@@ -8,4 +8,4 @@ Then read your playbook:
 - Scraper-builder: [docs/agents/scraper.md](docs/agents/scraper.md)
 - Docs-keeper: [docs/agents/docs.md](docs/agents/docs.md)
 
-Never print or commit secrets or private data.
+Never print or commit secrets or private data. Runbooks in `docs/runbooks/` are owner procedures (live AWS and GitHub changes); agents do not run them.
