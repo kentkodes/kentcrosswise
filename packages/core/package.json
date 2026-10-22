@@ -5,9 +5,13 @@
   "description": "Shared types, model providers, sanitizer, event types",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./models": "./src/models/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0"
   }
 }

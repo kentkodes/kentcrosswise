@@ -5,3 +5,5 @@ packages:
   - scripts
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@1.1.0'
