@@ -1,0 +1,94 @@
+variable "name_prefix" {
+  description = "Prefix for every resource name, e.g. kcw-prod or kcw-pr-12. Lowercase letters, digits and dashes."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{2,30}$", var.name_prefix))
+    error_message = "name_prefix must be 3-31 lowercase letters, digits or dashes, starting with a letter."
+  }
+}
+
+variable "artifact_dir" {
+  description = "Path to the OpenNext output (apps/web/.open-next), laid out as described in AGENTS.md (OpenNext output contract)."
+  type        = string
+}
+
+variable "domain_names" {
+  description = "CloudFront aliases, e.g. [\"kentcrosswise.com\"]. Empty: serve on the *.cloudfront.net name only (D22)."
+  type        = list(string)
+  default     = []
+}
+
+variable "acm_certificate_arn" {
+  description = "us-east-1 ACM certificate covering domain_names. Required when domain_names is non-empty."
+  type        = string
+  default     = null
+}
+
+variable "route53_zone_id" {
+  description = "Hosted zone for the alias records. Null: no DNS records."
+  type        = string
+  default     = null
+}
+
+variable "secret_names" {
+  description = "Secrets Manager secret names the server function may read (D9)."
+  type        = list(string)
+  default     = []
+}
+
+variable "ssm_parameter_names" {
+  description = "SSM SecureString parameter names the server function may read, e.g. the preview DB URL (D21)."
+  type        = list(string)
+  default     = []
+}
+
+variable "server_environment" {
+  description = "Extra server env vars. Secret *names* only, never values (D9)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "lambda_runtime" {
+  description = "Lambda runtime for all functions."
+  type        = string
+  default     = "nodejs24.x"
+}
+
+variable "server_memory_mb" {
+  type    = number
+  default = 1024
+}
+
+variable "server_timeout_s" {
+  description = "Below CloudFront's 30 s origin response timeout."
+  type        = number
+  default     = 25
+}
+
+variable "image_memory_mb" {
+  type    = number
+  default = 1536
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 14
+}
+
+variable "price_class" {
+  type    = string
+  default = "PriceClass_100"
+}
+
+variable "force_destroy" {
+  description = "Allow destroying the assets bucket with objects in it (previews)."
+  type        = bool
+  default     = false
+}
+
+variable "permissions_boundary_arn" {
+  description = "Permissions boundary for the function roles (previews: kcw-preview-boundary from infra/bootstrap)."
+  type        = string
+  default     = null
+}
