@@ -194,6 +194,12 @@ Remove-Item Env:NEON_API_KEY
 
 These manual steps use your admin profile. The `kcw-gh-ci` role's preview permissions are exercised for real in P1-15 (`ci.yml`).
 
+## Live results (2026-10-22)
+
+- Step 6 (P1-11): prod applied (49 resources) at `https://d36w61sfnlrpvc.cloudfront.net`. `/` and `/demo` 200, `/hub` 307 to sign-in, sign-in POST through CloudFront 302 to Google, direct server Function URL 403 with no or wrong header.
+- Step 7 (P1-13): `pr-0` preview applied (52 resources), Playwright 5/5 passed, destroyed (52), state object and Neon branch deleted. `check-preview-clean` first reported one Lambda event-source mapping that AWS already returned as not found (tagging-index lag); it printed `pr-0 is clean` on re-run a minute later.
+- Open: Google may not accept the `*.cloudfront.net` redirect URI; sign-in on prod is untested until it does or the domain exists.
+
 ## Known risks to watch on first apply
 
 - **Origin header (D25).** The server Function URL is public; only the `x-kcw-origin` check keeps direct calls out. The value is in the CloudFront config and in Terraform state, which the PR plan role can read.
