@@ -2,7 +2,8 @@ name: Neon preview branch
 description: >-
   Creates or deletes the Neon branch preview/pr-<n> in the CI project (D12). The Neon API key is read
   from Secrets Manager (kcw/ci, key neon_api_key) through GitHub OIDC; no GitHub secret is involved.
-  Requires actions/checkout first. Created branches expire after 3 hours (D20).
+  Requires actions/checkout first. If the job already exported kcw/ci (KCW_CI_NEON_API_KEY), that
+  value is reused. Created branches expire after 3 hours (D20).
 
 inputs:
   mode:
@@ -70,7 +71,10 @@ runs:
         role-to-assume: ${{ inputs.role_to_assume }}
         aws-region: ${{ inputs.aws_region }}
 
+    # Skipped when the job already fetched kcw/ci (ci.yml does): the action refuses to export the
+    # same variable names twice in one job.
     - name: Neon API key from Secrets Manager
+      if: env.KCW_CI_NEON_API_KEY == ''
       uses: aws-actions/aws-secretsmanager-get-secrets@v3
       with:
         secret-ids: |

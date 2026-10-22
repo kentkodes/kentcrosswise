@@ -322,7 +322,8 @@ data "aws_iam_policy_document" "plan" {
       values   = ["secretsmanager.${local.region}.amazonaws.com"]
     }
   }
-  # Object reads only for the prod state and the public web assets (needed to refresh aws_s3_object).
+  # Object reads only for the prod state and the web bucket's public build output (needed to refresh
+  # aws_s3_object): _assets/ (static files) and _cache/ (prerendered public pages, no private data).
   statement {
     sid     = "NoObjectReadsOutsideStateAndAssets"
     effect  = "Deny"
@@ -330,6 +331,7 @@ data "aws_iam_policy_document" "plan" {
     not_resources = [
       "${local.state_arn}/prod.tfstate",
       "${local.arn_prefix}:s3:::kcw-prod-assets-${local.account_id}/_assets/*",
+      "${local.arn_prefix}:s3:::kcw-prod-assets-${local.account_id}/_cache/*",
     ]
   }
 }
