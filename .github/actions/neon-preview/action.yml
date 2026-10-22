@@ -1,0 +1,111 @@
+name: Neon preview branch
+description: >-
+  Creates or deletes the Neon branch preview/pr-<n> in the CI project (D12). The Neon API key is read
+  from Secrets Manager (kcw/ci, key neon_api_key) through GitHub OIDC; no GitHub secret is involved.
+  Requires actions/checkout first. Created branches expire after 3 hours (D20).
+
+inputs:
+  mode:
+    description: "create or delete"
+    required: true
+  pr_number:
+    description: "Pull request number (0 for the manual test)"
+    required: true
+  project_id:
+    description: "Neon CI project id (repo variable NEON_CI_PROJECT_ID)"
+    required: true
+  parent_branch:
+    description: "Branch to copy (schema + synthetic seed)"
+    required: false
+    default: base
+  role_to_assume:
+    description: "AWS role ARN (repo variable AWS_ROLE_CI_ARN). Empty: the job already has AWS credentials."
+    required: false
+    default: ""
+  aws_region:
+    description: "AWS region of the secret"
+    required: false
+    default: us-east-1
+
+outputs:
+  branch_name:
+    description: "preview/pr-<n>"
+    value: ${{ steps.plan.outputs.branch_name }}
+  branch_id:
+    description: "Neon branch id (create only)"
+    value: ${{ steps.create.outputs.branch_id }}
+  db_url:
+    description: "Pooled connection string (create only; masked in logs). Never echo it."
+    value: ${{ steps.create.outputs.db_url_pooled }}
+  expires_at:
+    description: "When Neon deletes the branch by itself"
+    value: ${{ steps.plan.outputs.expires_at }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check mode
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in create|delete) ;; *) echo "::error::mode must be create or delete"; exit 1 ;; esac
+
+    - name: Set up Node (plan helper)
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+
+    - name: Branch name and expiry
+      id: plan
+      shell: bash
+      env:
+        PR_NUMBER: ${{ inputs.pr_number }}
+      run: node "$GITHUB_ACTION_PATH/plan.ts"
+
+    - name: AWS credentials (OIDC)
+      if: inputs.role_to_assume != ''
+      uses: aws-actions/configure-aws-credentials@v6.3.0
+      with:
+        role-to-assume: ${{ inputs.role_to_assume }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Neon API key from Secrets Manager
+      uses: aws-actions/aws-secretsmanager-get-secrets@v3
+      with:
+        secret-ids: |
+          KCW_CI, kcw/ci
+        parse-json-secrets: true
+
+    - name: Create branch
+      id: create
+      if: inputs.mode == 'create'
+      uses: neondatabase/create-branch-action@v6
+      with:
+        project_id: ${{ inputs.project_id }}
+        branch_name: ${{ steps.plan.outputs.branch_name }}
+        parent_branch: ${{ inputs.parent_branch }}
+        api_key: ${{ env.KCW_CI_NEON_API_KEY }}
+        expires_at: ${{ steps.plan.outputs.expires_at }}
+
+    # Auto-masking of these outputs is unverified (DESIGN U7), so mask them explicitly.
+    - name: Mask connection details
+      if: inputs.mode == 'create'
+      shell: bash
+      env:
+        DB_URL: ${{ steps.create.outputs.db_url }}
+        DB_URL_POOLED: ${{ steps.create.outputs.db_url_pooled }}
+        DB_PASSWORD: ${{ steps.create.outputs.password }}
+      run: |
+        for v in "$DB_URL" "$DB_URL_POOLED" "$DB_PASSWORD"; do
+          if [ -n "$v" ]; then echo "::add-mask::$v"; fi
+        done
+        if [ -z "$DB_URL_POOLED" ]; then echo "::error::create-branch-action returned no db_url_pooled"; exit 1; fi
+
+    - name: Delete branch
+      if: inputs.mode == 'delete'
+      uses: neondatabase/delete-branch-action@v3
+      with:
+        project_id: ${{ inputs.project_id }}
+        branch: ${{ steps.plan.outputs.branch_name }}
+        api_key: ${{ env.KCW_CI_NEON_API_KEY }}
