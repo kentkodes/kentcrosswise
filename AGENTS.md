@@ -23,6 +23,7 @@ Per-agent playbooks: [docs/agents/](docs/agents/).
 | `pnpm --filter web dev` | Local dev server |
 | `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (`pnpm migrate --help`: also `--secret <name>`, `DATABASE_URL`, `--dry-run`) |
 | `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
+| `pnpm build-web` | OpenNext v4 build of `apps/web` into `apps/web/.open-next` + contract check (see below); `KCW_ENV=preview` for previews |
 | `pnpm check-prod-bundle` | Fails if the built web app (`.next`, `.open-next`) contains the preview login provider; run after every prod build |
 
 Run one package's tests: `pnpm vitest run --project @kcw/db` (project = package name; the app is `web`).
@@ -64,3 +65,21 @@ docs/                specs, design, research, agent playbooks, runbooks
 - `import type` for type-only imports (lint rule).
 - One sample test per package at least; tests live in `<package>/test/*.test.ts`.
 - Model ids: Anthropic `claude-haiku-5-5`; Jev pinned to `jev-1.13.0`.
+
+## OpenNext output contract (P1-08 → `infra/modules/web`)
+
+`pnpm build-web` (`scripts/build-web.ts`) runs `open-next build` (`@opennextjs/aws` 4.1.12, config `apps/web/open-next.config.ts`) and fails if the output drifts from this layout (`scripts/lib/open-next-output.ts`). Set `KCW_ENV=preview` for a preview build; prod builds also run the preview-provider bundle check. Output in `apps/web/.open-next/` (gitignored):
+
+| Path | What | Terraform (`infra/modules/web`) |
+|---|---|---|
+| `server-functions/default/` | Next server, handler `index.handler` (`index.mjs`), wrapper `aws-lambda`, converter `aws-apigw-v2` (Function URL payload v2). Contains its own traced `node_modules` (pnpm symlinks) | Lambda arm64 + Function URL (OAC) = CloudFront default behaviour `*` |
+| `image-optimization-function/` | `next/image` optimizer, handler `index.handler`, `node_modules/sharp` for linux arm64 | Lambda arm64 + Function URL (OAC) = behaviour `_next/image*` |
+| `revalidation-function/` | ISR revalidation consumer, handler `index.handler` | Lambda triggered by the SQS FIFO revalidation queue |
+| `assets/` | `BUILD_ID`, `_next/static/**` (hashed), plus files from `public/` | Uploaded to the assets bucket under `_assets/`; CloudFront S3 origin path `/_assets`; behaviours `_next/*`, `BUILD_ID` and one per top-level public file/dir |
+| `cache/<BUILD_ID>/**` | Prerendered pages (ISR cache seed) | Uploaded under `_cache/`; server env `CACHE_BUCKET_KEY_PREFIX=_cache`, `OPEN_NEXT_BUILD_ID=<BUILD_ID>` |
+| `open-next.output.json` | OpenNext's own manifest of the above | Checked by build-web, not read by Terraform |
+| `warmer-function/`, `.build/` | Not deployed | |
+
+Server function env (set by the module): `CACHE_BUCKET_NAME`, `CACHE_BUCKET_REGION`, `CACHE_BUCKET_KEY_PREFIX`, `OPEN_NEXT_BUILD_ID`, `REVALIDATION_QUEUE_URL`, `REVALIDATION_QUEUE_REGION`, plus secret *names* (D9). Image function env: `BUCKET_NAME`, `BUCKET_KEY_PREFIX=_assets`. Overrides in use: incremental cache `s3-lite`, queue `sqs-lite`, tag cache `dummy` (so `revalidateTag`/`revalidatePath` do nothing yet; adding them needs a DynamoDB tag cache in the module). Function splitting or edge functions would change the layout and need a module change; build-web rejects them.
+
+Windows: OpenNext 4.1.12 fails to install sharp on Windows (it splits the output path on `/`); build-web installs `sharp` for linux/arm64 itself. On Linux CI OpenNext does it.
