@@ -230,10 +230,15 @@ Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`),
 
 - Step 6 (P1-11): prod applied (49 resources) at `https://d36w61sfnlrpvc.cloudfront.net`. `/` and `/demo` 200, `/hub` 307 to sign-in, sign-in POST through CloudFront 302 to Google, direct server Function URL 403 with no or wrong header.
 - Step 7 (P1-13): `pr-0` preview applied (52 resources), Playwright 5/5 passed, destroyed (52), state object and Neon branch deleted. `check-preview-clean` first reported one Lambda event-source mapping that AWS already returned as not found (tagging-index lag); it printed `pr-0 is clean` on re-run a minute later.
+- Step 8 (P1-15, P1-16): throwaway PR #2 (`ci-smoke`).
+  - First two runs failed. Run 39852675207: fixed in 702055b. Run 39853350799: `kcw-gh-ci` lacked `cloudfront:TagResource` on the CloudFront function (apply stopped). Destroy then stopped at the event-source mapping: once a mapping is deleted, Lambda checks `GetEventSourceMapping` against `*` and answers AccessDenied instead of NotFound. That left the revalidation queue, function, role and log group behind. The same run's prod plan showed 2 spurious infrastructure changes: the plan role couldn't decrypt Lambda environments, so refresh read them as empty. All three fixed in 866ccb5 (bootstrap re-applied, 2 in-place policy updates).
+  - Run 39865701644 green, including `ci/required`. The stale-preview step destroyed the previous run's 5 leftovers. Apply 52, Playwright 5/5, destroy 52, state object deleted, `pr-2 is clean` (after 3 retries for tagging-index lag). Prod plan summary: 0 infrastructure changes, 18 build artifact changes.
+  - Closed with `--delete-branch`: `preview-gc (closed PR)` run 39867313628 reported no leftovers. Manual dry run 39867396972 on main: no leftovers. `deploy.yml` on 866ccb5: success.
+  - CloudFront honored the `kcw:env=preview` request-tag condition on CreateFunction and CreateDistribution.
 - Open: Google may not accept the `*.cloudfront.net` redirect URI; sign-in on prod is untested until it does or the domain exists.
 
 ## Known risks to watch on first apply
 
 - **Origin header (D25).** The server Function URL is public; only the `x-kcw-origin` check keeps direct calls out. The value is in the CloudFront config and in Terraform state, which the PR plan role can read.
 - `lambda:InvokeFunction` with `invoked_via_function_url` is granted next to `lambda:InvokeFunctionUrl` (to CloudFront for the image URL, to everyone for the public server URL); if the apply rejects it, report it.
-- `kcw-gh-ci` limits CloudFront distribution changes by the tag `kcw:env=preview` (`aws:RequestTag` / `aws:ResourceTag`); whether CloudFront honors these keys for every action is unverified until P1-15.
+- `kcw-gh-ci` limits CloudFront distribution changes by the tag `kcw:env=preview` (`aws:RequestTag` / `aws:ResourceTag`); confirmed for create, update and delete by the P1-15 run (2026-10-22).
