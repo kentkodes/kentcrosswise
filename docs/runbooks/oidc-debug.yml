@@ -112,3 +112,4 @@ jobs:
         env:
           OUTCOME: ${{ steps.wrong.outcome }}
         run: test "$OUTCOME" = "failure"
+
