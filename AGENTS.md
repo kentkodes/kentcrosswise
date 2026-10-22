@@ -21,8 +21,8 @@ Per-agent playbooks: [docs/agents/](docs/agents/).
 | `pnpm test` | Vitest, every workspace package is a project (`vitest.config.ts`) |
 | `pnpm --filter web build` | Production build of the Next.js app |
 | `pnpm --filter web dev` | Local dev server |
-| `pnpm migrate -- --pglite .pglite/dev` | Apply migrations to a local PGlite directory (see `scripts/migrate.ts --help`) |
-| `pnpm seed -- --pglite .pglite/dev` | Insert the synthetic seed |
+| `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (see `scripts/migrate.ts --help`) |
+| `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
 
 Run one package's tests: `pnpm vitest run --project @kcw/db`.
 

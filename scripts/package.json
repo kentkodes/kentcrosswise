@@ -5,6 +5,17 @@
   "description": "Repo scripts (Node/TS via tsx; never bash or PowerShell)",
   "type": "module",
   "scripts": {
+    "migrate": "tsx migrate.ts",
+    "seed": "tsx seed.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@kcw/db": "workspace:*",
+    "@kcw/secrets": "workspace:*",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }
