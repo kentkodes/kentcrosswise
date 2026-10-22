@@ -139,15 +139,26 @@ data "aws_iam_policy_document" "ci" {
     actions   = ["lambda:CreateEventSourceMapping"]
     resources = ["*"]
     condition {
-      test     = "StringLike"
+      test     = "ArnLike"
       variable = "lambda:FunctionArn"
       values   = ["${local.lambda_arn}:function:${local.preview_names}"]
     }
   }
   statement {
-    sid       = "PreviewEventSourceMappings"
-    actions   = ["lambda:GetEventSourceMapping", "lambda:DeleteEventSourceMapping", "lambda:UpdateEventSourceMapping", "lambda:ListTags", "lambda:TagResource"]
+    sid = "PreviewEventSourceMappings"
+    actions = [
+      "lambda:GetEventSourceMapping", "lambda:DeleteEventSourceMapping", "lambda:UpdateEventSourceMapping",
+      "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource",
+    ]
     resources = ["${local.lambda_arn}:event-source-mapping:*"]
+  }
+  # Once a mapping is gone, Lambda authorizes GetEventSourceMapping against "*" (not the mapping
+  # ARN) and answers AccessDenied instead of NotFound. The provider's delete waiter polls until
+  # NotFound, so without this every destroy stopped at the mapping (CI run 39853350799).
+  statement {
+    sid       = "EventSourceMappingDeleteWaiter"
+    actions   = ["lambda:GetEventSourceMapping"]
+    resources = ["*"]
   }
   statement {
     sid = "PreviewRolesWithBoundary"
@@ -197,14 +208,31 @@ data "aws_iam_policy_document" "ci" {
     ]
     resources = ["${local.logs_arn}:log-group:/aws/lambda/${local.preview_names}", "${local.logs_arn}:log-group:/aws/lambda/${local.preview_names}:*"]
   }
+  # The provider sends the default tags with CreateFunction, which CloudFront authorizes as
+  # cloudfront:TagResource on the function as well.
   statement {
-    sid       = "PreviewCloudFrontFunctions"
-    actions   = ["cloudfront:CreateFunction", "cloudfront:UpdateFunction", "cloudfront:PublishFunction", "cloudfront:DeleteFunction", "cloudfront:DescribeFunction", "cloudfront:GetFunction"]
+    sid = "PreviewCloudFrontFunctions"
+    actions = [
+      "cloudfront:UpdateFunction", "cloudfront:PublishFunction", "cloudfront:DeleteFunction", "cloudfront:DescribeFunction",
+      "cloudfront:GetFunction", "cloudfront:TagResource", "cloudfront:UntagResource",
+    ]
     resources = ["${local.cf_arn}:function/${local.preview_names}"]
   }
+  # CreateFunction and CreateDistribution have no resource type in the IAM reference (resource "*"),
+  # so they are scoped by the request tag instead.
   statement {
-    sid       = "CreatePreviewDistributions"
-    actions   = ["cloudfront:CreateDistribution", "cloudfront:CreateDistributionWithTags", "cloudfront:TagResource"]
+    sid       = "CreatePreviewFunctionsAndDistributions"
+    actions   = ["cloudfront:CreateFunction", "cloudfront:CreateDistribution"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kcw:env"
+      values   = ["preview"]
+    }
+  }
+  statement {
+    sid       = "TagNewPreviewDistributions"
+    actions   = ["cloudfront:TagResource"]
     resources = ["${local.cf_arn}:distribution/*"]
     condition {
       test     = "StringEquals"
@@ -236,7 +264,7 @@ data "aws_iam_policy_document" "ci" {
     actions = [
       "cloudfront:Get*", "cloudfront:List*", "cloudfront:Describe*",
       "lambda:ListEventSourceMappings", "logs:DescribeLogGroups", "ssm:DescribeParameters",
-      "acm:ListCertificates", "acm:DescribeCertificate", "route53:ListHostedZones", "route53:ListHostedZonesByName",
+      "acm:ListCertificates", "acm:DescribeCertificate", "acm:ListTagsForCertificate", "route53:ListHostedZones", "route53:ListHostedZonesByName",
       "route53:GetHostedZone", "route53:ListResourceRecordSets", "route53:GetChange", "route53:ListTagsForResource",
       "tag:GetResources", "iam:ListRoles",
     ]
@@ -308,18 +336,22 @@ data "aws_iam_policy_document" "plan" {
     ]
     resources = ["*"]
   }
-  # KMS decrypt only through Secrets Manager, which itself is limited to origin-verify above.
+  # KMS decrypt only through Secrets Manager, which itself is limited to origin-verify above, and
+  # through Lambda, which decrypts function environment variables with the caller's permissions.
+  # Without Lambda, refresh reads every function's environment as empty and each prod plan shows a
+  # spurious change to environment.0.variables (CI run 39853350799). Function environments hold
+  # names only, never secret values (D9).
   # A plain Deny on kms:Decrypt would also block reading that secret: Secrets Manager decrypts with
   # the caller's permissions.
   statement {
-    sid       = "NoDecryptOutsideSecretsManager"
+    sid       = "NoDecryptOutsideSecretsManagerAndLambda"
     effect    = "Deny"
     actions   = ["kms:Decrypt"]
     resources = ["*"]
     condition {
       test     = "StringNotEquals"
       variable = "kms:ViaService"
-      values   = ["secretsmanager.${local.region}.amazonaws.com"]
+      values   = ["secretsmanager.${local.region}.amazonaws.com", "lambda.${local.region}.amazonaws.com"]
     }
   }
   # Object reads only for the prod state and the web bucket's public build output (needed to refresh
