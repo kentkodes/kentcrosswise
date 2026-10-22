@@ -53,3 +53,4 @@ The App id (a number) is on the App's settings page ("App ID"); it is not secret
 `ci.yml` runs `pnpm check-repo-settings --profile <KCW_RULESET_PROFILE, default interim>` on every PR as a non-blocking step. It reads the ruleset with the workflow token; GitHub may hide the bypass list from tokens without admin rights, in which case the check prints a warning instead of comparing it. Make the step blocking (drop `continue-on-error`) once the final profile is applied.
 
 Unverified until the first live run: that `15368` is the GitHub Actions App id GitHub expects as the source of `ci/required` (a wrong id would leave `ci/required` pending forever: re-apply without it to recover).
+
