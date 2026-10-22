@@ -7,7 +7,8 @@
   "scripts": {
     "migrate": "tsx migrate.ts",
     "seed": "tsx seed.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check-prod-bundle": "tsx check-prod-bundle.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.11",

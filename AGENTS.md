@@ -23,6 +23,7 @@ Per-agent playbooks: [docs/agents/](docs/agents/).
 | `pnpm --filter web dev` | Local dev server |
 | `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (`pnpm migrate --help`: also `--secret <name>`, `DATABASE_URL`, `--dry-run`) |
 | `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
+| `pnpm check-prod-bundle` | Fails if the built web app (`.next`, `.open-next`) contains the preview login provider; run after every prod build |
 
 Run one package's tests: `pnpm vitest run --project @kcw/db` (project = package name; the app is `web`).
 PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where possible.
@@ -31,7 +32,10 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 
 ```
 apps/web/            Next.js 16 App Router app. src/app/(public) = visitor pages, src/app/(owner) = owner pages
-                     (the (owner) layout redirects to / until Auth.js lands in P1-07).
+                     The (owner) layout redirects to /api/auth/signin unless the session is the allowlisted owner.
+apps/web/src/auth/   Auth.js v5 (next-auth beta): Google (prod, scopes openid email profile) + allowlist from
+                     kcw/prod/web owner_email; preview builds (KCW_ENV=preview at build time) get a credentials
+                     provider keyed by kcw/ci e2e_login instead (preview-login.ts, never in a prod bundle).
 packages/core/       shared types; src/models = model providers (Anthropic, Jev, Fake, withFallback)
 packages/db/         migrations/*.sql, runner, synthetic seed (seeds/)
 packages/secrets/    getSecret/putSecret (Secrets Manager; names starting with "/" are SSM SecureString)
