@@ -100,14 +100,14 @@ Recorded 2026-10-22 from runs 39837647404 (dispatch on main) and 39837666181 (PR
 
 Secrets Manager console → the secret → *Retrieve secret value* → *Edit* → *Key/value*. Phase 1 needs:
 
-| Secret | Keys to fill now | Where the value comes from |
-|---|---|---|
-| `kcw/prod/web` | `auth_secret` | a random string of at least 32 characters (below) |
-| | `owner_email` | the Google account allowed to sign in |
-| | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients (SETUP.md A5) |
-| `kcw/prod/origin-verify` | `origin_verify` | a long random value (below). CloudFront sends it to the server Lambda, which refuses requests without it (D25). Fill it before step 6, or the prod plan fails |
-| `kcw/ci` | `neon_api_key` | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered |
-| | `e2e_login` | a random string of at least 16 characters (below); the preview login token |
+| Secret                   | Keys to fill now                           | Where the value comes from                                                                                                                                    |
+| ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kcw/prod/web`           | `auth_secret`                              | a random string of at least 32 characters (below)                                                                                                             |
+|                          | `owner_email`                              | the Google account allowed to sign in                                                                                                                         |
+|                          | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients (SETUP.md A5)                                                                                                                  |
+| `kcw/prod/origin-verify` | `origin_verify`                            | a long random value (below). CloudFront sends it to the server Lambda, which refuses requests without it (D25). Fill it before step 6, or the prod plan fails |
+| `kcw/ci`                 | `neon_api_key`                             | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered                                                                                   |
+|                          | `e2e_login`                                | a random string of at least 16 characters (below); the preview login token                                                                                    |
 
 The other keys and secrets (`vapid_*`, `db_url*`, models, GitHub Apps, social) are filled in later phases; leave them empty.
 

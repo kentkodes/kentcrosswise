@@ -50,7 +50,7 @@ winget install Git.Git OpenJS.NodeJS.LTS pnpm.pnpm Amazon.AWSCLI Hashicorp.Terra
 ### A3. GitHub repo (5 min)
 
 1. [x] Create a **public** repo `kentcrosswise` (empty: no README, no license yet).
-2. [ ] Tell me when it exists. I'll read its owner and repo IDs myself — the AWS trust policies need them because new repos use GitHub's new ID-based OIDC format.
+2. [x] Tell me when it exists. I'll read its owner and repo IDs myself — the AWS trust policies need them because new repos use GitHub's new ID-based OIDC format.
 
 Do **not** create GitHub Apps yet (Part B).
 
