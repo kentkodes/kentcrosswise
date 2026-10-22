@@ -1,0 +1,18 @@
+{
+  "name": "@kcw/report",
+  "version": "0.0.0",
+  "private": true,
+  "description": "kcw-report CLI: agent workflows send {task_id, agent, event_type, usage} to the orchestrator queue",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "kcw-report": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1154.0",
+    "@kcw/core": "workspace:*"
+  }
+}
