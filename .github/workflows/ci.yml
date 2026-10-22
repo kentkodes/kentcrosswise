@@ -1,5 +1,5 @@
 # CI for every pull request (DESIGN §4.2 step 4, §5; P1-15).
-#   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings, non-blocking)
+#   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings check, non-blocking)
 #   preview    same-repo PRs only: Neon branch + migrate + seed, preview build, terraform apply
 #              infra/preview, Playwright against it, then teardown in the same job (if: always())
 #   prod-plan  same-repo PRs only: read-only prod plan; summary artifact for merge-rules
@@ -58,6 +58,16 @@ jobs:
 
       - name: Terraform format
         run: terraform fmt -check -recursive infra
+
+      # P1-17: compares the main ruleset with scripts/repo-settings/ (profile: repo variable
+      # KCW_RULESET_PROFILE, default interim). Non-blocking until Phase 2 manages the ruleset.
+      - name: Repo settings (non-blocking)
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PROFILE: ${{ vars.KCW_RULESET_PROFILE || 'interim' }}
+          KCW_ORCHESTRATOR_APP_ID: ${{ vars.KCW_ORCHESTRATOR_APP_ID }}
+        run: pnpm check-repo-settings --profile "$PROFILE"
 
   preview:
     name: preview

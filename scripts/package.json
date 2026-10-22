@@ -13,7 +13,9 @@
     "check-preview-clean": "tsx check-preview-clean.ts",
     "plan-summary": "tsx plan-summary.ts",
     "smoke-check": "tsx smoke-check.ts",
-    "preview-gc": "tsx preview-gc.ts"
+    "preview-gc": "tsx preview-gc.ts",
+    "check-repo-settings": "tsx check-repo-settings.ts",
+    "apply-repo-settings": "tsx apply-repo-settings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.1154.0",

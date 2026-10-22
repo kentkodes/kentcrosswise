@@ -18,7 +18,9 @@
     "check-preview-clean": "pnpm --filter @kcw/scripts check-preview-clean",
     "plan-summary": "pnpm --filter @kcw/scripts plan-summary",
     "smoke-check": "pnpm --filter @kcw/scripts smoke-check",
-    "preview-gc": "pnpm --filter @kcw/scripts preview-gc"
+    "preview-gc": "pnpm --filter @kcw/scripts preview-gc",
+    "check-repo-settings": "pnpm --filter @kcw/scripts check-repo-settings",
+    "apply-repo-settings": "pnpm --filter @kcw/scripts apply-repo-settings"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

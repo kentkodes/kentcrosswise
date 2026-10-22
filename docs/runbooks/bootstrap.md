@@ -224,6 +224,8 @@ Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`),
 5. Close the PR. `preview-gc (closed PR)` runs and reports no leftovers.
 6. `gh workflow run preview-gc.yml --ref main` (dry run by default) reports leftovers without changing anything.
 
+**Before Phase 2:** the `main` ruleset is applied from [github-apps.md](github-apps.md) §1 (interim profile). From then on every change to `main` goes through a pull request: direct pushes, including this runbook's `git commit` on main, are refused.
+
 ## Live results (2026-10-22)
 
 - Step 6 (P1-11): prod applied (49 resources) at `https://d36w61sfnlrpvc.cloudfront.net`. `/` and `/demo` 200, `/hub` 307 to sign-in, sign-in POST through CloudFront 302 to Google, direct server Function URL 403 with no or wrong header.
