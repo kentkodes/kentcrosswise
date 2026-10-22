@@ -16,6 +16,12 @@ export function googleProvider(settings: AuthSettings): Provider {
   });
 }
 
+/** The Auth.js error type (e.g. CredentialsSignin); minified class names are useless in prod logs. */
+export function authErrorType(error: Error): string {
+  const type = (error as { type?: unknown }).type;
+  return typeof type === "string" ? type : "Error";
+}
+
 /**
  * Builds the Auth.js config. Providers are passed in so prod (Google) and preview
  * (credentials) builds differ only in what ./index decides to load.
@@ -31,6 +37,12 @@ export function buildAuthConfig(
     trustHost: true,
     session: { strategy: "jwt" },
     providers,
+    // One line per auth error, type only: no stacks or messages that could carry tokens or emails.
+    logger: {
+      error(error) {
+        console.error(`[auth] ${authErrorType(error)}`);
+      },
+    },
     callbacks: {
       signIn({ account, profile, user }) {
         const email = account?.provider === "google" ? profile?.email : user.email;

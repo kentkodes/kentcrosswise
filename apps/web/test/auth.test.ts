@@ -1,7 +1,7 @@
 import { createFakeSecrets } from "@kcw/secrets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isAllowedSignIn, isOwnerEmail } from "../src/auth/allowlist";
-import { buildAuthConfig, GOOGLE_SIGN_IN_SCOPES, googleProvider } from "../src/auth/config";
+import { authErrorType, buildAuthConfig, GOOGLE_SIGN_IN_SCOPES, googleProvider } from "../src/auth/config";
 import { loadPreviewModule, parseKcwEnv } from "../src/auth/env";
 import {
   checkPreviewToken,
@@ -170,6 +170,12 @@ describe("Auth.js config", () => {
     const creds = { provider: PREVIEW_PROVIDER_ID, type: "credentials", providerAccountId: "p" };
     expect(cb({ account: creds, user: { email: OWNER } })).toBe(false);
     expect(signIn(PREVIEW_PROVIDER_ID)({ account: creds, user: { email: OWNER } })).toBe(true);
+  });
+
+  it("logs only the Auth.js error type", () => {
+    const err = Object.assign(new Error("token owner@example.com"), { type: "CredentialsSignin" });
+    expect(authErrorType(err)).toBe("CredentialsSignin");
+    expect(authErrorType(new Error("secret detail"))).toBe("Error");
   });
 
   it("asks Google for sign-in scopes only", () => {

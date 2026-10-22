@@ -24,6 +24,8 @@ Per-agent playbooks: [docs/agents/](docs/agents/).
 | `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (`pnpm migrate --help`: also `--secret <name>`, `DATABASE_URL`, `--dry-run`) |
 | `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
 | `pnpm build-web` | OpenNext v4 build of `apps/web` into `apps/web/.open-next` + contract check (see below); `KCW_ENV=preview` for previews |
+| `pnpm --filter web e2e` | Playwright (`apps/web/e2e/*.e2e.ts`). No `BASE_URL`: starts `next dev` as a preview build with a fixed local login token; `PW_SERVER=start` uses `next start` (build with `KCW_ENV=preview` first); `BASE_URL=... KCW_E2E_LOGIN=...` targets a deployed preview. First time: `pnpm --filter web exec playwright install chromium` |
+| `pnpm check-preview-clean --pr <n>` | After a preview teardown: fails if any `kcw-pr-<n>` resource, `/kcw/preview/pr-<n>/` parameter, state/lock object or Neon branch is left (needs AWS credentials; `--skip-neon` without a Neon key) |
 | `pnpm check-prod-bundle` | Fails if the built web app (`.next`, `.open-next`) contains the preview login provider; run after every prod build |
 
 Run one package's tests: `pnpm vitest run --project @kcw/db` (project = package name; the app is `web`).
@@ -44,7 +46,11 @@ packages/demo-data/  deterministic simulated data for public pages
 packages/essays/     essays feature (stub)
 packages/xray/       X-ray registry (stub)
 agents/merge-rules/  approved-deps.json (dependency allowlist); detector arrives in P2-04
-scripts/             repo scripts (Node/TS via tsx): migrate.ts, seed.ts
+scripts/             repo scripts (Node/TS via tsx): migrate, seed, build-web, check-prod-bundle, check-preview-clean
+infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate (local state, then S3)
+infra/prod/          prod composition (web only so far); infra/preview/ = one per-PR web stack (D21)
+infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + read policy)
+.github/actions/     neon-preview (Neon branch preview/pr-<n> with the key from Secrets Manager)
 docs/                specs, design, research, agent playbooks, runbooks
 ```
 
@@ -60,6 +66,9 @@ docs/                specs, design, research, agent playbooks, runbooks
 8. Migrations are append-only: never edit an applied file (the runner checks checksums); add `NNNN_name.sql`.
 
 ## Conventions
+
+- Terraform: `terraform fmt -check -recursive infra`; `terraform -chdir=infra/<stack> init -backend=false && terraform -chdir=infra/<stack> validate` (validate reads `apps/web/.open-next`, so run `pnpm build-web` first). Only the owner applies (`docs/runbooks/bootstrap.md`). Region `us-east-1` everywhere; the domain is optional (`domain_name = ""`, D22).
+- Workflows and composite actions must pass `actionlint` (download the release binary; it is not a dependency).
 
 - ESM everywhere (`"type": "module"`); extensionless relative imports (bundler resolution).
 - `import type` for type-only imports (lint rule).
