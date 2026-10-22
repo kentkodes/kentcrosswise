@@ -8,6 +8,16 @@ variable "name_prefix" {
   }
 }
 
+variable "kcw_env" {
+  description = "prod or preview. Must match the build (artifact_dir/kcw-build.json, written by pnpm build-web)."
+  type        = string
+
+  validation {
+    condition     = contains(["prod", "preview"], var.kcw_env)
+    error_message = "kcw_env must be prod or preview."
+  }
+}
+
 variable "artifact_dir" {
   description = "Path to the OpenNext output (apps/web/.open-next), laid out as described in AGENTS.md (OpenNext output contract)."
   type        = string

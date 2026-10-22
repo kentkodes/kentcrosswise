@@ -73,6 +73,7 @@ module "web_secrets" {
 module "web" {
   source = "../modules/web"
 
+  kcw_env             = "prod"
   name_prefix         = "kcw-prod"
   artifact_dir        = var.artifact_dir
   domain_names        = local.has_domain ? [var.domain_name] : []

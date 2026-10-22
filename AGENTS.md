@@ -86,6 +86,7 @@ docs/                specs, design, research, agent playbooks, runbooks
 | `revalidation-function/` | ISR revalidation consumer, handler `index.handler` | Lambda triggered by the SQS FIFO revalidation queue |
 | `assets/` | `BUILD_ID`, `_next/static/**` (hashed), plus files from `public/` | Uploaded to the assets bucket under `_assets/`; CloudFront S3 origin path `/_assets`; behaviours `_next/*`, `BUILD_ID` and one per top-level public file/dir |
 | `cache/<BUILD_ID>/**` | Prerendered pages (ISR cache seed) | Uploaded under `_cache/`; server env `CACHE_BUCKET_KEY_PREFIX=_cache`, `OPEN_NEXT_BUILD_ID=<BUILD_ID>` |
+| `kcw-build.json` | Written by build-web: `{kcw_env, build_id}` | The module input `kcw_env` must match, so prod never ships a preview build |
 | `open-next.output.json` | OpenNext's own manifest of the above | Checked by build-web, not read by Terraform |
 | `warmer-function/`, `.build/` | Not deployed | |
 

@@ -1,0 +1,114 @@
+# Throwaway P1-10 live check (docs/runbooks/bootstrap.md, step 4). Copy to
+# .github/workflows/oidc-debug.yml on a scratch branch, run it, record the printed subs, then delete it.
+# Each job assumes the role meant for its context and checks that a wrong role is refused.
+# It prints only the token's `sub` claim, never the token.
+name: oidc-debug
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Print the OIDC sub
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const token = await core.getIDToken("sts.amazonaws.com");
+            const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+            core.info(`sub=${claims.sub}`);
+      - name: kcw-gh-ci (must work)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+      - name: kcw-gh-plan (must work)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: us-east-1
+      - name: kcw-gh-deploy (must fail)
+        id: wrong
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
+          aws-region: us-east-1
+      - name: Wrong role was refused
+        env:
+          OUTCOME: ${{ steps.wrong.outcome }}
+        run: test "$OUTCOME" = "failure"
+
+  main:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Print the OIDC sub
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const token = await core.getIDToken("sts.amazonaws.com");
+            const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+            core.info(`sub=${claims.sub}`);
+      - name: kcw-gh-agent (must work)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_ARN }}
+          aws-region: us-east-1
+      - name: kcw-gh-ci (must fail)
+        id: wrong
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+      - name: Wrong role was refused
+        env:
+          OUTCOME: ${{ steps.wrong.outcome }}
+        run: test "$OUTCOME" = "failure"
+
+  prod:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Print the OIDC sub
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const token = await core.getIDToken("sts.amazonaws.com");
+            const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+            core.info(`sub=${claims.sub}`);
+      - name: kcw-gh-deploy (must work)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
+          aws-region: us-east-1
+      - name: kcw-gh-agent (must fail)
+        id: wrong
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_ARN }}
+          aws-region: us-east-1
+      - name: Wrong role was refused
+        env:
+          OUTCOME: ${{ steps.wrong.outcome }}
+        run: test "$OUTCOME" = "failure"

@@ -3,7 +3,7 @@
 // Usage: [KCW_ENV=prod|preview] pnpm build-web
 // Prod builds (the default) also fail if the preview login provider is in the output.
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,5 +73,8 @@ await runMain(async () => {
       throw new Error("prod build contains the preview login provider");
     }
   }
+  // infra/modules/web refuses to deploy a build made for the other environment (variable kcw_env).
+  writeFileSync(path.join(outDir, "kcw-build.json"), `${JSON.stringify({ kcw_env: kcwEnv, build_id: buildId })}
+`);
   console.log(`build-web: OK (BUILD_ID ${buildId}, output ${path.relative(repoRoot, outDir)})`);
 });

@@ -113,7 +113,7 @@ resource "aws_lambda_function" "server" {
     log_group  = aws_cloudwatch_log_group.server.name
   }
 
-  depends_on = [aws_iam_role_policy.server]
+  depends_on = [aws_iam_role_policy.server, terraform_data.build_matches_env]
 }
 
 resource "aws_lambda_function_url" "server" {

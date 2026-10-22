@@ -104,6 +104,7 @@ resource "aws_ssm_parameter" "database_url" {
 module "web" {
   source = "../modules/web"
 
+  kcw_env                  = "preview"
   name_prefix              = local.name
   artifact_dir             = var.artifact_dir
   force_destroy            = true

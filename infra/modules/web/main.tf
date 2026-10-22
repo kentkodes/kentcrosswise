@@ -14,6 +14,7 @@ locals {
   cache_dir  = "${var.artifact_dir}/cache"
   zip_dir    = "${path.root}/.terraform/kcw-web"
   build_id   = trimspace(file("${local.assets_dir}/BUILD_ID"))
+  build_info = jsondecode(file("${var.artifact_dir}/kcw-build.json"))
 
   assets_prefix = "_assets"
   cache_prefix  = "_cache"
@@ -65,6 +66,18 @@ locals {
   server_name       = "${var.name_prefix}-server"
   image_name        = "${var.name_prefix}-image"
   revalidation_name = "${var.name_prefix}-revalidation"
+}
+
+# A prod stack must never ship a preview build (it contains the preview login) and vice versa.
+resource "terraform_data" "build_matches_env" {
+  input = local.build_info.kcw_env
+
+  lifecycle {
+    precondition {
+      condition     = local.build_info.kcw_env == var.kcw_env && local.build_info.build_id == local.build_id
+      error_message = "The OpenNext output in artifact_dir was not built by pnpm build-web for this kcw_env. Rebuild (KCW_ENV=${var.kcw_env})."
+    }
+  }
 }
 
 check "certificate_with_aliases" {
