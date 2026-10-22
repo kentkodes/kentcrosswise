@@ -23,7 +23,7 @@ $bucket = "kentcrosswise-tfstate-$acct"
 
 ## 1. Apply `infra/bootstrap` (local state)
 
-Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy`, `kcw-gh-agent`, the policy `kcw-preview-boundary`, the 14 empty secrets of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
+Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy`, `kcw-gh-agent`, the policy `kcw-preview-boundary`, the 15 empty secrets of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
 
 ```powershell
 cd infra/bootstrap
@@ -96,15 +96,16 @@ Secrets Manager console → the secret → *Retrieve secret value* → *Edit* �
 | `kcw/prod/web` | `auth_secret` | a random string of at least 32 characters (below) |
 | | `owner_email` | the Google account allowed to sign in |
 | | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients (SETUP.md A5) |
+| `kcw/prod/origin-verify` | `origin_verify` | a long random value (below). CloudFront sends it to the server Lambda, which refuses requests without it (D25). Fill it before step 6, or the prod plan fails |
 | `kcw/ci` | `neon_api_key` | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered |
 | | `e2e_login` | a random string of at least 16 characters (below); the preview login token |
 
 The other keys and secrets (`vapid_*`, `db_url*`, models, GitHub Apps, social) are filled in later phases; leave them empty.
 
-A random value, generated locally and copied straight to the clipboard (not printed):
+A random value (48 characters), generated locally and copied straight to the clipboard (not printed). Use a fresh one each for `auth_secret`, `origin_verify` and `e2e_login`:
 
 ```powershell
-node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))" | Set-Clipboard
+node -e "process.stdout.write(require('node:crypto').randomBytes(36).toString('base64url'))" | Set-Clipboard
 ```
 
 Google client: add the prod redirect URI after step 6, `https://<prod host>/api/auth/callback/google`. Google may refuse a `*.cloudfront.net` redirect URI because it is not an authorized domain you own (**verify**); if it does, Google sign-in waits for the domain, and everything else still works.
@@ -127,7 +128,9 @@ cd ../..
 The plan refuses a build made with `KCW_ENV=preview` (it checks `apps/web/.open-next/kcw-build.json`), and the preview stack refuses a prod build. The first CloudFront deployment takes several minutes. Then check:
 
 - `<url>/` shows the public home and `<url>/demo` the demo.
-- `<url>/hub` redirects to `/api/auth/signin`, and "Sign in with Google" works with the owner account (this is a `POST` through CloudFront to the Lambda Function URL with OAC; if it fails with a signature error, tell the Liaison: see "Known risks").
+- `<url>/hub` redirects to `/api/auth/signin`, and "Sign in with Google" works with the owner account (a `POST` through CloudFront; D25 replaced OAC on the server origin for this).
+- The server Function URL called directly (`terraform state show module.web.aws_lambda_function_url.server` shows it) answers `403 Forbidden`.
+- To rotate `origin_verify`: change the secret, then re-run this step. Until the apply finishes, the site answers 403.
 - Another Google account is refused.
 
 ## 7. Manual preview `pr-0` (P1-12, P1-13)
@@ -184,6 +187,6 @@ These manual steps use your admin profile. The `kcw-gh-ci` role's preview permis
 
 ## Known risks to watch on first apply
 
-- **POST through CloudFront to a Function URL with OAC.** AWS documents that `PUT`/`POST` bodies to a Lambda Function URL behind OAC need the client to send an `x-amz-content-sha256` header. Browsers don't, which would break Auth.js sign-in/sign-out forms and server actions. Not testable before an apply; step 6 checks it. If it fails, the fix is a design decision (Liaison/architect).
-- `lambda:InvokeFunction` with `invoked_via_function_url` is granted next to `lambda:InvokeFunctionUrl` for CloudFront; if the apply rejects it, report it.
+- **Origin header (D25).** The server Function URL is public; only the `x-kcw-origin` check keeps direct calls out. The value is in the CloudFront config and in Terraform state, which the PR plan role can read.
+- `lambda:InvokeFunction` with `invoked_via_function_url` is granted next to `lambda:InvokeFunctionUrl` (to CloudFront for the image URL, to everyone for the public server URL); if the apply rejects it, report it.
 - `kcw-gh-ci` limits CloudFront distribution changes by the tag `kcw:env=preview` (`aws:RequestTag` / `aws:ResourceTag`); whether CloudFront honors these keys for every action is unverified until P1-15.

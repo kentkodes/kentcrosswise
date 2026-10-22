@@ -98,7 +98,7 @@ resource "aws_lambda_function" "server" {
   timeout          = var.server_timeout_s
 
   environment {
-    variables = merge(var.server_environment, {
+    variables = merge(var.server_environment, local.origin_env, {
       CACHE_BUCKET_NAME         = aws_s3_bucket.assets.id
       CACHE_BUCKET_KEY_PREFIX   = local.cache_prefix
       CACHE_BUCKET_REGION       = local.region
@@ -116,29 +116,28 @@ resource "aws_lambda_function" "server" {
   depends_on = [aws_iam_role_policy.server, terraform_data.build_matches_env]
 }
 
+# D25: public Function URL (AuthType NONE). CloudFront OAC cannot be used here because it signs
+# requests and Lambda then requires clients to send x-amz-content-sha256 for POST/PUT bodies,
+# which browsers do not. Direct calls are refused by the server wrapper (x-kcw-origin header).
 resource "aws_lambda_function_url" "server" {
   function_name      = aws_lambda_function.server.function_name
-  authorization_type = "AWS_IAM"
+  authorization_type = "NONE"
   invoke_mode        = "BUFFERED"
 }
 
-# CloudFront (OAC) calls the Function URL. Function URLs need lambda:InvokeFunctionUrl and, for
-# newer URLs, lambda:InvokeFunction restricted to calls made through the URL.
 resource "aws_lambda_permission" "server_url" {
-  statement_id           = "CloudFrontInvokeFunctionUrl"
+  statement_id           = "PublicInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.server.function_name
-  principal              = "cloudfront.amazonaws.com"
-  source_arn             = aws_cloudfront_distribution.this.arn
-  function_url_auth_type = "AWS_IAM"
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }
 
 resource "aws_lambda_permission" "server_invoke" {
-  statement_id             = "CloudFrontInvokeFunction"
+  statement_id             = "PublicInvokeFunctionViaUrl"
   action                   = "lambda:InvokeFunction"
   function_name            = aws_lambda_function.server.function_name
-  principal                = "cloudfront.amazonaws.com"
-  source_arn               = aws_cloudfront_distribution.this.arn
+  principal                = "*"
   invoked_via_function_url = true
 }
 

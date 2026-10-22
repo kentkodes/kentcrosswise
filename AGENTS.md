@@ -81,7 +81,7 @@ docs/                specs, design, research, agent playbooks, runbooks
 
 | Path | What | Terraform (`infra/modules/web`) |
 |---|---|---|
-| `server-functions/default/` | Next server, handler `index.handler` (`index.mjs`), wrapper `aws-lambda`, converter `aws-apigw-v2` (Function URL payload v2). Contains its own traced `node_modules` (pnpm symlinks) | Lambda arm64 + Function URL (OAC) = CloudFront default behaviour `*` |
+| `server-functions/default/` | Next server, handler `index.handler` (`index.mjs`), wrapper `kcw-origin-guard` (OpenNext's aws-lambda wrapper behind the `x-kcw-origin` check, D25), converter `aws-apigw-v2` (Function URL payload v2). Its traced `node_modules` has no symlinks: build-web replaces pnpm links with copies, hoists `.pnpm/node_modules/*` to the root and drops `.pnpm`, because a zip cannot keep the links | Lambda arm64 + public Function URL; CloudFront adds `x-kcw-origin`; default behaviour `*` |
 | `image-optimization-function/` | `next/image` optimizer, handler `index.handler`, `node_modules/sharp` for linux arm64 | Lambda arm64 + Function URL (OAC) = behaviour `_next/image*` |
 | `revalidation-function/` | ISR revalidation consumer, handler `index.handler` | Lambda triggered by the SQS FIFO revalidation queue |
 | `assets/` | `BUILD_ID`, `_next/static/**` (hashed), plus files from `public/` | Uploaded to the assets bucket under `_assets/`; CloudFront S3 origin path `/_assets`; behaviours `_next/*`, `BUILD_ID` and one per top-level public file/dir |
@@ -90,6 +90,6 @@ docs/                specs, design, research, agent playbooks, runbooks
 | `open-next.output.json` | OpenNext's own manifest of the above | Checked by build-web, not read by Terraform |
 | `warmer-function/`, `.build/` | Not deployed | |
 
-Server function env (set by the module): `CACHE_BUCKET_NAME`, `CACHE_BUCKET_REGION`, `CACHE_BUCKET_KEY_PREFIX`, `OPEN_NEXT_BUILD_ID`, `REVALIDATION_QUEUE_URL`, `REVALIDATION_QUEUE_REGION`, plus secret *names* (D9). Image function env: `BUCKET_NAME`, `BUCKET_KEY_PREFIX=_assets`. Overrides in use: incremental cache `s3-lite`, queue `sqs-lite`, tag cache `dummy` (so `revalidateTag`/`revalidatePath` do nothing yet; adding them needs a DynamoDB tag cache in the module). Function splitting or edge functions would change the layout and need a module change; build-web rejects them.
+Server function env (set by the module): `KCW_ORIGIN_VERIFY_SECRET` (+ `KCW_ORIGIN_VERIFY_KEY`), `CACHE_BUCKET_NAME`, `CACHE_BUCKET_REGION`, `CACHE_BUCKET_KEY_PREFIX`, `OPEN_NEXT_BUILD_ID`, `REVALIDATION_QUEUE_URL`, `REVALIDATION_QUEUE_REGION`, plus secret *names* (D9). Image function env: `BUCKET_NAME`, `BUCKET_KEY_PREFIX=_assets`. Overrides in use: incremental cache `s3-lite`, queue `sqs-lite`, tag cache `dummy` (so `revalidateTag`/`revalidatePath` do nothing yet; adding them needs a DynamoDB tag cache in the module). Function splitting or edge functions would change the layout and need a module change; build-web rejects them.
 
 Windows: OpenNext 4.1.12 fails to install sharp on Windows (it splits the output path on `/`); build-web installs `sharp` for linux/arm64 itself. On Linux CI OpenNext does it.

@@ -1,4 +1,5 @@
-# CloudFront in front of S3 (assets) and the two Function URLs, all through Origin Access Control.
+# CloudFront in front of S3 (assets, OAC), the image Function URL (OAC, GET only) and the server
+# Function URL (public, guarded by the x-kcw-origin header, D25).
 
 resource "aws_cloudfront_origin_access_control" "s3" {
   name                              = "${var.name_prefix}-s3"
@@ -10,7 +11,7 @@ resource "aws_cloudfront_origin_access_control" "s3" {
 
 resource "aws_cloudfront_origin_access_control" "lambda" {
   name                              = "${var.name_prefix}-lambda"
-  description                       = "${var.name_prefix} Function URLs"
+  description                       = "${var.name_prefix} image Function URL"
   origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -110,9 +111,13 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   origin {
-    origin_id                = local.server_origin_id
-    domain_name              = split("/", aws_lambda_function_url.server.function_url)[2]
-    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    origin_id   = local.server_origin_id
+    domain_name = split("/", aws_lambda_function_url.server.function_url)[2]
+    # D25: no OAC on the server origin; the wrapper checks this header instead.
+    custom_header {
+      name  = "x-kcw-origin"
+      value = var.origin_verify_value
+    }
     custom_origin_config {
       http_port              = 80
       https_port             = 443

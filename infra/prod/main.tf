@@ -65,6 +65,16 @@ data "aws_acm_certificate" "this" {
   most_recent = true
 }
 
+# D25: the CloudFront -> server origin header value. Its own secret (filled by the owner), so the
+# PR plan role can read this one value without reading kcw/prod/web.
+locals {
+  origin_verify_secret = "kcw/prod/origin-verify"
+}
+
+data "aws_secretsmanager_secret_version" "origin_verify" {
+  secret_id = local.origin_verify_secret
+}
+
 module "web_secrets" {
   source = "../modules/secrets"
   names  = ["kcw/prod/web"]
@@ -80,6 +90,10 @@ module "web" {
   acm_certificate_arn = local.has_domain ? data.aws_acm_certificate.this[0].arn : null
   route53_zone_id     = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
   secret_names        = module.web_secrets.names
+
+  origin_verify_value       = jsondecode(data.aws_secretsmanager_secret_version.origin_verify.secret_string)["origin_verify"]
+  origin_verify_secret_name = local.origin_verify_secret
+  origin_verify_secret_key  = "origin_verify"
 
   server_environment = {
     KCW_WEB_SECRET = "kcw/prod/web"

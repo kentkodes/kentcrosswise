@@ -56,11 +56,19 @@ locals {
     xml         = "application/xml"
   }
 
+  origin_secret_is_ssm = startswith(var.origin_verify_secret_name, "/")
+  all_secret_names     = distinct(concat(var.secret_names, local.origin_secret_is_ssm ? [] : [var.origin_verify_secret_name]))
+  all_ssm_names        = distinct(concat(var.ssm_parameter_names, local.origin_secret_is_ssm ? [var.origin_verify_secret_name] : []))
+  origin_env = merge(
+    { KCW_ORIGIN_VERIFY_SECRET = var.origin_verify_secret_name },
+    var.origin_verify_secret_key == null ? {} : { KCW_ORIGIN_VERIFY_KEY = var.origin_verify_secret_key },
+  )
+
   secret_arns = [
-    for n in var.secret_names : "arn:${local.partition}:secretsmanager:${local.region}:${local.account_id}:secret:${n}-??????"
+    for n in local.all_secret_names : "arn:${local.partition}:secretsmanager:${local.region}:${local.account_id}:secret:${n}-??????"
   ]
   ssm_parameter_arns = [
-    for n in var.ssm_parameter_names : "arn:${local.partition}:ssm:${local.region}:${local.account_id}:parameter/${trimprefix(n, "/")}"
+    for n in local.all_ssm_names : "arn:${local.partition}:ssm:${local.region}:${local.account_id}:parameter/${trimprefix(n, "/")}"
   ]
 
   server_name       = "${var.name_prefix}-server"

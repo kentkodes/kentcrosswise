@@ -102,3 +102,25 @@ variable "permissions_boundary_arn" {
   type        = string
   default     = null
 }
+
+variable "origin_verify_value" {
+  description = "D25: value CloudFront sends in x-kcw-origin to the server Function URL (>= 32 chars). It ends up in Terraform state and the CloudFront config."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.origin_verify_value) >= 32
+    error_message = "origin_verify_value must be at least 32 characters."
+  }
+}
+
+variable "origin_verify_secret_name" {
+  description = "D25: where the server reads the same value: a Secrets Manager name (with origin_verify_secret_key) or an SSM SecureString name starting with \"/\"."
+  type        = string
+}
+
+variable "origin_verify_secret_key" {
+  description = "JSON key inside origin_verify_secret_name (Secrets Manager only)."
+  type        = string
+  default     = null
+}

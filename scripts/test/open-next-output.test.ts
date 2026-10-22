@@ -24,7 +24,7 @@ const manifest = {
       type: "function",
       handler: "index.handler",
       bundle: ".open-next/server-functions/default",
-      wrapper: "aws-lambda",
+      wrapper: "kcw-origin-guard",
       converter: "aws-apigw-v2",
       queue: "sqs-lite",
       incrementalCache: "s3-lite",

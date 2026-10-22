@@ -5,8 +5,10 @@ import type { OpenNextConfig } from "@opennextjs/aws/types/open-next.js";
 const config = {
   default: {
     override: {
+      // OpenNext's aws-lambda wrapper behind the CloudFront origin-header check (D25). The Function
+      // URL is public (AuthType NONE), so this is what keeps direct calls out.
+      wrapper: () => import("./src/server/origin-wrapper").then((m) => m.default as never),
       // Lambda Function URL events use the API Gateway v2 payload format.
-      wrapper: "aws-lambda",
       converter: "aws-apigw-v2",
       // ISR/data cache in the assets bucket under _cache/ (aws4fetch, no AWS SDK in the bundle).
       incrementalCache: "s3-lite",

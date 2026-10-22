@@ -283,11 +283,23 @@ data "aws_iam_policy_document" "plan" {
     actions   = ["s3:GetObject"]
     resources = ["${local.state_arn}/prod.tfstate"]
   }
+  # D25: the prod plan needs the origin header value; it is in the prod state anyway.
+  statement {
+    sid       = "OriginVerifySecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local.secret_arn}:kcw/prod/origin-verify-??????"]
+  }
+  statement {
+    sid           = "NoOtherSecretValues"
+    effect        = "Deny"
+    actions       = ["secretsmanager:GetSecretValue"]
+    not_resources = ["${local.secret_arn}:kcw/prod/origin-verify-??????"]
+  }
   statement {
     sid    = "NoDataReads"
     effect = "Deny"
     actions = [
-      "secretsmanager:GetSecretValue", "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath",
+      "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath",
       "kms:Decrypt", "sqs:ReceiveMessage", "logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery",
       "logs:GetQueryResults", "logs:StartLiveTail", "dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:Query",
       "dynamodb:Scan", "lambda:InvokeFunction", "lambda:InvokeFunctionUrl",
@@ -331,9 +343,9 @@ data "aws_iam_policy_document" "deploy" {
     resources = [local.state_arn]
   }
   statement {
-    sid       = "MigratorSecret"
+    sid       = "MigratorAndOriginSecrets"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["${local.secret_arn}:kcw/prod/migrator-??????"]
+    resources = ["${local.secret_arn}:kcw/prod/migrator-??????", "${local.secret_arn}:kcw/prod/origin-verify-??????"]
   }
   statement {
     sid = "ProdRoles"
@@ -362,7 +374,7 @@ data "aws_iam_policy_document" "deploy" {
     condition {
       test     = "StringNotLike"
       variable = "secretsmanager:SecretId"
-      values   = ["${local.secret_arn}:kcw/prod/migrator-??????"]
+      values   = ["${local.secret_arn}:kcw/prod/migrator-??????", "${local.secret_arn}:kcw/prod/origin-verify-??????"]
     }
   }
   statement {

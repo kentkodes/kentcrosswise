@@ -32,6 +32,7 @@ Changes vs v0.1: OIDC trust uses GitHub's immutable `sub` format (§5); Claude C
 | D22 | The domain is optional in Terraform: `domain_name = ""` means no ACM certificate or Route 53 records, and prod and previews use their CloudFront `*.cloudfront.net` URLs. Setting the variable later adds the cert, aliases and DNS without recreating anything else. | Blocking Phase 1 on the domain | As of 2026-10-22 the owner can't register `kentcrosswise.com` on Route 53 yet (AWS support case open). If Route 53 keeps refusing, buy the domain at another registrar and point its name servers at a Route 53 hosted zone. |
 | D24 | Accepted from P1 build (2026-10-22): Node 24 (`.nvmrc`, `engines >=22.12`, engine-strict); TypeScript pinned `~6.0` (typescript-eslint doesn't support 7); ESLint 9. `(public)/**` may import `@kcw/demo-data` **and** `@kcw/xray` (X-ray is public by spec; amends D10). DB roles in migrations are NOLOGIN group roles; Neon login users are created outside the repo (bootstrap runbook) and granted membership, so no DB passwords live in git. Jev is called with `fetch` through `jev-adapter.ts`. | | Recorded after Liaison verification. |
 | D23 | AWS region `us-east-1` for every resource. The owner's IAM Identity Center lives in `us-east-2`; that only affects `aws sso login`. CLI profile `kc-admin`. GitHub repo `kentkodes/kentcrosswise` (public), owner id `107236483`, repo id `1430035147`, so the OIDC `sub` prefix is `repo:kentkodes@107236483/kentcrosswise@1430035147`. | | Recorded from the owner's setup. |
+| D25 | The server Lambda Function URL uses **AuthType NONE**, guarded by a secret origin header: CloudFront adds `x-kcw-origin`, and the OpenNext server wrapper (`apps/web/src/server/origin-wrapper.ts`, wrapper override `kcw-origin-guard`) answers 403 to any request without the exact value (constant-time compare), before routing, the ISR cache, route handlers and server actions. Prod value: secret `kcw/prod/origin-verify`, key `origin_verify` (the owner fills a long random value). Preview value: Terraform `random_password` per preview, stored for the server in the SSM SecureString `/kcw/preview/pr-<n>/origin-verify`. The image-optimization Function URL keeps OAC + AWS_IAM (GET only); revalidation stays on SQS. | OAC + AWS_IAM on the server URL | AWS requires clients that PUT/POST through OAC to a Function URL to send `x-amz-content-sha256`; browsers don't, which breaks Auth.js forms and server actions (CloudFront Developer Guide, restricting access to a Lambda function URL origin). The prod value has its own secret rather than a key in `kcw/prod/web` because Terraform must read it to configure CloudFront: the PR plan role and the deploy role can read this one value without reading the auth secret and Google client secret. **Residual risk:** the value lives in the CloudFront config and in Terraform state (private, encrypted bucket); the PR plan role can read the prod state, so PR CI code could learn it and call the Function URL directly. That bypasses CloudFront, not Auth.js. Rotate by changing the secret and re-applying prod. |
 
 ## 1. Architecture
 
@@ -283,8 +284,9 @@ infra/bootstrap/   applied once by the owner locally (local state, then migrated
   - Secrets Manager secret containers (no values; the owner fills them)
   - ACM cert (us-east-1): kentcrosswise.com, *.kentcrosswise.com, *.preview.kentcrosswise.com; DNS validation
 infra/modules/
-  web/           own module for OpenNext v4 output: assets bucket, server Lambda + Function URL (OAC),
-                 image-optimization Lambda, revalidation SQS, CloudFront, Route 53 alias
+  web/           own module for OpenNext v4 output: assets bucket, server Lambda + public Function URL
+                 guarded by the x-kcw-origin header (D25), image-optimization Lambda + Function URL (OAC),
+                 revalidation SQS, CloudFront, Route 53 alias
   orchestrator/  orchestrator Lambda, SQS FIFO + DLQ, relay Lambda + Function URL, IAM
   pipelines/     watcher, runner Lambda, SQS essay-urls + DLQ, private essay-text bucket
   scheduler/     EventBridge schedules
@@ -332,13 +334,14 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | `kcw/prod/orchestrator` | db_url, github_app_client_id, github_app_installation_id, github_app_private_key | orchestrator Lambda |
 | `kcw/prod/pipeline` | db_url | pipeline Lambdas |
 | `kcw/prod/migrator` | db_url | `deploy.yml` |
+| `kcw/prod/origin-verify` | origin_verify (D25) | web Lambda; prod Terraform (`kcw-gh-plan`, `kcw-gh-deploy`) to configure CloudFront |
 | `kcw/prod/google-owner-token` | refresh_token (written by web at consent) | web (Calendar), social Lambda (YouTube) |
 | `kcw/prod/social/instagram` | app_id, app_secret, long_lived_token (rewritten on each refresh) | social Lambda (read + write) |
 | `kcw/prod/social/tiktok` | client_key, client_secret, refresh_token (rewritten; may rotate) | social Lambda (read + write) |
 | `kcw/github/webhook-secret` | secret | relay Lambda |
 | `kcw/github/developer-app`, `qa-app`, `scraper-app`, `docs-app` | private_key | the matching `agent-*.yml` only (App client ids are repo variables) |
 | `kcw/ci` | neon_api_key (project-scoped to `kentcrosswise-ci` if available), e2e_login | `ci.yml`, `preview-gc.yml`; e2e_login also in the preview web Lambda |
-That is 14 fixed secrets. There is no Anthropic key for agents: they use federation (D16). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
+That is 15 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25). There is no Anthropic key for agents: they use federation (D16). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
 
 When the owner pastes a value, it goes into the named secret under the listed key (console "Key/value" view). `docs/SETUP.md` uses these names.
 

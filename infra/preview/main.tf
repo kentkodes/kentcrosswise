@@ -16,6 +16,10 @@ terraform {
       source  = "hashicorp/archive"
       version = ">= 2.4"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.6"
+    }
   }
 
   backend "s3" {
@@ -101,6 +105,20 @@ resource "aws_ssm_parameter" "database_url" {
   description      = "Neon branch preview/pr-${var.pr_number} (synthetic data)"
 }
 
+# D25: per-preview origin header value, generated here (no secret to fill). The server reads it
+# from this SecureString; CloudFront sends it. It lives in this preview's state until destroy.
+resource "random_password" "origin_verify" {
+  length  = 48
+  special = false
+}
+
+resource "aws_ssm_parameter" "origin_verify" {
+  name        = "/kcw/preview/pr-${var.pr_number}/origin-verify"
+  type        = "SecureString"
+  value       = random_password.origin_verify.result
+  description = "CloudFront origin header for preview pr-${var.pr_number} (D25)"
+}
+
 module "web" {
   source = "../modules/web"
 
@@ -115,6 +133,9 @@ module "web" {
   route53_zone_id          = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
   secret_names             = ["kcw/ci"]
   ssm_parameter_names      = [aws_ssm_parameter.database_url.name]
+
+  origin_verify_value       = random_password.origin_verify.result
+  origin_verify_secret_name = aws_ssm_parameter.origin_verify.name
 
   server_environment = {
     KCW_CI_SECRET          = "kcw/ci"

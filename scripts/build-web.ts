@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import openNextConfig from "../apps/web/open-next.config";
 import { parseKcwEnv } from "../apps/web/src/auth/env";
 import { scanForMarkers } from "./lib/bundle-check";
+import { hoistPnpm, materializeSymlinks, prunePnpm } from "./lib/materialize";
 import { runMain } from "./lib/main";
 import { CONTRACT, checkOpenNextOutput } from "./lib/open-next-output";
 
@@ -58,6 +59,16 @@ await runMain(async () => {
   const openNextBin = path.join(webDir, "node_modules", "@opennextjs", "aws", "dist", "index.js");
   run(process.execPath, [openNextBin, "build"], webDir);
   ensureSharp();
+
+  // pnpm symlinks do not survive zipping (archive_file copies them); see lib/materialize.ts.
+  const serverDir = path.join(outDir, CONTRACT.server.dir);
+  const links = materializeSymlinks(serverDir);
+  const hoisted = hoistPnpm(serverDir);
+  const { pruned, conflicts } = prunePnpm(serverDir);
+  console.log(
+    `build-web: server bundle: ${links} symlinks materialized, ${hoisted.length} packages hoisted, ` +
+      (pruned ? "node_modules/.pnpm removed" : `node_modules/.pnpm kept (${conflicts.join("; ")})`),
+  );
 
   const { problems, buildId } = checkOpenNextOutput(outDir);
   if (problems.length > 0) {

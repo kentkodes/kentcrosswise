@@ -16,7 +16,7 @@ export const CONTRACT = {
   revalidation: { dir: "revalidation-function", entry: "revalidation-function/index.mjs", handler: "index.handler" },
   assets: { dir: "assets", buildId: "assets/BUILD_ID", bucketPrefix: "_assets" },
   cache: { dir: "cache", bucketPrefix: "_cache" },
-  overrides: { wrapper: "aws-lambda", converter: "aws-apigw-v2", incrementalCache: "s3-lite", queue: "sqs-lite" },
+  overrides: { wrapper: "kcw-origin-guard", converter: "aws-apigw-v2", incrementalCache: "s3-lite", queue: "sqs-lite" },
 } as const;
 
 interface Origin {
