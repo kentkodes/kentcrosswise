@@ -9,9 +9,15 @@
     "seed": "tsx seed.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check-prod-bundle": "tsx check-prod-bundle.ts",
-    "build-web": "tsx build-web.ts"
+    "build-web": "tsx build-web.ts",
+    "check-preview-clean": "tsx check-preview-clean.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudfront": "^3.1154.0",
+    "@aws-sdk/client-iam": "^3.1154.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "^3.1154.0",
+    "@aws-sdk/client-s3": "^3.1154.0",
+    "@aws-sdk/client-ssm": "^3.1154.0",
     "@electric-sql/pglite": "^0.5.11",
     "@kcw/db": "workspace:*",
     "@kcw/secrets": "workspace:*",

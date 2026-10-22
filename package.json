@@ -14,7 +14,8 @@
     "migrate": "pnpm --filter @kcw/scripts migrate",
     "seed": "pnpm --filter @kcw/scripts seed",
     "check-prod-bundle": "pnpm --filter @kcw/scripts check-prod-bundle",
-    "build-web": "pnpm --filter @kcw/scripts build-web"
+    "build-web": "pnpm --filter @kcw/scripts build-web",
+    "check-preview-clean": "pnpm --filter @kcw/scripts check-preview-clean"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
