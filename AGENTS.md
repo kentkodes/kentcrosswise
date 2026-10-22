@@ -21,15 +21,17 @@ Per-agent playbooks: [docs/agents/](docs/agents/).
 | `pnpm test` | Vitest, every workspace package is a project (`vitest.config.ts`) |
 | `pnpm --filter web build` | Production build of the Next.js app |
 | `pnpm --filter web dev` | Local dev server |
-| `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (see `scripts/migrate.ts --help`) |
+| `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (`pnpm migrate --help`: also `--secret <name>`, `DATABASE_URL`, `--dry-run`) |
 | `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
 
-Run one package's tests: `pnpm vitest run --project @kcw/db`.
+Run one package's tests: `pnpm vitest run --project @kcw/db` (project = package name; the app is `web`).
+PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where possible.
 
 ## Layout
 
 ```
-apps/web/            Next.js 16 App Router app. src/app/(public) = visitor pages, src/app/(owner) = owner pages.
+apps/web/            Next.js 16 App Router app. src/app/(public) = visitor pages, src/app/(owner) = owner pages
+                     (the (owner) layout redirects to / until Auth.js lands in P1-07).
 packages/core/       shared types; src/models = model providers (Anthropic, Jev, Fake, withFallback)
 packages/db/         migrations/*.sql, runner, synthetic seed (seeds/)
 packages/secrets/    getSecret/putSecret (Secrets Manager; names starting with "/" are SSM SecureString)
