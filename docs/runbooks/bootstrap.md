@@ -90,9 +90,11 @@ Recorded subjects (fill in):
 
 | Context | Actual `sub` | Right role assumed | Wrong role refused |
 |---|---|---|---|
-| push/dispatch on main | | | |
-| pull_request | | | |
-| environment prod | | | |
+| push/dispatch on main | `repo:kentkodes@107236483/kentcrosswise@1430035147:ref:refs/heads/main` | yes (`kcw-gh-agent`) | yes (`kcw-gh-ci`) |
+| pull_request | `repo:kentkodes@107236483/kentcrosswise@1430035147:pull_request` | yes (`kcw-gh-ci`, `kcw-gh-plan`) | yes (`kcw-gh-deploy`) |
+| environment prod | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:prod` | yes (`kcw-gh-deploy`) | yes (`kcw-gh-agent`) |
+
+Recorded 2026-10-22 from runs 39837647404 (dispatch on main) and 39837666181 (PR #1).
 
 ## 5. Fill the secrets needed now
 
