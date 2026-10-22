@@ -144,7 +144,7 @@ The plan refuses a build made with `KCW_ENV=preview` (it checks `apps/web/.open-
 
 ## 7. Manual preview `pr-0` (P1-12, P1-13)
 
-**Neon branch.** Either open a PR that touches `.github/actions/neon-preview/` (the `neon-preview-smoke` workflow creates and deletes `preview/pr-0`, which is the P1-12 live check), or for the P1-13 test create it by hand: Neon console → project `kentcrosswise-ci` → Branches → *New branch* `preview/pr-0` from `base` → copy the **pooled** connection string. If `base` has no schema yet:
+**Neon branch.** Create it by hand (the `neon-preview-smoke` workflow used for the P1-12 check was removed once `ci.yml` covered it): Neon console → project `kentcrosswise-ci` → Branches → *New branch* `preview/pr-0` from `base` → copy the **pooled** connection string. If `base` has no schema yet:
 
 ```powershell
 $env:DATABASE_URL = Read-Host -MaskInput "pooled URL of preview/pr-0"
@@ -184,7 +184,7 @@ terraform destroy -var pr_number=0         # same -var flags as the apply; TF_VA
 Remove-Item Env:TF_VAR_database_url
 cd ../..
 aws s3 rm "s3://$bucket/preview/pr-0.tfstate"
-# Neon console: delete branch preview/pr-0 (or let it expire after 3 h if the smoke workflow made it)
+# Neon console: delete branch preview/pr-0 (or let it expire)
 $env:NEON_API_KEY = Read-Host -MaskInput "neon_api_key from kcw/ci"
 pnpm check-preview-clean --pr 0 --bucket $bucket --neon-project "<kentcrosswise-ci project id>"
 Remove-Item Env:NEON_API_KEY

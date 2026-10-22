@@ -60,6 +60,34 @@ export async function findPreviewLeftovers(probe: PreviewProbe, opts: CleanCheck
   return leftovers;
 }
 
+export interface RetryOptions {
+  /** Total attempts (1 = no retry). */
+  attempts: number;
+  delayMs: number;
+  sleep?: (ms: number) => Promise<void>;
+  log?: (line: string) => void;
+}
+
+/**
+ * The tagging API keeps listing deleted resources for a minute or so after a destroy (seen in the
+ * pr-0 live run), so CI re-checks a few times before calling it a leak. Returns the last result.
+ */
+export async function findPreviewLeftoversWithRetries(
+  probe: PreviewProbe,
+  opts: CleanCheckOptions,
+  retry: RetryOptions,
+): Promise<string[]> {
+  const sleep = retry.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let leftovers: string[] = [];
+  for (let attempt = 1; attempt <= Math.max(1, retry.attempts); attempt++) {
+    leftovers = await findPreviewLeftovers(probe, opts);
+    if (leftovers.length === 0 || attempt >= retry.attempts) return leftovers;
+    retry.log?.(`check-preview-clean: ${leftovers.length} leftover(s) on attempt ${attempt}/${retry.attempts}; re-checking in ${Math.round(retry.delayMs / 1000)} s`);
+    await sleep(retry.delayMs);
+  }
+  return leftovers;
+}
+
 function errorName(err: unknown): string | undefined {
   return typeof err === "object" && err !== null && "name" in err ? String(err.name) : undefined;
 }

@@ -1,0 +1,282 @@
+# CI for every pull request (DESIGN §4.2 step 4, §5; P1-15).
+#   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings, non-blocking)
+#   preview    same-repo PRs only: Neon branch + migrate + seed, preview build, terraform apply
+#              infra/preview, Playwright against it, then teardown in the same job (if: always())
+#   prod-plan  same-repo PRs only: read-only prod plan; summary artifact for merge-rules
+#   required   the aggregate check `ci/required` that the main ruleset requires
+#
+# Fork PRs get `checks` only: no AWS role, no secrets (and the role trust would refuse them anyway).
+#
+# Cancelled runs: a new push cancels the running CI for that PR (concurrency below). The preview
+# teardown steps use `if: always()`, so they still run in the cancelled job. If they are cut short
+# (or a runner dies), the next CI run of the PR removes its own stale preview first ("Stale
+# preview" steps), and preview-gc.yml removes leftovers when the PR closes and nightly (> 24 h).
+name: ci
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  NEXT_TELEMETRY_DISABLED: "1"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Next.js build
+        run: pnpm --filter web build
+
+      - name: Terraform format
+        run: terraform fmt -check -recursive infra
+
+  preview:
+    name: preview
+    needs: checks
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      NEON_CI_PROJECT_ID: ${{ vars.NEON_CI_PROJECT_ID }}
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - name: AWS credentials (kcw-gh-ci)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      # Exports KCW_CI_NEON_API_KEY and KCW_CI_E2E_LOGIN, masked, to the later steps of this job.
+      - name: Read kcw/ci
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            KCW_CI, kcw/ci
+          parse-json-secrets: true
+
+      - name: Preview build (KCW_ENV=preview)
+        env:
+          KCW_ENV: preview
+        run: pnpm build-web
+
+      - name: Terraform init (preview/pr-${{ github.event.pull_request.number }}.tfstate)
+        id: tfinit
+        run: >-
+          terraform -chdir=infra/preview init
+          -backend-config="bucket=$TF_STATE_BUCKET"
+          -backend-config="key=preview/pr-$PR_NUMBER.tfstate"
+
+      - name: Stale preview from an earlier run?
+        id: stale
+        run: pnpm preview-gc find --pr "$PR_NUMBER" --force
+
+      - name: Stale preview - destroy
+        if: steps.stale.outputs.has_state == 'true'
+        env:
+          TF_VAR_database_url: unused-on-destroy
+        run: terraform -chdir=infra/preview destroy -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      - name: Stale preview - delete Neon branch
+        if: steps.stale.outputs.has_branch == 'true'
+        run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
+
+      - name: Neon branch preview/pr-${{ github.event.pull_request.number }}
+        id: neon
+        uses: ./.github/actions/neon-preview
+        with:
+          mode: create
+          pr_number: ${{ github.event.pull_request.number }}
+          project_id: ${{ vars.NEON_CI_PROJECT_ID }}
+
+      - name: Migrate and seed the branch
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          pnpm migrate
+          pnpm seed
+
+      - name: Terraform apply infra/preview
+        id: apply
+        env:
+          TF_VAR_database_url: ${{ steps.neon.outputs.db_url }}
+        run: terraform -chdir=infra/preview apply -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      - name: Preview URL
+        id: url
+        run: |
+          url="$(terraform -chdir=infra/preview output -raw url)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for the preview
+        env:
+          BASE_URL: ${{ steps.url.outputs.url }}
+        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15
+
+      - name: Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      # No report or trace upload: a trace would contain the typed preview login token.
+      - name: Playwright against the preview
+        env:
+          BASE_URL: ${{ steps.url.outputs.url }}
+          KCW_E2E_LOGIN: ${{ env.KCW_CI_E2E_LOGIN }}
+        run: pnpm --filter web e2e
+
+      # ---------- teardown: runs on success, failure and cancellation ----------
+
+      - name: Teardown - refresh AWS credentials
+        if: always() && steps.aws.outcome == 'success'
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      - name: Teardown - terraform destroy
+        id: destroy
+        if: always() && steps.tfinit.outcome == 'success'
+        continue-on-error: true
+        env:
+          TF_VAR_database_url: unused-on-destroy
+        run: terraform -chdir=infra/preview destroy -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      # Only after a successful destroy: without the state, nothing could remove what is left.
+      - name: Teardown - delete the state object
+        if: always() && steps.destroy.outcome == 'success'
+        continue-on-error: true
+        run: aws s3 rm "s3://$TF_STATE_BUCKET/preview/pr-$PR_NUMBER.tfstate"
+
+      - name: Teardown - delete the Neon branch
+        if: always() && steps.aws.outcome == 'success'
+        continue-on-error: true
+        run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
+
+      # The authority on teardown: fails the job if anything of pr-<n> is left. Retries cover the
+      # tagging API, which lists deleted resources for about a minute.
+      - name: Teardown - check nothing is left
+        if: always() && steps.aws.outcome == 'success'
+        run: pnpm check-preview-clean --pr "$PR_NUMBER" --retries 5 --retry-delay 30
+
+  prod-plan:
+    name: prod-plan
+    needs: checks
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      # Prod build; build-web also fails if the preview login is in the bundle.
+      - name: Prod build
+        run: pnpm build-web
+
+      - name: AWS credentials (kcw-gh-plan, read-only)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform init infra/prod
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir=infra/prod init -backend-config="bucket=$TF_STATE_BUCKET"
+
+      # -lock=false: the plan role cannot write the lock object, and a plan changes nothing.
+      - name: Terraform plan infra/prod
+        run: terraform -chdir=infra/prod plan -lock=false -out=prod.tfplan
+
+      # The plan JSON contains sensitive values in clear text: it is summarized, then deleted, never uploaded.
+      - name: Plan summary
+        run: |
+          terraform -chdir=infra/prod show -json prod.tfplan > "$RUNNER_TEMP/prod-plan.json"
+          pnpm plan-summary --plan-json "$RUNNER_TEMP/prod-plan.json" --out "$RUNNER_TEMP/prod-plan-summary.json" --markdown "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/prod-plan.json" infra/prod/prod.tfplan
+
+      - name: Upload plan summary (for merge-rules)
+        uses: actions/upload-artifact@v7
+        with:
+          name: prod-plan-summary
+          path: ${{ runner.temp }}/prod-plan-summary.json
+          if-no-files-found: error
+          retention-days: 30
+
+  required:
+    name: ci/required
+    needs: [checks, preview, prod-plan]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: All required jobs passed
+        env:
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          CHECKS: ${{ needs.checks.result }}
+          PREVIEW: ${{ needs.preview.result }}
+          PLAN: ${{ needs['prod-plan'].result }}
+        run: |
+          echo "checks=$CHECKS preview=$PREVIEW prod-plan=$PLAN same-repo=$SAME_REPO"
+          test "$CHECKS" = success
+          if [ "$SAME_REPO" = true ]; then
+            test "$PREVIEW" = success
+            test "$PLAN" = success
+          else
+            echo "Fork PR: preview and prod plan do not run."
+          fi

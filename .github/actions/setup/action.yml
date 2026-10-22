@@ -1,0 +1,41 @@
+name: Repo setup
+description: >-
+  Node (from .nvmrc), pnpm (from packageManager, store cached), `pnpm install --frozen-lockfile`,
+  and optionally Terraform. Requires actions/checkout first. No credentials involved.
+
+inputs:
+  terraform:
+    description: "Also install Terraform (true/false)"
+    required: false
+    default: "false"
+  terraform_version:
+    description: "Terraform version (same as the local toolchain in AGENTS.md)"
+    required: false
+    default: "1.16.6"
+
+runs:
+  using: composite
+  steps:
+    - name: pnpm
+      uses: pnpm/action-setup@v6
+      with:
+        cache: true
+
+    - name: Node
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        # pnpm/action-setup caches the store; avoid a second, automatic cache here.
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Terraform
+      if: inputs.terraform == 'true'
+      uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        # The wrapper rewrites stdout; `terraform output -raw` must stay clean.
+        terraform_wrapper: false

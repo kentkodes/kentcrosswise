@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { awsPreviewProbe, findPreviewLeftovers, previewNames, type PreviewProbe } from "../lib/preview-clean";
+import {
+  awsPreviewProbe,
+  findPreviewLeftovers,
+  findPreviewLeftoversWithRetries,
+  previewNames,
+  type PreviewProbe,
+} from "../lib/preview-clean";
 
 function fakeProbe(state: {
   tagged?: Record<number, string[]>;
@@ -71,6 +77,33 @@ describe("findPreviewLeftovers", () => {
     const probe = fakeProbe({ branches: ["preview/pr-0"] });
     expect(await findPreviewLeftovers(probe, { pr: 0, stateBucket: BUCKET, skipNeon: true })).toEqual([]);
     expect(probe.neonCalls).toBe(0);
+  });
+});
+
+describe("findPreviewLeftoversWithRetries", () => {
+  it("re-checks while the tagging index still lists deleted resources", async () => {
+    const probe = fakeProbe({});
+    let calls = 0;
+    probe.taggedArns = async () => (++calls < 3 ? ["arn:aws:lambda:us-east-1:000000000000:event-source-mapping:x"] : []);
+    const sleeps: number[] = [];
+    const left = await findPreviewLeftoversWithRetries(
+      probe,
+      { pr: 4, stateBucket: BUCKET, skipNeon: true },
+      { attempts: 5, delayMs: 30_000, sleep: async (ms) => void sleeps.push(ms) },
+    );
+    expect(left).toEqual([]);
+    expect(calls).toBe(3);
+    expect(sleeps).toEqual([30_000, 30_000]);
+  });
+
+  it("returns the leftovers after the last attempt", async () => {
+    const probe = fakeProbe({ objects: [`${BUCKET}/preview/pr-4.tfstate`] });
+    const left = await findPreviewLeftoversWithRetries(
+      probe,
+      { pr: 4, stateBucket: BUCKET, skipNeon: true },
+      { attempts: 2, delayMs: 1, sleep: async () => {} },
+    );
+    expect(left).toEqual([`state object s3://${BUCKET}/preview/pr-4.tfstate`]);
   });
 });
 

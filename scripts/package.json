@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check-prod-bundle": "tsx check-prod-bundle.ts",
     "build-web": "tsx build-web.ts",
-    "check-preview-clean": "tsx check-preview-clean.ts"
+    "check-preview-clean": "tsx check-preview-clean.ts",
+    "plan-summary": "tsx plan-summary.ts",
+    "smoke-check": "tsx smoke-check.ts",
+    "preview-gc": "tsx preview-gc.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.1154.0",
