@@ -19,6 +19,13 @@ $acct = aws sts get-caller-identity --query Account --output text
 $bucket = "kentcrosswise-tfstate-$acct"
 ```
 
+**If Terraform says `failed to find SSO session section`:** the AWS provider can't read an SSO session whose name contains a space (the owner's is `kent crosswise`). Either rename the session in `~/.aws/config` (no spaces) and run `aws configure sso` again, or hand Terraform short-lived credentials for this shell only (they expire with the SSO session):
+
+```powershell
+aws configure export-credentials --profile kc-admin --format powershell | Invoke-Expression
+Remove-Item Env:AWS_PROFILE
+```
+
 **Domain or not (D22).** Everything below works without a domain: prod and previews get `https://<id>.cloudfront.net` URLs. Add `-var "domain_name=kentcrosswise.com"` to the bootstrap, prod and preview commands only once the Route 53 hosted zone for the domain exists (it is looked up, never created by Terraform). You can add it later: re-run step 1 (certificate), then step 6 (aliases and DNS).
 
 ## 1. Apply `infra/bootstrap` (local state)
