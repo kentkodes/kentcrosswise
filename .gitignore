@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# secrets: never commit
+.env
+.env*
+*.pem
+*.key
+*.p12
+
+# build output
+dist/
+build/
+out/
+.next/
+.open-next/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# tests
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.pglite/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+.terraform.tfstate.lock.info
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

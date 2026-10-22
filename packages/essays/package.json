@@ -1,0 +1,13 @@
+{
+  "name": "@kcw/essays",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Essays UI and server logic (mounted at /essays)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

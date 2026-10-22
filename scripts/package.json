@@ -1,0 +1,10 @@
+{
+  "name": "@kcw/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Repo scripts (Node/TS via tsx; never bash or PowerShell)",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
