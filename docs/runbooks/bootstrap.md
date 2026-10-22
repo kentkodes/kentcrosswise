@@ -76,6 +76,7 @@ The trust policies expect these exact subjects (`terraform -chdir=infra/bootstra
 | Role | Expected `sub` |
 |---|---|
 | `kcw-gh-ci`, `kcw-gh-plan` | `repo:kentkodes@107236483/kentcrosswise@1430035147:pull_request` |
+| `kcw-gh-ci` (also) | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:preview-gc` (preview-gc sweep, added for P1-16) |
 | `kcw-gh-deploy` | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:prod` |
 | `kcw-gh-agent` | `repo:kentkodes@107236483/kentcrosswise@1430035147:ref:refs/heads/main` |
 
@@ -193,6 +194,35 @@ Remove-Item Env:NEON_API_KEY
 `check-preview-clean` must print `pr-0 is clean`. Tagged resources can show up in the tagging API for a few minutes after deletion; wait and re-run before reporting a leak.
 
 These manual steps use your admin profile. The `kcw-gh-ci` role's preview permissions are exercised for real in P1-15 (`ci.yml`).
+
+## 8. CI, deploy and preview GC go-live (P1-15, P1-16)
+
+Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`), `preview-gc.yml` (PR closed; nightly and manual sweep in environment `preview-gc`). Optional repo variable `KCW_DOMAIN_NAME` (empty = CloudFront URLs, D22).
+
+1. Re-apply bootstrap: `kcw-gh-ci` now also trusts `...:environment:preview-gc`, and the plan role may decrypt through Secrets Manager (needed to read `kcw/prod/origin-verify` for the prod plan):
+
+   ```powershell
+   cd infra/bootstrap
+   terraform init -backend-config="bucket=$bucket"
+   terraform plan -var "aws_account_id=$acct" -out bootstrap.tfplan   # expect 2 in-place updates (kcw-gh-ci trust, kcw-gh-plan policy)
+   terraform apply bootstrap.tfplan
+   Remove-Item bootstrap.tfplan
+   cd ../..
+   ```
+
+2. Let only `main` deploy to the `prod` and `preview-gc` environments (the first is created already; the second is created on first use, or now):
+
+   ```powershell
+   foreach ($envName in "prod", "preview-gc") {
+     gh api -X PUT "repos/kentkodes/kentcrosswise/environments/$envName" -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"
+     gh api -X POST "repos/kentkodes/kentcrosswise/environments/$envName/deployment-branch-policies" -f name=main -f type=branch
+   }
+   ```
+
+3. Push `main`. `deploy.yml` runs: the migrate step logs the notice "Migrations skipped" (no prod DB URL yet, DESIGN §11), then build, apply and the smoke check (`/`, `/demo` 200, `/hub` redirects).
+4. Open a throwaway PR from a branch of this repo. `ci.yml` must be green, including `ci/required`; the `preview` job's last step prints `pr-<n> is clean`, and `prod-plan` uploads the `prod-plan-summary` artifact (a trivial PR shows no infrastructure changes).
+5. Close the PR. `preview-gc (closed PR)` runs and reports no leftovers.
+6. `gh workflow run preview-gc.yml --ref main` (dry run by default) reports leftovers without changing anything.
 
 ## Live results (2026-10-22)
 

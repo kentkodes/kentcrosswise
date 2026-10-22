@@ -83,7 +83,7 @@ describe("findCandidates", () => {
       maxAgeHours: 24,
     });
     expect(c).toEqual([]);
-    expect(gcOutputs(c)).toEqual({ prs: "[]", destroy_prs: "[]", count: "0", has_state: "false", has_branch: "false" });
+    expect(gcOutputs(c)).toEqual({ prs: "[]", destroy_prs: "[]", lock_prs: "[]", count: "0", has_state: "false", has_branch: "false" });
     expect(gcReport(c)).toBe("No preview leftovers.\n");
   });
 });
@@ -92,14 +92,17 @@ describe("gcOutputs and gcReport", () => {
   it("lists eligible PRs and those that need terraform destroy", async () => {
     const c = await findCandidates(
       sources({
-        objects: [{ key: "preview/pr-3.tfstate", lastModified: hoursAgo(1) }],
+        objects: [
+          { key: "preview/pr-3.tfstate", lastModified: hoursAgo(1) },
+          { key: "preview/pr-3.tfstate.tflock", lastModified: hoursAgo(1) },
+        ],
         branches: [{ id: "b4", name: "preview/pr-4", createdAt: hoursAgo(1) }],
         prs: { 3: "closed", 4: "closed" },
       }),
       { now: NOW, maxAgeHours: 24 },
     );
-    expect(gcOutputs(c)).toEqual({ prs: "[3,4]", destroy_prs: "[3]", count: "2", has_state: "true", has_branch: "true" });
-    expect(gcReport(c)).toContain("| pr-3 | state | PR closed | clean |");
+    expect(gcOutputs(c)).toEqual({ prs: "[3,4]", destroy_prs: "[3]", lock_prs: "[3]", count: "2", has_state: "true", has_branch: "true" });
+    expect(gcReport(c)).toContain("| pr-3 | state, lock | PR closed | clean |");
   });
 });
 

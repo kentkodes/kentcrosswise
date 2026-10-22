@@ -1,5 +1,5 @@
 # GitHub OIDC provider and the four workflow roles (DESIGN §5). Every trust policy pins the audience
-# and one exact immutable `sub` (repo:OWNER@OWNER_ID/REPO@REPO_ID:<context>).
+# and exact immutable `sub` values (repo:OWNER@OWNER_ID/REPO@REPO_ID:<context>).
 
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
@@ -10,11 +10,13 @@ resource "aws_iam_openid_connect_provider" "github" {
 locals {
   oidc_host = "token.actions.githubusercontent.com"
 
+  # kcw-gh-ci also serves preview-gc.yml's sweep job (dispatch/schedule on main), which runs in
+  # environment preview-gc so that agent workflows on main (ref:refs/heads/main) cannot use this role.
   role_subs = {
-    "kcw-gh-ci"     = "${local.github_sub}:pull_request"
-    "kcw-gh-plan"   = "${local.github_sub}:pull_request"
-    "kcw-gh-deploy" = "${local.github_sub}:environment:prod"
-    "kcw-gh-agent"  = "${local.github_sub}:ref:refs/heads/main"
+    "kcw-gh-ci"     = ["${local.github_sub}:pull_request", "${local.github_sub}:environment:preview-gc"]
+    "kcw-gh-plan"   = ["${local.github_sub}:pull_request"]
+    "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
+    "kcw-gh-agent"  = ["${local.github_sub}:ref:refs/heads/main"]
   }
 
   state_arn     = aws_s3_bucket.state.arn
@@ -46,7 +48,7 @@ data "aws_iam_policy_document" "trust" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_host}:sub"
-      values   = [each.value]
+      values   = each.value
     }
   }
 }
@@ -300,11 +302,25 @@ data "aws_iam_policy_document" "plan" {
     effect = "Deny"
     actions = [
       "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath",
-      "kms:Decrypt", "sqs:ReceiveMessage", "logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery",
+      "sqs:ReceiveMessage", "logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery",
       "logs:GetQueryResults", "logs:StartLiveTail", "dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:Query",
       "dynamodb:Scan", "lambda:InvokeFunction", "lambda:InvokeFunctionUrl",
     ]
     resources = ["*"]
+  }
+  # KMS decrypt only through Secrets Manager, which itself is limited to origin-verify above.
+  # A plain Deny on kms:Decrypt would also block reading that secret: Secrets Manager decrypts with
+  # the caller's permissions.
+  statement {
+    sid       = "NoDecryptOutsideSecretsManager"
+    effect    = "Deny"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringNotEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${local.region}.amazonaws.com"]
+    }
   }
   # Object reads only for the prod state and the public web assets (needed to refresh aws_s3_object).
   statement {

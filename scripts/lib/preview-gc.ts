@@ -128,6 +128,8 @@ export function gcOutputs(cands: readonly Candidate[]): Record<string, string> {
   return {
     prs: JSON.stringify(eligible.map((c) => c.pr)),
     destroy_prs: JSON.stringify(eligible.filter((c) => c.hasState).map((c) => c.pr)),
+    // A lock on an eligible preview is stale (its run is gone); it would block terraform destroy.
+    lock_prs: JSON.stringify(eligible.filter((c) => c.hasLock).map((c) => c.pr)),
     count: String(eligible.length),
     has_state: String(eligible.some((c) => c.hasState)),
     has_branch: String(eligible.some((c) => c.hasBranch)),

@@ -1,0 +1,118 @@
+name: Preview GC
+description: >-
+  Finds per-PR preview leftovers (state objects, Neon branches, SSM parameters, tagged resources)
+  and removes those of closed PRs, or older than max_age_hours: stale lock removed, terraform
+  destroy, state object deleted, Neon branch deleted, then check-preview-clean. Requires checkout
+  and ./.github/actions/setup (with Terraform) first. Used by preview-gc.yml.
+
+inputs:
+  role_to_assume:
+    description: "AWS role ARN (repo variable AWS_ROLE_CI_ARN)"
+    required: true
+  state_bucket:
+    description: "Terraform state bucket (repo variable TF_STATE_BUCKET)"
+    required: true
+  neon_project_id:
+    description: "Neon CI project id (repo variable NEON_CI_PROJECT_ID)"
+    required: true
+  github_token:
+    description: "Token to read pull request state"
+    required: true
+  pr:
+    description: "Only this PR (empty: every PR)"
+    required: false
+    default: ""
+  max_age_hours:
+    description: "Open PRs are cleaned when their newest leftover is older than this"
+    required: false
+    default: "24"
+  dry_run:
+    description: "true: report only, change nothing"
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: AWS credentials (kcw-gh-ci)
+      uses: aws-actions/configure-aws-credentials@v6.3.0
+      with:
+        role-to-assume: ${{ inputs.role_to_assume }}
+        aws-region: us-east-1
+        role-duration-seconds: 3600
+
+    - name: Read kcw/ci
+      uses: aws-actions/aws-secretsmanager-get-secrets@v3
+      with:
+        secret-ids: |
+          KCW_CI, kcw/ci
+        parse-json-secrets: true
+
+    - name: Find leftovers
+      id: find
+      shell: bash
+      env:
+        TF_STATE_BUCKET: ${{ inputs.state_bucket }}
+        NEON_CI_PROJECT_ID: ${{ inputs.neon_project_id }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ inputs.pr }}
+        MAX_AGE: ${{ inputs.max_age_hours }}
+      run: |
+        if [ -n "$PR" ]; then
+          pnpm preview-gc find --pr "$PR" --max-age-hours "$MAX_AGE"
+        else
+          pnpm preview-gc find --max-age-hours "$MAX_AGE"
+        fi
+
+    - name: Dry run - nothing changed
+      if: inputs.dry_run == 'true'
+      shell: bash
+      env:
+        PRS: ${{ steps.find.outputs.prs }}
+      run: echo "Dry run. Would clean previews $PRS." | tee -a "$GITHUB_STEP_SUMMARY"
+
+    # terraform destroy evaluates the preview config, which reads the build output.
+    - name: Preview build (for terraform destroy)
+      if: inputs.dry_run != 'true' && steps.find.outputs.has_state == 'true'
+      shell: bash
+      env:
+        KCW_ENV: preview
+        NEXT_TELEMETRY_DISABLED: "1"
+      run: pnpm build-web
+
+    - name: Clean
+      if: inputs.dry_run != 'true' && steps.find.outputs.count != '0'
+      shell: bash
+      env:
+        TF_STATE_BUCKET: ${{ inputs.state_bucket }}
+        NEON_CI_PROJECT_ID: ${{ inputs.neon_project_id }}
+        PRS: ${{ steps.find.outputs.prs }}
+        DESTROY_PRS: ${{ steps.find.outputs.destroy_prs }}
+        LOCK_PRS: ${{ steps.find.outputs.lock_prs }}
+        TF_IN_AUTOMATION: "1"
+        TF_INPUT: "0"
+        TF_VAR_database_url: unused-on-destroy
+      run: |
+        failed=0
+        in_list() { jq -e --argjson n "$1" 'any(.[]; . == $n)' <<<"$2" >/dev/null; }
+        for pr in $(jq -r '.[]' <<<"$PRS"); do
+          echo "::group::pr-$pr"
+          if in_list "$pr" "$LOCK_PRS"; then
+            echo "pr-$pr: removing a stale state lock"
+            aws s3 rm "s3://$TF_STATE_BUCKET/preview/pr-$pr.tfstate.tflock" || failed=1
+          fi
+          if in_list "$pr" "$DESTROY_PRS"; then
+            if terraform -chdir=infra/preview init -reconfigure \
+                 -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=preview/pr-$pr.tfstate" \
+               && terraform -chdir=infra/preview destroy -auto-approve -lock-timeout=2m -var "pr_number=$pr"; then
+              aws s3 rm "s3://$TF_STATE_BUCKET/preview/pr-$pr.tfstate" || failed=1
+            else
+              echo "::error::pr-$pr: terraform destroy failed; the state object is kept for the next run"
+              failed=1
+            fi
+          fi
+          pnpm preview-gc delete-neon --pr "$pr" || failed=1
+          pnpm check-preview-clean --pr "$pr" --retries 5 --retry-delay 30 || failed=1
+          echo "::endgroup::"
+        done
+        exit "$failed"

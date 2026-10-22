@@ -299,7 +299,7 @@ OIDC role trust. The repo is new, so the immutable `sub` applies. Prefix `P` = `
 
 | Role | `sub` (StringEquals) | Permissions |
 |---|---|---|
-| `kcw-gh-ci` | `P:pull_request` | create/destroy resources tagged `kcw:env=preview` with name prefix `kcw-pr-*`; put/delete SSM parameters under `/kcw/preview/*`; read secret `kcw/ci`; preview state keys |
+| `kcw-gh-ci` | `P:pull_request`, `P:environment:preview-gc` (the `preview-gc.yml` sweep job, which runs on main for dispatch/schedule; an environment keeps agent workflows on main out) | create/destroy resources tagged `kcw:env=preview` with name prefix `kcw-pr-*`; put/delete SSM parameters under `/kcw/preview/*`; read secret `kcw/ci`; preview state keys |
 | `kcw-gh-plan` | `P:pull_request` | read-only on prod resources + read prod state (for the prod plan) |
 | `kcw-gh-deploy` | `P:environment:prod` | full prod apply; read `kcw/prod/migrator` |
 | `kcw-gh-agent` | `P:ref:refs/heads/main` (agent workflows are dispatched on main without an environment) | read `kcw/github/*-app` (one statement per App secret); `sqs:SendMessage` on `orchestrator-in` |
@@ -490,5 +490,8 @@ Resolved by the owner (via the Liaison):
 - **Q4:** capture-box agent requests are private by default.
 
 Open:
+- **Prod migrations skipped until the prod DB is wired (2026-10-22, temporary).** `kcw/prod/migrator` has no `db_url` yet, so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator --skip-if-unset`: a missing secret value, key or non-`postgres://` value logs a notice ("Migrations skipped") and the deploy continues; access errors still fail. Remove `--skip-if-unset` once the owner fills `kcw/prod/migrator` (and `db_url` in `kcw/prod/web`).
+- **Prod plan summary vs. "prod plan non-empty" (for P2-04).** Every PR changes the web build, so the prod plan is never empty (Lambda code, `OPEN_NEXT_BUILD_ID`, uploaded assets). `ci.yml` uploads `prod-plan-summary` (`scripts/lib/plan-summary.ts`): `infra` lists real infrastructure changes (address, create/update/delete/replace, changed attribute paths); `artifact` only counts build-shipping changes. Merge-rules should treat `infra` non-empty (and any `infra` create, for cost) as critical, not the raw plan.
+- **Nightly preview GC before the sweeper.** `preview-gc.yml` has an interim nightly `schedule` until P2-17's sweeper dispatches it; drop the schedule then.
 - **C4 / Q1 (resolved 2026-10-22):** Owner chose an allowlist. `agents/merge-rules/approved-deps.json` lists pre-approved npm packages (exact names or scopes like `@aws-sdk/*`), seeded in P1-01 with the stack's libraries. A new dependency on the list is not critical; one off the list is critical. Editing the list itself is critical (owner-approved).
 - **Q5:** Admin identity: IAM Identity Center (ends Free-plan credits) or an IAM user with MFA?

@@ -1,0 +1,81 @@
+# Deploy main to prod (DESIGN §4.2 step 8; P1-16): migrate, prod build, terraform apply infra/prod
+# (which uploads the OpenNext build), then smoke-check the live site.
+# Runs in GitHub environment `prod`, so the OIDC subject is ...:environment:prod (kcw-gh-deploy).
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# One deploy at a time, never cancelled mid-apply. A newer pending run replaces an older pending one,
+# so the latest main is what gets deployed.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  NEXT_TELEMETRY_DISABLED: "1"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  deploy:
+    name: deploy
+    # Manual runs must also be on main: only main is deployed.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - name: AWS credentials (kcw-gh-deploy)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      # Until the prod DB URL is in kcw/prod/migrator, this logs a notice and skips (DESIGN §11).
+      # Access errors still fail the deploy.
+      - name: Migrate prod
+        run: pnpm migrate --secret kcw/prod/migrator --skip-if-unset
+
+      # Prod build; build-web also fails if the preview login is in the bundle.
+      - name: Prod build
+        run: pnpm build-web
+
+      - name: Terraform init infra/prod
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir=infra/prod init -backend-config="bucket=$TF_STATE_BUCKET"
+
+      - name: Terraform apply infra/prod
+        run: terraform -chdir=infra/prod apply -auto-approve -lock-timeout=10m
+
+      - name: Prod URL
+        id: url
+        run: |
+          url="$(terraform -chdir=infra/prod output -raw url)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke check (/ and /demo 200, /hub redirects to sign-in)
+        env:
+          BASE_URL: ${{ steps.url.outputs.url }}
+        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15

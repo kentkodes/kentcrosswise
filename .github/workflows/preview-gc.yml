@@ -1,0 +1,96 @@
+# Preview garbage collection (DESIGN §5 step 6; P1-16). Removes preview leftovers of closed PRs
+# and of previews older than 24 h (CI runs that died before their teardown). Uses kcw-gh-ci.
+#
+# Triggers and OIDC subjects (kcw-gh-ci must trust both, see infra/bootstrap/iam.tf):
+#   - pull_request closed         -> ...:pull_request; cleans that PR only. Shares the PR's CI
+#                                    concurrency group, so it waits for a running CI teardown.
+#   - workflow_dispatch, schedule -> job in environment `preview-gc` -> ...:environment:preview-gc.
+#     The nightly schedule is interim: the orchestrator sweeper dispatches this workflow once
+#     P2-17 lands (GitHub disables schedules in public repos after 60 days without activity).
+name: preview-gc
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report only, change nothing"
+        type: boolean
+        default: true
+      max_age_hours:
+        description: "Clean open PRs whose newest leftover is older than this"
+        type: string
+        default: "24"
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions: {}
+
+env:
+  AWS_REGION: us-east-1
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  pr-closed:
+    name: preview-gc (closed PR)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: ci-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    steps:
+      # Trusted code: the base branch, not the closed PR's head.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - uses: ./.github/actions/preview-gc
+        with:
+          role_to_assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          neon_project_id: ${{ vars.NEON_CI_PROJECT_ID }}
+          github_token: ${{ github.token }}
+          pr: ${{ github.event.pull_request.number }}
+
+  sweep:
+    name: preview-gc (sweep)
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: preview-gc
+    concurrency:
+      group: preview-gc-sweep
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      # Scheduled runs have no inputs: they clean (dry_run false) with the 24 h limit.
+      - uses: ./.github/actions/preview-gc
+        with:
+          role_to_assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          neon_project_id: ${{ vars.NEON_CI_PROJECT_ID }}
+          github_token: ${{ github.token }}
+          max_age_hours: ${{ inputs.max_age_hours || '24' }}
+          dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}

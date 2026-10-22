@@ -4,7 +4,7 @@
 //       Lists per-PR preview leftovers and decides which to clean: closed PRs always, open PRs (or
 //       PRs that do not exist, like the manual pr-0) when the newest leftover is older than
 //       --max-age-hours (default 24). --force: everything found is eligible (ci.yml cleaning its
-//       own PR before a new preview). Writes step outputs prs, destroy_prs, count, has_state,
+//       own PR before a new preview). Writes step outputs prs, destroy_prs, lock_prs, count, has_state,
 //       has_branch to $GITHUB_OUTPUT and a table to $GITHUB_STEP_SUMMARY when set.
 //   pnpm preview-gc delete-neon --pr <n>
 //       Deletes the Neon branch preview/pr-<n> if it exists.
