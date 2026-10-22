@@ -1,0 +1,13 @@
+{
+  "name": "@kcw/merge-rules",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure critical-change detector: evaluate(PR diff, prod plan summary, lockfile diff) -> {critical, reasons}",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
