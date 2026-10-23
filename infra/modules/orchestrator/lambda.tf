@@ -175,12 +175,17 @@ resource "aws_lambda_function_url" "relay" {
   invoke_mode        = "BUFFERED"
 }
 
+# Ordering: the Function URL create (AuthType NONE) adds its own permission statements without the
+# provider's per-function lock, so these wait for it (same race as the web server URL, see
+# infra/modules/web/lambda.tf). Only the apply order changes.
 resource "aws_lambda_permission" "relay_url" {
   statement_id           = "PublicInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.relay.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+
+  depends_on = [aws_lambda_function_url.relay]
 }
 
 resource "aws_lambda_permission" "relay_invoke" {
@@ -189,4 +194,6 @@ resource "aws_lambda_permission" "relay_invoke" {
   function_name            = aws_lambda_function.relay.function_name
   principal                = "*"
   invoked_via_function_url = true
+
+  depends_on = [aws_lambda_function_url.relay]
 }

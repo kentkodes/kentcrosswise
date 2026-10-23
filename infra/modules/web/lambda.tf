@@ -135,12 +135,20 @@ resource "aws_lambda_function_url" "server" {
   invoke_mode        = "BUFFERED"
 }
 
+# Ordering: with authorization_type = "NONE" the provider's Function URL create also calls
+# AddPermission itself (statement ids FunctionURLAllowPublicAccess, FunctionURLAllowInvokeAction),
+# without the per-function lock and the ResourceConflictException retry that aws_lambda_permission
+# uses (hashicorp/aws 6.70, internal/service/lambda/function_url.go). Run in parallel, one of the
+# policy updates failed with 409 "concurrent update operation" (PR #12 preview). depends_on
+# serializes them; it only changes the apply order, no attribute.
 resource "aws_lambda_permission" "server_url" {
   statement_id           = "PublicInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.server.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+
+  depends_on = [aws_lambda_function_url.server]
 }
 
 resource "aws_lambda_permission" "server_invoke" {
@@ -149,6 +157,8 @@ resource "aws_lambda_permission" "server_invoke" {
   function_name            = aws_lambda_function.server.function_name
   principal                = "*"
   invoked_via_function_url = true
+
+  depends_on = [aws_lambda_function_url.server]
 }
 
 # ---------- image optimization ----------

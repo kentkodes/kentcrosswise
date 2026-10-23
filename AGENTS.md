@@ -44,7 +44,7 @@ CI and owner only (need AWS or GitHub admin credentials; locally use `--help`):
 
 | Command | What it does |
 |---|---|
-| `pnpm check-preview-clean --pr <n>` | After a preview teardown: fails if any `kcw-pr-<n>` resource, `/kcw/preview/pr-<n>/` parameter, state/lock object or Neon branch is left (`--retries`, `--retry-delay` for the tagging-index lag; `--skip-neon`) |
+| `pnpm check-preview-clean --pr <n>` | After a preview teardown: fails if any `kcw-pr-<n>` resource, `/kcw/preview/pr-<n>/` parameter, state/lock object or Neon branch is left. Tagged ARNs are confirmed with a get/describe call per type (`scripts/lib/tagged-resource.ts`): a confirmed not-found is ignored (the tagging index lags deletes), anything else counts, with its reason (`--retries`, `--retry-delay` to wait for deletes in progress; `--skip-neon`) |
 | `pnpm preview-gc find` / `delete-neon --pr <n>` | Preview leftovers per PR and which to clean (closed, or older than 24 h); delete a preview Neon branch |
 | `pnpm apply-repo-settings --profile interim --dry-run` | Owner only: create/update the `main` ruleset ([docs/runbooks/github-apps.md](docs/runbooks/github-apps.md)) |
 

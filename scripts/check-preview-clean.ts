@@ -3,7 +3,9 @@
 // objects, or the Neon branch preview/pr-<n>.
 // Usage: pnpm check-preview-clean --pr <n> [--bucket <state bucket>] [--neon-project <id>] [--skip-neon]
 //                                  [--retries <n>] [--retry-delay <seconds>]
-// --retries: re-check up to n more times while leftovers remain (tagging-index lag after a destroy).
+// Tagged ARNs are confirmed with the owning service (get/describe): a confirmed not-found is ignored
+// (the tagging index lags deletes); access denied or an unchecked type still counts, with the reason.
+// --retries: re-check up to n more times while leftovers remain (e.g. resources still deleting).
 // Env: AWS credentials (kcw-gh-ci or the owner's profile); TF_STATE_BUCKET; NEON_CI_PROJECT_ID;
 //      NEON_API_KEY or KCW_CI_NEON_API_KEY (as exported by aws-secretsmanager-get-secrets).
 import { parseArgs } from "./lib/args";
@@ -49,7 +51,7 @@ await runMain(async () => {
   const delayMs = nonNegativeInt("retry-delay", 30) * 1000;
   const leftovers = await findPreviewLeftoversWithRetries(
     probe,
-    { pr, stateBucket, skipNeon },
+    { pr, stateBucket, skipNeon, log: (line) => console.log(line) },
     { attempts: retries + 1, delayMs, log: (line) => console.log(line) },
   );
   if (leftovers.length > 0) {

@@ -21,9 +21,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.1154.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.1154.0",
     "@aws-sdk/client-iam": "^3.1154.0",
+    "@aws-sdk/client-lambda": "^3.1154.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.1154.0",
     "@aws-sdk/client-s3": "^3.1154.0",
+    "@aws-sdk/client-sqs": "^3.1154.0",
     "@aws-sdk/client-ssm": "^3.1154.0",
     "@electric-sql/pglite": "^0.5.11",
     "@kcw/core": "workspace:*",
