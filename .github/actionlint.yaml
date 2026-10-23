@@ -1,0 +1,7 @@
+# actionlint 1.7.9 checks popular actions against a bundled list of their inputs, and that list for
+# anthropics/claude-code-action@v1 predates these inputs. They exist in the action.yml at tag v1
+# (checked 2026-10-23); scripts/test/agent-workflows.test.ts keeps its own copy of the real list.
+paths:
+  .github/workflows/agent-*.yml:
+    ignore:
+      - 'input "(anthropic_federation_rule_id|anthropic_organization_id|anthropic_service_account_id|anthropic_workspace_id|display_report)" is not defined in action "anthropics/claude-code-action@v1"'

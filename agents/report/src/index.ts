@@ -2,6 +2,7 @@
 // {task_id, agent, event_type, usage} to the orchestrator's SQS FIFO queue.
 // Everything here is injectable so tests run with a fake SQS client; cli.ts wires in the real one.
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { parseAgentReport, threadIdOf, type AgentReport, type Usage } from "@kcw/core/events";
@@ -51,7 +52,10 @@ Sends {task_id, agent, event_type, usage} to the orchestrator queue (SQS FIFO).
 
 Options:
   --provider <p> --model <m> --input-tokens <n> --output-tokens <n>   model usage of this step
-  --minutes <x>                     GitHub Actions minutes of this job
+  --claude-execution-file <path>    model usage of a Claude Code Action run (its execution_file
+                                    output), one usage line per model
+  --minutes <x>                     GitHub Actions minutes of this job (agent workflows do not send
+                                    it: the relay records Actions minutes, DESIGN §11 Q13)
   --queue-url <url>                 default: $${QUEUE_URL_ENV}
   --region <r>                      default: $AWS_REGION, then us-east-1
   --dedupe-id <id>                  FIFO deduplication id (default: random)
@@ -68,6 +72,7 @@ const OPTIONS = {
   "input-tokens": { type: "string" },
   "output-tokens": { type: "string" },
   minutes: { type: "string" },
+  "claude-execution-file": { type: "string" },
   "queue-url": { type: "string" },
   region: { type: "string" },
   "dedupe-id": { type: "string" },
@@ -114,11 +119,57 @@ export function reportFromFlags(v: Record<string, string | boolean | undefined>)
   });
 }
 
+/**
+ * Model usage of a Claude Code Action run, from its execution file (the JSON array of Agent SDK
+ * messages; the last `result` message carries `modelUsage` per model). Input tokens include cache
+ * reads and cache writes, because usage_events has one input count (the computed cost is then an
+ * upper bound). No result message (the run died early): no usage. Never echoes file content.
+ */
+export function usageFromExecution(messages: unknown): Usage[] {
+  if (!Array.isArray(messages)) throw new UsageError("the execution file is not a JSON array");
+  const result = [...(messages as unknown[])]
+    .reverse()
+    .find((m) => typeof m === "object" && m !== null && (m as { type?: unknown }).type === "result") as
+    | { modelUsage?: unknown }
+    | undefined;
+  if (!result || typeof result.modelUsage !== "object" || result.modelUsage === null) return [];
+  const count = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  const usage: Usage[] = [];
+  for (const [model, raw] of Object.entries(result.modelUsage as Record<string, unknown>)) {
+    if (typeof raw !== "object" || raw === null || !/^[\w.:/-]{1,100}$/.test(model)) continue;
+    const u = raw as Record<string, unknown>;
+    const input = count(u.inputTokens) + count(u.cacheReadInputTokens) + count(u.cacheCreationInputTokens);
+    const output = count(u.outputTokens);
+    if (input === 0 && output === 0) continue;
+    usage.push({ kind: "model", provider: "anthropic", model, input_tokens: input, output_tokens: output });
+  }
+  return usage;
+}
+
+async function readExecutionUsage(file: string, read: (p: string) => Promise<string>): Promise<Usage[]> {
+  let text: string;
+  try {
+    text = await read(file);
+  } catch {
+    // A run that failed before Claude started has no file: the event is sent without usage.
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new UsageError("the execution file is not valid JSON");
+  }
+  return usageFromExecution(parsed);
+}
+
 export interface CliDeps {
   env: Readonly<Record<string, string | undefined>>;
   /** Defaults to a real SQSClient in the chosen region. */
   sqs?: SqsLike;
   stdout: (line: string) => void;
+  /** Reads --claude-execution-file; defaults to fs.readFile. */
+  readFile?: (path: string) => Promise<string>;
 }
 
 /** Runs the CLI. Throws on bad input or a failed send; cli.ts turns that into exit code 1. */
@@ -133,7 +184,12 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<vo
     deps.stdout(HELP);
     return;
   }
-  const report = reportFromFlags(values);
+  let report = reportFromFlags(values);
+  const execFile = values["claude-execution-file"];
+  if (typeof execFile === "string" && execFile !== "") {
+    const extra = await readExecutionUsage(execFile, deps.readFile ?? ((p) => readFile(p, "utf8")));
+    if (extra.length > 0) report = parseAgentReport({ ...report, usage: [...(report.usage ?? []), ...extra] });
+  }
   if (values["dry-run"] === true) {
     deps.stdout(JSON.stringify(report, null, 2));
     return;
