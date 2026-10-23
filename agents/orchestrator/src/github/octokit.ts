@@ -1,6 +1,7 @@
 // GitHubClient over the REST API, authenticated as the orchestrator GitHub App (DESIGN §4.1).
 // @octokit/auth-app signs a JWT with the App's private key, exchanges it for an installation
 // token (cached and renewed by auth-app, ~1 h) and sends that token on every request.
+import { createPrivateKey } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { MERGE_INPUT_ARTIFACT, MERGE_INPUT_FILE, MergeInputFormatError, parseMergeInput } from "@kcw/core/merge-input";
@@ -381,12 +382,34 @@ export async function readAppCredentials(secretName: string, secrets?: SecretGet
   if (!/^\d+$/.test(installation.trim()) || Number(installation) < 1) {
     throw new GitHubConfigError(`${APP_SECRET_KEYS.installationId} must be a positive integer`);
   }
-  // A key pasted into the console as one line may carry literal "\n" sequences.
-  const privateKey = key.includes("\\n") ? key.replace(/\\n/g, "\n") : key;
-  if (!/-----BEGIN (RSA )?PRIVATE KEY-----/.test(privateKey)) {
-    throw new GitHubConfigError(`${APP_SECRET_KEYS.privateKey} is not a PEM private key`);
+  return { appId: appId.trim(), privateKey: normalizePrivateKey(key), installationId: Number(installation.trim()) };
+}
+
+const PEM = /-----BEGIN ((?:RSA )?PRIVATE KEY)-----([\s\S]*?)-----END \1-----/;
+
+/**
+ * Rebuilds the App's PEM key so it parses whatever happened to its line breaks, then checks that
+ * it does. A key pasted into the Secrets Manager console's key/value field loses its newlines
+ * (single-line input) or gets spaces or literal `\n` instead; the JWT library then fails before
+ * any request (Node: "DECODER routines::unsupported" for PKCS#1, WebCrypto "Invalid keyData" for
+ * PKCS#8), which surfaced as a status-less GitHubApiError on the first App call (P2-17 sweeper).
+ * Errors name the setting and the parser's error, never key material.
+ */
+export function normalizePrivateKey(raw: string): string {
+  const m = PEM.exec(raw.replace(/\\n/g, "\n"));
+  if (!m) throw new GitHubConfigError(`${APP_SECRET_KEYS.privateKey} is not a PEM private key`);
+  const body = m[2]!.replace(/\s+/g, "");
+  if (body.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body)) {
+    throw new GitHubConfigError(`${APP_SECRET_KEYS.privateKey} has a malformed PEM body`);
   }
-  return { appId: appId.trim(), privateKey, installationId: Number(installation.trim()) };
+  const pem = `-----BEGIN ${m[1]}-----\n${body.match(/.{1,64}/g)!.join("\n")}\n-----END ${m[1]}-----\n`;
+  try {
+    createPrivateKey(pem);
+  } catch (err) {
+    const code = typeof err === "object" && err !== null && "code" in err ? ` ${String(err.code)}` : "";
+    throw new GitHubConfigError(`${APP_SECRET_KEYS.privateKey} does not parse as a private key${code}`, { cause: err });
+  }
+  return pem;
 }
 
 /** The production client: credentials from the orchestrator secret, Octokit with App auth. */

@@ -2,6 +2,7 @@
 // (infra/modules/scheduler), separate from the orchestrator: it sends to the queue the
 // orchestrator consumes, and it does not load LangGraph.
 export * from "./deliveries";
+export * from "./errors";
 export * from "./github";
 export * from "./lambda";
 export * from "./schedule";

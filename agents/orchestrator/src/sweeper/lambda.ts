@@ -10,6 +10,7 @@
 import pg from "pg";
 import { createAppOctokit, readAppCredentials, type SecretGetter } from "../github/octokit";
 import { DEFAULT_REPO } from "../github/types";
+import { describeError } from "./errors";
 import { OctokitSweeperGitHub, type SweeperGitHub } from "./github";
 import { scheduledTimeOf } from "./schedule";
 import { sqlSweeperStore, type SqlQuery } from "./store";
@@ -100,7 +101,7 @@ export function createSweeperHandler(deps: SweeperLambdaDeps): (event: unknown) 
       db = await (deps.connect ?? connectPg)(url);
     } catch (err) {
       deps.secrets.clearCache?.();
-      log(`sweeper: database unavailable (${err instanceof Error ? err.name : "error"})`);
+      log(`sweeper: database unavailable (${err instanceof Error ? err.name : "error"}) ${describeError(err)}`);
       throw new SweepFailedError("database unavailable");
     }
 

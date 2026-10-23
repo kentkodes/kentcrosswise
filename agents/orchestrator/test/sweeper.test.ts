@@ -16,7 +16,9 @@ import {
   SWEEP_STATUSES,
   SweepFailedError,
   createSweeperHandler,
+  describeError,
   isAgentWorkflowPath,
+  redact,
   nightlyGcWindow,
   runSweep,
   scheduledTimeOf,
@@ -32,7 +34,34 @@ import {
   type SweeperStore,
   type WebhookDelivery,
 } from "../src/sweeper";
-import type { CancelResult, DispatchWorkflowInput } from "../src/github";
+import { GitHubApiError, type CancelResult, type DispatchWorkflowInput } from "../src/github";
+
+describe("describeError / redact", () => {
+  it("chains causes with class, status and code, at most three deep", () => {
+    const inner = Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" });
+    const mid = Object.assign(new Error("request failed", { cause: inner }), { name: "HttpError", status: 502 });
+    const outer = new GitHubApiError("listDeliveries", 502, { cause: mid });
+    expect(describeError(outer)).toBe(
+      "GitHubApiError 502: listDeliveries failed: GitHub returned 502 <- HttpError 502: request failed <- Error [ECONNREFUSED]: connect ECONNREFUSED",
+    );
+    const deep = new Error("4", { cause: new Error("3", { cause: new Error("2", { cause: new Error("1") }) }) });
+    expect(describeError(deep).split(" <- ")).toHaveLength(3);
+    expect(describeError("x")).toBe("string");
+  });
+
+  it("redacts credentials and shortens long messages", () => {
+    const secretish = [
+      "token ghs_abcdefghijklmnop1234",
+      "Authorization: bearer eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ4In0.c2ln",
+      "postgres://kcw_orch:hunter2hunter2@ep-x.neon.tech/db failed",
+      "-----BEGIN RSA PRIVATE KEY-----MIIEsecretbody-----END RSA PRIVATE KEY-----",
+    ].join(" ");
+    const out = redact(secretish);
+    for (const leak of ["ghs_abcdefghijklmnop1234", "eyJhbGci", "hunter2", "MIIEsecretbody"]) expect(out).not.toContain(leak);
+    expect(out).toContain("://<redacted>@ep-x.neon.tech");
+    expect(redact("a".repeat(500))).toHaveLength(163);
+  });
+});
 
 const T = (iso: string) => new Date(iso);
 
@@ -356,7 +385,7 @@ describe("runSweep", () => {
     expect(gh.listedSince).toEqual([T("2026-10-23T09:00:00Z")]); // 180 min lookback
   });
 
-  it("one failing part does not stop the others; failures are named by class only", async () => {
+  it("one failing part does not stop the others; the report names the class, the log the error chain", async () => {
     const { store, gh, deps, logs } = setup("2026-10-23T06:15:00Z");
     store.failTasks = true;
     gh.deliveries = [delivery("x", 500, 1)];
@@ -364,8 +393,18 @@ describe("runSweep", () => {
     expect(r.failed).toEqual({ tasks: "TypeError" });
     expect(r.gc).toBe("dispatched");
     expect(r.redelivered).toBe(1);
-    expect(logs).toContain("sweeper: tasks failed (TypeError)");
-    expect(logs.join("\n")).not.toContain("db down");
+    expect(logs).toContain("sweeper: tasks failed (TypeError) TypeError: db down");
+  });
+
+  it("logs the cause of a status-less GitHubApiError (the P2-17 live failure)", async () => {
+    const { gh, deps, logs } = setup();
+    const keyError = Object.assign(new Error("error:1E08010C:DECODER routines::unsupported"), { code: "ERR_OSSL_UNSUPPORTED" });
+    gh.listDeliveries = () => Promise.reject(new GitHubApiError("listDeliveries", undefined, { cause: keyError }));
+    const r = await runSweep(deps);
+    expect(r.failed).toEqual({ redeliver: "GitHubApiError" });
+    expect(logs).toContain(
+      "sweeper: redeliver failed (GitHubApiError) GitHubApiError: listDeliveries failed <- Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported",
+    );
   });
 
   it("missing App credentials fail the GitHub parts only, and the client is created once", async () => {
@@ -615,7 +654,7 @@ describe("createSweeperHandler", () => {
     const { store: secrets } = createFakeSecrets({ "kcw/prod/orchestrator": { db_url: " " } });
     const handler = createSweeperHandler({ env, secrets, sendMessage: async () => undefined, log: (l) => logs.push(l) });
     await expect(handler({})).rejects.toBeInstanceOf(SweepFailedError);
-    expect(logs).toEqual(["sweeper: database unavailable (SweeperConfigError)"]);
+    expect(logs).toEqual(["sweeper: database unavailable (SweeperConfigError) SweeperConfigError: db_url is empty"]);
   });
 
   it("requires its env vars", async () => {

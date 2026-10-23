@@ -414,7 +414,7 @@ describe("built Lambda bundles", () => {
           MessageDeduplicationId: `sweep-${id}-${at.slice(0, 16)}Z`,
         },
       ]);
-      expect(r.logs).toContain("sweeper: redeliver failed (SecretKeyMissingError)");
+      expect(r.logs.some((l) => l.startsWith("sweeper: redeliver failed (SecretKeyMissingError) SecretKeyMissingError: "))).toBe(true);
       expect(r.output).not.toContain(orchDb.url);
     }, 60_000);
 
@@ -423,7 +423,8 @@ describe("built Lambda bundles", () => {
       const before = aws.sent.length;
       const r = await invoke(out, file("sweeper"), env(), { scheduled_time: scheduledTime() });
       expect(r.result).toEqual({ thrown: "SweepFailedError" });
-      expect(r.logs).toEqual(["sweeper: database unavailable (SecretKeyMissingError)"]);
+      expect(r.logs).toHaveLength(1);
+      expect(r.logs[0]).toMatch(/^sweeper: database unavailable \(SecretKeyMissingError\) SecretKeyMissingError: .*db_url/);
       expect(aws.sent.length).toBe(before);
       expect(r.output).not.toContain(DB_MARKER);
     }, 60_000);
