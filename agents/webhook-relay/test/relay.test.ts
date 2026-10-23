@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PACKAGE_NAME, handleDelivery, signBody, type RelayDeps, type RelayRequest } from "../src/index";
+import {
+  PACKAGE_NAME,
+  actionsMinutesOf,
+  handleDelivery,
+  normalize,
+  signBody,
+  type RelayDeps,
+  type RelayRequest,
+} from "../src/index";
 import { ALLOWED, DELIVERY, FakeQueue, FakeStore, IDS, SECRET, fixture, type Fixture, type Payload } from "./helpers";
 
 function request(event: string, payload: unknown, over: Partial<RelayRequest> & { headers?: Record<string, string | undefined> } = {}): RelayRequest {
@@ -247,6 +255,124 @@ describe("delivery dedupe (inbound_events)", () => {
     expect(await t.run(request("push", fixture("push")))).toEqual({ status: 500, body: { result: "error", reason: "db" } });
     expect(t.queue.sent).toEqual([]);
     expect(t.logs.join("\n")).not.toMatch(/postgres:|pw@/);
+  });
+});
+
+describe("Actions minutes (workflow_run.completed)", () => {
+  const DELIVERY_2 = "5f1a0c2e-0000-4000-8000-000000000002";
+
+  it("records the run's duration once per run attempt, linked to the task", async () => {
+    const t = setup();
+    expect((await t.run(request("workflow_run", fixture("workflow_run.completed")))).body.result).toBe("forwarded");
+    expect([...t.store.minutes.values()]).toEqual([
+      {
+        usage: {
+          dedupeKey: "github:workflow_run:30000001:1",
+          agent: "orchestrator",
+          minutes: 7.5,
+          ts: "2026-10-22T10:07:30.000Z",
+        },
+        taskId: 42,
+      },
+    ]);
+    expect(t.logs[0]).toMatch(/ minutes=7\.5$/);
+  });
+
+  it("a redelivery (same or new delivery id) does not count the run again", async () => {
+    const t = setup();
+    const req = request("workflow_run", fixture("workflow_run.completed"));
+    await t.run(req);
+    expect(await t.run(req)).toEqual({ status: 200, body: { result: "duplicate" } });
+    await t.run(request("workflow_run", fixture("workflow_run.completed"), { headers: { "x-github-delivery": DELIVERY_2 } }));
+    expect(t.store.minutes.size).toBe(1);
+    expect(t.logs[1]).toMatch(/minutes=duplicate$/);
+  });
+
+  it("a re-run (next attempt) is counted separately", async () => {
+    const t = setup();
+    await t.run(request("workflow_run", fixture("workflow_run.completed")));
+    const p = fixture("workflow_run.completed");
+    p.workflow_run.run_attempt = 2;
+    await t.run(request("workflow_run", p, { headers: { "x-github-delivery": DELIVERY_2 } }));
+    expect([...t.store.minutes.keys()]).toEqual(["github:workflow_run:30000001:1", "github:workflow_run:30000001:2"]);
+  });
+
+  it("runs without a task (deploys) are still counted, then ignored", async () => {
+    const t = setup();
+    const p = fixture("workflow_run.completed");
+    p.workflow_run.head_branch = "main";
+    p.workflow_run.pull_requests = [];
+    p.workflow_run.path = ".github/workflows/deploy.yml";
+    expect((await t.run(request("workflow_run", p))).body).toEqual({ result: "ignored", reason: "no_task" });
+    expect([...t.store.minutes.values()]).toMatchObject([{ taskId: null, usage: { agent: "orchestrator" } }]);
+    expect(t.store.claimed.size).toBe(0);
+  });
+
+  it("not for requested runs, stranger senders or runs without times", async () => {
+    const t = setup();
+    const requested = fixture("workflow_run.completed");
+    requested.action = "requested";
+    await t.run(request("workflow_run", requested));
+    const stranger = fixture("workflow_run.completed");
+    stranger.sender.id = IDS.stranger;
+    await t.run(request("workflow_run", stranger));
+    const noStart = fixture("workflow_run.completed");
+    delete noStart.workflow_run.run_started_at;
+    await t.run(request("workflow_run", noStart, { headers: { "x-github-delivery": DELIVERY_2 } }));
+    expect(t.store.minutes.size).toBe(0);
+    expect(t.store.calls).not.toContain("minutes");
+  });
+
+  it("a database failure while recording is a 500 and nothing is claimed or sent", async () => {
+    const store = new FakeStore(new Map([[12, 42]]));
+    store.recordActionsMinutes = async () => {
+      throw Object.assign(new Error("synthetic"), { name: "DatabaseError" });
+    };
+    const t = setup({ store });
+    expect(await t.run(request("workflow_run", fixture("workflow_run.completed")))).toEqual({
+      status: 500,
+      body: { result: "error", reason: "db" },
+    });
+    expect(t.store.claimed.size).toBe(0);
+    expect(t.queue.sent).toEqual([]);
+  });
+});
+
+describe("actionsMinutesOf", () => {
+  function normalized(p: Payload) {
+    const n = normalize("workflow_run", p);
+    if (!n.ok || n.value.payload.type !== "workflow_run") throw new Error("fixture did not normalize");
+    return n.value.payload;
+  }
+
+  it.each<[string, string]>([
+    [".github/workflows/agent-developer.yml", "developer"],
+    [".github/workflows/agent-qa.yml", "qa"],
+    [".github/workflows/agent-scraper.yml", "scraper"],
+    [".github/workflows/agent-docs.yml", "docs"],
+    [".github/workflows/ci.yml", "orchestrator"],
+    [".github/workflows/preview-gc.yml", "orchestrator"],
+  ])("%s -> %s", (path, agent) => {
+    const p = fixture("workflow_run.completed");
+    p.workflow_run.path = path;
+    expect(actionsMinutesOf(normalized(p))?.agent).toBe(agent);
+  });
+
+  it("rounds to 2 decimals and defaults the attempt to 1", () => {
+    const p = fixture("workflow_run.completed");
+    p.workflow_run.updated_at = "2026-10-22T10:00:20Z"; // 20 s
+    delete p.workflow_run.run_attempt;
+    expect(actionsMinutesOf(normalized(p))).toMatchObject({ minutes: 0.33, dedupeKey: "github:workflow_run:30000001:1" });
+  });
+
+  it.each<[string, (p: Payload) => void]>([
+    ["end before start", (p) => (p.workflow_run.updated_at = "2026-10-22T09:00:00Z")],
+    ["unparseable time", (p) => (p.workflow_run.run_started_at = "yesterday")],
+    ["longer than a day", (p) => (p.workflow_run.updated_at = "2026-10-24T10:00:00Z")],
+  ])("%s -> null", (_label, edit) => {
+    const p = fixture("workflow_run.completed");
+    edit(p);
+    expect(actionsMinutesOf(normalized(p))).toBeNull();
   });
 });
 
