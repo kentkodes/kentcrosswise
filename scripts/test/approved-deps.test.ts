@@ -11,6 +11,7 @@ const PACKAGE_FILES = [
   "package.json",
   "apps/web/package.json",
   "scripts/package.json",
+  "agents/report/package.json",
   ...["core", "db", "secrets", "essays", "demo-data", "xray"].map((p) => `packages/${p}/package.json`),
 ];
 
