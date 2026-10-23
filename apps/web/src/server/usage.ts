@@ -1,4 +1,4 @@
-// Usage panel data (P2-15, DESIGN §3.2, §11 Q12). Runs as web_rw, owner pages only. All the
+// Usage panel data (P2-15, DESIGN §3.2, §11 Q13). Runs as web_rw, owner pages only. All the
 // aggregation SQL lives here.
 //
 // Cost of a model usage row, in this order:
