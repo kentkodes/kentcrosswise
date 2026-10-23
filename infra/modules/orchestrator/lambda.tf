@@ -1,5 +1,5 @@
 # Orchestrator and webhook relay functions (arm64). Code comes from a directory with index.mjs
-# exporting `handler`; until P2-05/P2-08 ship a bundle, the stubs in stub/ are deployed.
+# exporting `handler` (infra/prod: the `pnpm build-lambdas` output); null deploys the stubs in stub/.
 
 # ---------- orchestrator (SQS FIFO consumer) ----------
 

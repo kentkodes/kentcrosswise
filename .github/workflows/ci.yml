@@ -2,7 +2,7 @@
 #   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings check, non-blocking)
 #   preview    same-repo PRs only: Neon branch + migrate + seed, preview build, terraform apply
 #              infra/preview, Playwright against it, then teardown in the same job (if: always())
-#   prod-plan  same-repo PRs only: read-only prod plan; summary artifact for merge-rules
+#   prod-plan  same-repo PRs only: prod build + Lambda bundles, read-only prod plan; summary artifact for merge-rules
 #   required   the aggregate check `ci/required` that the main ruleset requires
 #
 # Fork PRs get `checks` only: no AWS role, no secrets (and the role trust would refuse them anyway).
@@ -236,6 +236,10 @@ jobs:
       # Prod build; build-web also fails if the preview login is in the bundle.
       - name: Prod build
         run: pnpm build-web
+
+      # Orchestrator and webhook relay Lambda code (agents/*/dist, read by infra/prod).
+      - name: Lambda bundles
+        run: pnpm build-lambdas
 
       - name: AWS credentials (kcw-gh-plan, read-only)
         uses: aws-actions/configure-aws-credentials@v6.3.0

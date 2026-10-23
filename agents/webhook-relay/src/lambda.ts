@@ -137,7 +137,20 @@ export function createHandler(opts: HandlerOptions = {}): (event: FunctionUrlEve
     }
     sqs ??= new SQSClient({ region: cfg.region });
     const store = secrets;
-    const db = lazyStore(async () => (opts.openDb ?? openPg)(await store.get(cfg.dbSecretName, "db_url")));
+    const db = lazyStore(async () => {
+      let url: string;
+      try {
+        url = await store.get(cfg.dbSecretName, "db_url");
+        // An empty URL would make node-postgres fall back to its localhost defaults.
+        if (url.trim().length === 0) throw new ConfigError("db_url is empty");
+      } catch (err) {
+        // Re-read on the next delivery, so filling the secret takes effect without a cold start.
+        // Only reached by deliveries that passed the signature check.
+        store.clearCache(cfg.dbSecretName);
+        throw err;
+      }
+      return (opts.openDb ?? openPg)(url);
+    });
     const raw = event.body ?? "";
     try {
       const r = await handleDelivery(

@@ -47,15 +47,15 @@ variable "artifact_dir" {
 }
 
 variable "orchestrator_package_dir" {
-  description = "Orchestrator Lambda code directory (index.mjs). Null (default): the module's stub, until agents/orchestrator ships a bundle."
+  description = "Orchestrator Lambda code directory (index.mjs exporting handler), built by pnpm build-lambdas (run it before plan/apply)."
   type        = string
-  default     = null
+  default     = "../../agents/orchestrator/dist"
 }
 
 variable "relay_package_dir" {
-  description = "Webhook relay Lambda code directory (index.mjs). Null (default): the module's stub, until agents/webhook-relay ships a bundle."
+  description = "Webhook relay Lambda code directory (index.mjs exporting handler), built by pnpm build-lambdas (run it before plan/apply)."
   type        = string
-  default     = null
+  default     = "../../agents/webhook-relay/dist"
 }
 
 variable "relay_allowed_sender_ids" {

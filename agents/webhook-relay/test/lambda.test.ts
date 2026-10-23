@@ -166,4 +166,19 @@ describe("Lambda handler (Function URL v2) with fake secrets, fake SQS and PGlit
     expect(JSON.parse(r.body)).toEqual({ result: "error", reason: "db" });
     expect(t.sqs.sent).toEqual([]);
   });
+
+  it("an empty db_url is a 500 (db) without connecting, and is re-read once filled", async () => {
+    const t = make({ secrets: { "kcw/github/webhook-secret": { secret: SECRET }, "kcw/test/relay": { db_url: " " } } });
+    const before = opened.length;
+    const e = urlEvent("push", fixture("push"), { delivery: "emptydb-1" });
+    const r = await t.handler(e);
+    expect(r).toMatchObject({ statusCode: 500, body: '{"result":"error","reason":"db"}' });
+    expect(opened.length).toBe(before);
+    expect(t.sqs.sent).toEqual([]);
+    expect(t.logs).toEqual(["relay: error (db) event=push delivery=emptydb-1 ConfigError"]);
+
+    // The owner fills the secret: the next delivery reads it again (no cold start needed).
+    t.aws.values.set("kcw/test/relay", JSON.stringify({ db_url: "postgres://synthetic.invalid/db" }));
+    expect(JSON.parse((await t.handler(e)).body)).toEqual({ result: "forwarded" });
+  });
 });

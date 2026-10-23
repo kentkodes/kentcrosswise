@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check-prod-bundle": "tsx check-prod-bundle.ts",
     "build-web": "tsx build-web.ts",
+    "build-lambdas": "tsx build-lambdas.ts",
     "check-preview-clean": "tsx check-preview-clean.ts",
     "plan-summary": "tsx plan-summary.ts",
     "smoke-check": "tsx smoke-check.ts",
@@ -29,6 +30,7 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1"
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2"
   }
 }
