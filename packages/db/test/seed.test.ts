@@ -28,6 +28,9 @@ describe("seedDemo on PGlite", () => {
       social_snapshots: 60,
       projects: 1,
       essay_prefs: 1,
+      tasks: 3,
+      agent_events: 13,
+      approvals: 2,
     });
     const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM crm_notes WHERE contact_id IS NOT NULL");
     expect(rows[0]?.n).toBe(data.crmNotes.length);
@@ -36,6 +39,13 @@ describe("seedDemo on PGlite", () => {
   it("is idempotent", async () => {
     const { inserted } = await seedDemo(db, OPTS);
     expect(Object.values(inserted).every((n) => n === 0)).toBe(true);
+  });
+
+  it("seeds agent events whose public titles hide private tasks", async () => {
+    const { rows } = await db.query<{ title: string }>("SELECT DISTINCT title FROM v_public_agent_events ORDER BY title");
+    expect(rows.map((r) => r.title)).toEqual(["Add a health check page", "Private task"]);
+    const pending = await db.query("SELECT 1 FROM approvals WHERE status = 'pending'");
+    expect(pending.rows).toHaveLength(2);
   });
 
   it("stores the same values the generator produced", async () => {

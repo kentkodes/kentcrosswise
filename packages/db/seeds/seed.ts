@@ -2,6 +2,8 @@
 // @kcw/demo-data (deterministic, fake people). Never put real data here.
 import { generateDemoData, type DemoData, type GenerateOptions } from "@kcw/demo-data";
 import type { SqlClient } from "../src/client";
+import { seedAgents } from "./agents";
+import { grantPreviewSessionRoles } from "./roles";
 
 export interface SeedResult {
   /** Rows inserted per table (0 for rows that already existed). */
@@ -34,6 +36,8 @@ export async function seedDemo(db: SqlClient, input: DemoData | GenerateOptions 
   const inserted: Record<string, number> = {};
   await db.exec("BEGIN");
   try {
+    // The web app needs SET ROLE web_rw/web_public as this user (see roles.ts).
+    await grantPreviewSessionRoles(db);
     inserted.contacts = await insertMany(
       db,
       "contacts",
@@ -119,6 +123,7 @@ export async function seedDemo(db: SqlClient, input: DemoData | GenerateOptions 
       [[1, ["argumentative", "personal_memoir", "science_nature"], ["short", "medium"]]],
       "(id)",
     );
+    Object.assign(inserted, await seedAgents(db));
     await db.exec("COMMIT");
   } catch (err) {
     await db.exec("ROLLBACK");
