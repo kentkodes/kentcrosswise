@@ -36,7 +36,7 @@ variable "relay_db_secret_name" {
 }
 
 variable "relay_allowed_sender_ids" {
-  description = "Numeric GitHub account ids whose webhook events the relay accepts (KCW_RELAY_ALLOWED_SENDER_IDS): the owner, and the App bots once they exist (P2-07). The relay refuses to start with an empty list."
+  description = "Numeric GitHub account ids whose webhook events the relay accepts (KCW_RELAY_ALLOWED_SENDER_IDS): the owner and the five App bot users (P2-07). The relay refuses to start with an empty list."
   type        = list(number)
 
   validation {

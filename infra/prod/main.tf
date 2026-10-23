@@ -59,9 +59,16 @@ variable "relay_package_dir" {
 }
 
 variable "relay_allowed_sender_ids" {
-  description = "GitHub account ids the webhook relay accepts events from. Default: the owner (D23). P2-07 adds the five App bot ids."
+  description = "GitHub account ids the webhook relay accepts events from. Default: the owner (D23) and the five App bot users (P2-07)."
   type        = list(number)
-  default     = [107236483]
+  default = [
+    107236483, # kentkodes (owner)
+    346712150, # kentcrosswise-orchestrator[bot]
+    346713162, # kentcrosswise-dev[bot]
+    346713513, # kentcrosswise-qa[bot]
+    346713720, # kentcrosswise-scraper[bot]
+    346713905, # kentcrosswise-docs[bot]
+  ]
 }
 
 locals {
