@@ -17,7 +17,7 @@ await runMain(async () => {
     opened = await openDb(args);
   } catch (err) {
     if (!(err instanceof DbNotConfigured)) throw err;
-    // deploy.yml: the prod DB is not wired yet (DESIGN §11). Visible as a notice in the Actions UI.
+    // --skip-if-unset (deploy.yml used it until the prod DB was wired, DESIGN §11). A notice in the Actions UI.
     const line = `migrate skipped: ${err.message}`;
     console.log(process.env.GITHUB_ACTIONS === "true" ? `::notice title=Migrations skipped::${line}` : line);
     return;

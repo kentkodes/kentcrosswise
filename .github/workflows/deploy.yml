@@ -52,10 +52,10 @@ jobs:
           aws-region: us-east-1
           role-duration-seconds: 3600
 
-      # Until the prod DB URL is in kcw/prod/migrator, this logs a notice and skips (DESIGN §11).
-      # Access errors still fail the deploy.
+      # Direct (non-pooled) URL of migrator_app in kcw/prod/migrator (docs/runbooks/prod-db.md).
+      # A missing or broken URL fails the deploy (DESIGN §11).
       - name: Migrate prod
-        run: pnpm migrate --secret kcw/prod/migrator --skip-if-unset
+        run: pnpm migrate --secret kcw/prod/migrator
 
       # Prod build; build-web also fails if the preview login is in the bundle.
       - name: Prod build
