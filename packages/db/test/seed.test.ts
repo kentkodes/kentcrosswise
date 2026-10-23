@@ -31,6 +31,8 @@ describe("seedDemo on PGlite", () => {
       tasks: 3,
       agent_events: 13,
       approvals: 2,
+      model_prices: 3,
+      usage_events: 8,
     });
     const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM crm_notes WHERE contact_id IS NOT NULL");
     expect(rows[0]?.n).toBe(data.crmNotes.length);
@@ -46,6 +48,19 @@ describe("seedDemo on PGlite", () => {
     expect(rows.map((r) => r.title)).toEqual(["Add a health check page", "Private task"]);
     const pending = await db.query("SELECT 1 FROM approvals WHERE status = 'pending'");
     expect(pending.rows).toHaveLength(2);
+  });
+
+  it("adds the usage seed to a database whose seed tasks predate it", async () => {
+    await db.exec("DELETE FROM usage_events; DELETE FROM model_prices;");
+    const { inserted } = await seedDemo(db, OPTS);
+    expect(inserted).toMatchObject({ tasks: 0, model_prices: 3, usage_events: 8 });
+    const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM usage_events WHERE task_id IS NOT NULL");
+    expect(rows[0]!.n).toBe(6);
+  });
+
+  it("seeds only synthetic model prices (provider 'seed')", async () => {
+    const { rows } = await db.query<{ provider: string }>("SELECT DISTINCT provider FROM model_prices");
+    expect(rows).toEqual([{ provider: "seed" }]);
   });
 
   it("stores the same values the generator produced", async () => {
