@@ -1,4 +1,4 @@
-# infra/prod: everything in production. Phase 1: the web app only (P1-11).
+# infra/prod: everything in production: the web app (P1-11) and the orchestrator (P2-06).
 # Init: terraform init -backend-config="bucket=kentcrosswise-tfstate-<account-id>"
 
 terraform {
@@ -44,6 +44,24 @@ variable "artifact_dir" {
   description = "OpenNext output of a prod build (pnpm build-web)."
   type        = string
   default     = "../../apps/web/.open-next"
+}
+
+variable "orchestrator_package_dir" {
+  description = "Orchestrator Lambda code directory (index.mjs). Null (default): the module's stub, until agents/orchestrator ships a bundle."
+  type        = string
+  default     = null
+}
+
+variable "relay_package_dir" {
+  description = "Webhook relay Lambda code directory (index.mjs). Null (default): the module's stub, until agents/webhook-relay ships a bundle."
+  type        = string
+  default     = null
+}
+
+variable "relay_allowed_sender_ids" {
+  description = "GitHub account ids the webhook relay accepts events from. Default: the owner (D23). P2-07 adds the five App bot ids."
+  type        = list(number)
+  default     = [107236483]
 }
 
 locals {
@@ -100,6 +118,46 @@ module "web" {
   }
 }
 
+# ---------- orchestrator (P2-06) ----------
+# Each Lambda reads only its own secrets (DESIGN §6); env vars carry the names (D9).
+
+module "orchestrator_secrets" {
+  source = "../modules/secrets"
+  names  = ["kcw/prod/orchestrator", "kcw/prod/models"]
+}
+
+# Relay (P2-05): the webhook secret, plus its own DB secret so it cannot read the orchestrator's
+# App key in kcw/prod/orchestrator. Both containers come from infra/bootstrap.
+locals {
+  relay_webhook_secret = "kcw/github/webhook-secret"
+  relay_db_secret      = "kcw/prod/relay"
+}
+
+module "relay_secrets" {
+  source = "../modules/secrets"
+  names  = [local.relay_webhook_secret, local.relay_db_secret]
+}
+
+module "orchestrator" {
+  source = "../modules/orchestrator"
+
+  name_prefix              = "kcw-prod"
+  orchestrator_package_dir = var.orchestrator_package_dir
+  relay_package_dir        = var.relay_package_dir
+
+  orchestrator_secret_names = module.orchestrator_secrets.names
+
+  # The lookups above make the plan fail early if a secret container is missing.
+  relay_webhook_secret_name = module.relay_secrets.names[0]
+  relay_db_secret_name      = module.relay_secrets.names[1]
+  relay_allowed_sender_ids  = var.relay_allowed_sender_ids
+
+  orchestrator_environment = {
+    KCW_ORCHESTRATOR_SECRET = "kcw/prod/orchestrator"
+    KCW_MODELS_SECRET       = "kcw/prod/models"
+  }
+}
+
 output "url" {
   value = module.web.url
 }
@@ -110,4 +168,13 @@ output "cloudfront_domain_name" {
 
 output "distribution_id" {
   value = module.web.distribution_id
+}
+
+output "orchestrator_queue_url" {
+  value = module.orchestrator.queue_url
+}
+
+output "relay_url" {
+  description = "Webhook URL for the orchestrator GitHub App (P2-07)."
+  value       = module.orchestrator.relay_url
 }

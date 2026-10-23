@@ -86,8 +86,12 @@ agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in sc
                      wire protocol (test/pg-socket.ts), connected as orch_rw
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
-infra/prod/          prod composition (web only so far); infra/preview/ = one per-PR web stack (D21)
-infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + read policy)
+infra/prod/          prod composition (web + orchestrator); infra/preview/ = one per-PR web stack (D21)
+infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + read policy),
+                     orchestrator (SQS FIFO orchestrator-in + DLQ, orchestrator Lambda on the queue,
+                     webhook relay Lambda + public Function URL; code = a directory with index.mjs
+                     exporting handler, passed as orchestrator_package_dir / relay_package_dir;
+                     null = the stubs in stub/, which process nothing)
 .github/workflows/   ci.yml, deploy.yml, preview-gc.yml
 .github/actions/     setup (Node, pnpm, install, Terraform), neon-preview (Neon branch with the key from
                      Secrets Manager), preview-gc (find and remove preview leftovers)
