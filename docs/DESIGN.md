@@ -118,7 +118,7 @@ kentcrosswise/
   docs/
     hub/SPEC.md  essays/SPEC.md  DESIGN.md  research/
     agents/ developer.md qa.md scraper.md docs.md
-    runbooks/ bootstrap.md github-apps.md
+    runbooks/ bootstrap.md github-apps.md prod-db.md
 ```
 
 ## 3. Data model (Postgres, Neon)
@@ -174,6 +174,8 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, created by the 
 - `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003).
 - `pipeline_rw`: essays tables, plus insert on `tasks` and `agent_events`.
 - `migrator`: DDL; deploy only.
+
+Login users are made outside migrations, one per runtime (`migrator_app` owns the prod database; `web_app`, `web_public_app`, `orch_app`, `relay_app` are members of one group role each): [runbooks/prod-db.md](runbooks/prod-db.md).
 
 The CI project has the same roles with synthetic data.
 
@@ -515,3 +517,4 @@ Open:
 - **Nightly preview GC before the sweeper.** `preview-gc.yml` has an interim nightly `schedule` until P2-17's sweeper dispatches it; drop the schedule then.
 - **C4 / Q1 (resolved 2026-10-22):** Owner chose an allowlist. `agents/merge-rules/approved-deps.json` lists pre-approved npm packages (exact names or scopes like `@aws-sdk/*`), seeded in P1-01 with the stack's libraries. A new dependency on the list is not critical; one off the list is critical. Editing the list itself is critical (owner-approved).
 - **Q5:** Admin identity: IAM Identity Center (ends Free-plan credits) or an IAM user with MFA?
+- **Relay DB role (2026-10-23).** No group role from 0001-0003 matches the relay exactly (it needs INSERT, DELETE, SELECT (delivery_id) on `inbound_events` and SELECT (id, pr_number, github_issue) on `tasks`). Until the owner approves a migration adding `relay_rw` with just those grants, `relay_app` is a member of `orch_rw` ([runbooks/prod-db.md](runbooks/prod-db.md) §3.3).
