@@ -2,7 +2,8 @@
 #   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings check, non-blocking)
 #   preview    same-repo PRs only: Neon branch + migrate + seed, preview build, terraform apply
 #              infra/preview, Playwright against it, then teardown in the same job (if: always())
-#   prod-plan  same-repo PRs only: prod build + Lambda bundles, read-only prod plan; summary artifact for merge-rules
+#   prod-plan  same-repo PRs only: prod build + Lambda bundles, read-only prod plan; summary artifact, and
+#              the merge-rules-input artifact (plan summary + lockfile diff) the orchestrator fetches
 #   required   the aggregate check `ci/required` that the main ruleset requires
 #
 # Fork PRs get `checks` only: no AWS role, no secrets (and the role trust would refuse them anyway).
@@ -225,9 +226,11 @@ jobs:
     env:
       TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
     steps:
+      # fetch-depth 2: the PR merge commit and its parents; HEAD^1 is the base branch (lockfile diff).
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - uses: ./.github/actions/setup
         with:
@@ -268,6 +271,25 @@ jobs:
         with:
           name: prod-plan-summary
           path: ${{ runner.temp }}/prod-plan-summary.json
+          if-no-files-found: error
+          retention-days: 30
+
+      # P2-13: plan summary + lockfile diff in one file for the orchestrator (merge-rules). Name and
+      # shape are MERGE_INPUT_ARTIFACT / MERGE_INPUT_FILE in @kcw/core/merge-input. The base lockfile
+      # is the first parent of the PR merge commit (checkout fetch-depth 2).
+      - name: Merge-rules input
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          echo "base sha (event)=$BASE_SHA merge parent=$(git rev-parse HEAD^1)"
+          git show HEAD^1:pnpm-lock.yaml > "$RUNNER_TEMP/base-pnpm-lock.yaml"
+          pnpm merge-input --plan-summary "$RUNNER_TEMP/prod-plan-summary.json" --base-lock "$RUNNER_TEMP/base-pnpm-lock.yaml" --head-lock pnpm-lock.yaml --out "$RUNNER_TEMP/merge-rules-input.json" --markdown "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload merge-rules input
+        uses: actions/upload-artifact@v7
+        with:
+          name: merge-rules-input
+          path: ${{ runner.temp }}/merge-rules-input.json
           if-no-files-found: error
           retention-days: 30
 

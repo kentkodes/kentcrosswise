@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./models": "./src/models/index.ts",
     "./events": "./src/events/index.ts",
-    "./sanitize": "./src/sanitize/index.ts"
+    "./sanitize": "./src/sanitize/index.ts",
+    "./merge-input": "./src/merge-input/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

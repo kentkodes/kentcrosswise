@@ -33,6 +33,7 @@ Everyday (no credentials needed):
 | `pnpm check-prod-bundle` | Fails if the built web app (`.next`, `.open-next`) contains the preview login provider; run after every prod build |
 | `pnpm --filter web e2e` | Playwright (`apps/web/e2e/*.e2e.ts`). No `BASE_URL`: starts `next dev` as a preview build with a fixed local login token. `PW_SERVER=start`: uses `next start` (run `KCW_ENV=preview pnpm --filter web build` first). `BASE_URL=https://...`: targets a deployed site; add `KCW_E2E_LOGIN` for a preview (CI does). First time: `pnpm --filter web exec playwright install chromium` |
 | `pnpm plan-summary --plan-json <file> --out <file>` | Summarizes `terraform show -json` output into infra vs build-artifact changes (CI's `prod-plan-summary` artifact, read by merge-rules) |
+| `pnpm merge-input --plan-summary <file> --base-lock <file> --head-lock <file> --out <file>` | Writes `merge-rules-input.json`: the plan summary plus the lockfile diff (direct dependencies added per workspace package, from the `importers` of the base vs head `pnpm-lock.yaml`; npm aliases count as the aliased package, git/URL/file sources never match the allowlist). CI uploads it as artifact `merge-rules-input`; name, shape and parser are in `@kcw/core/merge-input` |
 | `pnpm smoke-check --url https://<host>` | `/` and `/demo` return 200, `/hub` redirects to sign-in (retries for CloudFront) |
 | `pnpm check-repo-settings --profile interim` | Compares the `main` ruleset on GitHub with `scripts/repo-settings/` (exit 1 on drift, e.g. while no ruleset exists) |
 | `terraform fmt -check -recursive infra` | Terraform formatting |
@@ -61,6 +62,8 @@ Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a s
 
 No Playwright report or trace is uploaded: a trace would contain the typed preview login token. The prod plan JSON contains sensitive values in clear text; CI keeps only the summary.
 
+`prod-plan` uploads two artifacts: `prod-plan-summary` (the summary alone) and `merge-rules-input` (summary + lockfile diff in one file, which the orchestrator fetches for merge-rules). It checks out with `fetch-depth: 2`, so the base lockfile is `HEAD^1` of the PR merge commit.
+
 Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_ARN`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
 
 Once the `main` ruleset is applied (start of Phase 2), every change to `main` is a squash-merged PR with `ci/required` green.
@@ -75,7 +78,8 @@ apps/web/src/auth/   Auth.js v5 (next-auth beta): Google (prod, scopes openid em
                      provider keyed by kcw/ci e2e_login instead (preview-login.ts, never in a prod bundle).
 apps/web/src/server/ server-only code; origin-wrapper.ts = the x-kcw-origin guard (D25)
 apps/web/e2e/        Playwright tests (public pages, owner redirect, preview login)
-packages/core/       shared types; src/models = model providers (Anthropic, Jev, Fake, withFallback)
+packages/core/       shared types; src/models = model providers (Anthropic, Jev, Fake, withFallback);
+                     src/merge-input = the merge-rules CI artifact contract (name, shape, parser)
 packages/db/         migrations/*.sql, runner, synthetic seed (seeds/)
 packages/secrets/    getSecret/putSecret (Secrets Manager; names starting with "/" are SSM SecureString)
 packages/demo-data/  deterministic simulated data for public pages

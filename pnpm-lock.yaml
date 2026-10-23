@@ -362,6 +362,9 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.11
         version: 0.5.11
+      '@kcw/core':
+        specifier: workspace:*
+        version: link:../packages/core
       '@kcw/db':
         specifier: workspace:*
         version: link:../packages/db
@@ -372,6 +375,9 @@ importers:
         specifier: ^8.23.1
         version: 8.23.1
     devDependencies:
+      '@kcw/merge-rules':
+        specifier: workspace:*
+        version: link:../agents/merge-rules
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
