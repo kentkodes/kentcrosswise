@@ -1,17 +1,26 @@
 // After a preview teardown: is anything of pr-<n> left? (DESIGN P1-13, preview-gc.)
 // The probe is an interface so the logic is tested with a fake; awsPreviewProbe() is the real one.
 import { CloudFrontClient, ListCachePoliciesCommand, ListFunctionsCommand, ListOriginAccessControlsCommand } from "@aws-sdk/client-cloudfront";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { IAMClient, paginateListRoles } from "@aws-sdk/client-iam";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import {
   paginateGetResources,
   ResourceGroupsTaggingAPIClient,
 } from "@aws-sdk/client-resource-groups-tagging-api";
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { SQSClient } from "@aws-sdk/client-sqs";
 import { paginateGetParametersByPath, SSMClient } from "@aws-sdk/client-ssm";
+import { checkTaggedResource, type TaggedStatus } from "./tagged-resource";
 
 export interface PreviewProbe {
   /** ARNs of resources tagged kcw:pr=<pr>. */
   taggedArns(pr: number): Promise<string[]>;
+  /**
+   * Asks the owning service whether a tagged ARN still exists (the tagging index lags deletes).
+   * Only "gone" (a confirmed not-found) drops it; "unconfirmed" still counts as a leftover.
+   */
+  taggedStatus(arn: string): Promise<TaggedStatus>;
   /** Names of IAM roles, CloudFront functions, cache policies and OACs (these are not all taggable). */
   untaggedNames(): Promise<string[]>;
   /** Names of SSM parameters under a path. */
@@ -27,6 +36,8 @@ export interface CleanCheckOptions {
   stateBucket: string;
   /** Skip the Neon check (no project/key given). */
   skipNeon?: boolean;
+  /** Notes about tagged ARNs that were confirmed deleted (ignored). */
+  log?: (line: string) => void;
 }
 
 export function previewNames(pr: number) {
@@ -51,7 +62,17 @@ export async function findPreviewLeftovers(probe: PreviewProbe, opts: CleanCheck
     probe.objectExists(opts.stateBucket, n.lockKey),
     opts.skipNeon ? Promise.resolve<string[]>([]) : probe.neonBranchNames(),
   ]);
-  for (const arn of tagged) leftovers.push(`tagged resource ${arn}`);
+  const statuses = await Promise.all(
+    tagged.map((arn) =>
+      probe.taggedStatus(arn).catch((err: unknown): TaggedStatus => ({ state: "unconfirmed", reason: errorName(err) ?? "error" })),
+    ),
+  );
+  tagged.forEach((arn, i) => {
+    const s = statuses[i]!;
+    if (s.state === "exists") leftovers.push(`tagged resource ${arn}`);
+    else if (s.state === "unconfirmed") leftovers.push(`tagged resource ${arn} (not confirmed deleted: ${s.reason})`);
+    else opts.log?.(`check-preview-clean: ${arn} is still in the tagging index but confirmed deleted; ignored`);
+  });
   for (const name of names) if (name.startsWith(n.prefix)) leftovers.push(`resource named ${name}`);
   for (const p of params) leftovers.push(`SSM parameter ${p}`);
   if (state) leftovers.push(`state object s3://${opts.stateBucket}/${n.stateKey}`);
@@ -103,6 +124,16 @@ export function awsPreviewProbe(opts: AwsProbeOptions): PreviewProbe {
   const cloudfront = new CloudFrontClient({ region: "us-east-1" });
   const ssm = new SSMClient({ region: opts.region });
   const s3 = new S3Client({ region: opts.region });
+  const checkClients = {
+    region: opts.region,
+    lambda: new LambdaClient({ region: opts.region }),
+    logs: new CloudWatchLogsClient({ region: opts.region }),
+    sqs: new SQSClient({ region: opts.region }),
+    cloudfront,
+    s3,
+    iam,
+    ssm,
+  };
 
   return {
     async taggedArns(pr) {
@@ -112,6 +143,8 @@ export function awsPreviewProbe(opts: AwsProbeOptions): PreviewProbe {
       }
       return arns;
     },
+
+    taggedStatus: (arn) => checkTaggedResource(arn, checkClients),
 
     async untaggedNames() {
       const names: string[] = [];

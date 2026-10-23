@@ -6,9 +6,12 @@ import {
   previewNames,
   type PreviewProbe,
 } from "../lib/preview-clean";
+import type { TaggedStatus } from "../lib/tagged-resource";
 
 function fakeProbe(state: {
   tagged?: Record<number, string[]>;
+  /** Per-ARN existence check result; default "exists". */
+  status?: Record<string, TaggedStatus>;
   names?: string[];
   params?: Record<string, string[]>;
   objects?: string[];
@@ -17,6 +20,7 @@ function fakeProbe(state: {
   const probe = {
     neonCalls: 0,
     taggedArns: async (pr: number) => state.tagged?.[pr] ?? [],
+    taggedStatus: async (arn: string): Promise<TaggedStatus> => state.status?.[arn] ?? { state: "exists" },
     untaggedNames: async () => state.names ?? [],
     parameterNames: async (path: string) => state.params?.[path] ?? [],
     objectExists: async (bucket: string, key: string) => (state.objects ?? []).includes(`${bucket}/${key}`),
@@ -70,6 +74,39 @@ describe("findPreviewLeftovers", () => {
       `state object s3://${BUCKET}/preview/pr-3.tfstate`,
       `lock object s3://${BUCKET}/preview/pr-3.tfstate.tflock`,
       "Neon branch preview/pr-3",
+    ]);
+  });
+
+  it("drops tagged ARNs confirmed deleted and keeps unconfirmed ones with the reason", async () => {
+    const esm = "arn:aws:lambda:us-east-1:000000000000:event-source-mapping:5d886b80";
+    const fn = "arn:aws:lambda:us-east-1:000000000000:function:kcw-pr-5-server";
+    const denied = "arn:aws:sqs:us-east-1:000000000000:kcw-pr-5-revalidation.fifo";
+    const odd = "arn:aws:dynamodb:us-east-1:000000000000:table/kcw-pr-5-x";
+    const probe = fakeProbe({
+      tagged: { 5: [esm, fn, denied, odd] },
+      status: {
+        [esm]: { state: "gone" },
+        [denied]: { state: "unconfirmed", reason: "sqs:GetQueueUrl failed: AccessDenied" },
+        [odd]: { state: "unconfirmed", reason: "no existence check for dynamodb resource type" },
+      },
+    });
+    const logs: string[] = [];
+    expect(await findPreviewLeftovers(probe, { pr: 5, stateBucket: BUCKET, skipNeon: true, log: (l) => logs.push(l) })).toEqual([
+      `tagged resource ${fn}`,
+      `tagged resource ${denied} (not confirmed deleted: sqs:GetQueueUrl failed: AccessDenied)`,
+      `tagged resource ${odd} (not confirmed deleted: no existence check for dynamodb resource type)`,
+    ]);
+    expect(logs).toEqual([`check-preview-clean: ${esm} is still in the tagging index but confirmed deleted; ignored`]);
+  });
+
+  it("counts a tagged ARN whose check throws as a leftover", async () => {
+    const arn = "arn:aws:lambda:us-east-1:000000000000:function:kcw-pr-6-server";
+    const probe = fakeProbe({ tagged: { 6: [arn] } });
+    probe.taggedStatus = async () => {
+      throw Object.assign(new Error("boom"), { name: "ThrottlingException" });
+    };
+    expect(await findPreviewLeftovers(probe, { pr: 6, stateBucket: BUCKET, skipNeon: true })).toEqual([
+      `tagged resource ${arn} (not confirmed deleted: ThrottlingException)`,
     ]);
   });
 
