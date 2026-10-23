@@ -1,0 +1,25 @@
+{
+  "name": "@kcw/webhook-relay",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Webhook relay Lambda: verifies, filters and normalizes GitHub webhooks and enqueues them for the orchestrator",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./lambda": "./src/lambda.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1154.0",
+    "@kcw/core": "workspace:*",
+    "@kcw/db": "workspace:*",
+    "@kcw/secrets": "workspace:*",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@types/pg": "^8.23.1"
+  }
+}

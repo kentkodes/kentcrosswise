@@ -1,0 +1,25 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 6000001,
+    "body": "Synthetic review text that must not be forwarded.",
+    "state": "APPROVED",
+    "commit_id": "2222222222222222222222222222222222222222",
+    "user": { "login": "kcw-qa[bot]", "id": 9000003, "type": "Bot" }
+  },
+  "pull_request": {
+    "id": 5000012,
+    "number": 12,
+    "state": "open",
+    "title": "Synthetic PR title",
+    "head": {
+      "ref": "kcw/task-42",
+      "sha": "2222222222222222222222222222222222222222",
+      "repo": { "id": 1000, "full_name": "example-owner/example-repo" }
+    },
+    "base": { "ref": "main", "repo": { "id": 1000, "full_name": "example-owner/example-repo" } }
+  },
+  "repository": { "id": 1000, "name": "example-repo", "full_name": "example-owner/example-repo", "private": false },
+  "installation": { "id": 7000 },
+  "sender": { "login": "kcw-qa[bot]", "id": 9000003, "type": "Bot" }
+}

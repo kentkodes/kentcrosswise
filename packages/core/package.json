@@ -7,12 +7,17 @@
   "exports": {
     ".": "./src/index.ts",
     "./models": "./src/models/index.ts",
-    "./events": "./src/events/index.ts"
+    "./events": "./src/events/index.ts",
+    "./sanitize": "./src/sanitize/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@kcw/db": "workspace:*"
   }
 }

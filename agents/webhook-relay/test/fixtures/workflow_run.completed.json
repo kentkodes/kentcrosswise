@@ -1,0 +1,25 @@
+{
+  "action": "completed",
+  "workflow_run": {
+    "id": 30000001,
+    "name": "ci",
+    "path": ".github/workflows/ci.yml",
+    "event": "pull_request",
+    "status": "completed",
+    "conclusion": "failure",
+    "run_attempt": 1,
+    "head_branch": "kcw/task-42",
+    "head_sha": "1111111111111111111111111111111111111111",
+    "display_title": "Synthetic display title that must not be forwarded",
+    "head_commit": { "id": "1111111111111111111111111111111111111111", "message": "Synthetic commit message" },
+    "pull_requests": [{ "id": 5000012, "number": 12, "head": { "ref": "kcw/task-42" }, "base": { "ref": "main" } }],
+    "run_started_at": "2026-10-22T10:00:00Z",
+    "updated_at": "2026-10-22T10:07:30Z",
+    "head_repository": { "id": 1000, "full_name": "example-owner/example-repo" },
+    "repository": { "id": 1000, "full_name": "example-owner/example-repo" }
+  },
+  "workflow": { "id": 40000001, "name": "ci", "path": ".github/workflows/ci.yml" },
+  "repository": { "id": 1000, "name": "example-repo", "full_name": "example-owner/example-repo", "private": false },
+  "installation": { "id": 7000 },
+  "sender": { "login": "kcw-developer[bot]", "id": 9000002, "type": "Bot" }
+}

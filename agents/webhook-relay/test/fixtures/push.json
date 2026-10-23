@@ -1,0 +1,18 @@
+{
+  "ref": "refs/heads/kcw/task-42",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "2222222222222222222222222222222222222222",
+  "created": false,
+  "deleted": false,
+  "forced": false,
+  "head_commit": {
+    "id": "2222222222222222222222222222222222222222",
+    "message": "Synthetic commit message that must not be forwarded",
+    "author": { "name": "Synthetic Author", "email": "author@example.com" }
+  },
+  "commits": [],
+  "pusher": { "name": "kcw-qa[bot]", "email": "qa@example.invalid" },
+  "repository": { "id": 1000, "name": "example-repo", "full_name": "example-owner/example-repo", "private": false },
+  "installation": { "id": 7000 },
+  "sender": { "login": "kcw-qa[bot]", "id": 9000003, "type": "Bot" }
+}
