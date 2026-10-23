@@ -74,9 +74,9 @@ export function botEmail(cfg: AgentConfig): string {
 }
 
 const TEST_PATH = [/(^|\/)test\//, /(^|\/)e2e\//, /\.test\.tsx?$/, /\.e2e\.tsx?$/, /(^|\/)fixtures\//];
-const DOCS_PATH = [/^AGENTS\.md$/, /^docs\/DESIGN\.md$/, /^docs\/agents\/[^/]+\.md$/];
+const DOCS_PATH = [/^(AGENTS|CLAUDE|GEMINI)\.md$/, /^docs\/(DESIGN|HANDOFF)\.md$/, /^docs\/agents\/[^/]+\.md$/];
 /** No agent App has the Workflows permission, and `.claude/**` is owner-only (playbooks). */
-const NEVER = [/^\.github\//, /^\.claude\//];
+const NEVER = [/^\.github\//, /(^|\/)\.(claude|codex|gemini|agents)(\/|$)/, /(^|\/)\.mcp(\.|\/|$)/];
 
 /**
  * Paths of a commit range the rule refuses. `tests` = test files only (QA, playbook: "tests only");
@@ -85,6 +85,7 @@ const NEVER = [/^\.github\//, /^\.claude\//];
  */
 export function refusedPaths(rule: PushRule, files: readonly string[]): string[] {
   return files.filter((f) => {
+    if (f.includes("\\") || f.startsWith("/") || f.split("/").some((part) => part === ".." || part === "." || part === "")) return true;
     if (NEVER.some((re) => re.test(f))) return true;
     if (rule === "tests") return !TEST_PATH.some((re) => re.test(f));
     if (rule === "docs") return !DOCS_PATH.some((re) => re.test(f));

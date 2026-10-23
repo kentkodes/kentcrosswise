@@ -7,12 +7,15 @@ output "state_bucket" {
 output "repo_variables" {
   description = "GitHub repo variables to set (gh variable set NAME --body VALUE)."
   value = {
-    AWS_ACCOUNT_ID      = var.aws_account_id
-    AWS_ROLE_CI_ARN     = aws_iam_role.github["kcw-gh-ci"].arn
-    AWS_ROLE_PLAN_ARN   = aws_iam_role.github["kcw-gh-plan"].arn
-    AWS_ROLE_DEPLOY_ARN = aws_iam_role.github["kcw-gh-deploy"].arn
-    AWS_ROLE_AGENT_ARN  = aws_iam_role.github["kcw-gh-agent"].arn
-    TF_STATE_BUCKET     = aws_s3_bucket.state.id
+    AWS_ACCOUNT_ID               = var.aws_account_id
+    AWS_ROLE_CI_ARN              = aws_iam_role.github["kcw-gh-ci"].arn
+    AWS_ROLE_PLAN_ARN            = aws_iam_role.github["kcw-gh-plan"].arn
+    AWS_ROLE_DEPLOY_ARN          = aws_iam_role.github["kcw-gh-deploy"].arn
+    AWS_ROLE_AGENT_DEVELOPER_ARN = aws_iam_role.github["kcw-gh-agent-developer"].arn
+    AWS_ROLE_AGENT_QA_ARN        = aws_iam_role.github["kcw-gh-agent-qa"].arn
+    AWS_ROLE_AGENT_SCRAPER_ARN   = aws_iam_role.github["kcw-gh-agent-scraper"].arn
+    AWS_ROLE_AGENT_DOCS_ARN      = aws_iam_role.github["kcw-gh-agent-docs"].arn
+    TF_STATE_BUCKET              = aws_s3_bucket.state.id
   }
 }
 

@@ -1,6 +1,6 @@
 # Playbook: Docs-keeper
 
-Cloud runtime status: P2-12 workflows are pending the Q14/Q15 security hold in [HANDOFF.md](../HANDOFF.md). Cloud runs use the Docs GitHub App; local runs follow the assigned brief and authorization.
+Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
 
 After each merge to `main` (not for your own PRs), you update the docs so they match the code. In cloud runs you act as the Docs GitHub App and open a PR from `kcw/task-<id>`.
 
@@ -11,7 +11,7 @@ After each merge to `main` (not for your own PRs), you update the docs so they m
 - `docs/DESIGN.md`: mark tasks done, record decisions the merged code made, keep §10/§11 (unverified items, open questions) current.
 - `docs/agents/*.md`: canonical playbooks, continuity procedure, and handoff template; runtime allowlists only when an authorized workflow change requires a matching doc update.
 
-The pending #29 publisher does not yet permit `docs/HANDOFF.md` or all root entrypoints. Its QA context also needs the complete trusted instruction closure, and its scoped tool allowlist must permit the standalone checker command (or a permitted pnpm wrapper); regression tests use the existing Vitest convention. Track those integration blockers in [HANDOFF.md](../HANDOFF.md); do not assume cloud handoff maintenance works until the authorized runtime follow-up is verified.
+The Q15 source revision permits the thin root adapters, canonical agent docs, DESIGN and HANDOFF in Docs publishing, restores required payload guidance from pinned trusted source, and explicitly allows the standalone checker. Instruction/governance edits remain subject to the proposed owner-critical gate; factual handoff edits remain ordinarily noncritical. Regression tests use the existing Vitest convention. Source contracts are not live evidence: owner cutover and cloud verification remain pending in [HANDOFF.md](../HANDOFF.md).
 
 Never edit `docs/**/SPEC.md` (the product definition; critical, owner only), runbooks under `docs/runbooks/` (owner procedures; propose changes in the PR description instead), code, workflows or `.claude/**`.
 
@@ -25,22 +25,21 @@ Never edit `docs/**/SPEC.md` (the product definition; critical, owner only), run
 ## Definition of done
 
 ```
-pnpm install
-pnpm lint
+pnpm --dir payload install
+pnpm --dir payload lint
+node payload/scripts/check-agent-docs.mjs
 ```
 
 plus each new or changed command from INSTRUCTIONS.md.
 
-## Tool allowlist (v2)
+## Tool allowlist (v3: work runner)
 
 Must match `--allowedTools` in `agent-docs.yml` (`scripts/test/agent-workflows.test.ts` fails on drift; the workflow is the critical file that grants the tools).
 
 ```
-Read, Glob, Grep, Edit, Write,
-Bash(pnpm install), Bash(pnpm lint), Bash(pnpm typecheck), Bash(pnpm test), Bash(pnpm vitest run:*),
-Bash(pnpm --filter web build), Bash(pnpm build-web), Bash(pnpm migrate --help), Bash(pnpm seed --help),
-Bash(pnpm check-preview-clean --help), Bash(pnpm preview-gc --help), Bash(pnpm check-repo-settings --help),
-Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*)
+Read, Glob, Grep, Edit, Write, Bash(pnpm --dir payload install), Bash(pnpm --dir payload lint), Bash(pnpm --dir payload typecheck), Bash(pnpm --dir payload test), Bash(pnpm --dir payload vitest run:*), Bash(pnpm --dir payload --filter web build), Bash(pnpm --dir payload build-web), Bash(pnpm --dir payload migrate --help), Bash(pnpm --dir payload seed --help), Bash(pnpm --dir payload check-preview-clean --help), Bash(pnpm --dir payload preview-gc --help), Bash(pnpm --dir payload check-repo-settings --help), Bash(git -C payload status), Bash(git -C payload diff:*), Bash(git -C payload log:*), Bash(git -C payload show:*), Bash(git -C payload add:*), Bash(git -C payload commit:*), Bash(git -C payload update-index --no-skip-worktree:*), Bash(node payload/scripts/check-agent-docs.mjs)
 ```
 
 Not allowed: `git push` and `git switch` (the workflow does both), `aws`, `terraform` apply/plan/destroy, `gh`, `curl`/`wget`, `pnpm add`.
+
+Cloud execution uses trusted main configuration at the root and untrusted source under payload/. Run source checks and commits in payload/ with the scoped tools above. Run `node payload/scripts/check-agent-docs.mjs` to validate the payload documentation being edited; the script resolves its repository root from its own location. This executes task code only within the unprivileged work boundary; checker source remains owner-critical. If an older task payload lacks that checker, report the capability gap rather than substitute a trusted-root check. The publisher on a fresh runner owns all pushes and App operations.

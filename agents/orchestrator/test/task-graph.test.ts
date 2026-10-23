@@ -619,28 +619,62 @@ describe("task graph (P2-10)", () => {
       expect((await events(id)).slice(-3)).toEqual(["approved", "ci_running", "waiting_on_owner"]);
     });
 
-    it("CI not finished on the head QA approved: waits for the run, then merges", async () => {
+    it.each([false, true])("QA-published tests need fresh CI and independent QA before merge (critical: %s)", async (critical) => {
       const id = await newTask();
       const [h1, h2] = [sha(`${id}-1`), sha(`${id}-2`)];
       await toQa(id, 56, h1);
+      if (critical) gh.prs.get(56)!.files.push({ path: "infra/prod/main.tf", status: "modified" });
+      advance(WAIT_LIMIT_MINUTES.qa - 1);
       expect(await push(id, 56, h2)).toBe("applied"); // QA pushes its tests
-      expect((await task(id)).waiting_on).toBe("qa");
-      expect(await send(id, reviewEvent(id, 56, h2, "approved"))).toBe("applied");
+      expect(await task(id)).toMatchObject({ waiting_on: "ci", head_sha: h2, attempts: 0 });
+      expect(await waits(id)).toEqual([{ phase: "ci", waiting_on: "ci" }]);
+      expect(qaDispatches()).toHaveLength(1);
+      expect(await send(id, reviewEvent(id, 56, h1, "approved"))).toBe("stale");
+      expect(await send(id, reviewEvent(id, 56, h2, "approved"))).toBe("stale");
+      expect(await send(id, ciEvent(id, 56, h1, "success"))).toBe("stale");
+      expect(await push(id, 56, h2)).toBe("stale"); // duplicate synchronize cannot restart the wait
+      advance(2);
+      expect(await send(id, sweep(id))).toBe("unchanged"); // previous QA deadline cannot consume a retry
       expect(gh.calls.some((c) => c.method === "getDiff")).toBe(false); // nothing read before CI is done
-      expect((await task(id)).waiting_on).toBe("ci");
+      expect(gh.merges).toEqual([]);
       expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied");
+      expect(await task(id)).toMatchObject({ waiting_on: "qa", head_sha: h2, attempts: 0 });
+      expect(qaDispatches()).toHaveLength(2);
+      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(id), pr: "56" });
+      expect((await events(id)).slice(-2)).toEqual(["ci_passed", "qa_reviewing"]);
+      expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied"); // distinct duplicate CI event
+      expect(await send(id, reviewEvent(id, 56, h1, "approved"))).toBe("stale");
+      expect(qaDispatches()).toHaveLength(2);
+      expect(gh.merges).toEqual([]);
+      expect(await send(id, reviewEvent(id, 56, h2, "approved"))).toBe("applied");
+      if (critical) {
+        expect(gh.merges).toEqual([]);
+        expect((await task(id)).waiting_on).toBe("owner");
+        const approval = await pendingApproval(id);
+        expect(approval.reasons.join("\n")).toContain("infra/prod/main.tf");
+        expect(gh.latestCheck(h2)).toMatchObject({ state: "pending", title: "Owner approval required" });
+        expect(await decide(id, approval.id, "approved")).toBe("applied");
+      }
       expect(gh.merges).toEqual([{ pr: 56, sha: `squash-56-${h2}` }]);
+      expect(await task(id)).toMatchObject({ status: "merged", attempts: 0 });
     });
 
-    it("CI failing on the head QA approved goes back to the Developer", async () => {
+    it("CI failing on QA-published tests goes back to the Developer without awaiting a review", async () => {
       const id = await newTask();
       const [h1, h2] = [sha(`${id}-1`), sha(`${id}-2`)];
       await toQa(id, 57, h1);
       await push(id, 57, h2);
-      expect(await send(id, ciEvent(id, 57, h2, "failure"))).toBe("applied"); // recorded while QA works
-      expect((await task(id)).waiting_on).toBe("qa");
-      expect(await send(id, reviewEvent(id, 57, h2, "approved"))).toBe("applied");
+      expect(await task(id)).toMatchObject({ waiting_on: "ci", attempts: 0 });
+      expect(await send(id, ciEvent(id, 57, h1, "failure"))).toBe("stale");
+      expect(await send(id, ciEvent(id, 57, h2, "failure"))).toBe("applied");
       expect(await task(id)).toMatchObject({ waiting_on: "dev", attempts: 1 });
+      expect(devDispatches()).toHaveLength(2);
+      expect(devDispatches().at(-1)!.inputs).toMatchObject({ mode: "fix", pr: "57" });
+      expect(qaDispatches()).toHaveLength(1);
+      expect(await send(id, reviewEvent(id, 57, h2, "approved"))).toBe("stale");
+      expect(await send(id, ciEvent(id, 57, h2, "failure"))).toBe("stale");
+      expect(await task(id)).toMatchObject({ waiting_on: "dev", attempts: 1 });
+      expect(gh.merges).toEqual([]);
     });
 
     it("a malformed artifact is critical at once (fail closed)", async () => {

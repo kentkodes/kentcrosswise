@@ -77,6 +77,7 @@ async function getTaskPull(gh: GhOptions, n: number, branch: string | undefined,
   const pr = await ghGet<GhPull>(gh, `/repos/${gh.repo}/pulls/${n}`, `reading PR #${n}`);
   if (!pr) throw new InputError(`PR #${n} does not exist`);
   if (pr.head.repo?.full_name !== gh.repo) throw new InputError(`PR #${n} is not from this repository`);
+  if (pr.base.ref !== "main") throw new InputError(`PR #${n} must target main`);
   if (want === "open" && pr.state !== "open") throw new InputError(`PR #${n} is not open`);
   if (want === "merged" && !pr.merged) throw new InputError(`PR #${n} is not merged`);
   if (branch !== undefined && pr.head.ref !== branch) throw new InputError(`PR #${n} is not on branch ${branch}`);
@@ -143,6 +144,7 @@ export async function gatherContext(inputs: AgentInputs, gh: GhOptions): Promise
     md.push(...section(`Issue #${issue.number}: ${issue.title}`, clip(issue.body)));
     if (inputs.mode === "fix") {
       const pr = await getTaskPull(gh, inputs.pr!, branch, "open");
+      if (linkedIssue(pr.body) !== inputs.issue) throw new InputError("task PR must close the dispatched issue");
       outputs.pr = String(pr.number);
       outputs.head_sha = pr.head.sha;
       outputs.branch_exists = "true";

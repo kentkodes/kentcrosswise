@@ -50,6 +50,25 @@ afterAll(() => {
 });
 
 describe("pushCommits", { timeout: 30_000 }, () => {
+  it("rejects forbidden changes even when a later commit reverts them", () => {
+    const w = world();
+    w.commit(".github/workflows/hidden.yml", "forbidden");
+    git(w.src, "rm", ".github/workflows/hidden.yml");
+    git(w.src, "commit", "-q", "-m", "remove forbidden change");
+    w.commit("safe.ts", "apparently safe net diff");
+    expect(() => pushCommits({ source: w.src, baseSha: w.base, branch: "kcw/task-12", rule: "code", remoteUrl: w.remote })).toThrow(/may not change/);
+    expect(w.remoteHead("kcw/task-12")).toBeUndefined();
+  });
+
+  it("rejects gitlinks and branch races against the captured remote head", () => {
+    const w = world();
+    git(w.src, "update-index", "--add", "--cacheinfo", `160000,${w.base},submodule`);
+    git(w.src, "commit", "-q", "-m", "gitlink");
+    expect(() => pushCommits({ source: w.src, baseSha: w.base, branch: "kcw/task-12", rule: "code", remoteUrl: w.remote })).toThrow(/gitlinks/);
+    const v = world(); v.commit("safe.ts", "safe");
+    git(v.src, "push", "-q", v.remote, "HEAD:refs/heads/kcw/task-12");
+    expect(() => pushCommits({ source: v.src, baseSha: v.base, branch: "kcw/task-12", rule: "code", remoteUrl: v.remote, expectedRemoteSha: null })).toThrow(/git push/);
+  });
   it("pushes new commits to the task branch and lists them", () => {
     const w = world();
     w.commit("apps/web/healthz.ts", "feat: healthz");
@@ -140,7 +159,7 @@ describe("ensurePull", () => {
     expect(api.calls[1]!.body).toEqual({ title: "T", head: "kcw/task-12", base: "main", body: "Closes #5" });
   });
   it("reuses the open PR (fix mode)", async () => {
-    const api = fakeApi({ [LIST]: { body: [{ number: 30 }] } });
+    const api = fakeApi({ [LIST]: { body: [{ number: 30, head: { repo: { full_name: REPO }, ref: "kcw/task-12" }, base: { ref: "main" } }] } });
     expect(await ensurePull(api.gh, { branch: "kcw/task-12", base: "main", title: "T", body: "B" })).toEqual({ number: 30, created: false });
     expect(api.calls).toHaveLength(1);
   });

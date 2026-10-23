@@ -246,6 +246,15 @@ describe("docs/**/SPEC.md", () => {
 });
 
 describe("dependencies (C4)", () => {
+  it("existing runtime resolution changes require owner review even with no added dependency", () => {
+    const result = evaluate(input({
+      files: [{ path: "pnpm-lock.yaml", status: "modified" }],
+      patches: { "pnpm-lock.yaml": "@@\n-  integrity: old\n+  integrity: replacement\n" },
+      lockDiff: { added: [], existing: ["tsx", "@aws-sdk/client-sqs"] },
+    }));
+    expect(result).toEqual({ critical: true, reasons: ["trusted agent automation: pnpm-lock.yaml"] });
+  });
+
   it("a new dependency not on approved-deps.json is critical", () => {
     const r = evaluate(
       input({
@@ -253,7 +262,11 @@ describe("dependencies (C4)", () => {
         lockDiff: { added: [{ importer: "agents/report", name: "left-pad" }], existing: [] },
       }),
     );
-    expect(r).toEqual({ critical: true, reasons: ["new dependency not on the allowlist: left-pad (agents/report)"] });
+    expect(r).toEqual({ critical: true, reasons: [
+      "new dependency not on the allowlist: left-pad (agents/report)",
+      "trusted agent automation: agents/report/package.json",
+      "trusted agent automation: pnpm-lock.yaml",
+    ] });
   });
 
   it("a new dependency on the list (exact or scope glob) is not critical", () => {
@@ -280,7 +293,7 @@ describe("dependencies (C4)", () => {
   });
 
   it("a package.json change without a lockfile diff is critical (fails closed)", () => {
-    const r = evaluate(input({ files: [{ path: "packages/core/package.json", status: "modified" }], lockDiff: null }));
+    const r = evaluate(input({ files: [{ path: "packages/essays/package.json", status: "modified" }], lockDiff: null }));
     expect(r.reasons).toEqual(["lockfile diff missing: cannot check new dependencies"]);
   });
 
@@ -341,8 +354,50 @@ describe("cost (any prod plan create)", () => {
   });
 });
 
-describe("non-critical docs (C3)", () => {
-  it.each(["docs/DESIGN.md", "AGENTS.md", "docs/agents/developer.md", "docs/agents/qa.md", "docs/research/infra.md"])(
+// Q15 deliberately supersedes historical D8's non-critical instruction-doc behavior,
+// pending owner policy approval: an agent cannot silently rewrite its own authority.
+describe("trusted instruction/configuration and automation policy (Q15)", () => {
+  const protectedPaths = [
+    "AGENTS.md", "CLAUDE.md", "GEMINI.md", "apps/web/AGENTS.md", "nested/deeper/agents.MD",
+    "nested/claude.md", "nested/Gemini.Md", "docs/agents/INSTRUCTIONS.md", "docs/agents/qa.md",
+    "docs/agents/CONTINUITY.md", ".codex/config.toml", "nested/.CODEX/agents/developer.toml",
+    ".gemini/settings.json", "nested/.GEMINI/settings.json", "nested/.CLAUDE/settings.json",
+    ".mcp.json", "nested/.MCP.JSON", "scripts/agent-publish.ts", "scripts/agent-context.ts",
+    "scripts/agent-pipeline.ts", "scripts/lib/agent-pipeline.ts", "scripts/lib/agent-github.ts",
+    "scripts/lib/agent-context.ts", "scripts/lib/agent-publish.ts", "scripts/lib/agents.ts",
+    "scripts/check-agent-docs.mjs", "scripts/check-agent-docs.d.mts", "agents/report/src/cli.ts",
+    "agents/report/src/index.ts", "agents/report/package.json", "scripts/package.json",
+    "scripts/agent-artifact.ts", "scripts/lib/agent-report.ts",
+    "scripts/lib/args.ts", "scripts/lib/main.ts", "package.json", ".npmrc", ".pnpmfile.cjs",
+    ".pnpmfile.mjs", "scripts/tsconfig.json", "tsconfig.base.json",
+    "packages/core/src/events/index.ts", "packages/core/package.json",
+    "AGENTS.override.md", "nested/agents.OVERRIDE.MD", "CLAUDE.local.md", "nested/claude.LOCAL.MD",
+    ".claude.json", "nested/.CLAUDE.JSON", ".agents/skills/example/SKILL.md", "nested/.AGENTS/roles/developer.md",
+    "tsconfig.json", "TSCONFIG.JSON",
+    "pnpm-lock.yaml", "PNPM-LOCK.YAML",
+  ];
+
+  it.each(protectedPaths)("%s requires owner review even without a patch", (path) => {
+    expect(evaluate(withFile(path)).critical).toBe(true);
+    expect(evaluate(withFile(path, undefined, "removed")).critical).toBe(true);
+  });
+
+  it.each(protectedPaths)("renaming %s out cannot bypass the owner gate", (previousPath) => {
+    const result = evaluate(input({
+      files: [{ path: "docs/archive/ordinary.md", previousPath, status: "renamed" }],
+      patches: {},
+    }));
+    expect(result.critical).toBe(true);
+    expect(result.reasons.some((reason) => reason.endsWith(`: ${previousPath}`))).toBe(true);
+  });
+
+  it("renaming an ordinary file into a neutral instruction path requires review", () => {
+    expect(evaluate(input({ files: [{ path: "nested/GEMINI.md", previousPath: "notes.md", status: "renamed" }] })).critical).toBe(true);
+  });
+});
+
+describe("non-critical factual docs (C3)", () => {
+  it.each(["docs/DESIGN.md", "docs/HANDOFF.md", "docs/research/infra.md", "docs/agents-notes.md", "docs/README.md", "docs/archive/AGENTS.md.txt"])(
     "%s is not critical",
     (path) => {
       expect(evaluate(withFile(path, "@@\n+x\n"))).toEqual({ critical: false, reasons: [] });

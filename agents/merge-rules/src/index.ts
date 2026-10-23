@@ -5,7 +5,8 @@
 // Rules (hub SPEC "Critical changes", AGENTS.md rule 10, DESIGN §8 P2-04, §11 C3/C4/Q6/Q7):
 // - SQL that drops, renames or truncates (added lines of *.sql files); a migration in
 //   packages/db/migrations/ that is modified, deleted or renamed (Q7; added ones are fine);
-// - authentication, secrets or permissions (paths; IAM in Terraform); `.github/**`; `.claude/**`;
+// - authentication, secrets or permissions (paths; IAM in Terraform); `.github/**`;
+// - Q15 proposed owner gate: neutral/native agent instructions/configuration and trusted automation;
 // - production Terraform: `infra/prod`, `infra/modules/**`, `infra/bootstrap`, and a non-empty
 //   `infra` list in the prod plan summary (Q6; build `artifact` changes are never critical);
 // - any `docs/**/SPEC.md` change (C3);
@@ -69,7 +70,27 @@ export const APPROVED_DEPS_PATH = "agents/merge-rules/approved-deps.json";
 /** Owner-only areas by path. Order does not matter; the label goes into the reason. */
 const CRITICAL_PATHS: { label: string; test: (p: string) => boolean }[] = [
   { label: "GitHub workflows/settings (.github/**)", test: (p) => p.startsWith(".github/") },
-  { label: "agent configuration (.claude/**)", test: (p) => p.startsWith(".claude/") },
+  {
+    label: "agent configuration (.claude/**)",
+    test: (p) => /(^|\/)(?:\.claude(?:\/|$)|\.claude\.json$|CLAUDE\.local\.md$)/i.test(p),
+  },
+  {
+    label: "agent configuration (neutral/native)",
+    test: (p) =>
+      /(^|\/)(AGENTS(?:\.override)?\.md|CLAUDE\.md|GEMINI\.md|\.mcp\.json)$/i.test(p) ||
+      /(^|\/)\.(agents|codex|gemini)(?:\/|$)/i.test(p) ||
+      /^docs\/agents(?:\/|$)/i.test(p),
+  },
+  {
+    label: "trusted agent automation",
+    test: (p) =>
+      /^scripts\/(?:lib\/)?agent-[^/]+\.ts$/i.test(p) ||
+      /^scripts\/lib\/(?:agents|args|main)\.ts$/i.test(p) ||
+      /^(?:package\.json|pnpm-lock\.yaml|\.npmrc|\.pnpmfile\.[cm]js|tsconfig(?:\.base)?\.json|scripts\/(?:package|tsconfig)\.json)$/i.test(p) ||
+      /^scripts\/check-agent-docs\.(?:mjs|d\.mts)$/i.test(p) ||
+      /^packages\/core\/(?:package\.json$|src\/events(?:\/|$))/i.test(p) ||
+      /^agents\/report(?:\/|$)/i.test(p),
+  },
   { label: "production Terraform (infra/prod)", test: (p) => p.startsWith("infra/prod/") },
   { label: "production Terraform (infra/modules/**)", test: (p) => p.startsWith("infra/modules/") },
   { label: "production Terraform (infra/bootstrap)", test: (p) => p.startsWith("infra/bootstrap/") },

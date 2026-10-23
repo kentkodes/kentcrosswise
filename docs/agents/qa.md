@@ -1,6 +1,6 @@
 # Playbook: QA
 
-Cloud runtime status: P2-12 workflows are pending the Q14/Q15 security hold in [HANDOFF.md](../HANDOFF.md). Cloud runs use the QA GitHub App; local runs follow the assigned review scope and authorization.
+Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
 
 You review one PR after CI is green, add tests where coverage is missing, then approve or request changes. In cloud runs you act as the QA GitHub App (never the PR author).
 
@@ -20,30 +20,28 @@ Read [INSTRUCTIONS.md](INSTRUCTIONS.md) and [CONTINUITY.md](CONTINUITY.md) first
    - migrations are new files, not edits;
    - new dependencies are on `approved-deps.json`.
 4. Critical areas (auth, secrets, IAM, `.github/**`, `.claude/**`, prod Terraform, SPEC.md, dependencies): review them, but the final call is the owner's through merge-rules. Say in the review which critical areas the PR touches.
-5. Run the checks yourself:
+5. In the work runner, execute checks against payload/:
 
 ```
-pnpm install
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm --filter web build
+pnpm --dir payload install --frozen-lockfile
+pnpm --dir payload lint
+pnpm --dir payload typecheck
+pnpm --dir payload test
+pnpm --dir payload --filter web build
 ```
 
 Approve only if all pass and the checklist is clean. Otherwise request changes with a numbered list of concrete problems (file and line).
 
-## Tool allowlist (v2)
+## Tool allowlist (v3: work runner)
 
 Must match `--allowedTools` in `agent-qa.yml` (`scripts/test/agent-workflows.test.ts` fails on drift; the workflow is the critical file that grants the tools).
 
 ```
-Read, Glob, Grep, Edit, Write,
-Bash(pnpm --dir pr-head install --frozen-lockfile), Bash(pnpm --dir pr-head lint), Bash(pnpm --dir pr-head typecheck),
-Bash(pnpm --dir pr-head test), Bash(pnpm --dir pr-head vitest run:*),
-Bash(pnpm --dir pr-head --filter web build), Bash(pnpm --dir pr-head build-web), Bash(pnpm --dir pr-head check-prod-bundle),
-Bash(pnpm --dir pr-head migrate --pglite:*), Bash(pnpm --dir pr-head seed --pglite:*),
-Bash(git -C pr-head status), Bash(git -C pr-head diff:*), Bash(git -C pr-head log:*), Bash(git -C pr-head show:*),
-Bash(git -C pr-head add:*), Bash(git -C pr-head commit:*)
+Read, Glob, Grep, Edit, Write, Bash(pnpm --dir payload install --frozen-lockfile), Bash(pnpm --dir payload lint), Bash(pnpm --dir payload typecheck), Bash(pnpm --dir payload test), Bash(pnpm --dir payload vitest run:*), Bash(pnpm --dir payload --filter web build), Bash(pnpm --dir payload build-web), Bash(pnpm --dir payload check-prod-bundle), Bash(pnpm --dir payload migrate --pglite:*), Bash(pnpm --dir payload seed --pglite:*), Bash(git -C payload status), Bash(git -C payload diff:*), Bash(git -C payload log:*), Bash(git -C payload show:*), Bash(git -C payload add:*), Bash(git -C payload commit:*), Bash(git -C payload update-index --no-skip-worktree:*)
 ```
 
 Not allowed: `git push` (the workflow pushes), `aws`, `terraform` (other than reading files), `curl`/`wget`, `gh`, `pnpm add`.
+
+Cloud execution uses trusted main configuration at the root and untrusted source under payload/. Run all source checks and commits in payload/ with the scoped tools above. The publisher on a fresh runner owns all pushes and App operations.
+
+The final review runs on a fresh runner after test work. Its tools are Read, Glob, Grep and scoped git diff with external diff and text conversion disabled. Read source and diff; execute no PR code or packages. A review decision names the prepared SHA. Added test commits require new CI and review; this run publishes them without approval. The independent review runner reports its own bounded advisory usage.

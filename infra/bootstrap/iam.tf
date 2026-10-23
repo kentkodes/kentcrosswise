@@ -1,4 +1,4 @@
-# GitHub OIDC provider and the four workflow roles (DESIGN §5). Every trust policy pins the audience
+# GitHub OIDC provider and workflow roles (DESIGN §5). Every trust policy pins the audience
 # and exact immutable `sub` values (repo:OWNER@OWNER_ID/REPO@REPO_ID:<context>).
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -16,7 +16,11 @@ locals {
     "kcw-gh-ci"     = ["${local.github_sub}:pull_request", "${local.github_sub}:environment:preview-gc"]
     "kcw-gh-plan"   = ["${local.github_sub}:pull_request"]
     "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
-    "kcw-gh-agent"  = ["${local.github_sub}:ref:refs/heads/main"]
+    # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust.
+    "kcw-gh-agent-developer" = ["${local.github_sub}:environment:agent-publish-developer"]
+    "kcw-gh-agent-qa"        = ["${local.github_sub}:environment:agent-publish-qa"]
+    "kcw-gh-agent-scraper"   = ["${local.github_sub}:environment:agent-publish-scraper"]
+    "kcw-gh-agent-docs"      = ["${local.github_sub}:environment:agent-publish-docs"]
   }
 
   state_arn     = aws_s3_bucket.state.arn
@@ -444,16 +448,15 @@ resource "aws_iam_role_policy" "deploy" {
   policy = data.aws_iam_policy_document.deploy.json
 }
 
-# ---------- kcw-gh-agent: agent workflows on main ----------
+# ---------- isolated agent publishers: one environment and App key each ----------
 
 data "aws_iam_policy_document" "agent" {
-  dynamic "statement" {
-    for_each = local.github_apps
-    content {
-      sid       = "${title(statement.value)}AppKey"
-      actions   = ["secretsmanager:GetSecretValue"]
-      resources = ["${local.secret_arn}:kcw/github/${statement.value}-app-??????"]
-    }
+  for_each = toset(local.github_apps)
+
+  statement {
+    sid       = "OwnAppKey"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local.secret_arn}:kcw/github/${each.key}-app-??????"]
   }
   statement {
     sid       = "ReportToOrchestrator"
@@ -463,7 +466,9 @@ data "aws_iam_policy_document" "agent" {
 }
 
 resource "aws_iam_role_policy" "agent" {
-  name   = "kcw-gh-agent"
-  role   = aws_iam_role.github["kcw-gh-agent"].id
-  policy = data.aws_iam_policy_document.agent.json
+  for_each = toset(local.github_apps)
+
+  name   = "kcw-gh-agent-${each.key}"
+  role   = aws_iam_role.github["kcw-gh-agent-${each.key}"].id
+  policy = data.aws_iam_policy_document.agent[each.key].json
 }

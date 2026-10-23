@@ -14,11 +14,12 @@ export type GitRun = (args: readonly string[], opts?: { cwd?: string; env?: Node
 
 /** Runs git with hooks off; output trimmed. Errors carry git's message, never the token (it is in env only). */
 export const runGit: GitRun = (args, opts) =>
-  execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], {
+  execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "protocol.ext.allow=never", "-c", "diff.external=", ...args], {
     cwd: opts?.cwd,
     env: opts?.env ?? process.env,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 16 * 1024 * 1024,
   }).trim();
 
 export class PublishError extends Error {
@@ -39,6 +40,7 @@ export interface PushOptions {
   /** Installation token; sent as an HTTP header through git's env config, never in argv or the URL. */
   token?: string;
   git?: GitRun;
+  expectedRemoteSha?: string | null;
 }
 
 export interface PushResult {
@@ -67,9 +69,20 @@ export function pushCommits(opts: PushOptions): PushResult {
     } catch {
       throw new PublishError("the agent's HEAD is not based on the commit it started from");
     }
-    const files = git(["diff", "--name-only", "--no-renames", opts.baseSha, headSha], { cwd: dir })
-      .split("\n")
-      .filter(Boolean);
+    const commits = git(["rev-list", "--reverse", `${opts.baseSha}..${headSha}`], { cwd: dir }).split("\n").filter(Boolean);
+    if (commits.length > 100) throw new PublishError("too many introduced commits");
+    const files: string[] = [];
+    let parent = opts.baseSha;
+    for (const commit of commits) {
+      const parents = git(["show", "-s", "--format=%P", commit], { cwd: dir }).split(" ");
+      if (parents.length !== 1 || parents[0] !== parent) throw new PublishError("introduced history must be linear");
+      const changed = git(["diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", "--no-renames", parent, commit], { cwd: dir }).split("\0").filter(Boolean);
+      if (changed.length > 2000) throw new PublishError("too many changed paths");
+      files.push(...changed);
+      const tree = git(["ls-tree", "-r", "-z", commit], { cwd: dir }).split("\0").filter(Boolean);
+      if (tree.some((entry) => /^(120000|160000) /.test(entry))) throw new PublishError("symlinks and gitlinks are refused");
+      parent = commit;
+    }
     const refused = refusedPaths(opts.rule, files);
     if (refused.length > 0) {
       throw new PublishError(`commits touch files this agent may not change (${opts.rule}): ${refused.slice(0, 20).join(", ")}`);
@@ -87,6 +100,10 @@ export function pushCommits(opts: PushOptions): PushResult {
       });
     }
     try {
+      if (opts.expectedRemoteSha !== undefined) {
+        const remote = git(["ls-remote", opts.remoteUrl, `refs/heads/${opts.branch}`], { cwd: dir, env }).split(/\s/)[0] || null;
+        if (remote !== opts.expectedRemoteSha) throw new PublishError("remote branch changed since preparation");
+      }
       git(["push", "-q", opts.remoteUrl, `${headSha}:refs/heads/${opts.branch}`], { cwd: dir, env });
     } catch {
       // git's stderr is not repeated: keep the log to what we know.
@@ -109,7 +126,10 @@ export async function ensurePull(
     `/repos/${gh.repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${pr.branch}`)}`,
     "listing PRs",
   );
-  if (open && open.length > 0) return { number: open[0]!.number, created: false };
+  if (open && open.length > 0) {
+    if (open.length !== 1 || open[0]!.head.repo?.full_name !== gh.repo || open[0]!.head.ref !== pr.branch || open[0]!.base.ref !== pr.base) throw new PublishError("existing task PR identity does not match");
+    return { number: open[0]!.number, created: false };
+  }
   const res = await ghRequest(gh, "POST", `/repos/${gh.repo}/pulls`, {
     title: pr.title,
     head: pr.branch,
@@ -127,6 +147,7 @@ export interface ReviewDecision {
 
 /** Parses QA's structured output (`--json-schema`); anything else is refused. */
 export function parseReviewDecision(json: string | undefined): ReviewDecision {
+  if (!json || Buffer.byteLength(json) > 64_000) throw new PublishError("QA review exceeds bounds");
   let x: unknown;
   try {
     x = JSON.parse(json ?? "");
@@ -138,6 +159,7 @@ export function parseReviewDecision(json: string | undefined): ReviewDecision {
     throw new PublishError("QA review decision must be approve or request_changes");
   }
   if (typeof o.body !== "string" || o.body.trim() === "") throw new PublishError("QA review needs a body");
+  if (Object.keys(o).sort().join(",") !== "body,decision") throw new PublishError("unexpected QA review fields");
   return { decision: o.decision, body: o.body.slice(0, 60_000) };
 }
 
