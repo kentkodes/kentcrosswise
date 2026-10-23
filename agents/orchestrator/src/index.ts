@@ -1,5 +1,6 @@
 // @kcw/orchestrator. The Lambda entry is src/lambda.ts (`handler`, still the P2-08 skeleton graph).
 // The task graph (P2-10) is `@kcw/orchestrator/graph`; the GitHub client is `@kcw/orchestrator/github`.
+// The planner and public-title nodes (P2-11) are `@kcw/orchestrator/nodes`.
 export const PACKAGE_NAME = "@kcw/orchestrator";
 
 export {

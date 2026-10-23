@@ -3,10 +3,12 @@
 // One thread per task (`task-<id>`, checkpointed in schema lg). Two nodes in a loop:
 //   step: applies one input to the task's state machine (machine.ts): GitHub calls, DB writes;
 //   wait: interrupt() until the next input (relay event, agent report, owner decision, sweep).
-// The thread ends when the task is merged, failed or cancelled.
+// The thread ends when the task is merged, failed or cancelled. A task the planner splits (P2-11)
+// gets one child task and thread per subtask; the parent thread waits in phase `children`.
 //
 // Not wired into src/lambda.ts yet (the live Lambda still runs the P2-08 skeleton): wiring needs
-// the planner (P2-11) and the agent workflows (P2-12). `handleTaskSqsEvent` is the entry to use then.
+// the agent workflows (P2-12). `handleTaskSqsEvent` is the entry to use then, with
+// `ModelPlanner` from `@kcw/orchestrator/nodes` as the planner.
 import { Annotation, Command, END, START, StateGraph, interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { handleRecords, threadConfig, type SqsBatchResponse, type SqsEvent } from "../handler";
 import { runStep, type TaskGraphDeps } from "./machine";
@@ -14,7 +16,7 @@ import { parseTaskMessage } from "./messages";
 import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskData, type TaskInput, type WaitingOn } from "./types";
 
 export * from "./types";
-export { PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
+export { PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
 export { runStep, type TaskGraphDeps } from "./machine";
 export { parseTaskMessage } from "./messages";
 
@@ -66,8 +68,26 @@ export type TaskOutcome =
  * Runs one input on the task's thread. A thread whose last step failed (GitHub or DB error) is
  * first completed with the input it already holds; the failed message comes back from SQS with the
  * same message id and is then recognised as applied.
+ *
+ * If the task is split into subtasks, every child thread that has not started (or whose start
+ * failed half-way) is then started here, so a redelivery or a sweep of the parent completes it.
  */
 export async function processTaskInput(graph: TaskGraph, taskId: number, input: TaskInput): Promise<TaskOutcome> {
+  const outcome = await applyTaskInput(graph, taskId, input);
+  if (outcome !== "no_thread") await startSubtasks(graph, taskId, input.message_id);
+  return outcome;
+}
+
+async function startSubtasks(graph: TaskGraph, taskId: number, messageId: string): Promise<void> {
+  const task = (await graph.getState(threadConfig(taskId))).values.task;
+  if (task?.phase !== "children") return;
+  // A started child answers duplicate_start (no write); a child never splits, so this never recurses further.
+  for (const child of task.children) {
+    await processTaskInput(graph, child, { kind: "start", message_id: `${messageId}/task-${child}` });
+  }
+}
+
+async function applyTaskInput(graph: TaskGraph, taskId: number, input: TaskInput): Promise<TaskOutcome> {
   const config = threadConfig(taskId);
   let snapshot = await graph.getState(config);
   const exists = snapshot.config.configurable?.checkpoint_id !== undefined;
