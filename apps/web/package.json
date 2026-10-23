@@ -11,6 +11,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1154.0",
     "@kcw/demo-data": "workspace:*",
     "@kcw/secrets": "workspace:*",
     "@kcw/xray": "workspace:*",

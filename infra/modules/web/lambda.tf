@@ -60,6 +60,16 @@ data "aws_iam_policy_document" "server" {
     resources = [aws_sqs_queue.revalidation.arn]
   }
 
+  # P2-14: the boss console and inbox enqueue task.created / owner decisions (DESIGN §4.2, §4.3).
+  dynamic "statement" {
+    for_each = length(var.server_send_queue_arns) > 0 ? [1] : []
+    content {
+      sid       = "SendToQueues"
+      actions   = ["sqs:SendMessage"]
+      resources = var.server_send_queue_arns
+    }
+  }
+
   dynamic "statement" {
     for_each = length(local.secret_arns) > 0 ? [1] : []
     content {

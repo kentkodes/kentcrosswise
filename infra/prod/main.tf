@@ -113,8 +113,13 @@ module "web" {
   origin_verify_secret_name = local.origin_verify_secret
   origin_verify_secret_key  = "origin_verify"
 
+  # Boss console and inbox (P2-14) send to the orchestrator input queue. The queue is SSE-SQS
+  # (sqs_managed_sse_enabled), so no KMS permission is needed.
+  server_send_queue_arns = [module.orchestrator.queue_arn]
+
   server_environment = {
-    KCW_WEB_SECRET = "kcw/prod/web"
+    KCW_WEB_SECRET             = "kcw/prod/web"
+    KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
   }
 }
 
