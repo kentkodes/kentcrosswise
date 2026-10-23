@@ -51,13 +51,13 @@ describe("drop/rename in SQL", () => {
 
   it("DROP is critical", () => {
     const r = evaluate(withFile(MIG, sqlPatch("ALTER TABLE todos DROP COLUMN done;"), "added"));
-    expect(r).toEqual({ critical: true, reasons: [`SQL drops or renames: ${MIG}`] });
+    expect(r).toEqual({ critical: true, reasons: [`SQL drops, renames or truncates: ${MIG}`] });
   });
 
   it("RENAME is critical", () => {
     const r = evaluate(withFile(MIG, sqlPatch("ALTER TABLE ideas", "  rename COLUMN body TO text;"), "added"));
     expect(r.critical).toBe(true);
-    expect(r.reasons).toEqual([`SQL drops or renames: ${MIG}`]);
+    expect(r.reasons).toEqual([`SQL drops, renames or truncates: ${MIG}`]);
   });
 
   it("additive SQL, and DROP only in a comment or a removed line, is not critical", () => {
@@ -65,10 +65,65 @@ describe("drop/rename in SQL", () => {
     expect(evaluate(withFile(MIG, patch, "added")).critical).toBe(false);
   });
 
+  it("TRUNCATE is critical (Q7)", () => {
+    const r = evaluate(withFile(MIG, sqlPatch("truncate table usage_events;"), "added"));
+    expect(r).toEqual({ critical: true, reasons: [`SQL drops, renames or truncates: ${MIG}`] });
+  });
+
   it("an SQL file without a diff is critical (fails closed)", () => {
     expect(evaluate(withFile(MIG, undefined, "added")).reasons).toEqual([
-      `SQL diff unavailable, cannot check for DROP/RENAME: ${MIG}`,
+      `SQL diff unavailable, cannot check for DROP/RENAME/TRUNCATE: ${MIG}`,
     ]);
+  });
+});
+
+describe("existing migrations are append-only (Q7)", () => {
+  const OLD = "packages/db/migrations/0001_hub_essays.sql";
+
+  it("modifying a migration on main is critical", () => {
+    const r = evaluate(withFile(OLD, sqlPatch("CREATE INDEX todos_done_idx ON todos (done);")));
+    expect(r).toEqual({ critical: true, reasons: [`existing migration modified: ${OLD}`] });
+  });
+
+  it("deleting a migration is critical", () => {
+    expect(evaluate(withFile(OLD, undefined, "removed")).reasons).toEqual([`existing migration removed: ${OLD}`]);
+  });
+
+  it("renaming a migration is critical (in or out of the directory)", () => {
+    const inside = evaluate(
+      input({
+        files: [{ path: "packages/db/migrations/0001_hub.sql", previousPath: OLD, status: "renamed" }],
+        patches: { "packages/db/migrations/0001_hub.sql": "" },
+      }),
+    );
+    expect(inside.reasons).toEqual([`existing migration renamed: ${OLD} -> packages/db/migrations/0001_hub.sql`]);
+    const out = evaluate(
+      input({ files: [{ path: "packages/db/old/0001_hub_essays.sql", previousPath: OLD, status: "renamed" }], patches: { "packages/db/old/0001_hub_essays.sql": "" } }),
+    );
+    expect(out.reasons).toEqual([`existing migration renamed: ${OLD} -> packages/db/old/0001_hub_essays.sql`]);
+  });
+
+  it("adding a new additive migration is not critical", () => {
+    const r = evaluate(withFile("packages/db/migrations/0003_more.sql", sqlPatch("ALTER TABLE todos ADD COLUMN due date;"), "added"));
+    expect(r).toEqual({ critical: false, reasons: [] });
+  });
+});
+
+describe("the rules themselves (Q7)", () => {
+  it.each([
+    ["agents/merge-rules/src/index.ts", "merge-rules code or data (agents/merge-rules/**)"],
+    ["agents/merge-rules/test/evaluate.test.ts", "merge-rules code or data (agents/merge-rules/**)"],
+    ["agents/merge-rules/package.json", "merge-rules code or data (agents/merge-rules/**)"],
+    ["scripts/lib/plan-summary.ts", "prod plan classifier (scripts/lib/plan-summary.ts)"],
+    ["pnpm-workspace.yaml", "workspace config (pnpm-workspace.yaml)"],
+  ])("%s is critical", (path, label) => {
+    const r = evaluate(withFile(path, "@@\n+x\n"));
+    expect(r.critical).toBe(true);
+    expect(r.reasons).toContain(`${label}: ${path}`);
+  });
+
+  it("other scripts are not", () => {
+    expect(evaluate(withFile("scripts/lib/smoke.ts", "@@\n+x\n")).critical).toBe(false);
   });
 });
 
@@ -218,7 +273,10 @@ describe("dependencies (C4)", () => {
 
   it("any edit of approved-deps.json is critical", () => {
     const path = "agents/merge-rules/approved-deps.json";
-    expect(evaluate(withFile(path, '@@\n+  "left-pad",\n')).reasons).toEqual([`dependency allowlist edit: ${path}`]);
+    expect(evaluate(withFile(path, '@@\n+  "left-pad",\n')).reasons).toEqual([
+      `dependency allowlist edit: ${path}`,
+      `merge-rules code or data (agents/merge-rules/**): ${path}`,
+    ]);
   });
 
   it("a package.json change without a lockfile diff is critical (fails closed)", () => {

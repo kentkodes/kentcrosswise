@@ -2,15 +2,17 @@
 // The orchestrator runs it on the latest head SHA of an approved PR (§4.2 step 7); a critical
 // result keeps `kcw/merge-rules` pending and creates an `approvals(kind=critical_pr, reasons)` row.
 //
-// Rules (hub SPEC "Critical changes", AGENTS.md rule 10, DESIGN §8 P2-04, §11 C3/C4/Q6):
-// - SQL that drops or renames (added lines of *.sql files);
+// Rules (hub SPEC "Critical changes", AGENTS.md rule 10, DESIGN §8 P2-04, §11 C3/C4/Q6/Q7):
+// - SQL that drops, renames or truncates (added lines of *.sql files); a migration in
+//   packages/db/migrations/ that is modified, deleted or renamed (Q7; added ones are fine);
 // - authentication, secrets or permissions (paths; IAM in Terraform); `.github/**`; `.claude/**`;
 // - production Terraform: `infra/prod`, `infra/modules/**`, `infra/bootstrap`, and a non-empty
 //   `infra` list in the prod plan summary (Q6; build `artifact` changes are never critical);
 // - any `docs/**/SPEC.md` change (C3);
 // - a new direct dependency not on approved-deps.json, or any edit of that file (C4);
 // - a new service (new Terraform provider, or a new AWS SDK client in the workspace);
-// - cost: any create in the prod plan summary.
+// - cost: any create in the prod plan summary;
+// - the rules themselves (Q7): agents/merge-rules/**, scripts/lib/plan-summary.ts, pnpm-workspace.yaml.
 // Missing inputs fail closed: if a rule cannot be checked, the PR is critical.
 import defaultApprovedDeps from "../approved-deps.json" with { type: "json" };
 
@@ -73,6 +75,10 @@ const CRITICAL_PATHS: { label: string; test: (p: string) => boolean }[] = [
   { label: "production Terraform (infra/bootstrap)", test: (p) => p.startsWith("infra/bootstrap/") },
   { label: "product spec (docs/**/SPEC.md)", test: (p) => /^docs\/(.+\/)?SPEC\.md$/.test(p) },
   { label: "dependency allowlist edit", test: (p) => p === APPROVED_DEPS_PATH },
+  // Q7: a PR must not be able to weaken the rules that decide whether it needs the owner.
+  { label: "merge-rules code or data (agents/merge-rules/**)", test: (p) => p.startsWith("agents/merge-rules/") },
+  { label: "prod plan classifier (scripts/lib/plan-summary.ts)", test: (p) => p === "scripts/lib/plan-summary.ts" },
+  { label: "workspace config (pnpm-workspace.yaml)", test: (p) => p === "pnpm-workspace.yaml" },
   {
     label: "authentication",
     test: (p) =>
@@ -93,7 +99,11 @@ const CRITICAL_PATHS: { label: string; test: (p: string) => boolean }[] = [
 ];
 
 /** SQL keywords that drop or rename (DESIGN D2: grep SQL for DROP/RENAME). */
-const SQL_DESTRUCTIVE = /\b(DROP|RENAME)\b/i;
+const SQL_DESTRUCTIVE = /\b(DROP|RENAME|TRUNCATE)\b/i;
+/** Applied migrations are append-only (AGENTS.md rule 11). */
+const MIGRATIONS_DIR = "packages/db/migrations/";
+/** Statuses that mean the file already exists on the PR's base (main). */
+const EXISTING_FILE_STATUSES: readonly FileStatus[] = ["modified", "removed", "renamed", "changed"];
 /** IAM in Terraform outside the already-critical prod paths (e.g. infra/preview). */
 const TF_IAM = /\b(aws_iam_\w+|iam_policy\w*|assume_role_policy|aws_lambda_permission)\b/;
 /** A provider block added to a Terraform lock file. */
@@ -132,13 +142,19 @@ export function evaluate(input: MergeRulesInput): MergeRulesResult {
       for (const rule of CRITICAL_PATHS) if (rule.test(p)) add(`${rule.label}: ${p}`);
     }
 
+    // Q7: adding a migration is routine; changing, deleting or renaming one that is on main is not.
+    if (paths.some((p) => p.startsWith(MIGRATIONS_DIR)) && EXISTING_FILE_STATUSES.includes(f.status)) {
+      const from = f.previousPath && f.previousPath !== f.path ? `${f.previousPath} -> ` : "";
+      add(`existing migration ${f.status}: ${from}${f.path}`);
+    }
+
     const patch = input.patches[f.path];
     if (f.path.toLowerCase().endsWith(".sql") && f.status !== "removed") {
       if (patch === undefined) {
-        add(`SQL diff unavailable, cannot check for DROP/RENAME: ${f.path}`);
+        add(`SQL diff unavailable, cannot check for DROP/RENAME/TRUNCATE: ${f.path}`);
       } else {
         const hit = addedLines(patch).some((l) => SQL_DESTRUCTIVE.test(l.replace(/--.*$/, "")));
-        if (hit) add(`SQL drops or renames: ${f.path}`);
+        if (hit) add(`SQL drops, renames or truncates: ${f.path}`);
       }
     }
 
