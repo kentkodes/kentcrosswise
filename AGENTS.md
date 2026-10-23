@@ -81,6 +81,9 @@ packages/demo-data/  deterministic simulated data for public pages
 packages/essays/     essays feature (stub)
 packages/xray/       X-ray registry (stub)
 agents/merge-rules/  approved-deps.json (dependency allowlist); detector arrives in P2-04
+agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in schema lg (thread = task-<id>);
+                     Lambda entry src/lambda.ts. Tests run node-postgres against PGlite served over the
+                     wire protocol (test/pg-socket.ts), connected as orch_rw
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
 infra/prod/          prod composition (web only so far); infra/preview/ = one per-PR web stack (D21)
