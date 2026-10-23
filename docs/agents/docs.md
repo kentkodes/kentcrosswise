@@ -1,6 +1,6 @@
 # Playbook: Docs-keeper
 
-Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
+Read [HANDOFF.md](../HANDOFF.md) for current rollout status, enablement and holds.
 
 After each merge to `main` (not for your own PRs), you update the docs so they match the code. In cloud runs you act as the Docs GitHub App and open a PR from `kcw/task-<id>`.
 
@@ -11,7 +11,7 @@ After each merge to `main` (not for your own PRs), you update the docs so they m
 - `docs/DESIGN.md`: mark tasks done, record decisions the merged code made, keep §10/§11 (unverified items, open questions) current.
 - `docs/agents/*.md`: canonical playbooks, continuity procedure, and handoff template; runtime allowlists only when an authorized workflow change requires a matching doc update.
 
-The Q15 source revision permits the thin root adapters, canonical agent docs, DESIGN and HANDOFF in Docs publishing, restores required payload guidance from pinned trusted source, and explicitly allows the standalone checker. Instruction/governance edits remain subject to the proposed owner-critical gate; factual handoff edits remain ordinarily noncritical. Regression tests use the existing Vitest convention. Source contracts are not live evidence: owner cutover and cloud verification remain pending in [HANDOFF.md](../HANDOFF.md).
+The Q15 source revision permits the thin root adapters, canonical agent docs, DESIGN and HANDOFF in Docs publishing, restores required payload guidance from pinned trusted source, and explicitly allows the standalone checker. Instruction/governance edits remain subject to the owner-accepted critical-change gate; factual handoff edits remain ordinarily noncritical. Regression tests use the existing Vitest convention. Read [HANDOFF.md](../HANDOFF.md) for current rollout evidence, verification gaps and holds.
 
 Never edit `docs/**/SPEC.md` (the product definition; critical, owner only), runbooks under `docs/runbooks/` (owner procedures; propose changes in the PR description instead), code, workflows or `.claude/**`.
 

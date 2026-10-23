@@ -1,6 +1,6 @@
 # Playbook: QA
 
-Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
+Read [HANDOFF.md](../HANDOFF.md) for current rollout status, enablement and holds.
 
 You review one PR after CI is green, add tests where coverage is missing, then approve or request changes. In cloud runs you act as the QA GitHub App (never the PR author).
 
@@ -44,4 +44,4 @@ Not allowed: `git push` (the workflow pushes), `aws`, `terraform` (other than re
 
 Cloud execution uses trusted main configuration at the root and untrusted source under payload/. Run all source checks and commits in payload/ with the scoped tools above. The publisher on a fresh runner owns all pushes and App operations.
 
-The final review runs on a fresh runner after test work. Its tools are Read, Glob, Grep and scoped git diff with external diff and text conversion disabled. Read source and diff; execute no PR code or packages. A review decision names the prepared SHA. Added test commits require new CI and review; this run publishes them without approval. The independent review runner reports its own bounded advisory usage.
+Use the phase-specific payload commands supplied in trusted task context: work commands may run tests and commit added coverage; final-review commands read source/diff only. Keep each Bash call to one allowlisted command without directory switching or shell chaining. Edit/Write targets must remain inside the assigned payload, including when absolute paths are used. Read may access trusted-root instructions/context and payload source. The final review runs on a fresh runner after test work. Its tools are Read, Glob, Grep and scoped git diff with external diff and text conversion disabled. Read source and diff; execute no PR code or packages. A review decision names the prepared SHA. Added test commits require new CI and review; this run publishes them without approval. The independent review runner reports its own bounded advisory usage.

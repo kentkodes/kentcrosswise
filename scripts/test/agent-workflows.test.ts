@@ -12,6 +12,11 @@ function jobs(yml: string): Record<string, string> {
   return out;
 }
 const tools = (s: string) => s.replace(/\s+/g," ").trim().split(",").map(s=>s.trim());
+const prompt = (job: string) => / {10}prompt: \|\n((?: {12}[^\n]*\n|\n)*)/.exec(job)?.[1] ?? "";
+const permissions = (job: string) => Object.fromEntries(
+  (/ {4}permissions:\n((?: {6}[^\n]+\n)*)/.exec(job)?.[1] ?? "").trim().split("\n")
+    .filter(Boolean).map((line) => line.trim().split(": ")),
+);
 describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
   const yml=read(`.github/workflows/agent-${agent}.yml`), job=jobs(yml);
   it("separates public prepare, work and privileged publish/report runners",()=>{
@@ -72,6 +77,30 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(job.work).toContain('anthropic_federation_rule_id:');
     expect(job.work).toContain('--model claude-haiku-5-5');
   });
+  it("retains exact job permissions while explaining the command shapes", () => {
+    const common = { actions: "read", contents: "read", "id-token": "write" };
+    for (const [name, content] of Object.entries(job)) {
+      expect(permissions(content)).toEqual(name === "prepare"
+        ? { contents: "read", issues: "read", "pull-requests": "read", checks: "read" }
+        : name === "publish" || name === "review" ? { ...common, "pull-requests": "read", checks: "read" } : common);
+    }
+  });
+  it("explains separately callable work commands without widening the tool rules", () => {
+    const workPrompt = prompt(job.work!);
+    const allowed = tools(/--allowedTools "([^"]*)"/.exec(job.work!)![1]!);
+    const examples = ["git -C payload status", "git -C payload log -5 --oneline", "git -C payload add -- <path-relative-to-payload>",
+      'git -C payload commit -m "<message>"', "pnpm --dir payload lint", "pnpm --dir payload typecheck", "pnpm --dir payload test"];
+    for (const command of examples) {
+      expect(workPrompt).toContain(`\`${command}\``);
+      expect(allowed.some((rule) => rule === `Bash(${command})` ||
+        (rule.endsWith(":*)") && command.startsWith(`${rule.slice(5, -3)} `)))).toBe(true);
+    }
+    expect(workPrompt).toContain("one Bash call per command");
+    expect(workPrompt).toContain("Do not use cd, chained commands, shell heredocs or absolute git -C paths");
+    expect(workPrompt).toContain("Keep Edit and Write targets inside payload/");
+    expect(workPrompt).toContain("Read may access trusted root guidance/context and payload data");
+    expect(workPrompt).toContain("status has no flags");
+  });
   if(agent==='docs') it("checks the edited payload documentation instead of the trusted root",()=>{
     expect(job.work).toContain('Bash(node payload/scripts/check-agent-docs.mjs)');
     expect(job.work).not.toContain('Bash(node scripts/check-agent-docs.mjs)');
@@ -90,5 +119,9 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(job.review).not.toMatch(/pnpm --dir payload|Bash\(pnpm|Edit,|Write,|aws-actions|create-github-app-token/);
     expect(job.review).toContain('diff --no-ext-diff --no-textconv');
     expect(job.publish).toContain('needs: [prepare, work, review]');
+    expect(prompt(job.review!)).toContain('git -C payload --no-pager diff --no-ext-diff --no-textconv origin/main...HEAD --');
+    expect(tools(/--allowedTools "([^"]*)"/.exec(job.review!)![1]!)).toEqual([
+      "Read", "Glob", "Grep", "Bash(git -C payload --no-pager diff --no-ext-diff --no-textconv:*)",
+    ]);
   });
 });
