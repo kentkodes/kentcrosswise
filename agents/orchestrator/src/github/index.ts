@@ -9,6 +9,7 @@ export {
   createAppOctokit,
   createOctokitGitHubClient,
   githubClientFromSecret,
+  normalizePrivateKey,
   parseRepo,
   readAppCredentials,
   type AppCredentials,

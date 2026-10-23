@@ -1,11 +1,13 @@
 // One sweeper run (DESIGN §4.3, P2-17). Four independent parts; one failing does not stop the
-// others, and the run reports which parts failed (error class only, never a message or value).
+// others. The report names failed parts by error class; the log line adds the error chain
+// (errors.ts describeError: classes, statuses, shortened messages with credentials redacted).
 //   tasks:      a sweep message per waiting/queued task (the graph decides timeouts and retries);
 //   pause:      if agents_paused, cancel agent workflow runs that have not completed;
 //   gc:         in the nightly window, dispatch preview-gc.yml unless already dispatched;
 //   redeliver:  redeliver failed webhook deliveries of the orchestrator App.
 // Every part is safe to repeat for the same scheduled time (retried invocation).
 import { threadIdOf } from "@kcw/core/events";
+import { describeError } from "./errors";
 import { REDELIVERY_DEFAULTS, selectRedeliveries, type RedeliveryPlan } from "./deliveries";
 import { PREVIEW_GC_WORKFLOW, type SweeperGitHub } from "./github";
 import { nightlyGcWindow, sweepDedupeId, windowLabel, windowStart } from "./schedule";
@@ -80,7 +82,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
       await fn();
     } catch (err) {
       report.failed[name] = errName(err);
-      log(`sweeper: ${name} failed (${errName(err)})`);
+      log(`sweeper: ${name} failed (${errName(err)}) ${describeError(err)}`);
     }
   };
 

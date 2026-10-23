@@ -372,8 +372,59 @@ describe("credentials from kcw/prod/orchestrator", () => {
     expect((await readAppCredentials(NAME, store)).privateKey).toBe(pkcs8);
   });
 
+  // P2-17 live bug: the key in the console lost its line breaks; the JWT could not be signed and the
+  // first App call failed before any request (GitHubApiError without a status).
+  const mangled = (pem: string) => ({
+    "no line breaks (console single-line field)": pem.replace(/\n/g, ""),
+    "spaces for line breaks": pem.trim().replace(/\n/g, " "),
+    "CRLF line breaks": pem.replace(/\n/g, "\r\n"),
+    "surrounding whitespace": `  ${pem}  \n`,
+  });
+
+  it.each(Object.entries(mangled(pkcs1.privateKey)).map(([l, k]) => [l, k] as const))(
+    "a PKCS#1 key with %s is rebuilt and signs the App JWT",
+    async (_l, key) => {
+      const { store } = createFakeSecrets({ [NAME]: { ...values, github_app_private_key: key } });
+      const creds = await readAppCredentials(NAME, store);
+      expect(creds.privateKey).toBe(pkcs1.privateKey);
+      const c = await githubClientFromSecret(NAME, { secrets: store, repo: "o/r", fetch: mock.fetch });
+      mock.on("POST", "/repos/o/r/actions/runs/1/cancel", () => json(202, {}));
+      await expect(c.cancelRun(1)).resolves.toBe("cancelled");
+      const exchange = mock.calls.find((x) => x.url.pathname === "/app/installations/42/access_tokens")!;
+      const [, jwt] = exchange.headers.authorization!.split(" ");
+      const [h, p, s] = jwt!.split(".");
+      expect(verify("sha256", Buffer.from(`${h}.${p}`), createPublicKey(pkcs1.publicKey), Buffer.from(s!, "base64url"))).toBe(true);
+    },
+  );
+
+  it.each(Object.entries(mangled(pkcs8)).map(([l, k]) => [l, k] as const))("a PKCS#8 key with %s is rebuilt", async (_l, key) => {
+    const { store } = createFakeSecrets({ [NAME]: { ...values, github_app_private_key: key } });
+    expect((await readAppCredentials(NAME, store)).privateKey).toBe(pkcs8);
+  });
+
+  it("reproduces the live failure without normalization: no request is sent and the error has no status", async () => {
+    const broken = createOctokitGitHubClient(
+      { appId: CLIENT_ID, privateKey: pkcs1.privateKey.replace(/\n/g, ""), installationId: 42 },
+      { repo: "o/r", fetch: mock.fetch },
+    );
+    const err = (await broken.cancelRun(1).catch((e: unknown) => e)) as GitHubApiError;
+    expect(err).toBeInstanceOf(GitHubApiError);
+    expect(err.status).toBeUndefined();
+    expect(mock.calls).toEqual([]);
+  });
+
+  it("a PEM whose body does not parse is a config error naming the key, without key material", async () => {
+    const fake = "-----BEGIN RSA PRIVATE KEY-----\nQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=\n-----END RSA PRIVATE KEY-----\n";
+    const { store } = createFakeSecrets({ [NAME]: { ...values, github_app_private_key: fake } });
+    const err = (await readAppCredentials(NAME, store).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(GitHubConfigError);
+    expect(err.message).toMatch(/^github_app_private_key does not parse as a private key/);
+    expect(err.message).not.toContain("QUJD");
+  });
+
   it.each([
     ["empty client id", { github_app_client_id: " " }, APP_SECRET_KEYS.appId],
+    ["PEM with a non-base64 body", { github_app_private_key: "-----BEGIN PRIVATE KEY-----\nnot*base64\n-----END PRIVATE KEY-----" }, APP_SECRET_KEYS.privateKey],
     ["non-numeric installation id", { github_app_installation_id: "abc" }, APP_SECRET_KEYS.installationId],
     ["key that is not PEM", { github_app_private_key: "not-a-key-value" }, APP_SECRET_KEYS.privateKey],
   ])("rejects an %s, naming the key but not the value", async (_l, patch, key) => {
