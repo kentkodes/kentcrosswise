@@ -269,6 +269,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aws-sdk/client-sqs':
+        specifier: ^3.1154.0
+        version: 3.1155.0
       '@kcw/demo-data':
         specifier: workspace:*
         version: link:../../packages/demo-data

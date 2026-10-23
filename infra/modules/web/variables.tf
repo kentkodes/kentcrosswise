@@ -53,6 +53,12 @@ variable "ssm_parameter_names" {
   default     = []
 }
 
+variable "server_send_queue_arns" {
+  description = "SQS queues the server function may send to (sqs:SendMessage only), e.g. the orchestrator input queue for the boss console (P2-14). Previews: none."
+  type        = list(string)
+  default     = []
+}
+
 variable "server_environment" {
   description = "Extra server env vars. Secret *names* only, never values (D9)."
   type        = map(string)
