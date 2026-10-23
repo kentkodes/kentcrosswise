@@ -5,7 +5,10 @@
 // package no longer finds its pnpm siblings (Node resolves upward from the copy, not from the
 // link target): "Cannot find module '@swc/helpers/...'" on cold start. Fix: replace every symlink
 // with a copy of its target, then hoist pnpm's hidden hoist directory (.pnpm/node_modules/*) to the
-// bundle's root node_modules, where every package finds it by walking up.
+// bundle's root node_modules, where every package finds it by walking up. pnpm's hidden hoist holds
+// one version per name, which may not be the one a hoisted package depends on (pg-types needs
+// postgres-array 2, the LangGraph checkpointer pulls in 3): nestConflicts copies the right version
+// into that package's own node_modules, like npm's nested layout.
 import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, rmSync } from "node:fs";
 import path from "node:path";
 
@@ -72,11 +75,53 @@ function pkgVersion(dir: string): string | undefined {
   }
 }
 
+function listPackages(nm: string): string[] {
+  const names: string[] = [];
+  for (const first of readdirSync(nm)) {
+    if (first.startsWith(".")) continue;
+    if (first.startsWith("@")) for (const sub of readdirSync(path.join(nm, first))) names.push(`${first}/${sub}`);
+    else names.push(first);
+  }
+  return names;
+}
+
+/**
+ * For every root package that is a copy of a node_modules/.pnpm/<entry>, copies each dependency of
+ * that entry whose version differs from the root copy into the package's own node_modules.
+ * Returns the nested packages as "<parent> > <name>@<version>".
+ */
+export function nestConflicts(root: string): string[] {
+  const store = path.join(root, "node_modules", ".pnpm");
+  if (!existsSync(store)) return [];
+  const nested: string[] = [];
+  for (const entry of readdirSync(store)) {
+    const nm = path.join(store, entry, "node_modules");
+    if (entry === "node_modules" || !existsSync(nm)) continue;
+    const names = listPackages(nm);
+    const own = names.find((n) => entry.startsWith(`${n.replace("/", "+")}@`));
+    if (own === undefined) continue;
+    const top = path.join(root, "node_modules", ...own.split("/"));
+    const ownVersion = pkgVersion(path.join(nm, ...own.split("/")));
+    if (ownVersion === undefined || pkgVersion(top) !== ownVersion) continue;
+    for (const dep of names) {
+      if (dep === own) continue;
+      const want = pkgVersion(path.join(nm, ...dep.split("/")));
+      if (want === undefined || pkgVersion(path.join(root, "node_modules", ...dep.split("/"))) === want) continue;
+      const dest = path.join(top, "node_modules", ...dep.split("/"));
+      if (existsSync(dest)) continue;
+      cpSync(path.join(nm, ...dep.split("/")), dest, { recursive: true });
+      nested.push(`${own} > ${dep}@${want}`);
+    }
+  }
+  return nested.sort();
+}
+
 /**
  * After hoisting, node_modules/.pnpm only duplicates the root copies. Deletes it when every
- * package inside matches the hoisted name and version; otherwise keeps it and returns the conflicts.
+ * package inside matches the hoisted name and version, or was nested by nestConflicts (`covered`:
+ * "<name>@<version>"); otherwise keeps it and returns the conflicts.
  */
-export function prunePnpm(root: string): { pruned: boolean; conflicts: string[] } {
+export function prunePnpm(root: string, covered: ReadonlySet<string> = new Set()): { pruned: boolean; conflicts: string[] } {
   const store = path.join(root, "node_modules", ".pnpm");
   if (!existsSync(store)) return { pruned: false, conflicts: [] };
   const conflicts: string[] = [];
@@ -88,7 +133,7 @@ export function prunePnpm(root: string): { pruned: boolean; conflicts: string[] 
       for (const name of names) {
         const nested = pkgVersion(path.join(nm, ...name.split("/")));
         const hoisted = pkgVersion(path.join(root, "node_modules", ...name.split("/")));
-        if (nested !== hoisted) conflicts.push(`${name} ${nested ?? "?"} vs hoisted ${hoisted ?? "missing"}`);
+        if (nested !== hoisted && !covered.has(`${name}@${nested}`)) conflicts.push(`${name} ${nested ?? "?"} vs hoisted ${hoisted ?? "missing"}`);
       }
     }
   }

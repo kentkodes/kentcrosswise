@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { hoistPnpm, materializeSymlinks, prunePnpm } from "../lib/materialize";
+import { hoistPnpm, materializeSymlinks, nestConflicts, prunePnpm } from "../lib/materialize";
 
 const root = mkdtempSync(path.join(tmpdir(), "kcw-materialize-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -68,5 +68,30 @@ describe("materializeSymlinks + hoistPnpm (pnpm-shaped OpenNext bundle)", () => 
     symlinkSync(path.join(outside, "pkg"), path.join(b2, "node_modules", "pkg"), process.platform === "win32" ? "junction" : "dir");
     expect(() => materializeSymlinks(b2)).toThrow(/outside the bundle/);
     expect(existsSync(path.join(b2, "node_modules", "pkg"))).toBe(true);
+  });
+});
+
+describe("nestConflicts (hidden hoist picked another version than a package needs)", () => {
+  const b = path.join(root, "bundle3");
+  const pkg = (rel: string, name: string, version: string, body = "code") => {
+    file(`bundle3/${rel}/package.json`, JSON.stringify({ name, version }));
+    file(`bundle3/${rel}/index.js`, body);
+  };
+  // pg-types@2 needs postgres-array@2; the hidden hoist (and so the root) has postgres-array@3.
+  pkg("node_modules/.pnpm/pg-types@2.2.0/node_modules/pg-types", "pg-types", "2.2.0");
+  pkg("node_modules/.pnpm/pg-types@2.2.0/node_modules/postgres-array", "postgres-array", "2.0.0", "v2");
+  pkg("node_modules/.pnpm/postgres-array@2.0.0/node_modules/postgres-array", "postgres-array", "2.0.0", "v2");
+  pkg("node_modules/.pnpm/postgres-array@3.0.4/node_modules/postgres-array", "postgres-array", "3.0.4", "v3");
+  pkg("node_modules/pg-types", "pg-types", "2.2.0");
+  pkg("node_modules/postgres-array", "postgres-array", "3.0.4", "v3");
+
+  it("nests the needed version under the root copy and lets .pnpm be pruned", () => {
+    const nested = nestConflicts(b);
+    expect(nested).toEqual(["pg-types > postgres-array@2.0.0"]);
+    expect(readFileSync(path.join(b, "node_modules/pg-types/node_modules/postgres-array/index.js"), "utf8")).toBe("v2");
+    expect(readFileSync(path.join(b, "node_modules/postgres-array/index.js"), "utf8")).toBe("v3");
+    expect(nestConflicts(b)).toEqual([]);
+    expect(prunePnpm(b).pruned).toBe(false);
+    expect(prunePnpm(b, new Set(["postgres-array@2.0.0"]))).toEqual({ pruned: true, conflicts: [] });
   });
 });
