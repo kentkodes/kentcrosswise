@@ -14,6 +14,7 @@ const PACKAGE_FILES = [
   "agents/merge-rules/package.json",
   "agents/report/package.json",
   "agents/orchestrator/package.json",
+  "agents/webhook-relay/package.json",
   ...["core", "db", "secrets", "essays", "demo-data", "xray"].map((p) => `packages/${p}/package.json`),
 ];
 
