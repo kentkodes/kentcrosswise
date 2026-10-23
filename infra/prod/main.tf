@@ -58,6 +58,12 @@ variable "relay_package_dir" {
   default     = null
 }
 
+variable "relay_allowed_sender_ids" {
+  description = "GitHub account ids the webhook relay accepts events from. Default: the owner (D23). P2-07 adds the five App bot ids."
+  type        = list(number)
+  default     = [107236483]
+}
+
 locals {
   has_domain = var.domain_name != ""
 }
@@ -120,9 +126,16 @@ module "orchestrator_secrets" {
   names  = ["kcw/prod/orchestrator", "kcw/prod/models"]
 }
 
+# Relay (P2-05): the webhook secret, plus its own DB secret so it cannot read the orchestrator's
+# App key in kcw/prod/orchestrator. Both containers come from infra/bootstrap.
+locals {
+  relay_webhook_secret = "kcw/github/webhook-secret"
+  relay_db_secret      = "kcw/prod/relay"
+}
+
 module "relay_secrets" {
   source = "../modules/secrets"
-  names  = ["kcw/github/webhook-secret"]
+  names  = [local.relay_webhook_secret, local.relay_db_secret]
 }
 
 module "orchestrator" {
@@ -133,14 +146,15 @@ module "orchestrator" {
   relay_package_dir        = var.relay_package_dir
 
   orchestrator_secret_names = module.orchestrator_secrets.names
-  relay_secret_names        = module.relay_secrets.names
+
+  # The lookups above make the plan fail early if a secret container is missing.
+  relay_webhook_secret_name = module.relay_secrets.names[0]
+  relay_db_secret_name      = module.relay_secrets.names[1]
+  relay_allowed_sender_ids  = var.relay_allowed_sender_ids
 
   orchestrator_environment = {
     KCW_ORCHESTRATOR_SECRET = "kcw/prod/orchestrator"
     KCW_MODELS_SECRET       = "kcw/prod/models"
-  }
-  relay_environment = {
-    KCW_WEBHOOK_SECRET = "kcw/github/webhook-secret"
   }
 }
 

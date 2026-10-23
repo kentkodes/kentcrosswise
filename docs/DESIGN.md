@@ -332,6 +332,7 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | `kcw/prod/web` | auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public | web Lambda |
 | `kcw/prod/models` | anthropic_api_key, typesafe_api_key, langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; agents use federation) |
 | `kcw/prod/orchestrator` | db_url, github_app_client_id, github_app_installation_id, github_app_private_key | orchestrator Lambda |
+| `kcw/prod/relay` | db_url | webhook relay Lambda (delivery dedupe, task lookup; its own secret so the relay cannot read the orchestrator App key) |
 | `kcw/prod/pipeline` | db_url | pipeline Lambdas |
 | `kcw/prod/migrator` | db_url | `deploy.yml` |
 | `kcw/prod/origin-verify` | origin_verify (D25) | web Lambda; prod Terraform (`kcw-gh-plan`, `kcw-gh-deploy`) to configure CloudFront |
@@ -341,7 +342,7 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | `kcw/github/webhook-secret` | secret | relay Lambda |
 | `kcw/github/developer-app`, `qa-app`, `scraper-app`, `docs-app` | private_key | the matching `agent-*.yml` only (App client ids are repo variables) |
 | `kcw/ci` | neon_api_key (project-scoped to `kentcrosswise-ci` if available), e2e_login | `ci.yml`, `preview-gc.yml`; e2e_login also in the preview web Lambda |
-That is 15 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25). There is no Anthropic key for agents: they use federation (D16). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
+That is 16 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25, and `kcw/prod/relay`, P2-05/P2-06). There is no Anthropic key for agents: they use federation (D16). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
 
 When the owner pastes a value, it goes into the named secret under the listed key (console "Key/value" view). `docs/SETUP.md` uses these names.
 

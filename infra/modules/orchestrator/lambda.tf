@@ -149,8 +149,12 @@ resource "aws_lambda_function" "relay" {
   timeout          = var.relay_timeout_s
 
   environment {
+    # Read by agents/webhook-relay/src/lambda.ts (configFromEnv).
     variables = merge(var.relay_environment, {
-      KCW_ORCHESTRATOR_QUEUE_URL = aws_sqs_queue.input.url
+      KCW_WEBHOOK_SECRET_NAME      = var.relay_webhook_secret_name
+      KCW_RELAY_DB_SECRET_NAME     = var.relay_db_secret_name
+      KCW_ORCHESTRATOR_QUEUE_URL   = aws_sqs_queue.input.url
+      KCW_RELAY_ALLOWED_SENDER_IDS = join(",", [for id in var.relay_allowed_sender_ids : format("%d", id)])
     })
   }
 

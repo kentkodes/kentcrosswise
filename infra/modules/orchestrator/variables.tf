@@ -25,9 +25,24 @@ variable "orchestrator_secret_names" {
   type        = list(string)
 }
 
-variable "relay_secret_names" {
-  description = "Secrets Manager names the relay Lambda may read (D9, DESIGN §6)."
-  type        = list(string)
+variable "relay_webhook_secret_name" {
+  description = "Secret with the GitHub webhook secret under key `secret` (KCW_WEBHOOK_SECRET_NAME). The relay may read it."
+  type        = string
+}
+
+variable "relay_db_secret_name" {
+  description = "Secret with the relay's database URL under key `db_url` (KCW_RELAY_DB_SECRET_NAME). The relay may read it."
+  type        = string
+}
+
+variable "relay_allowed_sender_ids" {
+  description = "Numeric GitHub account ids whose webhook events the relay accepts (KCW_RELAY_ALLOWED_SENDER_IDS): the owner, and the App bots once they exist (P2-07). The relay refuses to start with an empty list."
+  type        = list(number)
+
+  validation {
+    condition     = alltrue([for id in var.relay_allowed_sender_ids : id >= 1 && floor(id) == id])
+    error_message = "relay_allowed_sender_ids must be positive integers."
+  }
 }
 
 variable "orchestrator_environment" {

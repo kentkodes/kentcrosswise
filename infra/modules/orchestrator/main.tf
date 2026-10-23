@@ -24,7 +24,9 @@ locals {
 
   secret_arn_prefix        = "arn:${local.partition}:secretsmanager:${local.region}:${local.account_id}:secret"
   orchestrator_secret_arns = [for n in var.orchestrator_secret_names : "${local.secret_arn_prefix}:${n}-??????"]
-  relay_secret_arns        = [for n in var.relay_secret_names : "${local.secret_arn_prefix}:${n}-??????"]
+  relay_secret_arns = [
+    for n in [var.relay_webhook_secret_name, var.relay_db_secret_name] : "${local.secret_arn_prefix}:${n}-??????"
+  ]
 }
 
 # ---------- queues ----------
