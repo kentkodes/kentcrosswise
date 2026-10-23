@@ -20,7 +20,8 @@
     "smoke-check": "pnpm --filter @kcw/scripts smoke-check",
     "preview-gc": "pnpm --filter @kcw/scripts preview-gc",
     "check-repo-settings": "pnpm --filter @kcw/scripts check-repo-settings",
-    "apply-repo-settings": "pnpm --filter @kcw/scripts apply-repo-settings"
+    "apply-repo-settings": "pnpm --filter @kcw/scripts apply-repo-settings",
+    "kcw-report": "pnpm --filter @kcw/report kcw-report"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

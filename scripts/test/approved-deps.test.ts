@@ -12,6 +12,7 @@ const PACKAGE_FILES = [
   "apps/web/package.json",
   "scripts/package.json",
   "agents/merge-rules/package.json",
+  "agents/report/package.json",
   ...["core", "db", "secrets", "essays", "demo-data", "xray"].map((p) => `packages/${p}/package.json`),
 ];
 
