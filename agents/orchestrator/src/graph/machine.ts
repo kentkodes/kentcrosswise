@@ -373,13 +373,13 @@ class Machine {
     d.ci = null;
     await this.store.updateTask(this.id, { head_sha: i.head_sha });
     await this.event("ci_running", "orchestrator", { pr: d.pr_number, head_sha: d.head_sha });
-    if (d.phase === "qa") return "applied"; // QA pushing its tests (§4.2 step 6); QA's review follows.
     if (d.phase === "owner" && d.approval_id !== null) {
       // The owner was asked about another head: that approval no longer applies.
       await this.store.supersedeApproval(d.approval_id, "Superseded: the PR head changed; merge-rules runs again.");
     }
-    // After QA's approval or during an owner wait, new code needs CI and QA again (the ruleset
-    // dismisses stale approvals).
+    // Every new head needs CI and independent QA again, including tests published by QA.
+    // The publishing QA run defers its review when it adds commits; CI green dispatches a
+    // fresh QA run. New code also supersedes an earlier approval (the ruleset dismisses it).
     await this.enter("ci");
     return "applied";
   }

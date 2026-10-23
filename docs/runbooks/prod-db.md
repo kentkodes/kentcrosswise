@@ -74,10 +74,11 @@ The script below makes one random password per user on your machine (24 random b
 
 Neon requires plain-text passwords in `CREATE ROLE` (hashed passwords are not supported), so they appear in the SQL Editor's **History** for this project. Delete those history items if the console offers it; anyone who can open the project's SQL Editor could reset the passwords anyway. If Windows clipboard history (Win+V) is on, clear it afterwards (Settings → System → Clipboard → Clear).
 
-Get the pooled host first: Neon **Connect**, database `kentcrosswise`, **Connection pooling on**; copy only the host part, `ep-…-pooler.us-east-1.aws.neon.tech` (not secret).
+Get the pooled host first: Neon **Connect**, database `kentcrosswise`, **Connection pooling on**; copy only the host part, the text between `@` and `/` in the connection string, e.g. `ep-…-pooler.c-2.us-east-1.aws.neon.tech` (not secret; newer projects have a `c-<n>.` segment). The script stops before doing anything if the host doesn't look like that.
 
 ```powershell
-$poolHost = Read-Host "Pooled host (ep-...-pooler.us-east-1.aws.neon.tech)"
+$poolHost = (Read-Host "Pooled host (ep-...-pooler...us-east-1.aws.neon.tech)").Trim()
+if ($poolHost -notmatch '^ep-[a-z0-9-]+-pooler\.([a-z0-9-]+\.)?us-east-1\.aws\.neon\.tech$') { throw "Host looks wrong: copy only the text between @ and / from Neon's pooled connection string" }
 $users = [ordered]@{
   web_app        = @{ role = "web_rw";     secret = "kcw/prod/web";          key = "db_url" }
   web_public_app = @{ role = "web_public"; secret = "kcw/prod/web";          key = "db_url_public" }
@@ -227,3 +228,9 @@ Prod URL: `terraform -chdir=infra/prod output -raw url` (currently `https://d36w
   2. Add database `kentcrosswise` again, owner `migrator_app`; open the SQL Editor on it and run
      `DROP ROLE IF EXISTS web_app, web_public_app, orch_app, relay_app, web_rw, web_public, orch_rw, pipeline_rw, migrator;`
   3. Re-run `deploy.yml` (migrations recreate everything), then step 3 again with new passwords (the old URLs no longer work).
+
+## 7. Live results (2026-10-23)
+
+- §2: owner filled `kcw/prod/migrator`; the `deploy.yml` run for #21 applied 0001-0004 (`4 applied`); after #23 (strict migrate) the next run reported `0 applied, 4 already applied`.
+- §3: login users created. The first URLs had a malformed host (pasted at the `Pooled host` prompt: whitespace, then a stray `user@…` part), so web reported "database not connected" and the sweeper failed to connect while the relay looked fine (its events didn't need the DB). The owner fixed the host in all four values; the script now validates the host.
+- §5 after a `deploy.yml` re-run: `/api/public/agent-events` → `{"available":true,"events":[]}`; owner signed in with Google at `https://kentcrosswise.com`, `/console` and `/inbox` load with the pause switches; relay records Actions minutes (`minutes=1.52`); sweeper reads the DB (`swept=0`). Orchestrator `lg` tables: pending its first SQS message (graph not wired into `lambda.ts` yet).
