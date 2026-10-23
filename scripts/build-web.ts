@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import openNextConfig from "../apps/web/open-next.config";
 import { parseKcwEnv } from "../apps/web/src/auth/env";
 import { scanForMarkers } from "./lib/bundle-check";
-import { hoistPnpm, materializeSymlinks, prunePnpm } from "./lib/materialize";
+import { hoistPnpm, materializeSymlinks, nestConflicts, prunePnpm } from "./lib/materialize";
 import { runMain } from "./lib/main";
 import { CONTRACT, checkOpenNextOutput } from "./lib/open-next-output";
 
@@ -64,9 +64,11 @@ await runMain(async () => {
   const serverDir = path.join(outDir, CONTRACT.server.dir);
   const links = materializeSymlinks(serverDir);
   const hoisted = hoistPnpm(serverDir);
-  const { pruned, conflicts } = prunePnpm(serverDir);
+  const nested = nestConflicts(serverDir);
+  const { pruned, conflicts } = prunePnpm(serverDir, new Set(nested.map((n) => n.split(" > ")[1]!)));
   console.log(
     `build-web: server bundle: ${links} symlinks materialized, ${hoisted.length} packages hoisted, ` +
+      (nested.length > 0 ? `nested ${nested.join(", ")}, ` : "") +
       (pruned ? "node_modules/.pnpm removed" : `node_modules/.pnpm kept (${conflicts.join("; ")})`),
   );
 
