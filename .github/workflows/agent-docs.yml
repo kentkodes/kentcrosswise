@@ -1,0 +1,176 @@
+# Docs-keeper agent (DESIGN §4.1, §4.2 step 8; P2-12). Dispatched by the orchestrator App on main
+# after a merge (not for Docs-keeper's own PRs: the context step skips those). Same auth pattern as
+# agent-developer.yml (steps 1-6 of §4.1).
+#
+# Trusted config: the branch kcw/task-<task_id> is cut from main, so CLAUDE.md, .claude/ and
+# docs/agents/* are main's; the merged change is data (`git show <merge commit>`).
+# Claude runs with the read-only workflow token (DESIGN §11 Q14); the workflow pushes its commits
+# (AGENTS.md, docs/DESIGN.md, docs/agents/*.md only) and opens the PR as the Docs App.
+# The tool allowlist below must match docs/agents/docs.md (scripts/test/agent-workflows.test.ts).
+name: agent-docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "tasks.id of the docs task (branch kcw/task-<task_id>)"
+        type: string
+        required: true
+      pr:
+        description: "The merged PR to document"
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: agent-task-${{ inputs.task_id }}
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    name: agent-docs
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      KCW_TASK_ID: ${{ inputs.task_id }}
+      KCW_PR: ${{ inputs.pr }}
+      KCW_ORCHESTRATOR_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/${{ vars.AWS_ACCOUNT_ID }}/kcw-prod-orchestrator-in.fifo
+    steps:
+      # 1.
+      - name: AWS credentials (kcw-gh-agent)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_ARN }}
+          aws-region: us-east-1
+          output-credentials: true
+          output-env-credentials: false
+
+      # 2.
+      - name: Read the Docs App key
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        with:
+          secret-ids: |
+            KCW_APP, kcw/github/docs-app
+          parse-json-secrets: true
+
+      # 3.
+      - name: Docs App token
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.DOCS_APP_CLIENT_ID }}
+          private-key: ${{ env.KCW_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Drop the App key from the job env
+        run: echo "KCW_APP_PRIVATE_KEY=" >> "$GITHUB_ENV"
+
+      # 4. Trusted config: main.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Task context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: pnpm -s agent-context --agent docs --out "$RUNNER_TEMP/kcw-context/task.md"
+
+      - name: Task branch
+        id: branch
+        if: steps.ctx.outputs.skip != 'true'
+        env:
+          BRANCH: ${{ steps.ctx.outputs.branch }}
+          BRANCH_EXISTS: ${{ steps.ctx.outputs.branch_exists }}
+        run: |
+          if [ "$BRANCH_EXISTS" = "true" ]; then git switch "$BRANCH"; else git switch -c "$BRANCH"; fi
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # 6a.
+      - name: Report coding
+        if: steps.ctx.outputs.skip != 'true'
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: >-
+          pnpm -s kcw-report --task-id "$KCW_TASK_ID" --agent docs --event-type coding
+          --dedupe-id "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-start"
+
+      # 5.
+      - name: Claude (Docs-keeper)
+        id: claude
+        if: steps.ctx.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Docs-keeper agent of this repository, acting as the Docs GitHub App.
+            Read CLAUDE.md, AGENTS.md and docs/agents/docs.md, then the task context in
+            ${{ runner.temp }}/kcw-context/task.md (merged PR #${{ steps.ctx.outputs.pr }}, merge commit
+            ${{ steps.ctx.outputs.merge_sha }}). You are on branch ${{ steps.ctx.outputs.branch }}, cut from main.
+            Update AGENTS.md, docs/DESIGN.md and docs/agents/*.md where the merge made them wrong or
+            incomplete, run the checks of your playbook, and commit with git. If nothing needs to change,
+            make no commit. Do not push and do not open a PR: the workflow does that after you finish.
+          github_token: ${{ github.token }}
+          bot_id: "346713905"
+          bot_name: kentcrosswise-docs[bot]
+          allowed_bots: kentcrosswise-orchestrator[bot]
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          plugins: ""
+          plugin_marketplaces: ""
+          show_full_output: false
+          display_report: false
+          claude_args: >-
+            --model claude-haiku-5-5
+            --max-turns 40
+            --add-dir ${{ runner.temp }}/kcw-context
+            --allowedTools "Read, Glob, Grep, Edit, Write,
+            Bash(pnpm install), Bash(pnpm lint), Bash(pnpm typecheck), Bash(pnpm test), Bash(pnpm vitest run:*),
+            Bash(pnpm --filter web build), Bash(pnpm build-web), Bash(pnpm migrate --help), Bash(pnpm seed --help),
+            Bash(pnpm check-preview-clean --help), Bash(pnpm preview-gc --help), Bash(pnpm check-repo-settings --help),
+            Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*)"
+
+      - name: Push and open the PR
+        id: publish
+        if: steps.ctx.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE_SHA: ${{ steps.branch.outputs.base_sha }}
+          PR: ${{ steps.ctx.outputs.pr }}
+        run: >-
+          pnpm -s agent-publish --agent docs --task-id "$KCW_TASK_ID" --pr "$PR"
+          --source . --base-sha "$BASE_SHA"
+
+      # 6b. Usage (no Actions minutes, Q13). Success repeats coding (a report needs an event, Q14).
+      - name: Report usage / failure
+        if: always() && steps.aws.outcome == 'success' && steps.ctx.outputs.skip != 'true'
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+          EVENT: ${{ job.status == 'success' && 'coding' || 'failed' }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: >-
+          pnpm -s kcw-report --task-id "$KCW_TASK_ID" --agent docs --event-type "$EVENT"
+          --claude-execution-file "$EXECUTION_FILE" --dedupe-id "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-end"

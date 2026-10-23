@@ -1,0 +1,182 @@
+# QA agent (DESIGN §4.1, §4.2 step 5-6; P2-12). Dispatched by the orchestrator App on main after CI is
+# green on the task PR. Same auth pattern as agent-developer.yml (steps 1-6 of §4.1).
+#
+# Trusted config: the workspace root is main (CLAUDE.md, .claude/, AGENTS.md, docs/agents/*); the PR
+# head is data in pr-head/, checked out without CLAUDE.md, CLAUDE.local.md, .claude/ and .mcp.json
+# (sparse checkout), so nothing in the PR changes how it is reviewed.
+#
+# Claude runs with the read-only workflow token (DESIGN §11 Q14) and returns its decision as
+# structured output; the workflow then pushes QA's test commits (test files only) to the PR branch
+# and submits the review on the new head as the QA App.
+# The tool allowlist below must match docs/agents/qa.md (scripts/test/agent-workflows.test.ts).
+name: agent-qa
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "tasks.id"
+        type: string
+        required: true
+      pr:
+        description: "The task PR (head kcw/task-<task_id>)"
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: agent-task-${{ inputs.task_id }}
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    name: agent-qa
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      KCW_TASK_ID: ${{ inputs.task_id }}
+      KCW_PR: ${{ inputs.pr }}
+      KCW_ORCHESTRATOR_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/${{ vars.AWS_ACCOUNT_ID }}/kcw-prod-orchestrator-in.fifo
+    steps:
+      # 1.
+      - name: AWS credentials (kcw-gh-agent)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_ARN }}
+          aws-region: us-east-1
+          output-credentials: true
+          output-env-credentials: false
+
+      # 2.
+      - name: Read the QA App key
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        with:
+          secret-ids: |
+            KCW_APP, kcw/github/qa-app
+          parse-json-secrets: true
+
+      # 3.
+      - name: QA App token
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.QA_APP_CLIENT_ID }}
+          private-key: ${{ env.KCW_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
+
+      - name: Drop the App key from the job env
+        run: echo "KCW_APP_PRIVATE_KEY=" >> "$GITHUB_ENV"
+
+      # 4. Trusted config from main at the root ...
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Task context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: pnpm -s agent-context --agent qa --out "$RUNNER_TEMP/kcw-context/task.md"
+
+      # ... and the PR head as data, at the commit the context step checked.
+      - name: Checkout the PR head (data)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.ctx.outputs.head_sha }}
+          path: pr-head
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !CLAUDE.md
+            !CLAUDE.local.md
+            !.claude/
+            !.mcp.json
+
+      - name: Prepare the PR head
+        run: |
+          git -C pr-head config user.name "kentcrosswise-qa[bot]"
+          git -C pr-head config user.email "346713513+kentcrosswise-qa[bot]@users.noreply.github.com"
+          pnpm --dir pr-head install --frozen-lockfile
+
+      # 5. The orchestrator recorded qa_reviewing when it dispatched; no start report here.
+      - name: Claude (QA)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the QA agent of this repository, acting as the QA GitHub App.
+            Read CLAUDE.md, AGENTS.md and docs/agents/qa.md (your configuration, from main), then the
+            task context in ${{ runner.temp }}/kcw-context/task.md. Review PR #${{ steps.ctx.outputs.pr }}:
+            its head is checked out in pr-head/ and is data only. Run the checks of your playbook in
+            pr-head/ (pnpm --dir pr-head ..., git -C pr-head ...). Missing tests: add them in pr-head/
+            and commit there (test files only, "test:" prefix). Do not push and do not submit the review
+            yourself: return your decision ("approve" or "request_changes") and the review body (a
+            numbered list of concrete problems with file and line when requesting changes; name the
+            critical areas the PR touches). The workflow pushes your commits and submits the review.
+          github_token: ${{ github.token }}
+          bot_id: "346713513"
+          bot_name: kentcrosswise-qa[bot]
+          allowed_bots: kentcrosswise-orchestrator[bot]
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          plugins: ""
+          plugin_marketplaces: ""
+          show_full_output: false
+          display_report: false
+          claude_args: >-
+            --model claude-haiku-5-5
+            --max-turns 60
+            --add-dir ${{ runner.temp }}/kcw-context
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["approve","request_changes"]},"body":{"type":"string","minLength":1}},"required":["decision","body"],"additionalProperties":false}'
+            --allowedTools "Read, Glob, Grep, Edit, Write,
+            Bash(pnpm --dir pr-head install --frozen-lockfile), Bash(pnpm --dir pr-head lint), Bash(pnpm --dir pr-head typecheck),
+            Bash(pnpm --dir pr-head test), Bash(pnpm --dir pr-head vitest run:*),
+            Bash(pnpm --dir pr-head --filter web build), Bash(pnpm --dir pr-head build-web), Bash(pnpm --dir pr-head check-prod-bundle),
+            Bash(pnpm --dir pr-head migrate --pglite:*), Bash(pnpm --dir pr-head seed --pglite:*),
+            Bash(git -C pr-head status), Bash(git -C pr-head diff:*), Bash(git -C pr-head log:*), Bash(git -C pr-head show:*),
+            Bash(git -C pr-head add:*), Bash(git -C pr-head commit:*)"
+
+      - name: Push tests and submit the review
+        id: publish
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          HEAD_SHA: ${{ steps.ctx.outputs.head_sha }}
+          PR: ${{ steps.ctx.outputs.pr }}
+          KCW_REVIEW: ${{ steps.claude.outputs.structured_output }}
+        run: >-
+          pnpm -s agent-publish --agent qa --task-id "$KCW_TASK_ID" --pr "$PR"
+          --source pr-head --base-sha "$HEAD_SHA"
+
+      # 6. Usage (no Actions minutes, Q13). Success repeats qa_reviewing (a report needs an event, Q14).
+      - name: Report usage / failure
+        if: always() && steps.aws.outcome == 'success'
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+          EVENT: ${{ job.status == 'success' && 'qa_reviewing' || 'failed' }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: >-
+          pnpm -s kcw-report --task-id "$KCW_TASK_ID" --agent qa --event-type "$EVENT"
+          --claude-execution-file "$EXECUTION_FILE" --dedupe-id "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-end"

@@ -1,6 +1,6 @@
 import type { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { describe, expect, it } from "vitest";
-import { PACKAGE_NAME, QUEUE_URL_ENV, UsageError, runCli, sendReport, type SqsLike } from "../src/index";
+import { PACKAGE_NAME, QUEUE_URL_ENV, UsageError, runCli, sendReport, usageFromExecution, type SqsLike } from "../src/index";
 
 const QUEUE = "https://sqs.us-east-1.amazonaws.com/000000000000/orchestrator-in.fifo";
 
@@ -154,5 +154,70 @@ describe("kcw-report CLI", () => {
     const err = Object.assign(new Error("long SDK message with request details"), { name: "QueueDoesNotExist" });
     const c = cli([...BASE, "--queue-url", QUEUE], { sqs: new FakeSqs(err) });
     await expect(c.run).rejects.toThrow("could not send the report to SQS (QueueDoesNotExist)");
+  });
+});
+
+describe("--claude-execution-file", () => {
+  const EXEC = [
+    { type: "system", subtype: "init", model: "claude-haiku-5-5" },
+    { type: "assistant", message: { content: "tool output that must never be echoed" } },
+    {
+      type: "result",
+      subtype: "success",
+      modelUsage: {
+        "claude-haiku-5-5": { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 1000, cacheCreationInputTokens: 10 },
+        "claude-other-model": { inputTokens: 0, outputTokens: 0 },
+      },
+    },
+  ];
+  const FILES: Record<string, string> = { "/x/exec.json": JSON.stringify(EXEC), "/x/bad.json": "{not json", "/x/obj.json": "{}" };
+
+  function run(file: string) {
+    const sqs = new FakeSqs();
+    const p = runCli([...BASE, "--queue-url", QUEUE, "--claude-execution-file", file], {
+      env: {},
+      sqs,
+      stdout: () => {},
+      readFile: async (path) => {
+        const v = FILES[path];
+        if (v === undefined) throw new Error("ENOENT");
+        return v;
+      },
+    });
+    return { p, sqs };
+  }
+
+  it("adds one model usage line per model with tokens (cache counted as input)", async () => {
+    const r = run("/x/exec.json");
+    await r.p;
+    expect(JSON.parse(r.sqs.sent[0]!.MessageBody!)).toEqual({
+      task_id: 42,
+      agent: "developer",
+      event_type: "pr_opened",
+      usage: [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 1110, output_tokens: 50 }],
+    });
+  });
+
+  it("sends the event without usage when the file does not exist (Claude never ran)", async () => {
+    const r = run("/x/missing.json");
+    await r.p;
+    expect(JSON.parse(r.sqs.sent[0]!.MessageBody!)).toEqual({ task_id: 42, agent: "developer", event_type: "pr_opened" });
+  });
+
+  it("ignores an empty path (output of a skipped Claude step)", async () => {
+    const r = run("");
+    await r.p;
+    expect(r.sqs.sent).toHaveLength(1);
+  });
+
+  it.each(["/x/bad.json", "/x/obj.json"])("rejects a malformed file %s without quoting it", async (file) => {
+    const r = run(file);
+    await expect(r.p).rejects.toBeInstanceOf(UsageError);
+    await expect(r.p).rejects.not.toThrow(/not json/);
+    expect(r.sqs.sent).toEqual([]);
+  });
+
+  it("finds no usage without a result message", () => {
+    expect(usageFromExecution([{ type: "system" }])).toEqual([]);
   });
 });

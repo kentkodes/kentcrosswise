@@ -47,6 +47,9 @@ CI and owner only (need AWS or GitHub admin credentials; locally use `--help`):
 | `pnpm check-preview-clean --pr <n>` | After a preview teardown: fails if any `kcw-pr-<n>` resource, `/kcw/preview/pr-<n>/` parameter, state/lock object or Neon branch is left. Tagged ARNs are confirmed with a get/describe call per type (`scripts/lib/tagged-resource.ts`): a confirmed not-found is ignored (the tagging index lags deletes), anything else counts, with its reason (`--retries`, `--retry-delay` to wait for deletes in progress; `--skip-neon`) |
 | `pnpm preview-gc find` / `delete-neon --pr <n>` | Preview leftovers per PR and which to clean (closed, or older than 24 h); delete a preview Neon branch |
 | `pnpm apply-repo-settings --profile interim --dry-run` | Owner only: create/update the `main` ruleset ([docs/runbooks/github-apps.md](docs/runbooks/github-apps.md)) |
+| `pnpm agent-context --agent <a> --out <file>` | Agent workflows, before Claude: validates the dispatch inputs (`KCW_TASK_ID`, `KCW_ISSUE`, `KCW_PR`, `KCW_MODE`), checks the issue/PR (open, this repo, branch `kcw/task-<id>`) and writes the task context file + step outputs. Needs `GH_TOKEN` (the agent App token), `GITHUB_REPOSITORY` |
+| `pnpm agent-publish --agent <a> --task-id <n> --source <dir> --base-sha <sha> [--issue <n>] [--pr <n>]` | Agent workflows, after Claude: pushes the agent's commits (fresh repo, no force, only `kcw/task-<id>`, path rule per agent) and opens the PR or submits the QA review (`KCW_REVIEW`) as the App |
+| `pnpm kcw-report --task-id <n> --agent <a> --event-type <t> [--claude-execution-file <f>]` | Sends an office event (+ model usage from a Claude Code Action run) to the orchestrator queue; `--dry-run` prints the message |
 
 PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where possible.
 
@@ -57,6 +60,11 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 | `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `preview` and `prod-plan`; `ci/required` aggregates them and is the required check | `kcw-gh-ci` (preview), `kcw-gh-plan` (read-only prod plan) |
 | `deploy.yml` | push to `main` (environment `prod`) | migrate (skipped with a notice while `kcw/prod/migrator` is empty), prod `build-web`, `build-lambdas`, `terraform apply infra/prod` (uploads the builds), smoke check | `kcw-gh-deploy` |
 | `preview-gc.yml` | PR closed; nightly; manual (`dry_run`, default true) | removes preview leftovers of closed PRs or older than 24 h, then `check-preview-clean` | `kcw-gh-ci` (sweep job in environment `preview-gc`) |
+| `agent-developer.yml`, `agent-scraper.yml` | `workflow_dispatch` on main by the orchestrator App (`task_id`, `issue`, `mode`, `pr`) | App token → task context → Claude Code Action (Haiku 5.5, federation, read-only workflow token, allowlist from the playbook) commits on `kcw/task-<id>` → `agent-publish` pushes and opens the PR → `kcw-report` | `kcw-gh-agent` (reads the App key, sends to the queue) |
+| `agent-qa.yml` | dispatch (`task_id`, `pr`) | main at the root (trusted config), PR head in `pr-head/` without agent config; Claude returns approve/request_changes; `agent-publish` pushes QA's test commits and submits the review | `kcw-gh-agent` |
+| `agent-docs.yml` | dispatch (`task_id`, `pr` = merged PR) | Docs-keeper on a branch from main; `agent-publish` pushes docs-only commits and opens the PR; skips its own PRs | `kcw-gh-agent` |
+
+Each agent workflow's `--allowedTools` must equal the "Tool allowlist" block of its playbook in `docs/agents/` (`scripts/test/agent-workflows.test.ts`); change both together.
 
 Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
 
@@ -64,7 +72,7 @@ No Playwright report or trace is uploaded: a trace would contain the typed previ
 
 `prod-plan` uploads two artifacts: `prod-plan-summary` (the summary alone) and `merge-rules-input` (summary + lockfile diff in one file, which the orchestrator fetches for merge-rules). It checks out with `fetch-depth: 2`, so the base lockfile is `HEAD^1` of the PR merge commit.
 
-Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_ARN`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
+Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_ARN`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`; for the agent workflows `DEV_APP_CLIENT_ID`, `QA_APP_CLIENT_ID`, `SCRAPER_APP_CLIENT_ID`, `DOCS_APP_CLIENT_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID`, `ANTHROPIC_WORKSPACE_ID`. There are no GitHub Actions secrets.
 
 Once the `main` ruleset is applied (start of Phase 2), every change to `main` is a squash-merged PR with `ci/required` green.
 
@@ -103,7 +111,8 @@ infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + r
                      webhook relay Lambda + public Function URL; code = a directory with index.mjs
                      exporting handler, passed as orchestrator_package_dir / relay_package_dir;
                      infra/prod passes the pnpm build-lambdas output; null = the stubs in stub/)
-.github/workflows/   ci.yml, deploy.yml, preview-gc.yml
+.github/workflows/   ci.yml, deploy.yml, preview-gc.yml, agent-{developer,qa,scraper,docs}.yml
+                     (actionlint.yaml: ignores actionlint's stale input list for claude-code-action)
 .github/actions/     setup (Node, pnpm, install, Terraform), neon-preview (Neon branch with the key from
                      Secrets Manager), preview-gc (find and remove preview leftovers)
 docs/                specs, design, research, agent playbooks, runbooks (owner)

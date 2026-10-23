@@ -1,0 +1,197 @@
+# Scraper-builder agent (DESIGN §4.1; P2-12): writes or repairs one extractor in
+# pipelines/extractors/<site>/ from a quarantine issue or a new-source task. Dispatched by the
+# orchestrator App on main, with the same inputs as agent-developer.yml so the PR loop treats both alike
+# (the AWS role and the Anthropic federation rule only accept ref:refs/heads/main + workflow_dispatch).
+#
+# Auth pattern (§4.1): 1. kcw-gh-agent via OIDC (credentials kept as step outputs, never exported)
+# 2. the Scraper App key from kcw/github/scraper-app 3. the App token (1 h, this job), after which
+# the key is dropped from the job env 4. checkout of main, then the task branch kcw/task-<id>
+# 5. Claude Code Action (federation, no Anthropic key) 6. kcw-report.
+#
+# Claude runs with the read-only workflow token, not the App token (DESIGN §11 Q14): it commits
+# locally; the workflow then pushes the commits and opens the PR "Closes #<issue>" as the App.
+# The tool allowlist below must match docs/agents/scraper.md (scripts/test/agent-workflows.test.ts).
+name: agent-scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "tasks.id"
+        type: string
+        required: true
+      issue:
+        description: "GitHub issue to implement"
+        type: string
+        required: true
+      mode:
+        description: "implement a new branch, or fix the open PR"
+        type: choice
+        options: [implement, fix]
+        default: implement
+      pr:
+        description: "The task PR (mode fix)"
+        type: string
+        required: false
+        default: ""
+
+permissions: {}
+
+# One agent run per task at a time (shared with the other agent workflows).
+concurrency:
+  group: agent-task-${{ inputs.task_id }}
+  cancel-in-progress: false
+
+jobs:
+  scraper:
+    name: agent-scraper
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      KCW_TASK_ID: ${{ inputs.task_id }}
+      KCW_ISSUE: ${{ inputs.issue }}
+      KCW_PR: ${{ inputs.pr }}
+      KCW_MODE: ${{ inputs.mode }}
+      # Not secret: the queue name is fixed by infra (kcw-prod-orchestrator-in.fifo).
+      KCW_ORCHESTRATOR_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/${{ vars.AWS_ACCOUNT_ID }}/kcw-prod-orchestrator-in.fifo
+    steps:
+      # 1. AWS credentials for this job's own steps only (step outputs, masked; not in the env Claude inherits).
+      - name: AWS credentials (kcw-gh-agent)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_ARN }}
+          aws-region: us-east-1
+          output-credentials: true
+          output-env-credentials: false
+
+      # 2. Exports KCW_APP_PRIVATE_KEY (masked) until the step after the token.
+      - name: Read the Scraper App key
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        with:
+          secret-ids: |
+            KCW_APP, kcw/github/scraper-app
+          parse-json-secrets: true
+
+      # 3. Installation token of the Scraper App (revoked at the end of the job by the action).
+      - name: Scraper App token
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SCRAPER_APP_CLIENT_ID }}
+          private-key: ${{ env.KCW_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: read
+
+      - name: Drop the App key from the job env
+        run: echo "KCW_APP_PRIVATE_KEY=" >> "$GITHUB_ENV"
+
+      # 4. main first (scripts used by the workflow), then the task branch (like the Developer, the
+      #    Scraper-builder works on its own branch, with that branch's CLAUDE.md and .claude/).
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Task context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: pnpm -s agent-context --agent scraper --out "$RUNNER_TEMP/kcw-context/task.md"
+
+      - name: Task branch
+        id: branch
+        env:
+          BRANCH: ${{ steps.ctx.outputs.branch }}
+          BRANCH_EXISTS: ${{ steps.ctx.outputs.branch_exists }}
+        run: |
+          if [ "$BRANCH_EXISTS" = "true" ]; then
+            git switch "$BRANCH"
+            pnpm install --frozen-lockfile
+          else
+            git switch -c "$BRANCH"
+          fi
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # 6a. Office event (the orchestrator already recorded task_assigned when it dispatched).
+      - name: Report coding
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        run: >-
+          pnpm -s kcw-report --task-id "$KCW_TASK_ID" --agent scraper --event-type coding
+          --dedupe-id "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-start"
+
+      # 5. Claude. Repo .claude/settings.json and .claude/skills load automatically; no plugins yet.
+      - name: Claude (Scraper-builder)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Scraper-builder agent of this repository, acting as the Scraper GitHub App.
+            Read CLAUDE.md, AGENTS.md and docs/agents/scraper.md, then the task context in
+            ${{ runner.temp }}/kcw-context/task.md (mode ${{ inputs.mode }}, issue #${{ steps.ctx.outputs.issue }}).
+            You are on branch ${{ steps.ctx.outputs.branch }}. Write or repair the extractor the issue names
+            (or, in mode fix, fix what the context lists), run the checks of your playbook, and commit with
+            git. Do not push and do not open a PR: the workflow pushes your commits and opens the PR after
+            you finish.
+          github_token: ${{ github.token }}
+          bot_id: "346713720"
+          bot_name: kentcrosswise-scraper[bot]
+          allowed_bots: kentcrosswise-orchestrator[bot]
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          plugins: ""
+          plugin_marketplaces: ""
+          show_full_output: false
+          display_report: false
+          claude_args: >-
+            --model claude-haiku-5-5
+            --max-turns 60
+            --add-dir ${{ runner.temp }}/kcw-context
+            --allowedTools "Read, Glob, Grep, Edit, Write,
+            Bash(pnpm install), Bash(pnpm lint), Bash(pnpm typecheck), Bash(pnpm test), Bash(pnpm vitest run:*),
+            Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*)"
+
+      - name: Push and open the PR
+        id: publish
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE_SHA: ${{ steps.branch.outputs.base_sha }}
+          ISSUE: ${{ steps.ctx.outputs.issue }}
+          PR: ${{ steps.ctx.outputs.pr }}
+        run: >-
+          pnpm -s agent-publish --agent scraper --task-id "$KCW_TASK_ID" --issue "$ISSUE" --pr "$PR"
+          --source . --base-sha "$BASE_SHA"
+
+      # 6b. Model usage of the run (no Actions minutes: the relay records them, Q13). Success
+      #     repeats `coding` because a report needs an event type (Q14); failure reports `failed`.
+      - name: Report usage / failure
+        if: always() && steps.aws.outcome == 'success'
+        env:
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+          EVENT: ${{ job.status == 'success' && 'coding' || 'failed' }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: >-
+          pnpm -s kcw-report --task-id "$KCW_TASK_ID" --agent scraper --event-type "$EVENT"
+          --claude-execution-file "$EXECUTION_FILE" --dedupe-id "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-end"
