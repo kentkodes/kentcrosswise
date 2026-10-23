@@ -94,7 +94,8 @@ agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in sc
                      TOKEN_PERMISSIONS), FakeGitHubClient for graph tests. src/graph
                      (`@kcw/orchestrator/graph`) = the task graph (PR loop of DESIGN §4.2-§4.3:
                      machine.ts state machine, store.ts DB as orch_rw, messages.ts queue parsing).
-                     lambda.ts still runs the P2-08 skeleton (src/skeleton.ts) until P2-11/P2-12
+                     lambda.ts runs it with ModelPlanner (src/nodes, Haiku via AnthropicProvider;
+                     key from kcw/prod/models); planner usage -> usage_events per task (src/nodes/usage.ts)
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
 infra/prod/          prod composition (web + orchestrator); infra/preview/ = one per-PR web stack (D21)

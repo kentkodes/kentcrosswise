@@ -6,9 +6,7 @@
 // The thread ends when the task is merged, failed or cancelled. A task the planner splits (P2-11)
 // gets one child task and thread per subtask; the parent thread waits in phase `children`.
 //
-// Not wired into src/lambda.ts yet (the live Lambda still runs the P2-08 skeleton): wiring needs
-// the agent workflows (P2-12). `handleTaskSqsEvent` is the entry to use then, with
-// `ModelPlanner` from `@kcw/orchestrator/nodes` as the planner.
+// src/lambda.ts runs it: `handleTaskSqsEvent` with `ModelPlanner` from `@kcw/orchestrator/nodes`.
 import { Annotation, Command, END, START, StateGraph, interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { handleRecords, threadConfig, type SqsBatchResponse, type SqsEvent } from "../handler";
 import { runStep, type TaskGraphDeps } from "./machine";
@@ -119,7 +117,7 @@ export interface TaskHandlerDeps {
   log?: (line: string) => void;
 }
 
-/** SQS handler for the task graph (same batch semantics as the skeleton's handleSqsEvent). */
+/** SQS handler for the task graph (batch semantics: `handleRecords`). */
 export async function handleTaskSqsEvent(event: SqsEvent, deps: TaskHandlerDeps): Promise<SqsBatchResponse> {
   return handleRecords(
     event,
