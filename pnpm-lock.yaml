@@ -205,6 +205,31 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  agents/webhook-relay:
+    dependencies:
+      '@aws-sdk/client-sqs':
+        specifier: ^3.1154.0
+        version: 3.1155.0
+      '@kcw/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kcw/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@kcw/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.11
+        version: 0.5.11
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+
   apps/web:
     dependencies:
       '@kcw/demo-data':

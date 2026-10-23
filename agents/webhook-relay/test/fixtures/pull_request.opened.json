@@ -1,0 +1,29 @@
+{
+  "action": "opened",
+  "number": 12,
+  "pull_request": {
+    "id": 5000012,
+    "number": 12,
+    "state": "open",
+    "title": "Synthetic PR title that must not be forwarded",
+    "body": "Closes #11. Synthetic body that must not be forwarded.",
+    "draft": false,
+    "merged": false,
+    "user": { "login": "kcw-developer[bot]", "id": 9000002, "type": "Bot" },
+    "head": {
+      "label": "example-owner:kcw/task-42",
+      "ref": "kcw/task-42",
+      "sha": "1111111111111111111111111111111111111111",
+      "repo": { "id": 1000, "full_name": "example-owner/example-repo" }
+    },
+    "base": {
+      "label": "example-owner:main",
+      "ref": "main",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "repo": { "id": 1000, "full_name": "example-owner/example-repo" }
+    }
+  },
+  "repository": { "id": 1000, "name": "example-repo", "full_name": "example-owner/example-repo", "private": false },
+  "installation": { "id": 7000 },
+  "sender": { "login": "kcw-developer[bot]", "id": 9000002, "type": "Bot" }
+}
