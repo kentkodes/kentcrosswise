@@ -69,6 +69,11 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(playbook).toContain('node payload/scripts/check-agent-docs.mjs');
     expect(playbook).toContain('report the capability gap');
   });
+  if(agent==='qa' || agent==='docs') it("publishes without an unsupported Issues permission",()=>{
+    expect(job.publish).not.toContain('permission-issues:');
+    expect(job.publish).toContain('permission-contents: write');
+    expect(job.publish).toContain('permission-pull-requests: write');
+  });
   if(agent==='qa') it("makes the final decision on a fresh runner with no PR execution or write tools",()=>{
     expect(job.review).toContain('--command review-input');
     expect(job.review).toContain('--command review-output');

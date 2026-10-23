@@ -1,14 +1,14 @@
-# Agent publisher security cutover (Q14/Q15 proposal)
+# Agent publisher security cutover (Q14/Q15)
 
-This is reviewable source preparation, **pending owner approval before merge and live rollout**. No AWS or GitHub setting was changed and no live negative test was performed during preparation. The approved product SPEC is unchanged. The proposed critical-change policy supersedes historical D8 treatment of behavior/governance instruction documents: neutral/native instructions, canonical `docs/agents/**` and trusted automation now require owner review. Factual `docs/HANDOFF.md`, ordinary research and routine design status remain ordinarily noncritical; other existing critical rules still apply. This policy proposal requires an explicit owner decision.
+The owner explicitly approved the source/policy and staged rollout on 2026-10-23. The initial source preparation performed no live mutations; the later authorized environment/IAM changes are recorded below. Live probes, next-head CI, merge and enablement remain pending. The approved product SPEC is unchanged. The owner-accepted critical-change policy supersedes historical D8 treatment of behavior/governance instruction documents: neutral/native instructions, canonical `docs/agents/**` and trusted automation now require owner review. Factual `docs/HANDOFF.md`, ordinary research and routine design status remain ordinarily noncritical; other existing critical rules still apply. This policy was explicitly accepted for this rollout.
 
 Trusted automation includes its command/resolver configuration and the core event parser imported by reporting, so an indirect dependency change also requires owner review.
 
-All `pnpm-lock.yaml` updates now require owner review, including version, tarball or integrity updates for preapproved dependency names. A frozen install validates consistency with the lockfile; it does not establish that the selected runtime code is trusted. This deliberately strengthens the historical dependency policy and requires explicit owner acceptance before merge. The approved product SPEC is unchanged.
+All `pnpm-lock.yaml` updates now require owner review, including version, tarball or integrity updates for preapproved dependency names. A frozen install validates consistency with the lockfile; it does not establish that the selected runtime code is trusted. The owner explicitly accepted this strengthening of the historical dependency policy for this rollout. The approved product SPEC is unchanged.
 
 Source verification on 2026-10-23: IAM and merge-rules source contracts passed (184 tests), and bootstrap formatting passed. The Liaison independently reported successful backend-disabled Terraform validation using the pinned provider on the host after sandboxed provider startup failed. This is no evidence of effective live IAM, deployed environment protection or successful negative probes. No live plan had run at that earlier validation stage; the separately authorized plan below is the later evidence.
 
-## Boundary to approve
+## Accepted boundary
 
 The untrusted `work` job runs on a fresh hosted runner, without an environment and without AWS trust. Its main-ref OIDC subject must be denied by every repository AWS role. Its Anthropic federation does not grant AWS credentials. A fresh protected start runner reports coding/qa_reviewing before work. A separate fresh `publish` runner checks out trusted `main`, consumes artifacts as untrusted data, validates them through trusted helpers, and obtains only its own publisher identity. Never execute scripts/configuration from a downloaded commit bundle or artifact, load artifact-controlled environment variables, reuse a work runner, or fall back to the legacy shared role.
 
@@ -58,7 +58,16 @@ Rendered trust was checked for every role: audience `sts.amazonaws.com` and exac
 
 CI at this source had checks and prod-plan green, with preview pending at observation; PR #30 at `2ed0b6e9110f5162e8f7cf75358efd3143c78c9a` was all green. No secret values were read by the plan, and no bootstrap/production apply, settings change, merge, agent dispatch or live probe was performed by this task. Standard PR CI independently runs temporary preview deployment and teardown. Source/policy acceptance and the separately authorized ordered rollout remain the next gates. Keep private plan artifacts and raw credential/state material outside this public record.
 
+
+## Current rollout progress (2026-10-23 17:59 UTC)
+
+Source/policy and staged rollout are owner-approved. The Liaison kept `KCW_AGENT_WORKFLOWS_ENABLED=false`, created all four publisher environments with exact custom `main` branch-only rules (no tags, `admins_bypass=false`), installed a `TokenIssueTime` cutoff deny in the legacy role's sole inline policy, validated a fresh plan's exact allowlist, and applied **8 add, 0 change, 2 destroy**. Each new live role was read back: exact immutable per-environment trust and audience, only own-secret read plus orchestrator queue send, no managed policies or extra inline policies. The shared role now returns `NoSuchEntity`. Four scoped role variables are set; `AWS_ROLE_AGENT_ARN` is removed.
+
+No merge, agent dispatch, model execution or App-key/secret-value read has occurred. Live positive/negative probes and required CI at the next source head remain pending; the applied plan and read-back checks do not replace those probes. Final source/probe preparation may be published through PR #29; merge waits for green checks and agents remain disabled until staged verification succeeds. The ordered steps below retain the rollout conditions; completed approvals and operations above need not be repeated solely because a session/model changes. Standard PR CI continues temporary preview deployments and teardown.
+
 ## Ordered rollout — separate owner authorization required
+
+The owner has authorized this staged rollout. Completed approvals and stages above need not be repeated; the remaining steps retain their verification conditions.
 
 1. Approve Q14 behavior, Q15 isolation and the expanded critical-path policy at the exact proposed head. Keep `KCW_AGENT_WORKFLOWS_ENABLED` absent or a value other than the literal `true` throughout preparation. Pause/disable existing legacy agent workflows through owner controls and cancel/drain outstanding legacy runs **before** applying or merging the new security boundary. Existing deployed legacy workflows do not gain a new source flag until updated, so the flag alone cannot stop them.
 2. Create and explicitly protect all four environments above. Select only the exact `main` branch for deployments; exclude tags. Review access/reviewer controls and reject any unexpected environment. Verify configuration directly before any workflow can use it. Do not rely on auto-creation, a naming convention, or the presence of a role ARN variable as protection.

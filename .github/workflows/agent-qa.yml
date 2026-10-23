@@ -358,7 +358,6 @@ jobs:
           private-key: ${{ env.KCW_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-          permission-issues: read
           permission-checks: read
       - name: Publish validated data using pinned trusted source
         env:

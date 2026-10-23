@@ -258,7 +258,6 @@ jobs:
           private-key: ${{ env.KCW_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-          permission-issues: read
       - name: Publish validated data using pinned trusted source
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
