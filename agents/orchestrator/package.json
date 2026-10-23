@@ -13,6 +13,7 @@
   "dependencies": {
     "@kcw/core": "workspace:*",
     "@kcw/secrets": "workspace:*",
+    "@langchain/core": "1.2.20",
     "@langchain/langgraph": "^1.5.2",
     "@langchain/langgraph-checkpoint-postgres": "^1.1.2",
     "pg": "^8.23.1"
