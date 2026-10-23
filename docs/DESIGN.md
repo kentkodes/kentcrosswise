@@ -86,8 +86,7 @@ Components:
 
 ```
 kentcrosswise/
-  AGENTS.md                      # canonical agent guide (kept current by Docs-keeper)
-  CLAUDE.md                      # points to AGENTS.md and docs/agents/*.md
+  AGENTS.md / CLAUDE.md / GEMINI.md # thin mandatory pointers to docs/agents/INSTRUCTIONS.md
   package.json  pnpm-workspace.yaml  tsconfig.base.json  eslint.config.js
   .claude/settings.json  .claude/skills/<skill>/SKILL.md
   .github/workflows/  ci.yml deploy.yml preview-gc.yml
@@ -117,7 +116,8 @@ kentcrosswise/
   scripts/        # check-repo-settings.ts, migrate.ts, check-preview-clean.ts
   docs/
     hub/SPEC.md  essays/SPEC.md  DESIGN.md  research/
-    agents/ developer.md qa.md scraper.md docs.md
+    agents/ INSTRUCTIONS.md CONTINUITY.md HANDOFF-TEMPLATE.md developer.md qa.md scraper.md docs.md
+    HANDOFF.md                   # public project state; task-specific patches through PRs
     runbooks/ bootstrap.md github-apps.md prod-db.md
 ```
 
@@ -188,7 +188,7 @@ The CI project has the same roles with synthetic data.
 | Developer | Actions `agent-developer.yml` | `workflow_dispatch` {task_id, issue, mode=`implement`/`fix`, pr} | issue body + `docs/agents/developer.md` | branch `kcw/task-<id>`, PR "Closes #n" | `claude-haiku-5-5` | Contents RW, Pull requests RW, Issues RW, Metadata R. **No Workflows.** Webhook inactive |
 | QA | Actions `agent-qa.yml` | dispatch {task_id, pr} after CI is green | PR diff, DESIGN.md, `docs/agents/qa.md` | test commits on the PR branch, then a review (approve / request changes) | Haiku 5.5 | Contents RW, Pull requests RW, Checks R, Metadata R. Webhook inactive |
 | Scraper-builder | Actions `agent-scraper.yml` | dispatch from a quarantine issue or new-source task | source record, failing URL, public-domain fixtures | PR with `pipelines/extractors/<site>/` | Haiku 5.5 | Contents RW, Pull requests RW, Issues RW, Metadata R. Webhook inactive |
-| Docs-keeper | Actions `agent-docs.yml` | dispatch after each merge (not for its own PRs) | merged diff, AGENTS.md, docs | PR updating AGENTS.md, DESIGN.md, `docs/agents/*` | Haiku 5.5 | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
+| Docs-keeper | Actions `agent-docs.yml` | dispatch after each merge (not for its own PRs) | merged diff, canonical instructions, docs | PR updating `docs/agents/*`, DESIGN.md and project handoff (publisher integration pending; see HANDOFF.md) | Haiku 5.5 | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
 | Router / Categorizer | web / pipeline Lambdas | new entry / new essay | text | label + confidence | Jev, Haiku 5.5 fallback | none |
 
 **Ruleset `main-protection`** (owner applies it from `docs/runbooks/github-apps.md`; `scripts/check-repo-settings.ts` fails CI on drift):
@@ -219,6 +219,9 @@ The PR author (Developer App) can never approve its own PR. Whether a GitHub App
 - QA and Docs-keeper always run with `CLAUDE.md`, `.claude/` and `docs/agents/*` from `main`, and read the PR head as data.
 - Consequence: a change to a skill, playbook or CLAUDE.md takes effect only after it merges. A PR can never change how it is itself reviewed.
 - The Developer works on its own branch; changes it makes to `.claude/**` are flagged by merge-rules as critical (they change agent permissions and behavior).
+
+
+**Instruction continuity (2026-10-23):** Root `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` are mandatory pointers to [agents/INSTRUCTIONS.md](agents/INSTRUCTIONS.md); [agents/CONTINUITY.md](agents/CONTINUITY.md) defines resume/handoff, and [HANDOFF.md](HANDOFF.md) records observed project state and holds. This docs structure does not change the selected Claude Action runtime/authentication or the approved permission policy. Historical task/decision references to commands or contracts in AGENTS.md now refer to the canonical guide. The trusted configuration must include the canonical pointer closure; pending #29's Docs publisher and QA context/exclusions do not yet cover it fully (see HANDOFF.md). Automation remains held for Q14/Q15 and integration review; this note does not claim the workflow implementation is updated.
 
 ### 4.2 PR loop (one subtask)
 1. The owner creates a task in the boss console. This writes a `tasks` row and sends the SQS message `{type: task.created}`.
@@ -378,7 +381,7 @@ Conventions for every task:
 | P1-05 | Synthetic seed + `@kcw/demo-data` | `packages/db/seeds`, `packages/demo-data` | 04 | Deterministic seeded generator (fake contacts, entries, mood series, social metrics); test: same seed = same output; grep test: no real-looking emails |
 | P1-06 | Next.js 16 app skeleton + route groups | `apps/web` | 01 | `pnpm --filter web build` passes; `(public)` home and `/demo` placeholder render; ESLint rule blocks `@kcw/db` imports under `(public)` (rule test with a fixture file) |
 | P1-07 | Auth | `apps/web/src/auth` | 02, 06 | Google provider (sign-in scopes only; Calendar/YouTube added later by incremental consent with `access_type=offline`); allowlist from secret; JWT session; `(owner)` layout redirects; preview-only credentials provider; unit tests for allowlist and the build flag; script asserting the prod bundle lacks the preview provider |
-| P1-08 | OpenNext v4 build | `apps/web/open-next.config.ts`, `scripts/build-web.ts` | 06 | `@opennextjs/aws` pinned to 4.1.x; `open-next build` output produced locally; output layout (server, image, revalidation, assets paths) written into AGENTS.md as the contract for P1-09 |
+| P1-08 | OpenNext v4 build | `apps/web/open-next.config.ts`, `scripts/build-web.ts` | 06 | `@opennextjs/aws` pinned to 4.1.x; `open-next build` output produced locally; output layout (server, image, revalidation, assets paths) written into the canonical guide (now `docs/agents/INSTRUCTIONS.md`) as the contract for P1-09 |
 | P1-09 | `infra/modules/web` (own module, D14) | `infra/modules/web` | 08 | Consumes the P1-08 layout: assets S3, server Lambda + Function URL with OAC, image Lambda, revalidation SQS, CloudFront behaviours, Route 53 alias; `terraform validate` + `fmt -check` pass; inputs: name prefix, domain, cert arn, artifact dir, secret names |
 | P1-10 | `infra/bootstrap` | `infra/bootstrap` | 01 | validate/fmt pass; roles use the immutable `sub` table of §5 with owner/repo IDs as variables, plus `aud`; **live:** owner applies and migrates state to S3; a throwaway debug workflow on main, on a PR and in environment `prod` assumes each role (and fails for the wrong one); the actual `sub` strings are recorded in the runbook |
 | P1-11 | `infra/prod` (web only for now) | `infra/prod`, `modules/secrets` | 09, 10 | validate passes; hosted zone imported; **live:** owner applies; `https://kentcrosswise.com` serves the public home |
@@ -388,7 +391,7 @@ Conventions for every task:
 | P1-15 | `ci.yml` | `.github/workflows/ci.yml`, `.github/actions/aws-auth` | 11-14 | Same-repo guard; `concurrency: pr-<n>`; jobs per §4.2 step 4; teardown `if: always()`; **live:** a test PR is green and the clean-check passes |
 | P1-16 | `deploy.yml` + `preview-gc.yml` | `.github/workflows` | 15 | Deploy runs migrate, then apply, then upload, in environment `prod`; GC (PR closed + `workflow_dispatch`) has a dry-run mode; **live:** merging a trivial change updates prod |
 | P1-17 | Repo settings checker | `scripts/check-repo-settings.ts`, `docs/runbooks/github-apps.md` | 15 | Reads the `main` ruleset via the API and compares it to the expected JSON (§4.1); unit test against fixtures; CI step (non-blocking until Phase 2) |
-| P1-18 | AGENTS.md and playbooks v1 | `AGENTS.md`, `docs/agents/*.md`, `CLAUDE.md` | 01-17 | Layout, commands, rules (no private data, no secrets, Windows-safe scripts, per-agent Bash allowlist); QA reviewer confirms each command in AGENTS.md runs |
+| P1-18 | AGENTS.md and playbooks v1 | `AGENTS.md`, `docs/agents/*.md`, `CLAUDE.md` | 01-17 | Layout, commands, rules (no private data, no secrets, Windows-safe scripts, per-agent Bash allowlist); QA reviewer confirms each command in the canonical guide runs |
 
 ## 8. Phase 2: agent system (local sub-agents)
 

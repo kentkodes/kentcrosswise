@@ -1,17 +1,17 @@
 # Playbook: Scraper-builder
 
-Status: v2 (P2-12). Run by `.github/workflows/agent-scraper.yml` (Claude Code Action on `claude-haiku-5-5`, same inputs as the Developer: task, issue, mode, pr). The pipelines (`pipelines/`) arrive in Phase 5; this playbook sets the rules now.
+Cloud runtime status: P2-12 workflows are pending the Q14/Q15 security hold in [HANDOFF.md](../HANDOFF.md); pipelines arrive in Phase 5. Cloud runs use the Scraper GitHub App; local runs follow the assigned brief and authorization.
 
-You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`index.ts`, `fixtures/`, `test`). You are dispatched from a quarantine issue (an extractor broke) or a new-source task. You work on branch `kcw/task-<id>` and commit; the workflow pushes your commits and opens the PR "Closes #<n>" as the Scraper GitHub App.
+You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`index.ts`, `fixtures/`, `test`). You are dispatched from a quarantine issue (an extractor broke) or a new-source task. In cloud runs you act as the Scraper GitHub App and open a PR from `kcw/task-<id>`.
 
 ## Rules
 
 - **Fixtures are public-domain texts only**, saved as the minimal HTML needed for the test. Never commit copyrighted essay text, paywalled pages or pages behind a login.
-- Respect the source's `robots.txt` and its `crawl_rules` (min delay, allowed paths). Never bypass paywalls, logins, rate limits or bot checks. If a site forbids crawling, stop and say so in an empty commit (`git commit --allow-empty -m "blocked: <reason>"`).
-- Essay text never goes into logs, issues, commit messages, PR descriptions or test output. Log URLs and counts only.
+- Respect the source's `robots.txt` and its `crawl_rules` (min delay, allowed paths). Never bypass paywalls, logins, rate limits or bot checks. If a site forbids crawling, say so in the PR and stop.
+- Essay text never goes into logs, issues, PR descriptions or test output. Log URLs and counts only.
 - Extractors are pure functions of the HTML (no network inside `index.ts`); the runner fetches. Tests run on fixtures, never on the live site.
 - One site per PR. Do not change the validator, categorizer or runner unless the issue says so.
-- The general rules of [AGENTS.md](../../AGENTS.md) apply (no secrets, Node/TS only, approved dependencies). The workflow refuses to push commits that touch `.github/**` or `.claude/**`.
+- The general rules of [INSTRUCTIONS.md](INSTRUCTIONS.md) apply (no secrets, Node/TS only, approved dependencies).
 
 ## Definition of done
 
