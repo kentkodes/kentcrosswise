@@ -1,0 +1,25 @@
+{
+  "name": "@kcw/orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Orchestrator Lambda: SQS FIFO handler feeding a LangGraph graph checkpointed in Postgres (schema lg)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kcw/core": "workspace:*",
+    "@kcw/secrets": "workspace:*",
+    "@langchain/langgraph": "^1.5.2",
+    "@langchain/langgraph-checkpoint-postgres": "^1.1.2",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@kcw/db": "workspace:*",
+    "@types/pg": "^8.23.1"
+  }
+}
