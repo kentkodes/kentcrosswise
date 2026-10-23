@@ -141,6 +141,20 @@ describe("sanitize (§4.5)", () => {
     expect(t.check("Add a page").ok).toBe(true);
   });
 
+  it("checkText applies the content rules line by line, without the title length limit (Q8)", () => {
+    const long = "Add a page that lists every essay with its reading time and its length band. ".repeat(3);
+    expect(long.length).toBeGreaterThan(MAX_TITLE_LENGTH);
+    expect(s.checkText(`${long}\n\n- returns 200\r\n- has a test`)).toEqual({ ok: true, violations: [] });
+    expect(s.checkText("").violations).toEqual(["empty"]);
+    expect(s.checkText(" \n\n ").violations).toEqual(["empty"]);
+    expect(s.checkText("Step one\nAsk Janie\nsee https://example.com").violations).toEqual(["url", "contact"]);
+    expect(s.checkText("ok\nCafé").violations).toEqual(["non_ascii"]);
+    expect(s.checkText("tab\tinside").violations).toEqual(["non_ascii"]);
+    // A phone number is not assembled across lines, but one on a line is caught.
+    expect(s.checkText("555\n123\n4567").ok).toBe(true);
+    expect(s.checkText("Call\n555-123-4567").violations).toEqual(["phone"]);
+  });
+
   it("is exported from @kcw/core", () => {
     expect(core.createSanitizer).toBe(createSanitizer);
     expect(core.PRIVATE_TITLE).toBe(PRIVATE_TITLE);

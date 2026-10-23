@@ -1,4 +1,5 @@
-// @kcw/orchestrator (P2-08 skeleton). The Lambda entry is src/lambda.ts (`handler`).
+// @kcw/orchestrator. The Lambda entry is src/lambda.ts (`handler`, still the P2-08 skeleton graph).
+// The task graph (P2-10) is `@kcw/orchestrator/graph`; the GitHub client is `@kcw/orchestrator/github`.
 export const PACKAGE_NAME = "@kcw/orchestrator";
 
 export {
@@ -8,9 +9,10 @@ export {
   createPool,
   setupCheckpointer,
 } from "./checkpointer";
-export { TaskState, buildGraph, type TaskGraph, type TaskStateValues, type WaitRequest, type WaitingOn } from "./graph";
+export { TaskState, buildGraph, type TaskGraph, type TaskStateValues, type WaitRequest, type WaitingOn } from "./skeleton";
 export {
   InputError,
+  handleRecords,
   handleSqsEvent,
   parseMessage,
   processInput,

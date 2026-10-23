@@ -268,11 +268,84 @@ export class OctokitGitHubClient implements GitHubClient {
   }
 }
 
-/** An Octokit authenticated as one installation of a GitHub App. */
-export function createAppOctokit(creds: AppCredentials, opts: Pick<OctokitClientOptions, "fetch"> = {}): Octokit {
+/**
+ * What the installation token may do (DESIGN §11 Q11): the least the calls above need, a subset of
+ * the App's permissions (§4.1). Per GitHub's "Permissions required for GitHub Apps":
+ * - actions write: workflow dispatch and run cancel; read covers listing runs, their artifacts and
+ *   the artifact download;
+ * - checks write: create the `kcw/merge-rules` check run;
+ * - contents write: merge a pull request (listed under Contents only);
+ * - issues write: create issues;
+ * - pull_requests read: get a pull request and list its files;
+ * - metadata read: implied for every token.
+ * Not requested: pull_requests write and statuses read (the App has them; no call needs them).
+ */
+export const TOKEN_PERMISSIONS = {
+  actions: "write",
+  checks: "write",
+  contents: "write",
+  issues: "write",
+  metadata: "read",
+  pull_requests: "read",
+} as const satisfies Record<string, "read" | "write">;
+
+/** Octokit's request function as an auth hook sees it (typed loosely: @octokit/types is not a direct dependency). */
+interface HookRequest {
+  (options: unknown): Promise<unknown>;
+  endpoint: {
+    merge(route: unknown, parameters?: unknown): { url: string; headers: Record<string, string | undefined> };
+    DEFAULTS: { baseUrl: string };
+  };
+}
+
+/** createAppAuth's result, as used here. */
+interface AppAuth {
+  (opts: { type: "installation"; repositoryNames: string[]; permissions: Record<string, string> }): Promise<{ token: string }>;
+  hook(request: HookRequest, route: unknown, parameters?: unknown): Promise<unknown>;
+}
+
+/**
+ * An Octokit auth strategy that sends every REST call with an installation token scoped to one
+ * repository and TOKEN_PERMISSIONS. createAppAuth's own hook always asks for an unscoped token
+ * (it passes no repository or permission options), so this hook asks createAppAuth for the
+ * scoped one explicitly. createAppAuth still signs the JWT, caches the token per scope, and
+ * handles the App endpoints (`/app/...`, including the token exchange itself, which needs the JWT).
+ */
+function scopedInstallationAuth(options: {
+  appId: string;
+  privateKey: string;
+  installationId: number;
+  repositoryName: string;
+  request?: unknown;
+  log?: unknown;
+}) {
+  const { repositoryName, ...appOptions } = options;
+  const appAuth = createAppAuth(appOptions as Parameters<typeof createAppAuth>[0]) as unknown as AppAuth;
+  const scope = { type: "installation" as const, repositoryNames: [repositoryName], permissions: { ...TOKEN_PERMISSIONS } };
+  const auth = () => appAuth(scope);
+  const hook = async (request: HookRequest, route: unknown, parameters?: unknown) => {
+    const endpoint = request.endpoint.merge(route, parameters);
+    const path = endpoint.url.replace(request.endpoint.DEFAULTS.baseUrl, "");
+    if (/^\/app(?:[/?]|$)/.test(path)) return appAuth.hook(request, route, parameters);
+    endpoint.headers.authorization = `token ${(await appAuth(scope)).token}`;
+    return request(endpoint);
+  };
+  return Object.assign(auth, { hook });
+}
+
+/** An Octokit authenticated as one installation of a GitHub App, with a token scoped to `repo` (owner/name). */
+export function createAppOctokit(
+  creds: AppCredentials,
+  opts: Pick<OctokitClientOptions, "fetch"> & { repo?: string } = {},
+): Octokit {
   return new Octokit({
-    authStrategy: createAppAuth,
-    auth: { appId: creds.appId, privateKey: creds.privateKey, installationId: creds.installationId },
+    authStrategy: scopedInstallationAuth,
+    auth: {
+      appId: creds.appId,
+      privateKey: creds.privateKey,
+      installationId: creds.installationId,
+      repositoryName: parseRepo(opts.repo ?? DEFAULT_REPO).repo,
+    },
     userAgent: "kcw-orchestrator",
     ...(opts.fetch && { request: { fetch: opts.fetch } }),
   });

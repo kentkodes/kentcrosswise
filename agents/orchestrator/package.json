@@ -6,13 +6,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./github": "./src/github/index.ts"
+    "./github": "./src/github/index.ts",
+    "./graph": "./src/graph/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@kcw/core": "workspace:*",
+    "@kcw/merge-rules": "workspace:*",
     "@kcw/secrets": "workspace:*",
     "@langchain/core": "1.2.20",
     "@langchain/langgraph": "^1.5.2",

@@ -2,7 +2,7 @@
 // but every record is handled on its own and failures are returned as partial batch failures.
 import { Command } from "@langchain/langgraph";
 import { ReportFormatError, parseAgentReport, threadIdOf, type AgentReport } from "@kcw/core/events";
-import type { TaskGraph } from "./graph";
+import type { TaskGraph } from "./skeleton";
 
 /** The fields of an SQS Lambda event we use. */
 export interface SqsRecord {
@@ -101,7 +101,24 @@ export interface HandlerDeps {
 }
 
 export async function handleSqsEvent(event: SqsEvent, deps: HandlerDeps): Promise<SqsBatchResponse> {
-  const log = deps.log ?? ((line: string) => console.log(line));
+  return handleRecords(
+    event,
+    (record) => processInput(deps.graph, parseMessage(record.body, record.attributes?.MessageGroupId)),
+    deps.log,
+  );
+}
+
+/**
+ * The record loop shared by the skeleton and the task graph: `process` parses and runs one record
+ * and returns its outcome for the log. InputError and ReportFormatError mean the message can never
+ * be processed (dropped); any other error is transient (returned to the queue).
+ */
+export async function handleRecords(
+  event: SqsEvent,
+  process: (record: SqsRecord) => Promise<string>,
+  logLine?: (line: string) => void,
+): Promise<SqsBatchResponse> {
+  const log = logLine ?? ((line: string) => console.log(line));
   const failures: { itemIdentifier: string }[] = [];
   for (const record of event.Records ?? []) {
     // FIFO: after a failure, later messages must not overtake it, so they are returned unprocessed.
@@ -110,8 +127,7 @@ export async function handleSqsEvent(event: SqsEvent, deps: HandlerDeps): Promis
       continue;
     }
     try {
-      const input = parseMessage(record.body, record.attributes?.MessageGroupId);
-      const outcome = await processInput(deps.graph, input);
+      const outcome = await process(record);
       log(`message ${record.messageId}: ${outcome}`);
     } catch (err) {
       if (err instanceof InputError || err instanceof ReportFormatError) {

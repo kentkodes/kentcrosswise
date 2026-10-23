@@ -156,6 +156,16 @@ describe("0002 agent system", () => {
     }
   });
 
+  it("orch_rw can add inbox items but not read or change them (0003)", async () => {
+    await as(
+      "orch_rw",
+      "INSERT INTO inbox_items (kind, ref_table, ref_id, title) VALUES ('approval', 'approvals', 'x', 'Synthetic')",
+    );
+    await expect(as("orch_rw", "SELECT * FROM inbox_items")).rejects.toThrow(/permission denied/);
+    await expect(as("orch_rw", "UPDATE inbox_items SET status = 'done'")).rejects.toThrow(/permission denied/);
+    await expect(as("orch_rw", "DELETE FROM inbox_items")).rejects.toThrow(/permission denied/);
+  });
+
   it("orch_rw can create tables in the lg schema but not read owner data", async () => {
     await as("orch_rw", "CREATE TABLE lg.probe (id int)");
     await expect(as("orch_rw", "SELECT * FROM diary_entries")).rejects.toThrow(/permission denied/);

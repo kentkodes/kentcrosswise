@@ -10,6 +10,7 @@ import {
   GitHubApiError,
   GitHubConfigError,
   MAX_ARTIFACT_BYTES,
+  TOKEN_PERMISSIONS,
   createOctokitGitHubClient,
   githubClientFromSecret,
   readAppCredentials,
@@ -114,8 +115,19 @@ describe("App authentication", () => {
     expect(decoded.ok).toBe(true);
     expect(decoded.header.alg).toBe("RS256");
     expect(decoded.payload.iss).toBe(CLIENT_ID);
-    // Default token scope (installation-wide; the App is installed on this repo only): no body narrowing it.
-    expect(exchanges[0]!.body).toBeUndefined();
+    // Q11: the token is scoped to this repository and the permissions the client's calls need.
+    expect(exchanges[0]!.body).toEqual({
+      repositories: ["r"],
+      permissions: {
+        actions: "write",
+        checks: "write",
+        contents: "write",
+        issues: "write",
+        metadata: "read",
+        pull_requests: "read",
+      },
+    });
+    expect((exchanges[0]!.body as { permissions: unknown }).permissions).toEqual(TOKEN_PERMISSIONS);
 
     for (const c of mock.api) expect(c.headers.authorization).toBe(`token ${TOKEN}`);
     expect(mock.api).toHaveLength(2);

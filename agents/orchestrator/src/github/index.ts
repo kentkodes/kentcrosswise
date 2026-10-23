@@ -5,6 +5,7 @@ export {
   APP_SECRET_KEYS,
   MAX_ARTIFACT_BYTES,
   OctokitGitHubClient,
+  TOKEN_PERMISSIONS,
   createAppOctokit,
   createOctokitGitHubClient,
   githubClientFromSecret,

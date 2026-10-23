@@ -44,6 +44,13 @@ export interface Sanitizer {
   check(title: string): CheckResult;
   /** The title if it passes, otherwise `Private task`. Null/undefined (no title) is also `Private task`. */
   publicTitle(title: string | null | undefined): string;
+  /**
+   * The content rules for longer public text, e.g. the GitHub issue bodies the orchestrator writes
+   * (DESIGN §11 Q8): every rule except the 60-character limit, applied line by line so that line
+   * breaks are allowed (tabs and other control characters are not). Blank lines are fine; a text
+   * without a non-blank line is `empty`.
+   */
+  checkText(text: string): CheckResult;
 }
 
 // ------------------------------------------------------------------ patterns
@@ -128,8 +135,21 @@ export function createSanitizer(opts: SanitizerOptions): Sanitizer {
     return { ok: false, violations: VIOLATIONS.filter((x) => v.has(x)) };
   }
 
+  function checkText(text: string): CheckResult {
+    const lines = text.split(/\r?\n/);
+    const v = new Set<Violation>();
+    if (lines.every((l) => l.trim().length === 0)) v.add("empty");
+    for (const line of lines) {
+      if (line.trim().length === 0) continue;
+      for (const x of check(line).violations) if (x !== "too_long") v.add(x);
+    }
+    if (v.size === 0) return { ok: true, violations: [] };
+    return { ok: false, violations: VIOLATIONS.filter((x) => v.has(x)) };
+  }
+
   return {
     check,
+    checkText,
     publicTitle: (title) => (title != null && check(title).ok ? title : PRIVATE_TITLE),
   };
 }
