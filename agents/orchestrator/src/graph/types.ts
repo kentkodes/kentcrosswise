@@ -30,9 +30,11 @@ export const branchOf = (taskId: number): string => `kcw/task-${taskId}`;
  * - `dev` / `ci` / `qa`: waiting on the Developer, CI or QA.
  * - `merge`: QA approved; waiting for complete merge-rules inputs (Q11).
  * - `owner`: waiting on an approval.
+ * - `children`: the planner split the task into subtasks (child tasks with their own threads); a
+ *   sweep finishes the parent once every child has ended (§11 Q12).
  * - `done`: merged, failed or cancelled (the thread ends).
  */
-export type Phase = "queued" | "dev" | "ci" | "qa" | "merge" | "owner" | "done";
+export type Phase = "queued" | "dev" | "ci" | "qa" | "merge" | "owner" | "children" | "done";
 
 /** `tasks.waiting_on` (§3.2). */
 export type WaitingOn = "dev" | "ci" | "qa" | "owner" | "deploy";
@@ -41,6 +43,9 @@ export type WaitingOn = "dev" | "ci" | "qa" | "owner" | "deploy";
 export type OwnerWait = "issue_text" | "critical" | "failure";
 
 export type DevMode = "implement" | "fix";
+
+/** What approving a failure restarts: the Developer, QA, or planning (planner or public-title output invalid). */
+export type RetryTarget = "dev" | "qa" | "plan";
 
 /** Why the merge step is waiting (Q11). */
 export type IncompleteReason = "ci_not_finished" | "head_moved" | "diff_incomplete" | "no_run" | "no_artifact";
@@ -104,7 +109,7 @@ export interface TaskData {
   owner_wait: OwnerWait | null;
   approval_id: string | null;
   /** For an owner wait after a failure: what approving it restarts. */
-  retry: "dev" | "qa" | null;
+  retry: RetryTarget | null;
   dev_mode: DevMode;
   issue_number: number | null;
   /** The public issue title (sanitized; also used for the squash commit). */
@@ -127,6 +132,8 @@ export interface TaskData {
   stale: number;
   last_message_id: string | null;
   last_outcome: StepOutcome | null;
+  /** Child task ids, once the planner split the task (phase `children`). */
+  children: number[];
 }
 
 export function initialTaskData(): TaskData {
@@ -150,6 +157,7 @@ export function initialTaskData(): TaskData {
     stale: 0,
     last_message_id: null,
     last_outcome: null,
+    children: [],
   };
 }
 
@@ -168,7 +176,10 @@ export function waitingOnOf(phase: Phase): WaitingOn | null {
   }
 }
 
-/** The task's plan (P2-11 writes it with a model; tests use a fake). */
+/** §4.2 step 2: the planner splits a task into at most this many subtasks. */
+export const MAX_SUBTASKS = 5;
+
+/** The public text of one (sub)task, from the public-title node (`@kcw/orchestrator/nodes`). */
 export interface Plan {
   /** Proposed public title (sanitized before use). */
   title: string;
@@ -183,6 +194,27 @@ export interface PlanRequest {
   is_private: boolean;
 }
 
+/** The planner and public-title nodes (P2-11: `ModelPlanner` in `@kcw/orchestrator/nodes`; tests use fakes). */
 export interface Planner {
+  /**
+   * Planner node: the task's private text split into 1..MAX_SUBTASKS subtasks, each a private,
+   * self-contained description of one PR. Only top-level tasks are split.
+   */
+  split(req: PlanRequest): Promise<string[]>;
+  /** Public-title node: the public title and issue body of one (sub)task. */
   plan(req: PlanRequest): Promise<Plan>;
+}
+
+/**
+ * A node's model output failed its schema twice (the first failure is retried once). The task
+ * goes to the owner as a failure. `reason` names the schema problem and never quotes model output.
+ */
+export class PlannerOutputError extends Error {
+  constructor(
+    readonly node: "planner" | "public_title",
+    readonly reason: string,
+  ) {
+    super(`${node} output invalid: ${reason}`);
+    this.name = "PlannerOutputError";
+  }
 }

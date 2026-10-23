@@ -74,8 +74,39 @@ export const SEED_APPROVALS = [
   { id: "5eed0000-0000-4000-8000-000000000002", kind: "critical_pr", reasons: ["seed: new dependency"] },
 ] as const;
 
-/** Inserts the seed tasks, events and approvals (caller owns the transaction). Returns row counts. */
+/**
+ * Synthetic model prices for the usage panel: provider `seed`, made-up numbers (never vendor
+ * prices; real prices are entered from the vendor pages). seed-small changes price 10 days ago;
+ * seed-unpriced has no price, so the panel shows "no price".
+ */
+export const SEED_MODEL_PRICES = [
+  { model: "seed-small", in: 1, out: 2, daysAgo: 400 },
+  { model: "seed-small", in: 2, out: 4, daysAgo: 10 },
+  { model: "seed-large", in: 5, out: 10, daysAgo: 400 },
+] as const;
+
+/** Synthetic usage within the last 30 days: [agent, model, input tokens, output tokens, days ago]. */
+const SEED_MODEL_USAGE: readonly (readonly [agent: string, model: string, input: number, output: number, daysAgo: number])[] = [
+  ["orchestrator", "seed-small", 120_000, 8_000, 20],
+  ["orchestrator", "seed-small", 90_000, 6_000, 2],
+  ["developer", "seed-large", 400_000, 40_000, 12],
+  ["developer", "seed-large", 250_000, 30_000, 1],
+  ["qa", "seed-small", 60_000, 5_000, 1],
+  ["router", "seed-unpriced", 3_000, 100, 3],
+];
+
+/** Synthetic Actions minutes: [agent, minutes, days ago]; dedupe keys `seed:workflow_run:<n>`. */
+const SEED_ACTIONS: readonly (readonly [agent: string, minutes: number, daysAgo: number])[] = [
+  ["orchestrator", 7.5, 12],
+  ["developer", 4.25, 1],
+];
+
+/** Inserts the seed tasks, events, approvals and usage (caller owns the transaction). Returns row counts. */
 export async function seedAgents(db: SqlClient): Promise<Record<string, number>> {
+  return { ...(await seedTasks(db)), ...(await seedUsage(db)) };
+}
+
+async function seedTasks(db: SqlClient): Promise<Record<string, number>> {
   const counts = { tasks: 0, agent_events: 0, approvals: 0 };
   const existing = await db.query("SELECT 1 FROM tasks WHERE starts_with(owner_text, $1) LIMIT 1", [SEED_TASK_PREFIX]);
   if (existing.rows.length > 0) return counts;
@@ -107,6 +138,48 @@ export async function seedAgents(db: SqlClient): Promise<Record<string, number>>
       [a.id, ids.get("public"), a.kind, a.reasons],
     );
     counts.approvals++;
+  }
+  return counts;
+}
+
+/**
+ * Synthetic usage for the usage panel, with its own marker (seed Actions rows), so a database whose
+ * seed tasks predate this seed still gets usage.
+ */
+async function seedUsage(db: SqlClient): Promise<Record<string, number>> {
+  const counts = { model_prices: 0, usage_events: 0 };
+  const existing = await db.query("SELECT 1 FROM usage_events WHERE starts_with(dedupe_key, 'seed:') LIMIT 1");
+  if (existing.rows.length > 0) return counts;
+  const task = await db.query<{ id: string }>("SELECT id FROM tasks WHERE owner_text = $1 ORDER BY id LIMIT 1", [
+    TASKS[0]!.ownerText,
+  ]);
+  const publicTask = task.rows[0] ? Number(task.rows[0].id) : null;
+
+  // Prices are dated relative to today, so they are inserted with the usage, once.
+  for (const p of SEED_MODEL_PRICES) {
+    const { rows } = await db.query(
+      `INSERT INTO model_prices (provider, model, usd_per_mtok_in, usd_per_mtok_out, effective_from)
+       VALUES ('seed', $1, $2, $3, current_date - $4::int) ON CONFLICT DO NOTHING RETURNING 1`,
+      [p.model, p.in, p.out, p.daysAgo],
+    );
+    counts.model_prices += rows.length;
+  }
+  for (const [agent, model, input, output, daysAgo] of SEED_MODEL_USAGE) {
+    await db.query(
+      `INSERT INTO usage_events (ts, kind, agent, provider, model, input_tokens, output_tokens, task_id)
+       VALUES (now() - make_interval(days => $5), 'model', $1, 'seed', $2, $3, $4, $6)`,
+      [agent, model, input, output, daysAgo, publicTask],
+    );
+    counts.usage_events++;
+  }
+  let run = 0;
+  for (const [agent, minutes, daysAgo] of SEED_ACTIONS) {
+    await db.query(
+      `INSERT INTO usage_events (ts, kind, agent, minutes, cost_usd, dedupe_key)
+       VALUES (now() - make_interval(days => $3), 'actions_minutes', $1, $2, 0, $4) ON CONFLICT (dedupe_key) DO NOTHING`,
+      [agent, minutes, daysAgo, `seed:workflow_run:${++run}`],
+    );
+    counts.usage_events++;
   }
   return counts;
 }

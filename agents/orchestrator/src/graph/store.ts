@@ -14,6 +14,13 @@ export interface TaskRecord {
   owner_text: string;
   is_private: boolean;
   github_issue: number | null;
+  /** Set for a subtask (a child row the planner created). */
+  parent_id: number | null;
+}
+
+export interface ChildTask {
+  id: number;
+  status: TaskStatus;
 }
 
 export interface TaskUpdate {
@@ -43,7 +50,8 @@ export interface TaskStore {
   /**
    * D20: moves a queued task to `planning` if fewer than `limit` other tasks are in flight
    * (planning, in_progress, waiting). Serialized across threads by an advisory lock. A task that
-   * is already in flight keeps its slot (true).
+   * is already in flight keeps its slot (true). A parent task with children does not count: its
+   * children hold the slots (§11 Q12).
    */
   claimSlot(id: number, limit: number): Promise<boolean>;
   updateTask(id: number, fields: TaskUpdate): Promise<void>;
@@ -55,6 +63,13 @@ export interface TaskStore {
   /** Closes a pending approval the thread no longer waits on (e.g. the PR head changed). */
   supersedeApproval(id: string, note: string): Promise<void>;
   loadContacts(): Promise<ContactNames[]>;
+  /**
+   * §4.2 step 2: one child `tasks` row per subtask (queued, thread `task-<id>`, source and
+   * is_private copied from the parent), in one transaction. If the parent already has children
+   * (a retried step), returns those instead. Ids in subtask order.
+   */
+  createSubtasks(parentId: number, ownerTexts: readonly string[]): Promise<number[]>;
+  getChildren(parentId: number): Promise<ChildTask[]>;
 }
 
 /** Statuses that hold an in-flight slot (D20). */
@@ -87,9 +102,19 @@ export class PgTaskStore implements TaskStore {
       owner_text: string;
       is_private: boolean;
       github_issue: number | null;
-    }>("SELECT id, status, owner_text, is_private, github_issue FROM tasks WHERE id = $1", [id]);
+      parent_id: string | null;
+    }>("SELECT id, status, owner_text, is_private, github_issue, parent_id FROM tasks WHERE id = $1", [id]);
     const r = rows[0];
-    return r ? { id: Number(r.id), status: r.status, owner_text: r.owner_text, is_private: r.is_private, github_issue: r.github_issue } : null;
+    return r
+      ? {
+          id: Number(r.id),
+          status: r.status,
+          owner_text: r.owner_text,
+          is_private: r.is_private,
+          github_issue: r.github_issue,
+          parent_id: num(r.parent_id),
+        }
+      : null;
   }
 
   async isPaused(): Promise<boolean> {
@@ -109,7 +134,9 @@ export class PgTaskStore implements TaskStore {
         claimed = true;
       } else if (status === "queued") {
         const { rows } = await client.query<{ n: number }>(
-          "SELECT count(*)::int AS n FROM tasks WHERE status = ANY($1::text[]) AND id <> $2",
+          `SELECT count(*)::int AS n FROM tasks t
+           WHERE t.status = ANY($1::text[]) AND t.id <> $2
+             AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)`,
           [IN_FLIGHT_STATUSES, id],
         );
         if ((rows[0]?.n ?? 0) < limit) {
@@ -204,6 +231,44 @@ export class PgTaskStore implements TaskStore {
       "UPDATE approvals SET status = 'rejected', decided_at = now(), note = $2 WHERE id = $1 AND status = 'pending'",
       [id, note],
     );
+  }
+
+  async createSubtasks(parentId: number, ownerTexts: readonly string[]): Promise<number[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // The row lock serializes a retried step with itself.
+      await client.query("SELECT 1 FROM tasks WHERE id = $1 FOR UPDATE", [parentId]);
+      const { rows: existing } = await client.query<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1 ORDER BY id", [parentId]);
+      const ids = existing.map((r) => Number(r.id));
+      if (ids.length === 0) {
+        for (const text of ownerTexts) {
+          const { rows } = await client.query<{ id: string }>(
+            `INSERT INTO tasks (parent_id, source, owner_text, is_private)
+             SELECT id, source, $2, is_private FROM tasks WHERE id = $1
+             RETURNING id`,
+            [parentId, text],
+          );
+          ids.push(Number(rows[0]!.id));
+        }
+        await client.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = ANY($1::bigint[])", [ids]);
+      }
+      await client.query("COMMIT");
+      return ids;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getChildren(parentId: number): Promise<ChildTask[]> {
+    const { rows } = await this.pool.query<{ id: string; status: TaskStatus }>(
+      "SELECT id, status FROM tasks WHERE parent_id = $1 ORDER BY id",
+      [parentId],
+    );
+    return rows.map((r) => ({ id: Number(r.id), status: r.status }));
   }
 
   loadContacts(): Promise<ContactNames[]> {
