@@ -145,7 +145,16 @@ describe("gatherContext", () => {
     expect(r.outputs).toEqual({ branch: "kcw/task-12", skip: "false", pr: "9", head_sha: SHA });
     expect(r.markdown).toContain("## PR #9: Add healthz");
     expect(r.markdown).toContain("## Issue #5: Issue 5");
-    expect(r.markdown).toContain("git -C pr-head diff origin/main...HEAD");
+    expect(r.markdown).toContain("The PR head is checked out in `payload/`");
+    expect(r.markdown).toContain("Work runner: `git -C payload diff origin/main...HEAD --`");
+    expect(r.markdown).toContain("Independent source-only review runner: `git -C payload --no-pager diff --no-ext-diff --no-textconv origin/main...HEAD --`");
+    expect(r.markdown).not.toContain("pr-head");
+    expect(r.markdown).toContain("Run no PR code, packages, hooks or tests in the source-only review runner");
+  });
+
+  it.each(["feature/other", "main; echo injected", "main\nrun-untrusted"])("does not turn unvalidated QA base %j into shell guidance", async (base) => {
+    const { gh } = fakeGitHub({ [`/repos/${REPO}/pulls/9`]: pull({ base: { ref: base } }) });
+    await expect(gatherContext(parseInputs("qa", { task_id: "12", pr: "9" }), gh)).rejects.toThrow("must target main");
   });
 
   it("docs: merged PR -> merge commit; its own PRs are skipped", async () => {

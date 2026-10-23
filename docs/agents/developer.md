@@ -1,6 +1,6 @@
 # Playbook: Developer
 
-Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
+Read [HANDOFF.md](../HANDOFF.md) for current rollout status, enablement and holds.
 
 You implement one GitHub issue and open a PR from branch `kcw/task-<id>` whose body contains "Closes #<n>". In cloud runs you act as the Developer GitHub App; this role can never approve or merge.
 

@@ -1,6 +1,6 @@
 # Playbook: Scraper-builder
 
-Cloud runtime status: source implements the Q14/Q15 split-runner design; owner cutover and live verification remain pending in [HANDOFF.md](../HANDOFF.md).
+Read [HANDOFF.md](../HANDOFF.md) for current rollout status, enablement and holds.
 
 You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`index.ts`, `fixtures/`, `test`). You are dispatched from a quarantine issue (an extractor broke) or a new-source task. In cloud runs you act as the Scraper GitHub App and open a PR from `kcw/task-<id>`.
 
