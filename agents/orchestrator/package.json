@@ -7,12 +7,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./github": "./src/github/index.ts",
-    "./graph": "./src/graph/index.ts"
+    "./graph": "./src/graph/index.ts",
+    "./nodes": "./src/nodes/index.ts",
+    "./sweeper": "./src/sweeper/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1154.0",
     "@kcw/core": "workspace:*",
     "@kcw/merge-rules": "workspace:*",
     "@kcw/secrets": "workspace:*",

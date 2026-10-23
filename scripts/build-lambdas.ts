@@ -1,5 +1,5 @@
-// Bundles the orchestrator and webhook relay Lambdas (scripts/lib/lambda-bundle.ts) into
-// agents/<pkg>/dist/index.mjs, then imports each bundle in a clean Node process to check that it
+// Bundles the orchestrator, webhook relay and sweeper Lambdas (scripts/lib/lambda-bundle.ts) into
+// each target's outDir/index.mjs, then imports each bundle in a clean Node process to check that it
 // loads and exports `handler`. Run before any terraform plan/apply of infra/prod.
 // Usage: pnpm build-lambdas
 import path from "node:path";

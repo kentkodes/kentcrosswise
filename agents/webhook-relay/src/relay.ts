@@ -7,6 +7,7 @@ import type { GitHubEventMessage, OrchestratorQueue } from "./queue";
 import { verifySignature } from "./signature";
 import { GITHUB_SOURCE, type RelayStore } from "./store";
 import { taskIdFromBranch } from "./task";
+import { actionsMinutesOf } from "./usage";
 
 export interface RelayRequest {
   method: string;
@@ -88,7 +89,23 @@ export async function handleDelivery(req: RelayRequest, deps: RelayDeps): Promis
   } catch (err) {
     return done(respond(500, "error", "db"), errName(err));
   }
-  if (taskId === null) return done(respond(202, "ignored", "no_task"));
+
+  // Actions minutes of every completed run from an allowed sender, task or not (deploys, owner
+  // PRs). Recorded before the delivery claim, so a redelivery after a failure still records them;
+  // the row's dedupe key (run id + attempt) keeps redeliveries from counting twice.
+  let minutesNote: string | undefined;
+  if (n.value.payload.type === "workflow_run") {
+    const usage = actionsMinutesOf(n.value.payload);
+    if (usage) {
+      try {
+        const recorded = await deps.store.recordActionsMinutes(usage, taskId);
+        minutesNote = recorded ? `minutes=${usage.minutes}` : "minutes=duplicate";
+      } catch (err) {
+        return done(respond(500, "error", "db"), errName(err));
+      }
+    }
+  }
+  if (taskId === null) return done(respond(202, "ignored", "no_task"), minutesNote);
 
   const message: GitHubEventMessage = {
     source: "github",
@@ -104,7 +121,7 @@ export async function handleDelivery(req: RelayRequest, deps: RelayDeps): Promis
   } catch (err) {
     return done(respond(500, "error", "db"), errName(err));
   }
-  if (!claimed) return done(respond(200, "duplicate"));
+  if (!claimed) return done(respond(200, "duplicate"), minutesNote);
 
   try {
     await deps.queue.send(message);
@@ -118,7 +135,10 @@ export async function handleDelivery(req: RelayRequest, deps: RelayDeps): Promis
     }
     return done(respond(502, "error", "queue"), `${errName(err)} ${released}`);
   }
-  return done(respond(200, "forwarded"), `${message.thread_id} ${message.resume.event}`);
+  return done(
+    respond(200, "forwarded"),
+    `${message.thread_id} ${message.resume.event}${minutesNote ? ` ${minutesNote}` : ""}`,
+  );
 }
 
 /** Only the error class/AWS error name: messages may contain connection strings. */

@@ -86,7 +86,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
     <main>
       <h1>Boss console</h1>
       <p>
-        <Link href="/inbox">Inbox</Link> · <Link href="/hub">Hub</Link>
+        <Link href="/inbox">Inbox</Link> · <Link href="/console/usage">Usage</Link> · <Link href="/hub">Hub</Link>
       </p>
       {notice ? <p role="status">{notice}</p> : null}
       {!queue.enabled ? <p>The orchestrator queue is not configured here: tasks are saved but not sent.</p> : null}

@@ -4,9 +4,10 @@
 # Triggers and OIDC subjects (kcw-gh-ci must trust both, see infra/bootstrap/iam.tf):
 #   - pull_request closed         -> ...:pull_request; cleans that PR only. Shares the PR's CI
 #                                    concurrency group, so it waits for a running CI teardown.
-#   - workflow_dispatch, schedule -> job in environment `preview-gc` -> ...:environment:preview-gc.
-#     The nightly schedule is interim: the orchestrator sweeper dispatches this workflow once
-#     P2-17 lands (GitHub disables schedules in public repos after 60 days without activity).
+#   - workflow_dispatch           -> job in environment `preview-gc` -> ...:environment:preview-gc.
+#     Nightly: the orchestrator sweeper (P2-17) dispatches it with dry_run=false and
+#     max_age_hours=24 between 06:15 and 07:15 UTC. No `schedule:` trigger (GitHub disables
+#     schedules in public repos after 60 days without activity).
 name: preview-gc
 
 on:
@@ -22,8 +23,6 @@ on:
         description: "Clean open PRs whose newest leftover is older than this"
         type: string
         default: "24"
-  schedule:
-    - cron: "17 6 * * *"
 
 permissions: {}
 
@@ -85,7 +84,7 @@ jobs:
         with:
           terraform: "true"
 
-      # Scheduled runs have no inputs: they clean (dry_run false) with the 24 h limit.
+      # Dispatched runs only (the sweeper's nightly one passes dry_run=false, max_age_hours=24).
       - uses: ./.github/actions/preview-gc
         with:
           role_to_assume: ${{ vars.AWS_ROLE_CI_ARN }}

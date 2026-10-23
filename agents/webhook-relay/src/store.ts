@@ -1,4 +1,5 @@
 // The relay's database access, behind a small interface so tests can use a fake or PGlite.
+import type { ActionsMinutes } from "./usage";
 
 /** Minimal SQL surface (fits `@kcw/db` SqlClient, node-postgres via fromPg, PGlite via fromPglite). */
 export interface SqlQuery {
@@ -14,6 +15,11 @@ export interface RelayStore {
   findTaskByPr(prNumber: number): Promise<number | null>;
   /** `tasks.id` of the task with this GitHub issue, or null. */
   findTaskByIssue(issueNumber: number): Promise<number | null>;
+  /**
+   * Records a completed run's Actions minutes (cost 0) unless its dedupe key is already there.
+   * `taskId` is linked only if that task exists. Returns false for a duplicate.
+   */
+  recordActionsMinutes(usage: ActionsMinutes, taskId: number | null): Promise<boolean>;
 }
 
 /** `inbound_events.source` for GitHub webhook deliveries. */
@@ -43,5 +49,15 @@ export function sqlRelayStore(db: SqlQuery): RelayStore {
     },
     findTaskByPr: (n) => newestTask(db, "pr_number", n),
     findTaskByIssue: (n) => newestTask(db, "github_issue", n),
+    async recordActionsMinutes(u, taskId) {
+      // A task-like branch name does not prove the task row exists: link it only if it does.
+      const { rows } = await db.query(
+        `INSERT INTO usage_events (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)
+         SELECT $1::timestamptz, 'actions_minutes', $2, $3, 0, (SELECT id FROM tasks WHERE id = $4::bigint), $5
+         ON CONFLICT (dedupe_key) DO NOTHING RETURNING id`,
+        [u.ts, u.agent, u.minutes, taskId, u.dedupeKey],
+      );
+      return rows.length === 1;
+    },
   };
 }
