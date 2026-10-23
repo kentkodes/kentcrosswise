@@ -1,6 +1,17 @@
 # Agent publisher security cutover (Q14/Q15)
 
-The owner explicitly approved the source/policy and staged rollout on 2026-10-23. The initial source preparation performed no live mutations; the later authorized environment/IAM changes are recorded below. Live probes, next-head CI, merge and enablement remain pending. The approved product SPEC is unchanged. The owner-accepted critical-change policy supersedes historical D8 treatment of behavior/governance instruction documents: neutral/native instructions, canonical `docs/agents/**` and trusted automation now require owner review. Factual `docs/HANDOFF.md`, ordinary research and routine design status remain ordinarily noncritical; other existing critical rules still apply. This policy was explicitly accepted for this rollout.
+The owner explicitly approved the source/policy and staged rollout on 2026-10-23. The initial source preparation performed no live mutations; the later authorized environment/IAM changes are recorded below. The secure source is merged/deployed and isolation probes passed; agents are disabled while a publisher App-key parsing failure is fixed and the controlled Developer/QA canary is completed. The approved product SPEC is unchanged. The owner-accepted critical-change policy supersedes historical D8 treatment of behavior/governance instruction documents: neutral/native instructions, canonical `docs/agents/**` and trusted automation now require owner review. Factual `docs/HANDOFF.md`, ordinary research and routine design status remain ordinarily noncritical; other existing critical rules still apply. This policy was explicitly accepted for this rollout.
+
+
+## Latest rollout result (2026-10-23 18:42 UTC)
+
+#29 merged as `30c98e3c27ce74a0dd10be64691826af8ef024d0`, tree-identical to reviewed `598e62eacabb9bc813403a647fc933a874fedb21`; [CI 40000253635](https://github.com/kentkodes/kentcrosswise/actions/runs/40000253635) and [deploy 40002977225](https://github.com/kentkodes/kentcrosswise/actions/runs/40002977225) passed. #30 is closed as included/superseded. Applied IAM/environment/variable state and post-apply no-drift evidence remain as recorded below.
+
+- [Probe 40003138583](https://github.com/kentkodes/kentcrosswise/actions/runs/40003138583): all 219 assertions passed, including own-role/key access, cross-key/cross-role denial, wrong audience, role chaining and four fixed-null messages. Worker and Liaison independently matched all four exact message IDs to `dropped (message must be a JSON object)` logs; queue and DLQ were zero at verification. The probe own-key checks discarded secret responses without inspecting/logging their values.
+- [Branch 40003427017](https://github.com/kentkodes/kentcrosswise/actions/runs/40003427017) and [tag 40003533025](https://github.com/kentkodes/kentcrosswise/actions/runs/40003533025) explicitly hit all four GitHub environment-protection rejections before steps: these expected failed runs verify non-main/tag denial. Owned refs are deleted. The disabled temporary diagnostic workflow is removed by the current cleanup patch; removal on main follows that patch's CI/merge.
+- [Developer canary 40003984068](https://github.com/kentkodes/kentcrosswise/actions/runs/40003984068) successfully exercised federation/model work and candidate export; publishing failed at App-token minting with DECODER unsupported. Start/end failure reporting passed; no task branch or PR was created. Stored-key shape was not inspected, so the live cause is not fully established. The new normalization fix passed 49 tests including real crypto/safe CLI, scripts lint/typecheck and four actionlint checks; its CI/merge and successful same-canary/independent-QA retry remain pending.
+
+`KCW_AGENT_WORKFLOWS_ENABLED=false` now. The specifically authorized public disposable issue #31/synthetic task `9000000001` has no DB task; owner console has zero tasks. Keep that independent workflow test separate from held #26 graph orchestration and real queued/console tasks. The owner approved the specific Developer/QA model test and cleanup in this session. Continue that scope after the reviewed source fix is green/merged; the probe results do not establish successful App publishing, QA approval or P2-18 E2E. Standard CI preview deployment/teardown continues independently. See [current handoff](../HANDOFF.md) for remaining gates; older observations below are dated audit history.
 
 Trusted automation includes its command/resolver configuration and the core event parser imported by reporting, so an indirect dependency change also requires owner review.
 
@@ -59,7 +70,7 @@ Rendered trust was checked for every role: audience `sts.amazonaws.com` and exac
 CI at this source had checks and prod-plan green, with preview pending at observation; PR #30 at `2ed0b6e9110f5162e8f7cf75358efd3143c78c9a` was all green. No secret values were read by the plan, and no bootstrap/production apply, settings change, merge, agent dispatch or live probe was performed by this task. Standard PR CI independently runs temporary preview deployment and teardown. Source/policy acceptance and the separately authorized ordered rollout remain the next gates. Keep private plan artifacts and raw credential/state material outside this public record.
 
 
-## Current rollout progress (2026-10-23 17:59 UTC)
+## Historical rollout progress (2026-10-23 17:59 UTC)
 
 Source/policy and staged rollout are owner-approved. The Liaison kept `KCW_AGENT_WORKFLOWS_ENABLED=false`, created all four publisher environments with exact custom `main` branch-only rules (no tags, `admins_bypass=false`), installed a `TokenIssueTime` cutoff deny in the legacy role's sole inline policy, validated a fresh plan's exact allowlist, and applied **8 add, 0 change, 2 destroy**. Each new live role was read back: exact immutable per-environment trust and audience, only own-secret read plus orchestrator queue send, no managed policies or extra inline policies. The shared role now returns `NoSuchEntity`. Four scoped role variables are set; `AWS_ROLE_AGENT_ARN` is removed.
 
@@ -77,7 +88,7 @@ The owner has authorized this staged rollout. Completed approvals and stages abo
 6. Run the explicitly authorized live verification below using a controlled probe, with no model execution or untrusted code. Record only pass/fail, subjects/role names and audit identifiers; suppress tokens, PEMs and secret-response values. An engineer must review the probe and its temporary branch/environment settings before any dispatch. Do not create arbitrary broadly trusted environments, relax branch protection, or merge an approval-bypass probe.
 7. After successful negative/positive verification, explicit owner acceptance and confirmation that old sessions are closed, set `KCW_AGENT_WORKFLOWS_ENABLED=true`. Run the owner-approved toy-issue/QA test first. Real task intake remains held until its results are reviewed. If anything fails, disable the workflows/flag again; do not restore the shared main-ref role as rollback.
 
-## Required live verification (not performed)
+## Required live verification matrix
 
 Use the exact protected environments and approved branch, then verify every matrix cell:
 
@@ -90,4 +101,4 @@ Use the exact protected environments and approved branch, then verify every matr
 | Non-main branch or a tag using a publisher environment | GitHub blocks deployment before AWS credentials can be issued |
 | Missing/misspelled environment or wrong audience/subject | AWS assumption denied; no fallback |
 
-Positive own-key checks, if separately authorized, must discard secret bodies without logging them. Test reporting in a controlled fixture so no unintended orchestration begins. Source contracts are not evidence that these live results passed. Store a redacted verification record with exact source SHA, time, operator, account/region, environment restrictions and pass/fail before enabling.
+Positive own-key checks, if separately authorized, must discard secret bodies without logging them. Test reporting in a controlled fixture so no unintended orchestration begins. Source contracts alone are not evidence of live results; the completed probe runs and remaining canary gap are recorded in the latest rollout block above. Store a redacted verification record with exact source SHA, time, operator, account/region, environment restrictions and pass/fail before enabling.
