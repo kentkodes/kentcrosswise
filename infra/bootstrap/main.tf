@@ -148,17 +148,28 @@ resource "aws_acm_certificate" "this" {
 }
 
 resource "aws_route53_record" "cert_validation" {
-  # The apex and *.apex share one validation record, so key by record name.
+  # Keys must be known at plan time: validation record names only exist after
+  # the certificate is created, so keying by them breaks the first plan. The
+  # apex and *.apex share one validation record (covered by "apex"); the
+  # preview wildcard has its own. Name/type/value are looked up at apply time.
   for_each = local.has_domain ? {
-    for o in aws_acm_certificate.this[0].domain_validation_options : o.resource_record_name => o...
+    apex    = var.domain_name
+    preview = "*.preview.${var.domain_name}"
   } : {}
 
   zone_id         = data.aws_route53_zone.this[0].zone_id
-  name            = each.key
-  type            = each.value[0].resource_record_type
-  records         = [each.value[0].resource_record_value]
+  name            = local.cert_validation_options[each.value].resource_record_name
+  type            = local.cert_validation_options[each.value].resource_record_type
+  records         = [local.cert_validation_options[each.value].resource_record_value]
   ttl             = 300
   allow_overwrite = true
+}
+
+locals {
+  # ACM validation options by the domain name they validate.
+  cert_validation_options = local.has_domain ? {
+    for o in aws_acm_certificate.this[0].domain_validation_options : o.domain_name => o
+  } : {}
 }
 
 resource "aws_acm_certificate_validation" "this" {
