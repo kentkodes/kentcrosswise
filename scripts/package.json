@@ -13,6 +13,7 @@
     "build-lambdas": "tsx build-lambdas.ts",
     "check-preview-clean": "tsx check-preview-clean.ts",
     "plan-summary": "tsx plan-summary.ts",
+    "merge-input": "tsx merge-input.ts",
     "smoke-check": "tsx smoke-check.ts",
     "preview-gc": "tsx preview-gc.ts",
     "check-repo-settings": "tsx check-repo-settings.ts",
@@ -25,11 +26,13 @@
     "@aws-sdk/client-s3": "^3.1154.0",
     "@aws-sdk/client-ssm": "^3.1154.0",
     "@electric-sql/pglite": "^0.5.11",
+    "@kcw/core": "workspace:*",
     "@kcw/db": "workspace:*",
     "@kcw/secrets": "workspace:*",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@kcw/merge-rules": "workspace:*",
     "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2"
   }

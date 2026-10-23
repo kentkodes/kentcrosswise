@@ -18,6 +18,7 @@
     "build-lambdas": "pnpm --filter @kcw/scripts build-lambdas",
     "check-preview-clean": "pnpm --filter @kcw/scripts check-preview-clean",
     "plan-summary": "pnpm --filter @kcw/scripts plan-summary",
+    "merge-input": "pnpm --filter @kcw/scripts merge-input",
     "smoke-check": "pnpm --filter @kcw/scripts smoke-check",
     "preview-gc": "pnpm --filter @kcw/scripts preview-gc",
     "check-repo-settings": "pnpm --filter @kcw/scripts check-repo-settings",

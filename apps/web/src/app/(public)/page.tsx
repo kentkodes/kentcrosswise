@@ -10,6 +10,9 @@ export default function HomePage() {
         <li>
           <Link href="/demo">See the demo</Link> (simulated data, fake people)
         </li>
+        <li>
+          <Link href="/office">Agent office</Link> (what the agents are doing now)
+        </li>
       </ul>
     </main>
   );
