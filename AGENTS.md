@@ -90,7 +90,11 @@ agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in sc
                      Lambda entry src/lambda.ts. Tests run node-postgres against PGlite served over the
                      wire protocol (test/pg-socket.ts), connected as orch_rw. src/github
                      (`@kcw/orchestrator/github`) = GitHubClient interface, Octokit impl as the
-                     orchestrator App (keys from kcw/prod/orchestrator), FakeGitHubClient for graph tests
+                     orchestrator App (keys from kcw/prod/orchestrator; token scoped to this repo and
+                     TOKEN_PERMISSIONS), FakeGitHubClient for graph tests. src/graph
+                     (`@kcw/orchestrator/graph`) = the task graph (PR loop of DESIGN §4.2-§4.3:
+                     machine.ts state machine, store.ts DB as orch_rw, messages.ts queue parsing).
+                     lambda.ts still runs the P2-08 skeleton (src/skeleton.ts) until P2-11/P2-12
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
 infra/prod/          prod composition (web + orchestrator); infra/preview/ = one per-PR web stack (D21)

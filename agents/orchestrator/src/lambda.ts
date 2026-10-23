@@ -4,7 +4,7 @@
 import { SecretKeyMissingError, SecretNotFoundError, SecretStore } from "@kcw/secrets";
 import type pg from "pg";
 import { checkpointerFromPool, createPool, setupCheckpointer } from "./checkpointer";
-import { buildGraph, type TaskGraph } from "./graph";
+import { buildGraph, type TaskGraph } from "./skeleton";
 import { handleSqsEvent, type SqsBatchResponse, type SqsEvent } from "./handler";
 
 /** Env var names (values are secret *names*, set by infra/modules/orchestrator via infra/prod). */

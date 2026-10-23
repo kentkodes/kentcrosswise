@@ -201,6 +201,9 @@ importers:
       '@kcw/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kcw/merge-rules':
+        specifier: workspace:*
+        version: link:../merge-rules
       '@kcw/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets

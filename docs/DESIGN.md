@@ -171,7 +171,7 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, created by the 
 ### 3.4 DB roles
 - `web_rw`: web Lambda, all app tables.
 - `web_public`: SELECT on `v_public_agent_events` only; used by public API routes.
-- `orch_rw`: agent tables, the `lg` schema, and read on `contacts.name`/`aliases` for the sanitizer.
+- `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003).
 - `pipeline_rw`: essays tables, plus insert on `tasks` and `agent_events`.
 - `migrator`: DDL; deploy only.
 
@@ -249,7 +249,8 @@ The PR author (Developer App) can never approve its own PR. Whether a GitHub App
 - **Threads:** each task is one LangGraph thread (`thread_id = task-<id>`), checkpointed in Neon (`lg` schema; **verify** the JS checkpointer package and the `interrupt()` / `Command({ resume })` API).
 - **Routing events to a thread:** the relay and workflow reports resolve the task from `branch`, `pr_number` or the `task_id` input. They enqueue `{thread_id, resume: {event, head_sha, payload}}` with `MessageGroupId = thread_id` and `MessageDeduplicationId = delivery id`.
 - **Stale events:** on resume the graph checks that the event matches `tasks.waiting_on` and `head_sha`. Stale or unexpected events are recorded and the thread re-interrupts unchanged.
-- **Owner decisions:** the inbox enqueues `{thread_id, resume: {approval_id, decision}}`.
+- **Owner decisions:** the inbox enqueues `{type: "owner.decision", task_id, thread_id, resume: {approval_id, decision}}`. The graph applies it only if the thread waits on that approval and `approvals.status` already holds that decision; otherwise it is stale.
+- **Sweep message** (P2-10 contract for P2-17): `{type: "sweep", task_id, thread_id}` per waiting or queued task. The graph decides itself whether a wait has timed out, retries a queued start (pause, in-flight limit) or an incomplete merge step, and runs inputs deferred while paused.
 - **Sweeper** (EventBridge, every 15 min):
   - Tasks waiting longer than their limit (dev 60 min, ci 90, qa 60, owner never) get a `timeout` resume. The graph redispatches once, then fails the task to the inbox.
   - Cancels running agent workflows when `agents_paused` is set.
@@ -502,6 +503,7 @@ Resolved by the owner (via the Liaison):
   (7) `esbuild` is approved for bundling the Lambda packages (dev dependency, added with the bundling task).
 - **Q9 (resolved 2026-10-23):** Console tasks are private by default: the console's Private box starts checked, and only an explicit uncheck makes a task public (§4.5(4)). The column comment in migration 0002 ("console tasks set false explicitly") is stale; it stays as it is, because editing an applied migration changes its checksum.
 - **Q10 (resolved 2026-10-23):** `@octokit/rest` and `@octokit/auth-app` are approved (exact names, on `approved-deps.json`) as dependencies of `agents/orchestrator` for the P2-09 GitHub client.
+- **Q11 (resolved 2026-10-23):** (1) The orchestrator's installation token is scoped to this repository and to the permissions its calls need (actions, checks, contents, issues write; pull_requests, metadata read), a subset of §4.1. (2) Merge-rules never runs on partial data: an incomplete file list, a missing `merge-rules-input` artifact (`no_run`/`no_artifact`) or CI not finished on the head makes the merge step wait (retried on the next CI event or sweep); after `INCOMPLETE_INPUT_TIMEOUT_MINUTES` (90, the CI limit) the PR is critical with the reason, which creates an approval and an inbox item.
 
 Open:
 - **Prod migrations skipped until the prod DB is wired (2026-10-22, temporary).** `kcw/prod/migrator` has no `db_url` yet, so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator --skip-if-unset`: a missing secret value, key or non-`postgres://` value logs a notice ("Migrations skipped") and the deploy continues; access errors still fail. Remove `--skip-if-unset` once the owner fills `kcw/prod/migrator` (and `db_url` in `kcw/prod/web`).

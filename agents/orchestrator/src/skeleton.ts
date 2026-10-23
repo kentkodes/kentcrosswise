@@ -1,6 +1,8 @@
 // P2-08 skeleton graph (DESIGN §4.3): one LangGraph thread per task (`task-<id>`), checkpointed in
 // Postgres schema `lg`. Two nodes: `assign` marks the task as waiting on the Developer, then
-// `await_report` interrupts until an agent report resumes it. The full state machine is P2-10.
+// `await_report` interrupts until an agent report resumes it. It touches neither GitHub nor the
+// agent tables. src/lambda.ts still runs it: the full state machine (src/graph, P2-10) is wired in
+// once the planner (P2-11) and the agent workflows (P2-12) exist.
 import {
   Annotation,
   END,

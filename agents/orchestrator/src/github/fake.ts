@@ -29,6 +29,8 @@ export interface FakePr {
   patches?: PrDiff["patches"];
   /** Defaults to true. */
   mergeable?: boolean;
+  /** getDiff's `complete` (defaults to true; false = GitHub listed only part of the files). */
+  complete?: boolean;
   merged?: boolean;
 }
 
@@ -52,6 +54,8 @@ export class FakeGitHubClient implements GitHubClient {
   readonly prs = new Map<number, FakePr>();
   /** Merge-rules artifacts by head SHA. */
   readonly artifacts = new Map<string, MergeInput>();
+  /** Head SHAs with no ci.yml run: getArtifact answers `no_run` instead of `no_artifact`. */
+  readonly headsWithoutRun = new Set<string>();
   /** Run ids that are still running (cancelRun of any other id returns `not_running`). */
   readonly runningRuns = new Set<number>();
   #failures = new Map<FakeMethod, GitHubApiError>();
@@ -131,14 +135,14 @@ export class FakeGitHubClient implements GitHubClient {
       author: p.author,
       files: p.files.map((f) => ({ ...f })),
       patches: { ...p.patches },
-      complete: true,
+      complete: p.complete ?? true,
     };
   }
 
   async getArtifact(input: GetArtifactInput): Promise<ArtifactResult> {
     this.#record("getArtifact", input);
     const found = this.artifacts.get(input.headSha);
-    if (!found) return { found: false, reason: "no_artifact" };
+    if (!found) return { found: false, reason: this.headsWithoutRun.has(input.headSha) ? "no_run" : "no_artifact" };
     return { found: true, input: structuredClone(found), runId: 1, artifactId: 1 };
   }
 }
