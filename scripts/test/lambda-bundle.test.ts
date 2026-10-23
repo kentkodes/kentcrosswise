@@ -3,7 +3,7 @@
 // HTTP endpoint (AWS_ENDPOINT_URL_*) and PGlite served over the wire protocol. Checks that each
 // bundle loads, that the happy path works, and what happens when a secret is missing or empty.
 import { execFile } from "node:child_process";
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -284,23 +284,87 @@ describe("built Lambda bundles", () => {
       LANGCHAIN_CALLBACKS_BACKGROUND: "false",
     });
 
-    it("starts a thread on Postgres (bundled pg, checkpointer and graph); no LangSmith key turns tracing off", async () => {
-      setSecrets({ "kcw/prod/orchestrator": { db_url: orchDb.url } });
-      const r = await invoke(out, file("orchestrator"), env(), {
-        Records: [sqsRecord("b1", { type: "task.created", task_id: 31 }, 31)],
+    // Synthetic App credentials: init only validates them (no GitHub call happens below).
+    const appSecret = () => ({
+      db_url: orchDb.url,
+      github_app_client_id: "Iv1.synthetic",
+      github_app_installation_id: "1",
+      github_app_private_key: generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+        publicKeyEncoding: { type: "spki", format: "pem" },
+      }).privateKey.replace(/\n/g, "\\n"), // as pasted into the console on one line
+    });
+
+    it("runs the task graph on Postgres with the bundled pg, checkpointer and Anthropic SDK; no LangSmith key turns tracing off", async () => {
+      // A local Messages API: the planner keeps one subtask; the issue body fails the sanitizer
+      // (an email address), so the task goes to an issue_text approval without any GitHub call.
+      const calls: string[] = [];
+      const anthropic: Server = createServer((req, res) => {
+        let raw = "";
+        req.on("data", (c: Buffer) => (raw += c.toString()));
+        req.on("end", () => {
+          const body = JSON.parse(raw) as { system: string };
+          calls.push(`${req.method} ${req.url} ${req.headers.authorization}`);
+          const text = body.system.startsWith("You plan work")
+            ? JSON.stringify({ subtasks: ["Add a contact page"] })
+            : JSON.stringify({ title: "Add a contact page", body: "Show the address someone@example.com." });
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              id: `msg_${calls.length}`,
+              type: "message",
+              role: "assistant",
+              model: "claude-haiku-5-5",
+              content: [{ type: "text", text }],
+              stop_reason: "end_turn",
+              stop_sequence: null,
+              usage: { input_tokens: 50, output_tokens: 10 },
+            }),
+          );
+        });
       });
-      expect(r.result).toEqual({ batchItemFailures: [] });
-      expect(r.logs).toEqual(["langsmith_api_key missing (no secret value): tracing off", "message b1: started"]);
+      await new Promise<void>((resolve) => anthropic.listen(0, "127.0.0.1", resolve));
+      try {
+        const [row] = (await db.query<{ id: number }>(
+          "INSERT INTO tasks (source, owner_text) VALUES ('console', 'synthetic contact page') RETURNING id",
+        )).rows;
+        const id = Number(row!.id);
+        await db.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = $1", [id]);
+        setSecrets({ "kcw/prod/orchestrator": appSecret(), "kcw/prod/models": { anthropic_api_key: "sk-synthetic" } });
+        const r = await invoke(
+          out,
+          file("orchestrator"),
+          { ...env(), ANTHROPIC_BASE_URL: `http://127.0.0.1:${(anthropic.address() as AddressInfo).port}` },
+          { Records: [sqsRecord("b1", { type: "task.created", task_id: id }, id)] },
+        );
+        expect(r.result).toEqual({ batchItemFailures: [] });
+        expect(r.logs).toEqual(["langsmith_api_key missing: tracing off", "message b1: started"]);
+        expect(calls).toEqual(["POST /v1/messages Bearer sk-synthetic", "POST /v1/messages Bearer sk-synthetic"]);
+        const approvals = await db.query<{ kind: string }>("SELECT kind FROM approvals WHERE task_id = $1", [id]);
+        expect(approvals.rows).toEqual([{ kind: "issue_text" }]);
+        const usage = await db.query<{ n: number }>(
+          "SELECT count(*)::int AS n FROM usage_events WHERE task_id = $1 AND kind = 'model' AND agent = 'orchestrator'",
+          [id],
+        );
+        expect(usage.rows).toEqual([{ n: 2 }]);
+        expect(r.output).not.toContain("sk-synthetic");
+        // Leave no task in flight for the sweeper tests below.
+        await db.query("UPDATE tasks SET status = 'cancelled', waiting_on = NULL WHERE id = $1", [id]);
+      } finally {
+        await new Promise((resolve) => anthropic.close(resolve));
+      }
     }, 60_000);
 
     it.each<[string, unknown, string]>([
       ["orchestrator secret has no value", undefined, "SecretNotFoundError"],
       ["db_url is missing", { github_app_client_id: DB_MARKER }, "SecretKeyMissingError"],
       ["db_url is empty", { db_url: " " }, "ConfigError"],
+      ["the Anthropic key is missing", "with-db", "SecretKeyMissingError"],
     ])("%s: the batch goes back to the queue, no value logged", async (_label, orchSecret, errName) => {
       setSecrets({
         "kcw/prod/models": { langsmith_api_key: "" },
-        ...(orchSecret === undefined ? {} : { "kcw/prod/orchestrator": orchSecret }),
+        ...(orchSecret === undefined ? {} : { "kcw/prod/orchestrator": orchSecret === "with-db" ? { db_url: DB_MARKER } : orchSecret }),
       });
       const r = await invoke(out, file("orchestrator"), env(), {
         Records: [sqsRecord("e1", { type: "task.created", task_id: 32 }, 32), sqsRecord("e2", { type: "task.created", task_id: 33 }, 33)],
