@@ -198,6 +198,9 @@ importers:
 
   agents/orchestrator:
     dependencies:
+      '@aws-sdk/client-sqs':
+        specifier: ^3.1154.0
+        version: 3.1155.0
       '@kcw/core':
         specifier: workspace:*
         version: link:../../packages/core

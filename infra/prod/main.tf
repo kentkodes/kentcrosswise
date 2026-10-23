@@ -1,4 +1,5 @@
-# infra/prod: everything in production: the web app (P1-11) and the orchestrator (P2-06).
+# infra/prod: everything in production: the web app (P1-11), the orchestrator (P2-06) and the
+# sweeper schedule (P2-17).
 # Init: terraform init -backend-config="bucket=kentcrosswise-tfstate-<account-id>"
 
 terraform {
@@ -56,6 +57,12 @@ variable "relay_package_dir" {
   description = "Webhook relay Lambda code directory (index.mjs exporting handler), built by pnpm build-lambdas (run it before plan/apply)."
   type        = string
   default     = "../../agents/webhook-relay/dist"
+}
+
+variable "sweeper_package_dir" {
+  description = "Sweeper Lambda code directory (index.mjs exporting handler), built by pnpm build-lambdas (run it before plan/apply)."
+  type        = string
+  default     = "../../agents/orchestrator/dist-sweeper"
 }
 
 variable "relay_allowed_sender_ids" {
@@ -168,6 +175,20 @@ module "orchestrator" {
     KCW_ORCHESTRATOR_SECRET = "kcw/prod/orchestrator"
     KCW_MODELS_SECRET       = "kcw/prod/models"
   }
+}
+
+# ---------- schedules (P2-17) ----------
+# The sweeper acts as the orchestrator App: it reads the orchestrator's secret (db_url as orch_rw,
+# App credentials) and may only send to the orchestrator queue.
+
+module "scheduler" {
+  source = "../modules/scheduler"
+
+  name_prefix              = "kcw-prod"
+  sweeper_package_dir      = var.sweeper_package_dir
+  orchestrator_secret_name = module.orchestrator_secrets.names[0]
+  queue_arn                = module.orchestrator.queue_arn
+  queue_url                = module.orchestrator.queue_url
 }
 
 output "url" {

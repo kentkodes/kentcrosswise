@@ -254,7 +254,9 @@ The PR author (Developer App) can never approve its own PR. Whether a GitHub App
 - **Sweeper** (EventBridge, every 15 min):
   - Tasks waiting longer than their limit (dev 60 min, ci 90, qa 60, owner never) get a `timeout` resume. The graph redispatches once, then fails the task to the inbox.
   - Cancels running agent workflows when `agents_paused` is set.
-  - Dispatches `preview-gc.yml` nightly.
+  - Dispatches `preview-gc.yml` nightly (06:15-07:15 UTC, `dry_run=false`, unless already dispatched since 06:15).
+  - Redelivers failed webhook deliveries of the orchestrator App (Q8 item 3): 3 h lookback, skipping guids that succeeded once, were refused with 4xx, are in `inbound_events` or had 4 attempts; at most 20 per run.
+  - P2-17: own Lambda `kcw-prod-sweeper` (`@kcw/orchestrator/sweeper`, `infra/modules/scheduler`), Scheduler `cron(0/15 * * * ? *)` UTC passing `<aws.scheduler.scheduled-time>`; sweep dedupe id `sweep-<task>-<window>`. Reads `kcw/prod/orchestrator` (orch_rw + App key); may only SendMessage to `orchestrator-in`.
 - **Pause-all** (`agents_paused`): no new dispatches, and in-flight agent runs are cancelled. Resumes queue up and are processed on unpause. `pipelines_paused` is a separate switch (Q2).
 
 ### 4.4 Event types (office animations)
@@ -507,6 +509,5 @@ Resolved by the owner (via the Liaison):
 
 Open:
 - **Prod migrations skipped until the prod DB is wired (2026-10-22, temporary).** `kcw/prod/migrator` has no `db_url` yet, so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator --skip-if-unset`: a missing secret value, key or non-`postgres://` value logs a notice ("Migrations skipped") and the deploy continues; access errors still fail. Remove `--skip-if-unset` once the owner fills `kcw/prod/migrator` (and `db_url` in `kcw/prod/web`).
-- **Nightly preview GC before the sweeper.** `preview-gc.yml` has an interim nightly `schedule` until P2-17's sweeper dispatches it; drop the schedule then.
 - **C4 / Q1 (resolved 2026-10-22):** Owner chose an allowlist. `agents/merge-rules/approved-deps.json` lists pre-approved npm packages (exact names or scopes like `@aws-sdk/*`), seeded in P1-01 with the stack's libraries. A new dependency on the list is not critical; one off the list is critical. Editing the list itself is critical (owner-approved).
 - **Q5:** Admin identity: IAM Identity Center (ends Free-plan credits) or an IAM user with MFA?
