@@ -40,6 +40,16 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(job.publish).not.toContain('pnpm install --frozen-lockfile\n');
     expect(job.report).not.toContain('pnpm install --frozen-lockfile\n');
   });
+  it("normalizes and masks the fetched App key only on the trusted publisher before token minting", () => {
+    const command = "pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-private-key.ts";
+    expect(job.publish!.split(command)).toHaveLength(2);
+    expect(job.publish!.indexOf("uses: aws-actions/aws-secretsmanager-get-secrets")).toBeLessThan(job.publish!.indexOf(command));
+    expect(job.publish!.indexOf(command)).toBeLessThan(job.publish!.indexOf("uses: actions/create-github-app-token"));
+    expect(job.publish).toContain("private-key: ${{ env.KCW_APP_PRIVATE_KEY }}");
+    for (const [name, content] of Object.entries(job)) if (name !== "publish") {
+      expect(content).not.toContain("agent-private-key");
+    }
+  });
   it("consumes explicit job-produced immutable artifact ids and no artifact-name fallback",()=>{
     const downloads=[...yml.matchAll(/uses: actions\/download-artifact@[^]*?(?= {6}-|$)/g)].map(m=>m[0]);
     expect(downloads.length).toBeGreaterThanOrEqual(4);

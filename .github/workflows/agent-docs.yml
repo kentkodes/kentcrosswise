@@ -251,6 +251,8 @@ jobs:
           secret-ids: |
             KCW_APP, kcw/github/docs-app
           parse-json-secrets: true
+      - name: Normalize and mask publisher App private key
+        run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-private-key.ts
       - uses: actions/create-github-app-token@v3
         id: app
         with:
