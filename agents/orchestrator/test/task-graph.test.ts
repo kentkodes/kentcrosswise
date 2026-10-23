@@ -44,7 +44,7 @@ describe("task graph (P2-10)", () => {
   const deps: TaskGraphDeps = {
     github: new FakeGitHubClient(),
     store: undefined as unknown as PgTaskStore,
-    planner: { plan: async (r) => plans.get(r.task_id) ?? PLAN },
+    planner: { split: async (r) => [r.owner_text], plan: async (r) => plans.get(r.task_id) ?? PLAN },
     now: () => clock,
   };
   let seq = 0;
