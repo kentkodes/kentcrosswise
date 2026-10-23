@@ -1,4 +1,4 @@
-// Builds the orchestrator and relay bundles exactly as `pnpm build-lambdas` does (into a temp dir)
+// Builds the orchestrator, relay and sweeper bundles exactly as `pnpm build-lambdas` does (into a temp dir)
 // and runs them in separate Node processes outside the repo, against a fake Secrets Manager / SQS
 // HTTP endpoint (AWS_ENDPOINT_URL_*) and PGlite served over the wire protocol. Checks that each
 // bundle loads, that the happy path works, and what happens when a secret is missing or empty.
@@ -19,10 +19,15 @@ import { BUNDLE_FILE, EXTERNALS, LAMBDA_TARGETS, bundleLambda, smokeImport, type
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("Lambda targets match the infrastructure", () => {
-  const lambdaTf = readFileSync(path.join(repoRoot, "infra/modules/orchestrator/lambda.tf"), "utf8");
   const prodTf = readFileSync(path.join(repoRoot, "infra/prod/main.tf"), "utf8");
 
+  it("targets have distinct names and output directories", () => {
+    expect(new Set(LAMBDA_TARGETS.map((t) => t.name)).size).toBe(LAMBDA_TARGETS.length);
+    expect(new Set(LAMBDA_TARGETS.map((t) => t.outDir)).size).toBe(LAMBDA_TARGETS.length);
+  });
+
   it.each(LAMBDA_TARGETS.map((t) => [t.name, t] as const))("%s: architecture and handler", (name, t) => {
+    const lambdaTf = readFileSync(path.join(repoRoot, t.tfFile), "utf8");
     const block = new RegExp(`resource "aws_lambda_function" "${name}" \\{([\\s\\S]*?)\\n\\}`).exec(lambdaTf)?.[1];
     expect(block).toBeDefined();
     expect(block).toMatch(new RegExp(`architectures\\s*=\\s*\\["${t.arch}"\\]`));
@@ -30,9 +35,8 @@ describe("Lambda targets match the infrastructure", () => {
     expect(BUNDLE_FILE).toBe("index.mjs");
   });
 
-  it.each(LAMBDA_TARGETS.map((t) => [t.name, t] as const))("%s: infra/prod deploys the bundle directory", (name, t) => {
-    const varName = name === "relay" ? "relay_package_dir" : "orchestrator_package_dir";
-    const block = new RegExp(`variable "${varName}" \\{([\\s\\S]*?)\\n\\}`).exec(prodTf)?.[1];
+  it.each(LAMBDA_TARGETS.map((t) => [t.name, t] as const))("%s: infra/prod deploys the bundle directory", (_name, t) => {
+    const block = new RegExp(`variable "${t.prodVar}" \\{([\\s\\S]*?)\\n\\}`).exec(prodTf)?.[1];
     expect(block).toMatch(new RegExp(`default\\s*=\\s*"\\.\\./\\.\\./${t.outDir.replaceAll("/", "\\/")}"`));
   });
 });
@@ -97,7 +101,9 @@ const RUNNER = [
   'import { pathToFileURL } from "node:url";',
   "const [bundle, event] = process.argv.slice(2);",
   "const m = await import(pathToFileURL(bundle).href);",
-  "const r = await m.handler(JSON.parse(event));",
+  // A handler that throws (the sweeper does when a part failed) reports the error class.
+  "let r;",
+  "try { r = await m.handler(JSON.parse(event)); } catch (e) { r = { thrown: e && e.name }; }",
   'console.log("RESULT " + JSON.stringify(r));',
   "process.exit(0);",
 ].join("\n");
@@ -304,6 +310,57 @@ describe("built Lambda bundles", () => {
         "langsmith_api_key empty: tracing off",
         `init failed (${errName}): 2 message(s) returned to the queue`,
       ]);
+      expect(r.output).not.toContain(DB_MARKER);
+    }, 60_000);
+  });
+
+  describe("sweeper", () => {
+    const env = () => ({
+      AWS_ENDPOINT_URL_SECRETS_MANAGER: aws.url,
+      AWS_ENDPOINT_URL_SQS: aws.url,
+      KCW_ORCHESTRATOR_SECRET: "kcw/prod/orchestrator",
+      KCW_ORCHESTRATOR_QUEUE_URL: `${aws.url}/000000000000/kcw-test-orchestrator-in.fifo`,
+    });
+
+    /** A recent 15-minute window start outside the nightly GC hour, so GitHub is only needed for redelivery. */
+    function scheduledTime(): string {
+      let t = Math.floor(Date.now() / 900_000) * 900_000;
+      const minutes = new Date(t).getUTCHours() * 60 + new Date(t).getUTCMinutes();
+      if (minutes >= 6 * 60 + 15 && minutes < 7 * 60 + 15) t -= 2 * 3600_000;
+      return new Date(t).toISOString().replace(".000Z", "Z");
+    }
+
+    it("sends sweep messages through the bundled pg and SQS clients; missing App keys fail only the GitHub part", async () => {
+      const [row] = (await db.query<{ id: number }>(
+        "INSERT INTO tasks (source, owner_text, status, waiting_on) VALUES ('console', 'synthetic', 'waiting', 'ci') RETURNING id",
+      )).rows;
+      const id = Number(row!.id);
+      setSecrets({ "kcw/prod/orchestrator": { db_url: orchDb.url } });
+      const before = aws.sent.length;
+      const at = scheduledTime();
+      const r = await invoke(out, file("sweeper"), env(), { scheduled_time: at });
+
+      expect(r.result).toEqual({ thrown: "SweepFailedError" });
+      const sent = aws.sent.slice(before);
+      expect(sent).toEqual([
+        {
+          QueueUrl: env().KCW_ORCHESTRATOR_QUEUE_URL,
+          MessageBody: JSON.stringify({ type: "sweep", task_id: id, thread_id: `task-${id}` }),
+          MessageGroupId: `task-${id}`,
+          MessageDeduplicationId: `sweep-${id}-${at.slice(0, 16)}Z`,
+        },
+      ]);
+      expect(r.logs).toContain("sweeper: redeliver failed (SecretKeyMissingError)");
+      expect(r.output).not.toContain(orchDb.url);
+    }, 60_000);
+
+    it("no database URL: fails before sending, no value logged", async () => {
+      setSecrets({ "kcw/prod/orchestrator": { github_app_client_id: DB_MARKER } });
+      const before = aws.sent.length;
+      const r = await invoke(out, file("sweeper"), env(), { scheduled_time: scheduledTime() });
+      expect(r.result).toEqual({ thrown: "SweepFailedError" });
+      expect(r.logs).toEqual(["sweeper: database unavailable (SecretKeyMissingError)"]);
+      expect(aws.sent.length).toBe(before);
       expect(r.output).not.toContain(DB_MARKER);
     }, 60_000);
   });

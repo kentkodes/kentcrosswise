@@ -1,6 +1,7 @@
-// Bundles the agent Lambdas (orchestrator, webhook relay) into one ESM file each with esbuild.
-// infra/modules/orchestrator zips each output directory (archive_file) and runs `index.handler`
-// on nodejs24.x / arm64; infra/prod points orchestrator_package_dir / relay_package_dir here.
+// Bundles the agent Lambdas (orchestrator, webhook relay, sweeper) into one ESM file each with
+// esbuild. infra/modules/orchestrator and infra/modules/scheduler zip each output directory
+// (archive_file) and run `index.handler` on nodejs24.x / arm64; infra/prod points each target's
+// `prodVar` (orchestrator_package_dir, relay_package_dir, sweeper_package_dir) here.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,8 +10,12 @@ import { deflateRawSync } from "node:zlib";
 import { build, type BuildOptions } from "esbuild";
 
 export interface LambdaTarget {
-  /** Short name, also the Terraform resource name in infra/modules/orchestrator (aws_lambda_function.<name>). */
-  name: "orchestrator" | "relay";
+  /** Short name, also the Terraform resource name (aws_lambda_function.<name>) in `tfFile`. */
+  name: "orchestrator" | "relay" | "sweeper";
+  /** Repo-relative Terraform file declaring the function. */
+  tfFile: string;
+  /** infra/prod variable whose default is `../../<outDir>`. */
+  prodVar: string;
   /** Entry module (repo-relative). */
   entry: string;
   /** Output directory (repo-relative); the bundle is `<outDir>/index.mjs`. */
@@ -20,8 +25,30 @@ export interface LambdaTarget {
 }
 
 export const LAMBDA_TARGETS: readonly LambdaTarget[] = [
-  { name: "orchestrator", entry: "agents/orchestrator/src/lambda.ts", outDir: "agents/orchestrator/dist", arch: "arm64" },
-  { name: "relay", entry: "agents/webhook-relay/src/lambda.ts", outDir: "agents/webhook-relay/dist", arch: "arm64" },
+  {
+    name: "orchestrator",
+    tfFile: "infra/modules/orchestrator/lambda.tf",
+    prodVar: "orchestrator_package_dir",
+    entry: "agents/orchestrator/src/lambda.ts",
+    outDir: "agents/orchestrator/dist",
+    arch: "arm64",
+  },
+  {
+    name: "relay",
+    tfFile: "infra/modules/orchestrator/lambda.tf",
+    prodVar: "relay_package_dir",
+    entry: "agents/webhook-relay/src/lambda.ts",
+    outDir: "agents/webhook-relay/dist",
+    arch: "arm64",
+  },
+  {
+    name: "sweeper",
+    tfFile: "infra/modules/scheduler/main.tf",
+    prodVar: "sweeper_package_dir",
+    entry: "agents/orchestrator/src/sweeper/entry.ts",
+    outDir: "agents/orchestrator/dist-sweeper",
+    arch: "arm64",
+  },
 ];
 
 export const BUNDLE_FILE = "index.mjs";

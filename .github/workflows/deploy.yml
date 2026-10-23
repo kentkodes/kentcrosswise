@@ -61,7 +61,7 @@ jobs:
       - name: Prod build
         run: pnpm build-web
 
-      # Orchestrator and webhook relay Lambda code (agents/*/dist, read by infra/prod).
+      # Orchestrator, webhook relay and sweeper Lambda code (agents/*/dist*, read by infra/prod).
       - name: Lambda bundles
         run: pnpm build-lambdas
 
