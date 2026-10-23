@@ -8,6 +8,8 @@
   "@langchain/langgraph",
   "@langchain/langgraph-checkpoint-postgres",
   "@next/eslint-plugin-next",
+  "@octokit/auth-app",
+  "@octokit/rest",
   "@opennextjs/aws",
   "@playwright/test",
   "@types/node",
