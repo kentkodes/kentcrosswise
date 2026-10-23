@@ -264,7 +264,7 @@ data "aws_iam_policy_document" "ci" {
     actions = [
       "cloudfront:Get*", "cloudfront:List*", "cloudfront:Describe*",
       "lambda:ListEventSourceMappings", "logs:DescribeLogGroups", "ssm:DescribeParameters",
-      "acm:ListCertificates", "acm:DescribeCertificate", "acm:ListTagsForCertificate", "route53:ListHostedZones", "route53:ListHostedZonesByName",
+      "acm:ListCertificates", "acm:DescribeCertificate", "acm:GetCertificate", "acm:ListTagsForCertificate", "route53:ListHostedZones", "route53:ListHostedZonesByName",
       "route53:GetHostedZone", "route53:ListResourceRecordSets", "route53:GetChange", "route53:ListTagsForResource",
       "tag:GetResources", "iam:ListRoles",
     ]
