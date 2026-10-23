@@ -165,7 +165,30 @@ describe("0002 agent system", () => {
     await as("pipeline_rw", "INSERT INTO tasks (source, owner_text) VALUES ('pipeline', 'synthetic')");
     await as("pipeline_rw", "INSERT INTO agent_events (agent, event_type) VALUES ('scraper', 'coding')");
     await expect(as("pipeline_rw", "SELECT * FROM tasks")).rejects.toThrow(/permission denied/);
+    await expect(as("pipeline_rw", "SELECT * FROM agent_events")).rejects.toThrow(/permission denied/);
     await expect(as("pipeline_rw", "SELECT * FROM approvals")).rejects.toThrow(/permission denied/);
+  });
+
+  it("pipeline_rw reads tasks.id only, so INSERT ... RETURNING id links its events", async () => {
+    const rows = await as<{ id: number }>(
+      "pipeline_rw",
+      "INSERT INTO tasks (source, owner_text) VALUES ('pipeline', 'synthetic') RETURNING id::int",
+    );
+    const id = rows[0]!.id;
+    await as("pipeline_rw", "INSERT INTO agent_events (task_id, agent, event_type) VALUES ($1, 'scraper', 'coding')", [id]);
+    expect(await as("pipeline_rw", "SELECT id::int AS id FROM tasks WHERE id = $1", [id])).toEqual([{ id }]);
+    const cols = await db.query<{ column_name: string }>(
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'tasks' AND column_name <> 'id'",
+    );
+    expect(cols.rows.length).toBeGreaterThan(10);
+    for (const { column_name } of cols.rows) {
+      await expect(as("pipeline_rw", `SELECT ${column_name} FROM tasks`), column_name).rejects.toThrow(
+        /permission denied/,
+      );
+    }
+    await expect(
+      as("pipeline_rw", "INSERT INTO tasks (source, owner_text) VALUES ('pipeline', 's') RETURNING owner_text"),
+    ).rejects.toThrow(/permission denied/);
   });
 
   it("rejects unknown event types, agents, statuses and over-long public titles", async () => {

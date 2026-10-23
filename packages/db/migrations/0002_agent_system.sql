@@ -142,5 +142,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
   tasks, agent_events, approvals, usage_events, model_prices, inbound_events, system_flags
 TO orch_rw;
 
--- pipeline_rw: insert tasks and events only.
+-- pipeline_rw: insert tasks and events; read only tasks.id so INSERT ... RETURNING id works (Q7).
 GRANT INSERT ON tasks, agent_events TO pipeline_rw;
+GRANT SELECT (id) ON tasks TO pipeline_rw;
