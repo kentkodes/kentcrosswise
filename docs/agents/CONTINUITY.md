@@ -21,4 +21,4 @@ Use this sequence at session start, after context loss, when changing tools/mode
 
 ## Documentation checks
 
-Run `node scripts/check-agent-docs.mjs` from the repository root after changing entrypoints or continuity docs. Run `node --test scripts/test/check-agent-docs.test.mjs` when changing the checker. These dependency-free Node checks cover pointers, local Markdown links, required handoff sections, generated Next.js rule markers and accidental local machine paths; they do not prove runtime integration or security.
+Run `node scripts/check-agent-docs.mjs` from the repository root after changing entrypoints or continuity docs. Run `pnpm vitest run --project @kcw/scripts scripts/test/check-agent-docs.test.ts` when changing the checker (also included in `pnpm test`). The standalone checker needs no installed dependencies; regression fixtures use the repository's Vitest runner. These checks cover pointers, local Markdown links, required handoff sections, generated Next.js rule markers and accidental local machine paths; they do not prove runtime integration or security.

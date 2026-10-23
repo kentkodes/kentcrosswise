@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { fileURLToPath } from "node:url";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 
@@ -18,7 +18,7 @@ test("detects broken continuity boundaries in an isolated fixture", () => {
     for (const file of ["docs", "apps/web/AGENTS.md", "AGENTS.md", "CLAUDE.md", "GEMINI.md", "agents/merge-rules/approved-deps.json"]) {
       cpSync(path.join(repo, file), path.join(root, file), { recursive: true });
     }
-    const edit = (file, transform) => writeFileSync(path.join(root, file), transform(readFileSync(path.join(root, file), "utf8")));
+    const edit = (file: string, transform: (text: string) => string) => writeFileSync(path.join(root, file), transform(readFileSync(path.join(root, file), "utf8")));
     edit("GEMINI.md", (text) => text.replace("docs/agents/INSTRUCTIONS.md)", "docs/agents/missing.md)"));
     edit("docs/agents/INSTRUCTIONS.md", (text) => `${text}\n[Bad heading](CONTINUITY.md#missing-heading)\n`);
     edit("docs/HANDOFF.md", (text) => text.replace("## Verification", "## Results") + "\nC:\\Users\\private-user\\work\\secret\n");

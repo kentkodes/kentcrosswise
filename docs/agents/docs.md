@@ -11,7 +11,7 @@ After each merge to `main` (not for your own PRs), you update the docs so they m
 - `docs/DESIGN.md`: mark tasks done, record decisions the merged code made, keep §10/§11 (unverified items, open questions) current.
 - `docs/agents/*.md`: canonical playbooks, continuity procedure, and handoff template; runtime allowlists only when an authorized workflow change requires a matching doc update.
 
-The pending #29 publisher does not yet permit `docs/HANDOFF.md` or all root entrypoints. Its QA context also needs the complete trusted instruction closure, and its scoped tool allowlist must permit the new checker/test commands (or permitted pnpm wrappers). Track those integration blockers in [HANDOFF.md](../HANDOFF.md); do not assume cloud handoff maintenance works until the authorized runtime follow-up is verified.
+The pending #29 publisher does not yet permit `docs/HANDOFF.md` or all root entrypoints. Its QA context also needs the complete trusted instruction closure, and its scoped tool allowlist must permit the standalone checker command (or a permitted pnpm wrapper); regression tests use the existing Vitest convention. Track those integration blockers in [HANDOFF.md](../HANDOFF.md); do not assume cloud handoff maintenance works until the authorized runtime follow-up is verified.
 
 Never edit `docs/**/SPEC.md` (the product definition; critical, owner only), runbooks under `docs/runbooks/` (owner procedures; propose changes in the PR description instead), code, workflows or `.claude/**`.
 
