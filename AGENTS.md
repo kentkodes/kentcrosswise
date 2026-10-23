@@ -29,6 +29,7 @@ Everyday (no credentials needed):
 | `pnpm migrate --pglite .pglite/dev` | Apply migrations to a local PGlite directory (`pnpm migrate --help`: also `--secret <name>`, `DATABASE_URL`, `--dry-run`, `--skip-if-unset`) |
 | `pnpm seed --pglite .pglite/dev` | Insert the synthetic seed |
 | `pnpm build-web` | OpenNext v4 build of `apps/web` into `apps/web/.open-next` + contract check (see below). Prod by default (also fails if the preview login is in the bundle); `KCW_ENV=preview pnpm build-web` for previews |
+| `pnpm build-lambdas` | esbuild bundles of the orchestrator and webhook relay Lambdas into `agents/orchestrator/dist` and `agents/webhook-relay/dist` (`index.mjs`, ESM, node24, AWS SDK bundled), then imports each in a clean Node process to check it loads. infra/prod deploys these directories: run it before a prod plan/apply |
 | `pnpm check-prod-bundle` | Fails if the built web app (`.next`, `.open-next`) contains the preview login provider; run after every prod build |
 | `pnpm --filter web e2e` | Playwright (`apps/web/e2e/*.e2e.ts`). No `BASE_URL`: starts `next dev` as a preview build with a fixed local login token. `PW_SERVER=start`: uses `next start` (run `KCW_ENV=preview pnpm --filter web build` first). `BASE_URL=https://...`: targets a deployed site; add `KCW_E2E_LOGIN` for a preview (CI does). First time: `pnpm --filter web exec playwright install chromium` |
 | `pnpm plan-summary --plan-json <file> --out <file>` | Summarizes `terraform show -json` output into infra vs build-artifact changes (CI's `prod-plan-summary` artifact, read by merge-rules) |
@@ -53,7 +54,7 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 | Workflow | Trigger | What | AWS role (OIDC) |
 |---|---|---|---|
 | `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `preview` and `prod-plan`; `ci/required` aggregates them and is the required check | `kcw-gh-ci` (preview), `kcw-gh-plan` (read-only prod plan) |
-| `deploy.yml` | push to `main` (environment `prod`) | migrate (skipped with a notice while `kcw/prod/migrator` is empty), prod `build-web`, `terraform apply infra/prod` (uploads the build), smoke check | `kcw-gh-deploy` |
+| `deploy.yml` | push to `main` (environment `prod`) | migrate (skipped with a notice while `kcw/prod/migrator` is empty), prod `build-web`, `build-lambdas`, `terraform apply infra/prod` (uploads the builds), smoke check | `kcw-gh-deploy` |
 | `preview-gc.yml` | PR closed; nightly; manual (`dry_run`, default true) | removes preview leftovers of closed PRs or older than 24 h, then `check-preview-clean` | `kcw-gh-ci` (sweep job in environment `preview-gc`) |
 
 Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
@@ -91,7 +92,7 @@ infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + r
                      orchestrator (SQS FIFO orchestrator-in + DLQ, orchestrator Lambda on the queue,
                      webhook relay Lambda + public Function URL; code = a directory with index.mjs
                      exporting handler, passed as orchestrator_package_dir / relay_package_dir;
-                     null = the stubs in stub/, which process nothing)
+                     infra/prod passes the pnpm build-lambdas output; null = the stubs in stub/)
 .github/workflows/   ci.yml, deploy.yml, preview-gc.yml
 .github/actions/     setup (Node, pnpm, install, Terraform), neon-preview (Neon branch with the key from
                      Secrets Manager), preview-gc (find and remove preview leftovers)

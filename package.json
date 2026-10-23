@@ -15,6 +15,7 @@
     "seed": "pnpm --filter @kcw/scripts seed",
     "check-prod-bundle": "pnpm --filter @kcw/scripts check-prod-bundle",
     "build-web": "pnpm --filter @kcw/scripts build-web",
+    "build-lambdas": "pnpm --filter @kcw/scripts build-lambdas",
     "check-preview-clean": "pnpm --filter @kcw/scripts check-preview-clean",
     "plan-summary": "pnpm --filter @kcw/scripts plan-summary",
     "smoke-check": "pnpm --filter @kcw/scripts smoke-check",

@@ -1,5 +1,6 @@
-# Deploy main to prod (DESIGN §4.2 step 8; P1-16): migrate, prod build, terraform apply infra/prod
-# (which uploads the OpenNext build), then smoke-check the live site.
+# Deploy main to prod (DESIGN §4.2 step 8; P1-16): migrate, prod build, Lambda bundles, terraform
+# apply infra/prod (which uploads the OpenNext build and the agent Lambda code), then smoke-check
+# the live site.
 # Runs in GitHub environment `prod`, so the OIDC subject is ...:environment:prod (kcw-gh-deploy).
 name: deploy
 
@@ -59,6 +60,10 @@ jobs:
       # Prod build; build-web also fails if the preview login is in the bundle.
       - name: Prod build
         run: pnpm build-web
+
+      # Orchestrator and webhook relay Lambda code (agents/*/dist, read by infra/prod).
+      - name: Lambda bundles
+        run: pnpm build-lambdas
 
       - name: Terraform init infra/prod
         env:

@@ -33,6 +33,9 @@ export async function servePglite(db: PGlite, opts: ServeOptions = {}): Promise<
   const server: Server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
+    // A client process that exits without closing its connection resets the socket; that ends
+    // this connection only and must not become an uncaught error in the test run.
+    socket.on("error", () => undefined);
     let buf = Buffer.alloc(0);
     let started = false;
     const fail = (e: unknown) => socket.destroy(e as Error);

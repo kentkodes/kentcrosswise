@@ -44,14 +44,14 @@ describe("orchestrator on Postgres", () => {
   const newProcess = (vars: Record<string, string> = {}, extra: Record<string, Record<string, string>> = {}) => {
     const lines: string[] = [];
     const env: Record<string, string | undefined> = { KCW_ORCHESTRATOR_SECRET: SECRET, ...vars };
-    const { store } = createFakeSecrets({ [SECRET]: { db_url: srv.url }, ...extra });
+    const { store, aws } = createFakeSecrets({ [SECRET]: { db_url: srv.url }, ...extra });
     const handler = createHandler({
       env,
       secrets: store,
       makePool: poolAsOrchRw,
       log: (l) => lines.push(l),
     });
-    return { handler, lines, env };
+    return { handler, lines, env, aws };
   };
 
   const asSuperuser = async <T>(sql: string, params: unknown[] = []): Promise<T[]> => {
@@ -167,6 +167,61 @@ describe("orchestrator on Postgres", () => {
     expect(p.env.LANGSMITH_API_KEY).toBeUndefined();
     expect(p.env.LANGSMITH_TRACING).toBe("false");
     expect(p.lines).toEqual(["langsmith_api_key missing: tracing off"]);
+  });
+
+  it.each<[string, Record<string, unknown> | undefined, string, number]>([
+    ["has no value", undefined, "langsmith_api_key missing (no secret value): tracing off", 20],
+    ["has an empty key", { langsmith_api_key: " " }, "langsmith_api_key empty: tracing off", 22],
+  ])("turns tracing off when the models secret %s", async (_label, models, line, taskId) => {
+    const p = newProcess(
+      { LANGSMITH_TRACING: "true", KCW_MODELS_SECRET: "kcw/prod/models" },
+      models ? { "kcw/prod/models": models as Record<string, string> } : {},
+    );
+    expect(await p.handler({ Records: [msg("t1", { type: "task.created", task_id: taskId }, taskId)] })).toEqual({
+      batchItemFailures: [],
+    });
+    expect(p.env.LANGSMITH_API_KEY).toBeUndefined();
+    expect(p.env.LANGSMITH_TRACING).toBe("false");
+    expect(p.lines).toEqual([line, "message t1: started"]);
+  });
+
+  it("an empty or missing db_url returns the batch to the queue, then recovers once filled", async () => {
+    const p = newProcess({}, { [SECRET]: { db_url: "" } });
+    const batch = { Records: [msg("d1", { type: "task.created", task_id: 21 }, 21), msg("d2", report, 7)] };
+    const failed = { batchItemFailures: [{ itemIdentifier: "d1" }, { itemIdentifier: "d2" }] };
+    expect(await p.handler(batch)).toEqual(failed);
+
+    p.aws.values.set(SECRET, JSON.stringify({ other: "x" }));
+    expect(await p.handler(batch)).toEqual(failed);
+    expect(p.lines).toEqual([
+      "init failed (ConfigError): 2 message(s) returned to the queue",
+      "init failed (SecretKeyMissingError): 2 message(s) returned to the queue",
+    ]);
+
+    // The owner fills db_url: the next invocation re-reads the secret (no new process needed).
+    p.aws.values.set(SECRET, JSON.stringify({ db_url: srv.url }));
+    expect(await p.handler({ Records: [batch.Records[0]!] })).toEqual({ batchItemFailures: [] });
+    expect(p.lines.at(-1)).toBe("message d1: started");
+  });
+});
+
+describe("orchestrator cold start without configuration", () => {
+  it("returns every record as a failure when the secret has no value, logging only the error class", async () => {
+    const { store } = createFakeSecrets({});
+    const lines: string[] = [];
+    const handler = createHandler({ env: { KCW_ORCHESTRATOR_SECRET: SECRET }, secrets: store, log: (l) => lines.push(l) });
+    expect(await handler({ Records: [msg("n1", { type: "task.created", task_id: 1 }, 1)] })).toEqual({
+      batchItemFailures: [{ itemIdentifier: "n1" }],
+    });
+    expect(lines).toEqual(["init failed (SecretNotFoundError): 1 message(s) returned to the queue"]);
+  });
+
+  it("an unset secret-name env var is a ConfigError, not a crash", async () => {
+    const { store } = createFakeSecrets({});
+    const lines: string[] = [];
+    const handler = createHandler({ env: {}, secrets: store, log: (l) => lines.push(l) });
+    expect(await handler({ Records: [] })).toEqual({ batchItemFailures: [] });
+    expect(lines).toEqual(["init failed (ConfigError): 0 message(s) returned to the queue"]);
   });
 });
 

@@ -23,4 +23,11 @@ export {
   type SqsRecord,
   type TaskCreatedMessage,
 } from "./handler";
-export { MODELS_SECRET_ENV, ORCHESTRATOR_SECRET_ENV, createHandler, type LambdaDeps, type SecretReader } from "./lambda";
+export {
+  ConfigError,
+  MODELS_SECRET_ENV,
+  ORCHESTRATOR_SECRET_ENV,
+  createHandler,
+  type LambdaDeps,
+  type SecretReader,
+} from "./lambda";
