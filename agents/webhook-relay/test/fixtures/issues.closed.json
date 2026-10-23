@@ -1,0 +1,14 @@
+{
+  "action": "closed",
+  "issue": {
+    "id": 4000011,
+    "number": 11,
+    "state": "closed",
+    "title": "Synthetic issue title that must not be forwarded",
+    "body": "Synthetic issue body that must not be forwarded.",
+    "user": { "login": "kcw-orchestrator[bot]", "id": 9000001, "type": "Bot" }
+  },
+  "repository": { "id": 1000, "name": "example-repo", "full_name": "example-owner/example-repo", "private": false },
+  "installation": { "id": 7000 },
+  "sender": { "login": "example-owner", "id": 9000000, "type": "User" }
+}
