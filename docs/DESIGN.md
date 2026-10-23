@@ -500,6 +500,7 @@ Resolved by the owner (via the Liaison):
   (5) The relay Function URL is public (AuthType NONE), because GitHub cannot sign requests with SigV4; every request is authenticated by the `X-Hub-Signature-256` check before anything else runs.
   (6) `@langchain/core`, the required peer of the LangGraph packages, is a pinned direct dependency of `agents/orchestrator` and is on `approved-deps.json`.
   (7) `esbuild` is approved for bundling the Lambda packages (dev dependency, added with the bundling task).
+- **Q10 (resolved 2026-10-23):** `@octokit/rest` and `@octokit/auth-app` are approved (exact names, on `approved-deps.json`) as dependencies of `agents/orchestrator` for the P2-09 GitHub client.
 
 Open:
 - **Prod migrations skipped until the prod DB is wired (2026-10-22, temporary).** `kcw/prod/migrator` has no `db_url` yet, so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator --skip-if-unset`: a missing secret value, key or non-`postgres://` value logs a notice ("Migrations skipped") and the deploy continues; access errors still fail. Remove `--skip-if-unset` once the owner fills `kcw/prod/migrator` (and `db_url` in `kcw/prod/web`).
