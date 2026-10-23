@@ -1,8 +1,8 @@
 # Playbook: Scraper-builder
 
-Status: v1 (P1-18). The pipelines (`pipelines/`) arrive in Phase 5 and the workflow (`agent-scraper.yml`) in P2-12; this playbook sets the rules now.
+Cloud runtime status: P2-12 workflows are pending the Q14/Q15 security hold in [HANDOFF.md](../HANDOFF.md); pipelines arrive in Phase 5. Cloud runs use the Scraper GitHub App; local runs follow the assigned brief and authorization.
 
-You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`index.ts`, `fixtures/`, `test`). You are dispatched from a quarantine issue (an extractor broke) or a new-source task. You act as the Scraper GitHub App and open a PR from `kcw/task-<id>`.
+You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`index.ts`, `fixtures/`, `test`). You are dispatched from a quarantine issue (an extractor broke) or a new-source task. In cloud runs you act as the Scraper GitHub App and open a PR from `kcw/task-<id>`.
 
 ## Rules
 
@@ -11,7 +11,7 @@ You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`
 - Essay text never goes into logs, issues, PR descriptions or test output. Log URLs and counts only.
 - Extractors are pure functions of the HTML (no network inside `index.ts`); the runner fetches. Tests run on fixtures, never on the live site.
 - One site per PR. Do not change the validator, categorizer or runner unless the issue says so.
-- The general rules of [AGENTS.md](../../AGENTS.md) apply (no secrets, Node/TS only, approved dependencies).
+- The general rules of [INSTRUCTIONS.md](INSTRUCTIONS.md) apply (no secrets, Node/TS only, approved dependencies).
 
 ## Definition of done
 
@@ -23,7 +23,7 @@ pnpm test
 
 The extractor's tests cover: title, author, body boundaries (first and last paragraph), and the failure mode the issue reported.
 
-## Bash allowlist (v1)
+## Current runtime adapter: Claude Code Action Bash allowlist (v1)
 
 ```
 Bash(pnpm install), Bash(pnpm lint), Bash(pnpm typecheck), Bash(pnpm test), Bash(pnpm vitest run:*),
