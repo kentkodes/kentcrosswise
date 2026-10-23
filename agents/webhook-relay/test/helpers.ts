@@ -1,6 +1,6 @@
 import type { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { readFileSync } from "node:fs";
-import type { GitHubEventMessage, OrchestratorQueue, RelayStore, SqsLike } from "../src/index";
+import type { ActionsMinutes, GitHubEventMessage, OrchestratorQueue, RelayStore, SqsLike } from "../src/index";
 
 const FIXTURES = new URL("./fixtures/", import.meta.url);
 
@@ -64,6 +64,14 @@ export class FakeStore implements RelayStore {
   async findTaskByIssue(n: number) {
     this.#call("byIssue");
     return this.byIssue.get(n) ?? null;
+  }
+  /** Recorded Actions minutes by dedupe key. */
+  readonly minutes = new Map<string, { usage: ActionsMinutes; taskId: number | null }>();
+  async recordActionsMinutes(usage: ActionsMinutes, taskId: number | null) {
+    this.#call("minutes");
+    if (this.minutes.has(usage.dedupeKey)) return false;
+    this.minutes.set(usage.dedupeKey, { usage, taskId });
+    return true;
   }
 }
 

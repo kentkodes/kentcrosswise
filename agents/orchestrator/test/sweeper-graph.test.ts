@@ -21,7 +21,7 @@ describe("sweeps for stale planning tasks", () => {
   const deps: TaskGraphDeps = {
     github: gh,
     store: undefined as unknown as PgTaskStore,
-    planner: { plan: async () => ({ title: "Add a healthz page", body: "Add a /healthz route that returns ok." }) },
+    planner: { split: async (r) => [r.owner_text], plan: async () => ({ title: "Add a healthz page", body: "Add a /healthz route that returns ok." }) },
     now: () => clock,
   };
 

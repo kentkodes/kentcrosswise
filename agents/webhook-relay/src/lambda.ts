@@ -100,6 +100,7 @@ function lazyStore(open: () => Promise<OpenedDb>): { store: RelayStore; close: (
       releaseDelivery: async (id) => (await get()).releaseDelivery(id),
       findTaskByPr: async (n) => (await get()).findTaskByPr(n),
       findTaskByIssue: async (n) => (await get()).findTaskByIssue(n),
+      recordActionsMinutes: async (u, taskId) => (await get()).recordActionsMinutes(u, taskId),
     },
     close: async () => {
       if (!opened) return;

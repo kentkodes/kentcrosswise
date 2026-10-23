@@ -118,7 +118,7 @@ kentcrosswise/
   docs/
     hub/SPEC.md  essays/SPEC.md  DESIGN.md  research/
     agents/ developer.md qa.md scraper.md docs.md
-    runbooks/ bootstrap.md github-apps.md
+    runbooks/ bootstrap.md github-apps.md prod-db.md
 ```
 
 ## 3. Data model (Postgres, Neon)
@@ -148,7 +148,7 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, created by the 
 | `tasks` | id, parent_id, source (`console`,`agent_request`,`schedule`,`github`,`pipeline`), owner_text (private), public_title, is_private bool, status (`queued`,`planning`,`in_progress`,`waiting`,`merged`,`done`,`failed`,`cancelled`), waiting_on (`dev`,`ci`,`qa`,`owner`,`deploy`, null), thread_id UNIQUE, agent, github_issue, pr_number, branch, head_sha, attempts, created_at, updated_at |
 | `agent_events` | id, ts, task_id, agent (`orchestrator`,`developer`,`qa`,`scraper`,`docs`,`router`), event_type (section 4.4), detail jsonb (private) |
 | `approvals` | id, task_id, kind (`critical_pr`,`agent_request`,`seed_list`,`issue_text`), reasons text[], status (`pending`,`approved`,`rejected`), decided_at, note |
-| `usage_events` | id, ts, kind (`model`,`actions_minutes`), agent, provider, model, input_tokens, output_tokens, minutes, cost_usd, task_id |
+| `usage_events` | id, ts, kind (`model`,`actions_minutes`), agent, provider, model, input_tokens, output_tokens, minutes, cost_usd, task_id, dedupe_key UNIQUE (0004; `github:workflow_run:<run id>:<attempt>` for relay-recorded Actions minutes) |
 | `model_prices` | provider, model, usd_per_mtok_in, usd_per_mtok_out, effective_from (filled from the vendor price pages, never hardcoded) |
 | `inbound_events` | delivery_id PK, source, received_at (dedupe) |
 | `system_flags` | key PK, value jsonb (`agents_paused`, `pipelines_paused`), updated_at |
@@ -174,6 +174,8 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, created by the 
 - `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003).
 - `pipeline_rw`: essays tables, plus insert on `tasks` and `agent_events`.
 - `migrator`: DDL; deploy only.
+
+Login users are made outside migrations, one per runtime (`migrator_app` owns the prod database; `web_app`, `web_public_app`, `orch_app`, `relay_app` are members of one group role each): [runbooks/prod-db.md](runbooks/prod-db.md).
 
 The CI project has the same roles with synthetic data.
 
@@ -506,8 +508,14 @@ Resolved by the owner (via the Liaison):
 - **Q9 (resolved 2026-10-23):** Console tasks are private by default: the console's Private box starts checked, and only an explicit uncheck makes a task public (§4.5(4)). The column comment in migration 0002 ("console tasks set false explicitly") is stale; it stays as it is, because editing an applied migration changes its checksum.
 - **Q10 (resolved 2026-10-23):** `@octokit/rest` and `@octokit/auth-app` are approved (exact names, on `approved-deps.json`) as dependencies of `agents/orchestrator` for the P2-09 GitHub client.
 - **Q11 (resolved 2026-10-23):** (1) The orchestrator's installation token is scoped to this repository and to the permissions its calls need (actions, checks, contents, issues write; pull_requests, metadata read), a subset of §4.1. (2) Merge-rules never runs on partial data: an incomplete file list, a missing `merge-rules-input` artifact (`no_run`/`no_artifact`) or CI not finished on the head makes the merge step wait (retried on the next CI event or sweep); after `INCOMPLETE_INPUT_TIMEOUT_MINUTES` (90, the CI limit) the PR is critical with the reason, which creates an approval and an inbox item.
+- **Q13 (P2-15 defaults, 2026-10-23):** Usage panel (`/console/usage`, aggregation SQL in `apps/web/src/server/usage.ts`).
+  (1) Cost of a model usage row: a stored `usage_events.cost_usd` wins; otherwise tokens × the `model_prices` row of the same provider+model with the latest `effective_from` on or before the event's UTC day; otherwise "no price" (counted, never shown as $0). Writers leave `cost_usd` null today (orchestrator `addUsage`), so prices entered later apply retroactively.
+  (2) Actions minutes are recorded by the webhook relay for every `workflow_run.completed` from an allowlisted sender, with or without a task (deploys count too): one row per run attempt, `minutes` = wall-clock `run_started_at` → `updated_at` (not GitHub's per-job billable minutes), `cost_usd = 0`, deduped by `dedupe_key`. Agent = the workflow file (`agent-developer.yml` → developer, `agent-qa.yml` → qa, `agent-scraper.yml` → scraper, `agent-docs.yml` → docs), anything else → orchestrator. Agent workflows should not also send `kcw-report --minutes`, or the panel counts those minutes twice.
+  (3) Days and ranges are UTC; default range is the last 30 days, at most 366.
 
 Open:
+- **Q12 (proposed in P2-11, 2026-10-23; owner to confirm):** Subtasks (§4.2 step 2). (1) The planner (Haiku, `@kcw/orchestrator/nodes`) splits a top-level task into 1 to 5 subtasks; a subtask is never split again. (2) One subtask: the task runs the PR loop itself, with no child row. (3) Two or more: one child `tasks` row each (`parent_id`, source and `is_private` copied, the subtask text as its private `owner_text`, thread `task-<id>`); the orchestrator starts each child's thread right after the split, and each child runs the public-title node and the PR loop on its own branch `kcw/task-<child id>`. (4) A parent with children holds no in-flight slot (D20 counts only tasks without children), so a split cannot deadlock the limit. (5) The parent waits with status `waiting`, `waiting_on` null; the next sweep after every child has ended sets it `done` (all merged) or `failed` (any child failed or was cancelled), so the parent can lag its last child by up to one sweep interval. (6) Model output is validated by hand (no schema library); an invalid answer is retried once with the error, then the task goes to the owner as a failure (`critical_pr` approval: approve plans again, reject fails the task). Provider errors fail the step and SQS redelivers the message.
 - **Prod migrations skipped until the prod DB is wired (2026-10-22, temporary).** `kcw/prod/migrator` has no `db_url` yet, so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator --skip-if-unset`: a missing secret value, key or non-`postgres://` value logs a notice ("Migrations skipped") and the deploy continues; access errors still fail. Remove `--skip-if-unset` once the owner fills `kcw/prod/migrator` (and `db_url` in `kcw/prod/web`).
 - **C4 / Q1 (resolved 2026-10-22):** Owner chose an allowlist. `agents/merge-rules/approved-deps.json` lists pre-approved npm packages (exact names or scopes like `@aws-sdk/*`), seeded in P1-01 with the stack's libraries. A new dependency on the list is not critical; one off the list is critical. Editing the list itself is critical (owner-approved).
 - **Q5:** Admin identity: IAM Identity Center (ends Free-plan credits) or an IAM user with MFA?
+- **Relay DB role (2026-10-23).** No group role from 0001-0003 matches the relay exactly (it needs INSERT, DELETE, SELECT (delivery_id) on `inbound_events` and SELECT (id, pr_number, github_issue) on `tasks`). Until the owner approves a migration adding `relay_rw` with just those grants, `relay_app` is a member of `orch_rw` ([runbooks/prod-db.md](runbooks/prod-db.md) §3.3).

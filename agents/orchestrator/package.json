@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./github": "./src/github/index.ts",
     "./graph": "./src/graph/index.ts",
+    "./nodes": "./src/nodes/index.ts",
     "./sweeper": "./src/sweeper/index.ts"
   },
   "scripts": {

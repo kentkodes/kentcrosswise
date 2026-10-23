@@ -10,13 +10,15 @@ import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
 import { ArtifactFormatError, CI_WORKFLOW, type GitHubClient } from "../github";
-import type { TaskStatus, TaskStore } from "./store";
+import { publicText } from "../nodes/public-title";
+import type { TaskRecord, TaskStatus, TaskStore } from "./store";
 import {
   DEV_WORKFLOW,
   INCOMPLETE_INPUT_TIMEOUT_MINUTES,
   IN_FLIGHT_LIMIT,
   MAX_ATTEMPTS,
   QA_WORKFLOW,
+  PlannerOutputError,
   WAIT_LIMIT_MINUTES,
   branchOf,
   waitingOnOf,
@@ -24,7 +26,9 @@ import {
   type GitHubInput,
   type IncompleteReason,
   type Phase,
+  type Plan,
   type Planner,
+  type RetryTarget,
   type StepOutcome,
   type TaskData,
   type TaskInput,
@@ -43,6 +47,9 @@ export interface TaskGraphDeps {
 
 /** CI conclusions that count as a failed run. Others (cancelled, skipped, neutral, stale) are not a verdict. */
 const FAILED_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+
+/** Task statuses that end a task (a parent in phase `children` waits for all of its children to reach one). */
+const FINAL_STATUSES = new Set<TaskStatus>(["merged", "done", "failed", "cancelled"]);
 
 const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   ci_not_finished: "CI has not finished on the PR head",
@@ -159,6 +166,9 @@ class Machine {
         else if (input.kind === "github" && input.event === "pull_request" && d.owner_wait === "critical") out = await this.onPush(input);
         else if (input.kind === "sweep") out = "unchanged"; // the owner never times out
         break;
+      case "children":
+        if (input.kind === "sweep") out = await this.childrenDone();
+        break;
       case "done":
         break;
     }
@@ -222,30 +232,70 @@ class Machine {
       return "queued";
     }
 
-    const plan = await this.deps.planner.plan({ task_id: this.id, owner_text: task.owner_text, is_private: task.is_private });
+    return this.plan(task);
+  }
+
+  /**
+   * §4.2 step 2 after the slot is claimed: the planner node splits a top-level task into subtasks
+   * (more than one: child rows, each with its own thread; this task waits for them); the
+   * public-title node writes the title and issue of a single (sub)task, which then goes to the
+   * Developer. Invalid model output (after the node's one retry) goes to the owner.
+   */
+  async plan(task: TaskRecord): Promise<StepOutcome> {
+    const req = { task_id: this.id, owner_text: task.owner_text, is_private: task.is_private };
+    let plan: Plan;
+    try {
+      // A subtask was planned by its parent: it is never split again.
+      const subtasks = task.parent_id === null ? await this.deps.planner.split(req) : [task.owner_text];
+      if (subtasks.length > 1) return await this.split(subtasks);
+      plan = await this.deps.planner.plan({ ...req, owner_text: subtasks[0] ?? task.owner_text });
+    } catch (err) {
+      if (!(err instanceof PlannerOutputError)) throw err;
+      this.log(`planning failed: ${err.message}`);
+      await this.toOwnerFailure(`The ${err.node === "planner" ? "planner" : "public-title"} model returned invalid output twice (${err.reason}).`, "plan");
+      return "applied";
+    }
+
     const sanitizer = createSanitizer({
       contacts: await this.store.loadContacts(),
       ...(this.deps.blocklist && { blocklist: this.deps.blocklist }),
     });
     // §4.5: a title that fails is never published; the feed and GitHub show `Private task`.
-    const titleOk = sanitizer.check(plan.title).ok;
-    await this.store.updateTask(this.id, { public_title: titleOk ? plan.title : null, branch: branchOf(this.id) });
-    const issue = { title: sanitizer.publicTitle(plan.title), body: plan.body };
+    const text = publicText(plan, sanitizer);
+    await this.store.updateTask(this.id, { public_title: text.publicTitle, branch: branchOf(this.id) });
 
-    const body = sanitizer.checkText(plan.body);
-    if (!body.ok) {
+    if (!text.body.ok) {
       // §4.2 step 2: GitHub issue text that fails the sanitizer goes to the owner first.
-      this.d.pending_issue = issue;
+      this.d.pending_issue = text.issue;
       await this.toOwner("issue_text", "issue_text", [
-        `The issue body fails the sanitizer (${body.violations.join(", ")}). Approve to publish it as written; reject to cancel the task.`,
-        `Proposed title: ${issue.title}`,
+        `The issue body fails the sanitizer (${text.body.violations.join(", ")}). Approve to publish it as written; reject to cancel the task.`,
+        `Proposed title: ${text.issue.title}`,
         `Proposed body: ${plan.body}`,
       ], `Task ${this.id}: issue text needs review`);
       return "applied";
     }
-    await this.publishIssue(issue);
+    await this.publishIssue(text.issue);
     await this.dispatchDev("implement");
     return "applied";
+  }
+
+  /** Child rows for the subtasks; the handler starts their threads (index.ts `startSubtasks`). */
+  async split(subtasks: string[]): Promise<StepOutcome> {
+    this.d.children = await this.store.createSubtasks(this.id, subtasks);
+    this.log(`split into ${this.d.children.length} subtasks: ${this.d.children.map((c) => `task-${c}`).join(", ")}`);
+    await this.enter("children");
+    return "applied";
+  }
+
+  /** Phase `children`, on a sweep: the parent ends once every child has (§11 Q12). */
+  async childrenDone(): Promise<StepOutcome> {
+    const children = await this.store.getChildren(this.id);
+    if (children.some((c) => !FINAL_STATUSES.has(c.status))) return "unchanged";
+    if (children.every((c) => c.status === "merged" || c.status === "done")) {
+      await this.enter("done", "done");
+      return "applied";
+    }
+    return this.finish("failed", "a subtask failed or was cancelled");
   }
 
   async publishIssue(issue: { title: string; body: string }): Promise<void> {
@@ -491,8 +541,9 @@ class Machine {
    * Attempts exhausted, a timeout after one redispatch, or a refused merge. The schema has no
    * "failed" approval kind, so this is a `critical_pr` approval whose reasons say what approving does.
    */
-  async toOwnerFailure(what: string, retry: "dev" | "qa"): Promise<void> {
-    const again = retry === "qa" ? "dispatch QA again" : `give the Developer ${MAX_ATTEMPTS} more attempts`;
+  async toOwnerFailure(what: string, retry: RetryTarget): Promise<void> {
+    const again =
+      retry === "qa" ? "dispatch QA again" : retry === "plan" ? "plan the task again" : `give the Developer ${MAX_ATTEMPTS} more attempts`;
     await this.toOwner("failure", "critical_pr", [`Task failed: ${what}`, `Approve to ${again}; reject to mark the task failed.`], `Task ${this.id} failed: needs a decision`);
     this.d.retry = retry;
   }
@@ -528,6 +579,11 @@ class Machine {
     }
     // failure
     if (decision === "rejected") return this.finish("failed", "the owner gave up after the failure");
+    if (d.retry === "plan") {
+      const task = await this.store.getTask(this.id);
+      if (!task) return this.finish("failed", "the task row is gone");
+      return this.plan(task);
+    }
     if (d.retry === "qa") {
       await this.dispatchQa("owner retry");
     } else {
