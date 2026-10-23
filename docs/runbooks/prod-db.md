@@ -156,6 +156,8 @@ GRANT SELECT (id, pr_number, github_issue) ON tasks TO relay_rw;
 
 This exact grant set was checked on PGlite: all four relay statements succeed and `tasks.owner_text` and `agent_events` are refused. Once it is deployed, swap the membership in the SQL Editor: `GRANT relay_rw TO relay_app; REVOKE orch_rw FROM relay_app;`. DESIGN §3.4 would then list `relay_rw`.
 
+**Since P2-15 (#22)** the relay also records Actions minutes: `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING` into `usage_events`, after checking the task exists. The grant set above does not cover that yet; the `relay_rw` migration must add `INSERT` on `usage_events` (and whatever its identity column and conflict target need) and be re-checked on PGlite. `orch_rw` already covers it, so the interim membership works.
+
 If you would rather not give the relay `orch_rw` even for a while: in the script, drop `relay_app` from `$users` and create it after the migration. Until then, deliveries that need the database get `error (db)` (HTTP 500) and GitHub marks them failed; they can be redelivered later.
 
 ### 3.4 Check (SQL Editor, database `kentcrosswise`)
