@@ -78,4 +78,18 @@ describe("loadPublicFeed degrades", () => {
     expect(log).toHaveBeenCalledWith("[public-feed] Error ECONNREFUSED");
     log.mockRestore();
   });
+
+  it("preview builds add diag (class + SQLSTATE only); prod builds never do", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // node-postgres names its server errors "error"; 42501 = insufficient_privilege (SET ROLE refused).
+    const refused = Object.assign(new Error('permission denied to set role "web_public"'), { name: "error", code: "42501" });
+    const preview = await loadPublicFeed(undefined, () => Promise.reject(refused), true);
+    expect(preview).toEqual({ available: false, events: [], note: NOTE_UNAVAILABLE, diag: "error 42501" });
+    const prod = await loadPublicFeed(undefined, () => Promise.reject(refused), false);
+    expect(prod).not.toHaveProperty("diag");
+    const unset = await loadPublicFeed(undefined, () => Promise.reject(new DbNotConfiguredError("x")), true);
+    expect(unset).toMatchObject({ note: NOTE_NOT_CONFIGURED, diag: "DbNotConfiguredError" });
+    expect(JSON.stringify([preview, unset])).not.toContain("permission denied");
+    log.mockRestore();
+  });
 });

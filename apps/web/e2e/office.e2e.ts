@@ -10,14 +10,21 @@ interface Feed {
   available: boolean;
   events: Record<string, unknown>[];
   note?: string;
+  /** Preview builds only: error class + SQLSTATE of the failure (server log prefix [public-feed]). */
+  diag?: string;
 }
+
+/** Why the feed is unavailable, for the CI log. */
+const why = (feed: Feed) =>
+  `feed unavailable: ${feed.note ?? "?"} (diag: ${feed.diag ?? "none"}; server log lines start with [public-feed] or [db])`;
 
 test("the feed API returns only id, ts, agent, type and title, with cache headers", async ({ request }) => {
   const res = await request.get("/api/public/agent-events");
   expect(res.status()).toBe(200);
   expect(res.headers()["cache-control"]).toContain("s-maxage=5");
   const feed = (await res.json()) as Feed;
-  if (expectDb) expect(feed.available, feed.note).toBe(true);
+  if (!feed.available) console.log(why(feed));
+  if (expectDb) expect(feed.available, why(feed)).toBe(true);
   if (!feed.available) {
     expect(feed.events).toEqual([]);
     expect(feed.note).toBeTruthy();
@@ -48,7 +55,10 @@ test("the office page lists the events as text", async ({ page }) => {
   await expect(page).toHaveURL(/\/office$/);
   await expect(page.getByRole("heading", { level: 1, name: "Agent office" })).toBeVisible();
   const items = page.getByTestId("agent-events").locator("li");
-  if (!expectDb) {
+  if (expectDb) {
+    const feed = (await (await page.request.get("/api/public/agent-events")).json()) as Feed;
+    expect(feed.available, why(feed)).toBe(true);
+  } else {
     await expect(items.first().or(page.getByRole("status"))).toBeVisible();
     return;
   }

@@ -13,7 +13,9 @@ export interface PublicEvent {
 
 export type PublicFeed =
   | { available: true; events: PublicEvent[] }
-  | { available: false; events: []; note: string };
+  // diag: preview builds only, error class + SQLSTATE (no message, no values), so a failing preview
+  // e2e shows the cause in the CI log. Previews hold synthetic data only (D4).
+  | { available: false; events: []; note: string; diag?: string };
 
 export const FEED_LIMIT = 50;
 
@@ -64,16 +66,22 @@ export async function queryPublicEvents(db: Queryable, since?: number): Promise<
 export const NOTE_NOT_CONFIGURED = "The agent feed is not connected yet.";
 export const NOTE_UNAVAILABLE = "The agent feed is unavailable right now.";
 
-/** The feed, or an empty one with a note when there is no database (prod for now) or it fails. */
+/**
+ * The feed, or an empty one with a note when there is no database (prod for now) or it fails.
+ * `preview` adds `diag`; the default keeps the literal KCW_ENV test so prod builds drop it.
+ */
 export async function loadPublicFeed(
   since?: number,
   run: <T>(fn: (db: Queryable) => Promise<T>) => Promise<T> = (fn) => withDb("web_public", fn, { readOnly: true }),
+  preview: boolean = process.env.KCW_ENV === "preview",
 ): Promise<PublicFeed> {
   try {
     return { available: true, events: await run((db) => queryPublicEvents(db, since)) };
   } catch (err) {
-    if (err instanceof DbNotConfiguredError) return { available: false, events: [], note: NOTE_NOT_CONFIGURED };
-    console.error(`[public-feed] ${dbErrorLabel(err)}`);
-    return { available: false, events: [], note: NOTE_UNAVAILABLE };
+    const label = dbErrorLabel(err);
+    const diag = preview ? { diag: label } : {};
+    if (err instanceof DbNotConfiguredError) return { available: false, events: [], note: NOTE_NOT_CONFIGURED, ...diag };
+    console.error(`[public-feed] ${label}`);
+    return { available: false, events: [], note: NOTE_UNAVAILABLE, ...diag };
   }
 }
