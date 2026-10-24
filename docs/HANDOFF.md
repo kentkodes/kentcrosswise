@@ -87,4 +87,4 @@
 - The finish review took four fresh rounds and ended with `ship` and no material fixes. Desktop comp-diff 87% (match).
 - **Engine record is open:** `build-phase finish --disposition ship` is refused. Responsive reopens, and its non-forced gate fails only on the 1505px landscape plate (<1536px), and a forced pass does not satisfy finish. The owner chose to proceed and fix it with the image-optimization follow-up (regenerate the landscape at ≥1536px).
 - The visual system is recorded in root `DESIGN.md` with sidecar `.impeccable/design.json`; the architectural `docs/DESIGN.md` is unchanged. Open items are listed there: about 10.6–13 MB unoptimized PNGs, comp agent-claim copy to revisit before launch, reviewer advisories, and unverified Firefox/Safari/real devices/`build-web`/`pnpm test`. Local e2e passes 15/15 with `--workers=2`; an office test is flaky on PGlite at 10 workers.
-- Nothing is committed or pushed yet; commit/PR awaits owner approval.
+- Committed with owner approval and opened as PR #38 (https://github.com/kentkodes/kentcrosswise/pull/38); not merged. Merge needs separate owner approval.
