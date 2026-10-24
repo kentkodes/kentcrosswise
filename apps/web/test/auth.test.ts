@@ -10,7 +10,6 @@ import {
   PREVIEW_OWNER_EMAIL,
   PREVIEW_PROVIDER_ID,
 } from "../src/auth/preview-login";
-import { hasSessionCookie } from "../src/auth/session-cookie";
 import { loadProdSettings } from "../src/auth/settings";
 import { PREVIEW_MARKERS } from "../../../scripts/lib/bundle-check";
 
@@ -188,19 +187,5 @@ describe("Auth.js config", () => {
     expect(google.id).toBe("google");
     expect(google.options?.authorization?.params?.scope).toBe(GOOGLE_SIGN_IN_SCOPES);
     expect(() => googleProvider(settings)).toThrow(/Google client/);
-  });
-});
-
-describe("public nav session cookie check", () => {
-  it("recognises Auth.js session cookies, plain, secure and chunked", () => {
-    expect(hasSessionCookie(["authjs.session-token"])).toBe(true);
-    expect(hasSessionCookie(["other", "__Secure-authjs.session-token"])).toBe(true);
-    expect(hasSessionCookie(["authjs.session-token.0", "authjs.session-token.1"])).toBe(true);
-  });
-
-  it("ignores other Auth.js and unrelated cookies", () => {
-    expect(hasSessionCookie([])).toBe(false);
-    expect(hasSessionCookie(["authjs.csrf-token", "__Host-authjs.csrf-token", "authjs.callback-url"])).toBe(false);
-    expect(hasSessionCookie(["xauthjs.session-token", "authjs.session-token.x", "authjs.session-tokens"])).toBe(false);
   });
 });

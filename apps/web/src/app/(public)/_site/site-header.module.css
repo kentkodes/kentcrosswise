@@ -97,6 +97,21 @@
   background: rgb(246 241 228 / 0.12);
 }
 
+/* "Sign in" and "Your hub" share one cell: the pill is as wide as the longer label in both
+   states, so the client-side swap moves nothing. The inactive label is hidden from everyone. */
+.signInLabels {
+  display: inline-grid;
+  justify-items: center;
+}
+
+.signInLabels > span {
+  grid-area: 1 / 1;
+}
+
+.signInLabels > [data-hidden] {
+  visibility: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .signIn {
     transition: none;

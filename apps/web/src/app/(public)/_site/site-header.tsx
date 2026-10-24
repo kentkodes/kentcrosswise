@@ -1,8 +1,8 @@
 // Shared public header: wordmark and main navigation for /, /demo and /office.
-// Server component: a signed-in visitor sees "Your hub" (/hub) in place of "Sign in". Reading the
-// session cookie makes the public pages render per request.
+// Renders statically; the account link ("Sign in" or, for a signed-in visitor, "Your hub") is
+// resolved in the browser by AccountLink, so the public pages never read the session on the server.
 import Link from "next/link";
-import { isSignedIn } from "@/auth/visitor";
+import { AccountLink } from "./account-link";
 import h from "./site-header.module.css";
 
 export type PublicPath = "/" | "/demo" | "/office";
@@ -13,7 +13,7 @@ const LINKS: { href: PublicPath; label: string }[] = [
   { href: "/office", label: "Agent office" },
 ];
 
-export async function SiteHeader({
+export function SiteHeader({
   current,
   className,
   stage = false,
@@ -25,7 +25,6 @@ export async function SiteHeader({
   /** Home only: from 1100px, place the header in the comp stage's pixel coordinates. */
   stage?: boolean;
 }) {
-  const signedIn = await isSignedIn();
   return (
     <header className={[h.header, stage ? h.stage : "", className ?? ""].filter(Boolean).join(" ")}>
       <Link className={h.wordmark} href="/">
@@ -41,16 +40,7 @@ export async function SiteHeader({
             </li>
           ))}
           <li className={h.navSignIn}>
-            {signedIn ? (
-              <Link className={h.signIn} href="/hub">
-                Your hub
-              </Link>
-            ) : (
-              // eslint-disable-next-line @next/next/no-html-link-for-pages -- Auth.js route handler, needs a full page load
-              <a className={h.signIn} href="/api/auth/signin">
-                Sign in
-              </a>
-            )}
+            <AccountLink />
           </li>
         </ul>
       </nav>

@@ -24,7 +24,13 @@ const PAGES = [
 async function expectSharedNav(page: Page, current: string, account: "Sign in" | "Your hub") {
   const nav = page.getByRole("navigation", { name: "Main" });
   const links = nav.getByRole("link");
-  await expect(links).toHaveText(["Home", "Demo", "Agent office", account]);
+  await expect(links).toHaveCount(4);
+  await expect(links.nth(0)).toHaveText("Home");
+  await expect(links.nth(1)).toHaveText("Demo");
+  await expect(links.nth(2)).toHaveText("Agent office");
+  // Resolved in the browser after mount (AccountLink); both labels are in the DOM, one hidden.
+  await expect(links.nth(3)).toHaveAccessibleName(account);
+  await expect(links.nth(3)).toHaveAttribute("href", account === "Your hub" ? "/hub" : "/api/auth/signin");
   await expect(nav.getByRole("link", { name: current, exact: true })).toHaveAttribute("aria-current", "page");
   await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
 }
@@ -59,6 +65,29 @@ test.describe("shared navigation", () => {
       await page.goto(path);
       await expect(page.getByRole("group", { name: "Scene light" })).toHaveCount(0);
     }
+  });
+
+  test("the account link swaps to Your hub in place, without moving", async ({ page }) => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    await page.route("**/api/auth/session", async (route) => {
+      await held;
+      await route.fulfill({ json: { user: { name: "Someone" }, expires: "2999-01-01T00:00:00.000Z" } });
+    });
+    await page.goto("/demo");
+    const account = page.getByRole("navigation", { name: "Main" }).getByRole("link").nth(3);
+    await expect(account).toHaveAccessibleName("Sign in");
+    const before = await account.boundingBox();
+    release();
+    await expect(account).toHaveAccessibleName("Your hub");
+    await expect(account).toHaveAttribute("href", "/hub");
+    expect(await account.boundingBox()).toEqual(before);
+  });
+
+  test("Sign in stays when the session check fails", async ({ page }) => {
+    await page.route("**/api/auth/session", (route) => route.abort());
+    await page.goto("/office");
+    await expectSharedNav(page, "Agent office", "Sign in");
   });
 
   for (const width of [320, 375]) {

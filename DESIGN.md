@@ -146,7 +146,7 @@ Visual system for the Kentcrosswise public surfaces; the architectural design do
 
 # Design System: Kentcrosswise
 
-Derived from the shipped public home (`apps/web/src/app/(public)/page.tsx`, `_home/*`, tokens in `_home/home.module.css`), the approved comp `.impeccable/mocks/03-hub-window.png`, and the review captures in `.impeccable/review/`. The build is the ground truth; where the comp and the build differ, the build is recorded.
+Derived from the shipped public home (`apps/web/src/app/(public)/page.tsx`, `_home/*`, tokens in `_home/home.module.css`; the shared header and the demo/office page look in `_site/*`), the approved comp `.impeccable/mocks/03-hub-window.png`, and the review captures in `.impeccable/review/`. The build is the ground truth; where the comp and the build differ, the build is recorded.
 
 ## Overview
 
@@ -232,6 +232,8 @@ Narrow and tablet values are listed first. From 1100px the page is a 1505x1045 s
 
 Three layouts, switched at 640px and 1100px.
 
+Demo and agent office share the public look without the scene: dusk navy ground, ivory Rosarivo 400 (headings not synthesised bold), apricot focus and selection, content at a 48rem measure on the header gutters.
+
 - **Narrow (under 640px):** one readable column. Header and intro sit over the painted scene with 20px gutters; the headline and apricot entrance lead, the CRT rests in the meadow lower left, and the hub follows as a front-facing paper window (`calc(100% - 24px)`, max 920px) that overlaps the scene's foot by 72px. The hub sidebar becomes a horizontally scrolling row with edge fades (44px masks) that appear only when there is more to scroll. Mood charts stack one per row so labels stay at 11px or above.
 - **Tablet (640-1099px):** 40px gutters; the hub becomes a two-column grid: header, sidebar row, greeting and lede span both columns, then People beside Following, Mood full width, Recent activity beside Explore more (16px column gap).
 - **Wide (1100px and up):** the first viewport is the approved comp, a 1505x1045 stage scaled uniformly by window width (aspect ratio fixed, so hub text never shrinks for a short window). Elements are absolutely placed in comp pixels; the hub is laid out flat at 912x665 and projected onto the comp's tilted window with one `matrix3d`. These stage coordinates are a fitting of one composition, not a spacing system.
@@ -266,7 +268,7 @@ Soft, nested rounding. Interactive controls on the scene and in the hub header a
 - **Shape:** full pill (`rounded.pill`).
 - **Primary (entrance):** apricot fill, entrance-ink text at 20px, 58px tall, a right arrow 16px after the label; entrance glow shadow. One per view.
 - **Hover / Focus:** fill lightens to lit apricot and the arrow slides 3px right (0.2s ease). Focus is a 2px apricot ring at 3px offset.
-- **Ghost (sign in):** ivory text in a 1.5px ivory-85% outline pill, 44px tall; hover adds a 12% ivory wash. Separated from the nav by a 1px ivory-35% vertical rule.
+- **Ghost (sign in / your hub):** ivory text in a 1.5px ivory-85% outline pill, 44px tall; hover adds a 12% ivory wash. Separated from the nav by a 1px ivory-35% vertical rule.
 
 ### Chips
 - **Simulated data label:** label-chip fill, label-chip edge border, pill, 32px tall, 14px text with an info icon; paper whisper shadow. A label, not a control: its full meaning is carried in screen-reader text. Any surface showing demo data carries it visibly.
@@ -277,7 +279,8 @@ Soft, nested rounding. Interactive controls on the scene and in the hub header a
 - **Lists inside panels:** rows divided by 1px rule hairlines, no zebra fills.
 
 ### Navigation
-- **Site nav (on the scene):** ivory 17px links; the current page carries a 2px current-colour underline at 85% opacity below the text; hover goes to pure white.
+- **Site nav (shared public header):** one header on every public page (home, demo, agent office): the wordmark, then Home, Demo and Agent office as ivory 17px links, then the ghost account pill. The current page carries a 2px current-colour underline at 85% opacity below the text (`aria-current="page"`); hover goes to pure white. On home it sits on the scene (stage-placed from 1100px); on demo and agent office it sits on dusk navy with the same gutters as the home stage (`max(40px, 6.25vw)` from 1100px). Phones get one compact row of links under the wordmark, never a menu, sized to fit 320px. The day/night toggle stays on home only.
+- **Account pill:** pages render "Sign in" statically; after load the browser asks the Auth.js session endpoint and a signed-in visitor sees "Your hub" (to the owner hub) in the same pill. Both labels share one cell, so the swap changes no width.
 - **Hub sidebar:** 38px items with icon and 13px label, 9px corners; current item honey-select, hover 45% honey. Vertical column with a lower group (Agent office, Settings) under a rule on the stage; a scrolling row with edge fades below 1100px, focus rings drawn inside the mask.
 - **Footer:** dusk navy, ivory text, links underlined in 50% apricot that strengthens to full apricot on hover.
 
