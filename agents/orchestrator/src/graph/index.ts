@@ -104,10 +104,17 @@ async function applyTaskInput(graph: TaskGraph, taskId: number, input: TaskInput
     if (snapshot.values.task?.last_message_id === input.message_id) return "recovered";
   }
   if (input.kind === "start") return "duplicate_start";
-  if (!interrupted()) return "finished";
+  // A final workflow report can arrive after the approving webhook ended the thread. Run it
+  // through the same checkpointed step with the completed state: Machine.report records usage
+  // without changing the lifecycle, and the step returns to END. Other late inputs stay ignored.
+  const terminalReport = !interrupted() && input.kind === "report" && snapshot.values.task?.phase === "done";
+  if (!interrupted() && !terminalReport) return "finished";
   if (snapshot.values.task?.last_message_id === input.message_id) return "duplicate";
 
-  await graph.invoke(new Command({ resume: input }), config);
+  await graph.invoke(
+    terminalReport ? { task_id: taskId, input, task: snapshot.values.task } : new Command({ resume: input }),
+    config,
+  );
   return (await graph.getState(config)).values.task?.last_outcome ?? "applied";
 }
 
