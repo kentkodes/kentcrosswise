@@ -1,0 +1,11 @@
+{
+  "prompt": "Create a high-fidelity desktop website design comp for Kentcrosswise, edge-to-edge at a landscape 1440x1000 viewport, crisp readable actual UI. No browser frame or external device framing. Kentcrosswise is a personal hub built with AI agents; the visitor's primary action is to explore a simulated hub of contacts, moods and social snapshots.\nHold this approved visual world: lush grass, blue-to-dusk sky, firefly lights, warm original beige retro computer, delicate serif lettering, natural texture and quiet cinematic nostalgia. This second composition goes further in using that world: the computer itself is the large, dominant gateway into the site, a sculptural dimensional object within the grassy scene. Its screen carries a genuine interface with the prominent action “Explore the demo”, while the surrounding site remains readable and navigable. Do not make a generic split hero with copy beside a product. Let the geometry of the single computer and the environment structure the page. The computer is original unbranded artwork, never an Apple logo or copied hardware photograph.\nName: “Kentcrosswise”. Shared navigation: “Home”, “Demo”, “Office”, “Sign in”. Supporting line: “A personal hub, built with a small team of AI agents.” Screen text can include “Welcome in.” and the primary button. A secondary “Agent office” link and a subtle day/night control must be findable. Finish the visible viewport as a designed website, with the beginning of a calm explanatory area below. No equal-sized feature cards, fake testimonials, dashboard metrics used as marketing proof, or invented personal biography. Strive for a memorable, warm, highly crafted and plausible responsive web experience.",
+  "approved": false,
+  "generator": "built-in image_gen",
+  "reference": "https://x.com/alimdesigner_/status/2082449286642737341",
+  "role": "homepage composition",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  }
+}
