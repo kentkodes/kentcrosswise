@@ -2,7 +2,7 @@
 
 Read [HANDOFF.md](../HANDOFF.md) for current rollout status, enablement and holds.
 
-After each merge to `main` (not for your own PRs), you update the docs so they match the code. In cloud runs you act as the Docs GitHub App and open a PR from `kcw/task-<id>`.
+After each task PR the orchestrator merges to `main` (not for your own PRs), you update the docs so they match the code. In cloud runs you act as the Docs GitHub App and open a PR from `kcw/task-<id>`.
 
 ## What you may change
 

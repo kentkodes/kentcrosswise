@@ -154,6 +154,8 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, created by the 
 | `system_flags` | key PK, value jsonb (`agents_paused`, `pipelines_paused`), updated_at |
 | view `v_public_agent_events` | id, ts, agent, event_type, task_no, title = CASE WHEN is_private OR public_title IS NULL THEN 'Private task' ELSE public_title END |
 
+A docs task (§4.2 step 8) is a `tasks` row whose `parent_id` is the merged task (a merged task has no other children), with `source='github'`, `is_private` copied from the merged task, the fixed owner text `Docs-keeper update after PR #<n>.` and the public title `Docs update after #<n>` (sanitized; null if it fails).
+
 ### 3.3 Essays
 | Table | Key columns |
 |---|---|
@@ -189,7 +191,7 @@ The CI project has the same roles with synthetic data.
 | Developer | Actions `agent-developer.yml` | `workflow_dispatch` {task_id, issue, mode=`implement`/`fix`, pr} | issue body + `docs/agents/developer.md` | branch `kcw/task-<id>`, PR "Closes #n" | `claude-haiku-5-5` | Contents RW, Pull requests RW, Issues RW, Metadata R. **No Workflows.** Webhook inactive |
 | QA | Actions `agent-qa.yml` | dispatch {task_id, pr} after CI is green | PR diff, DESIGN.md, `docs/agents/qa.md` | test commits on the PR branch, then a review (approve / request changes) | Haiku 5.5 | Contents RW, Pull requests RW, Checks R, Metadata R. Webhook inactive |
 | Scraper-builder | Actions `agent-scraper.yml` | dispatch from a quarantine issue or new-source task | source record, failing URL, public-domain fixtures | PR with `pipelines/extractors/<site>/` | Haiku 5.5 | Contents RW, Pull requests RW, Issues RW, Metadata R. Webhook inactive |
-| Docs-keeper | Actions `agent-docs.yml` | dispatch after each merge (not for its own PRs) | merged diff, canonical instructions, docs | PR updating `docs/agents/*`, DESIGN.md and project handoff | Haiku 5.5 | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
+| Docs-keeper | Actions `agent-docs.yml` | dispatch {task_id, pr} by the orchestrator after each task PR it merges (not for docs PRs; §4.2 step 8) | merged diff, canonical instructions, docs | PR updating `docs/agents/*`, DESIGN.md and project handoff | Haiku 5.5 | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
 | Router / Categorizer | web / pipeline Lambdas | new entry / new essay | text | label + confidence | Jev, Haiku 5.5 fallback | none |
 
 **Ruleset `main-protection`** (owner applies it from `docs/runbooks/github-apps.md`; `scripts/check-repo-settings.ts` fails CI on drift):
@@ -249,7 +251,12 @@ The PR author (Developer App) can never approve its own PR. Whether a GitHub App
 7. Merge-rules runs on the latest head SHA (diff + plan summary).
    - Critical: `kcw/merge-rules` stays pending; create `approvals(kind=critical_pr, reasons)`; inbox item + push notification; event `waiting_on_owner`; `interrupt(wait=owner)`.
    - Not critical, or owner approved: check success → squash merge → event `merged`.
-8. Push to main → `deploy.yml` (environment `prod`): migrate, `terraform apply infra/prod`, upload the OpenNext build, report `deployed`. The orchestrator then dispatches Docs-keeper, whose PR goes through steps 3-7. The parent task is `done` when all children are merged.
+8. Push to main → `deploy.yml` (environment `prod`): migrate, `terraform apply infra/prod`, upload the OpenNext build. Reporting `deployed` is separate future work (the event type stays defined but unused).
+   - Docs-keeper is dispatched at merge, not after deploy: in the step that squash-merges a task PR, the orchestrator creates the docs task (a child row of the merged task, §3.2), and the handler starts its thread. Only PRs the orchestrator merges trigger it; owner/local merges and docs PRs do not.
+   - The docs task takes an in-flight slot (D20) and waits `queued` like any task when paused or at the limit. Its start skips the planner, the public-title node and the issue: it dispatches `agent-docs.yml` {task_id = the docs task, pr = the merged PR} (run-name `docs task <task_id>`), records `task_assigned` (agent `docs`) and waits on `dev`.
+   - Its PR (branch `kcw/task-<docs task>`) goes through steps 3-7 unchanged, including merge-rules and the owner's critical gate (`docs/agents/**` and root adapters are critical). There is no Developer: a CI failure, QA changes requested or a refused merge (for example conflicting docs PRs) goes to the owner as a failure; approving re-dispatches Docs-keeper, rejecting marks the docs task `failed`.
+   - A run that changes nothing opens no PR; the sweep (§4.3) then ends the docs task `done` with no event or inbox item.
+   - The parent task is `done` when all children are merged (docs tasks are children of the merged subtask, not of the parent, so they never hold it up).
 
 ### 4.3 Resuming from interrupts
 - **Threads:** each task is one LangGraph thread (`thread_id = task-<id>`), checkpointed in Neon (`lg` schema; **verify** the JS checkpointer package and the `interrupt()` / `Command({ resume })` API).
@@ -259,6 +266,7 @@ The PR author (Developer App) can never approve its own PR. Whether a GitHub App
 - **Sweep message** (P2-10 contract for P2-17): `{type: "sweep", task_id, thread_id}` per waiting or queued task. The graph decides itself whether a wait has timed out, retries a queued start (pause, in-flight limit) or an incomplete merge step, and runs inputs deferred while paused.
 - **Sweeper** (EventBridge, every 15 min):
   - Tasks waiting longer than their limit (dev 60 min, ci 90, qa 60, owner never) get a `timeout` resume. The graph redispatches once, then fails the task to the inbox.
+  - A docs task waiting on Docs-keeper (`dev`, §4.2 step 8) is judged by its `agent-docs.yml` run, found by run-name `docs task <id>` among workflow_dispatch runs created since the dispatch (the dispatch API is not relied on for a run id): queued or running → wait, up to 150 min (job timeouts sum to 95), then the owner; succeeded after its start report with no PR → `done` silently; succeeded or skipped without a start report (agent workflows disabled) → `failed` with that reason and no inbox item; failed or timed out → the owner (approve re-dispatches Docs-keeper); cancelled (pause-all) or no run 30 min after the dispatch → redispatch once, then the owner.
   - Cancels running agent workflows when `agents_paused` is set.
   - Dispatches `preview-gc.yml` nightly (06:15-07:15 UTC, `dry_run=false`, unless already dispatched since 06:15).
   - Redelivers failed webhook deliveries of the orchestrator App (Q8 item 3): 3 h lookback, skipping guids that succeeded once, were refused with 4xx, are in `inbound_events` or had 4 attempts; at most 20 per run.
@@ -516,6 +524,7 @@ Resolved by the owner (via the Liaison):
   (1) Cost of a model usage row: a stored `usage_events.cost_usd` wins; otherwise tokens × the `model_prices` row of the same provider+model with the latest `effective_from` on or before the event's UTC day; otherwise "no price" (counted, never shown as $0). Writers leave `cost_usd` null today (orchestrator `addUsage`), so prices entered later apply retroactively.
   (2) Actions minutes are recorded by the webhook relay for every `workflow_run.completed` from an allowlisted sender, with or without a task (deploys count too): one row per run attempt, `minutes` = wall-clock `run_started_at` → `updated_at` (not GitHub's per-job billable minutes), `cost_usd = 0`, deduped by `dedupe_key`. Agent = the workflow file (`agent-developer.yml` → developer, `agent-qa.yml` → qa, `agent-scraper.yml` → scraper, `agent-docs.yml` → docs), anything else → orchestrator. Agent workflows should not also send `kcw-report --minutes`, or the panel counts those minutes twice.
   (3) Days and ranges are UTC; default range is the last 30 days, at most 366.
+- **Docs-keeper dispatch (resolved 2026-10-24):** The owner accepted these defaults. (1) Only task PRs the orchestrator merges trigger Docs-keeper; owner/local merges do not (a push to main resolves no task in the relay). (2) The docs task row uses `source='github'` (no migration). (3) A docs PR's CI failure, QA changes request or refused merge goes to the owner; approve re-dispatches Docs-keeper, reject fails the docs task. (4) A run that changes nothing ends the docs task `done` silently, with no inbox item. (5) Agent workflows disabled (all jobs skipped): the docs task fails with a reason, with no inbox approval. (6) The orchestrator does not rely on workflow dispatch returning a run id; it finds the run by `run-name: docs task <id>`. (7) Conflicting docs PRs go to the owner. (8) Dispatch happens at merge, not after deploy (§4.2 step 8 as amended); `deployed` reporting stays future work. Loop prevention: a docs task's merge never creates a docs task, and `agent-docs.yml` still skips merged PRs authored by the Docs App.
 
 Open:
 - **Q14 (proposed in P2-12, 2026-10-23; owner to confirm):** Agent workflows `agent-{developer,qa,scraper,docs}.yml` as built.
