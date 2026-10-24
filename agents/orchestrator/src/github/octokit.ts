@@ -19,6 +19,7 @@ import {
   type CreateIssueInput,
   type CreatedIssue,
   type DispatchWorkflowInput,
+  type FindWorkflowRunInput,
   type GetArtifactInput,
   type GitHubClient,
   type MergePrInput,
@@ -26,6 +27,7 @@ import {
   type PostCheckInput,
   type PostedCheck,
   type PrDiff,
+  type WorkflowRunInfo,
 } from "./types";
 import { ZipFormatError, readZipEntry } from "./zip";
 
@@ -207,6 +209,23 @@ export class OctokitGitHubClient implements GitHubClient {
         return { found: true, input: parseMergeInput(file.toString("utf8")), runId: run.id, artifactId: artifact.id };
       }
       return { found: false, reason: "no_artifact" } as const;
+    });
+  }
+
+  async findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null> {
+    return this.#call("findWorkflowRun", async () => {
+      const { data } = await this.#octokit.rest.actions.listWorkflowRuns({
+        ...this.#r,
+        workflow_id: input.workflow,
+        event: "workflow_dispatch",
+        created: `>=${input.createdAfter}`,
+        per_page: 30,
+      });
+      const after = Date.parse(input.createdAfter);
+      const run = data.workflow_runs
+        .filter((r) => r.display_title === input.displayTitle && Date.parse(r.created_at) >= after)
+        .sort(newestFirst)[0];
+      return run ? { id: run.id, status: run.status ?? "unknown", conclusion: run.conclusion ?? null } : null;
     });
   }
 

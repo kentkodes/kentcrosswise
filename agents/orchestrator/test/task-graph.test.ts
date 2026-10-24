@@ -10,6 +10,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { checkpointerFromPool, setupCheckpointer, threadConfig } from "../src/index";
 import { ArtifactFormatError, FakeGitHubClient, type ArtifactResult, type ChangedFile, type GetArtifactInput } from "../src/github";
 import {
+  DOCS_NO_RUN_MINUTES,
+  DOCS_WAIT_LIMIT_MINUTES,
   INCOMPLETE_INPUT_TIMEOUT_MINUTES,
   IN_FLIGHT_LIMIT,
   MAX_ATTEMPTS,
@@ -207,6 +209,22 @@ describe("task graph (P2-10)", () => {
 
   const devDispatches = () => gh.dispatches.filter((x) => x.workflow === "agent-developer.yml");
   const qaDispatches = () => gh.dispatches.filter((x) => x.workflow === "agent-qa.yml");
+  const docsDispatches = () => gh.dispatches.filter((x) => x.workflow === "agent-docs.yml");
+
+  /** The docs task of a merged task (its only child). */
+  async function docsTaskOf(merged: number): Promise<number> {
+    const rows = await sql<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1", [merged]);
+    expect(rows).toHaveLength(1);
+    return Number(rows[0]!.id);
+  }
+
+  /** An agent-docs.yml run of the docs task as GitHub lists it, created now. */
+  function addDocsRun(taskId: number, status: string, conclusion: string | null = null) {
+    const run = { id: ++seq, workflow: "agent-docs.yml", displayTitle: `docs task ${taskId}`, createdAt: clock.toISOString(), status, conclusion };
+    gh.workflowRuns.push(run);
+    return run;
+  }
+
   const waits = async (taskId: number) => {
     const s = await graph.getState(threadConfig(taskId));
     return s.tasks.flatMap((t) => t.interrupts.map((i) => i.value));
@@ -556,14 +574,22 @@ describe("task graph (P2-10)", () => {
     expect(await task(last)).toMatchObject({ status: "queued", waiting_on: null, github_issue: null });
     expect(await send(last, sweep(last))).toBe("queued");
 
-    // One task finishes (merged): the next sweep starts the queued one.
+    // One task finishes (merged): its docs task takes the freed slot (D20), so the queued one waits.
     const first = ids[0]!;
     const head = sha(`${first}-1`);
     await openPr(first, 53, head);
     await send(first, ciEvent(first, 53, head, "success"));
     await send(first, reviewEvent(first, 53, head, "approved"));
     expect((await task(first)).status).toBe("merged");
+    const docs = await docsTaskOf(first);
+    expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
+    expect(await send(last, sweep(last))).toBe("queued");
 
+    // The docs task ends (no docs change): the next sweep starts the queued one.
+    await send(docs, { task_id: docs, agent: "docs", event_type: "coding" });
+    addDocsRun(docs, "completed", "success");
+    expect(await send(docs, sweep(docs))).toBe("applied");
+    expect((await task(docs)).status).toBe("done");
     expect(await send(last, sweep(last))).toBe("applied");
     expect(gh.issues).toHaveLength(IN_FLIGHT_LIMIT + 1);
     expect(await task(last)).toMatchObject({ status: "waiting", waiting_on: "dev" });
@@ -687,6 +713,294 @@ describe("task graph (P2-10)", () => {
       expect(await send(id, reviewEvent(id, 58, head, "approved"))).toBe("applied");
       expect((await pendingApproval(id)).reasons[0]).toContain("malformed (ArtifactFormatError)");
       expect(gh.latestCheck(head)!.state).toBe("pending");
+    });
+  });
+
+  // ------------------------------------------------------------------ docs tasks (§4.2 step 8)
+
+  describe("docs tasks (§4.2 step 8)", () => {
+    const DOCS_BOT = "kentcrosswise-docs[bot]";
+    const DESIGN_DOC: ChangedFile = { path: "docs/DESIGN.md", status: "modified" };
+    const startReport = (docs: number) => ({ task_id: docs, agent: "docs", event_type: "coding" });
+
+    /** A work task the loop merged, and its docs task. */
+    async function merged(pr: number) {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, pr, head);
+      expect(await send(id, reviewEvent(id, pr, head, "approved"), `approve-${id}`)).toBe("applied");
+      expect((await task(id)).status).toBe("merged");
+      return { id, head, docs: await docsTaskOf(id) };
+    }
+
+    /** Docs-keeper's publisher opens the docs PR from the docs task's branch. */
+    function openDocsPr(docs: number, pr: number, head: string, files: ChangedFile[] = [DESIGN_DOC]) {
+      gh.prs.set(pr, { headSha: head, author: DOCS_BOT, files });
+      gh.artifacts.set(head, CLEAN);
+      return send(docs, prEvent(docs, "opened", pr, head));
+    }
+
+    it("a merge creates one docs child and dispatches Docs-keeper; redeliveries and retries add nothing", async () => {
+      const { id, head, docs } = await merged(60);
+      const [row] = await sql(
+        `SELECT parent_id::int AS parent_id, source, owner_text, public_title, is_private, status, waiting_on, agent,
+                thread_id, branch, github_issue FROM tasks WHERE id = $1`,
+        [docs],
+      );
+      expect(row).toEqual({
+        parent_id: id,
+        source: "github",
+        owner_text: "Docs-keeper update after PR #60.",
+        public_title: "Docs update after #60",
+        is_private: true,
+        status: "waiting",
+        waiting_on: "dev",
+        agent: "docs",
+        thread_id: `task-${docs}`,
+        branch: `kcw/task-${docs}`,
+        github_issue: null,
+      });
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", inputs: { task_id: String(docs), pr: "60" } }]);
+      expect(gh.issues).toHaveLength(1); // the work task's: no planner, title node or issue for docs
+      expect(devDispatches()).toHaveLength(1);
+      expect(await sql("SELECT agent, event_type FROM agent_events WHERE task_id = $1", [docs])).toEqual([
+        { agent: "docs", event_type: "task_assigned" },
+      ]);
+      expect(await waits(docs)).toEqual([{ phase: "dev", waiting_on: "dev" }]);
+      // The merged task's own record is unchanged.
+      expect((await events(id)).at(-1)).toBe("merged");
+
+      // The redelivered merge message, a late sweep and a retried creation change nothing.
+      expect(await send(id, reviewEvent(id, 60, head, "approved"), `approve-${id}`)).toBe("finished");
+      expect(await send(id, sweep(id))).toBe("finished");
+      expect(await deps.store.createDocsTask(id, 60, null)).toBe(docs);
+      expect(await sql("SELECT id FROM tasks WHERE parent_id = $1", [id])).toHaveLength(1);
+      expect(docsDispatches()).toHaveLength(1);
+      expect(await events(docs)).toEqual(["task_assigned"]);
+    });
+
+    it("a docs start that failed half-way is completed by the redelivered merge message", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 61, head);
+      gh.failNext("dispatchWorkflow", 502); // the docs dispatch
+      expect(await send(id, reviewEvent(id, 61, head, "approved"), "approve-61")).toBe("failed");
+      expect((await task(id)).status).toBe("merged");
+      const docs = await docsTaskOf(id);
+      expect(docsDispatches()).toEqual([]);
+
+      expect(await send(id, reviewEvent(id, 61, head, "approved"), "approve-61")).toBe("finished");
+      expect(docsDispatches()).toHaveLength(1);
+      expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
+      expect(gh.merges).toHaveLength(1);
+    });
+
+    it("paused before the docs start: deferred, then the sweep after unpause dispatches Docs-keeper", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 62, head);
+      gh.failNext("dispatchWorkflow", 502);
+      expect(await send(id, reviewEvent(id, 62, head, "approved"), "approve-62")).toBe("failed");
+      const docs = await docsTaskOf(id);
+
+      await sql("UPDATE system_flags SET value = 'true' WHERE key = 'agents_paused'");
+      expect(await send(id, reviewEvent(id, 62, head, "approved"), "approve-62")).toBe("finished");
+      expect(await waits(docs)).toEqual([{ phase: "queued", waiting_on: null }]);
+      expect(docsDispatches()).toEqual([]);
+      expect(await send(docs, sweep(docs))).toBe("paused");
+
+      await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
+      expect(await send(docs, sweep(docs))).toBe("unchanged"); // the deferred start ran first
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", inputs: { task_id: String(docs), pr: "62" } }]);
+      expect(gh.issues).toHaveLength(1);
+      expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
+    });
+
+    it(`in-flight limit full: the docs task stays queued, then a later sweep starts it as a docs task`, async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 63, head);
+      const others: number[] = [];
+      for (let n = 0; n < IN_FLIGHT_LIMIT; n++) others.push(await newTask());
+      await sql("UPDATE tasks SET status = 'waiting' WHERE id = ANY($1::bigint[])", [others]);
+
+      expect(await send(id, reviewEvent(id, 63, head, "approved"))).toBe("applied");
+      const docs = await docsTaskOf(id);
+      expect(await task(docs)).toMatchObject({ status: "queued", waiting_on: null });
+      expect(docsDispatches()).toEqual([]);
+      expect(await send(docs, sweep(docs))).toBe("queued");
+
+      await sql("UPDATE tasks SET status = 'done' WHERE id = $1", [others[0]]);
+      expect(await send(docs, sweep(docs))).toBe("applied");
+      expect(docsDispatches()).toHaveLength(1);
+      expect(gh.issues).toHaveLength(1);
+      expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
+    });
+
+    it("a docs PR runs CI and QA and merges a DESIGN-only diff, without a docs task of its own", async () => {
+      const { docs } = await merged(64);
+      const head = sha(`${docs}-1`);
+      expect(await send(docs, startReport(docs))).toBe("applied"); // the docs report in dev is expected
+      expect(await send(docs, { task_id: docs, agent: "developer", event_type: "coding" })).toBe("stale");
+      expect(await openDocsPr(docs, 65, head)).toBe("applied");
+      expect(await send(docs, ciEvent(docs, 65, head, "success"))).toBe("applied");
+      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(docs), pr: "65" });
+      expect(await send(docs, reviewEvent(docs, 65, head, "approved"))).toBe("applied");
+
+      expect(gh.merges.at(-1)).toEqual({ pr: 65, sha: `squash-65-${head}` });
+      expect(gh.calls.filter((c) => c.method === "merge").at(-1)!.args).toEqual({ pr: 65, headSha: head, title: "docs: update after #64 (#65)" });
+      expect(await task(docs)).toMatchObject({ status: "merged", pr_number: 65 });
+      expect(await sql("SELECT id FROM tasks WHERE parent_id = $1", [docs])).toEqual([]);
+      expect(docsDispatches()).toHaveLength(1);
+      expect(await sql("SELECT agent, event_type FROM agent_events WHERE task_id = $1 ORDER BY id", [docs])).toEqual([
+        { agent: "docs", event_type: "task_assigned" },
+        { agent: "docs", event_type: "coding" },
+        { agent: "docs", event_type: "pr_opened" },
+        { agent: "orchestrator", event_type: "ci_running" },
+        { agent: "orchestrator", event_type: "ci_passed" },
+        { agent: "qa", event_type: "qa_reviewing" },
+        { agent: "qa", event_type: "approved" },
+        { agent: "orchestrator", event_type: "merged" },
+      ]);
+    });
+
+    it("a docs PR touching docs/agents waits for the owner's critical approval", async () => {
+      const { docs } = await merged(66);
+      const head = sha(`${docs}-1`);
+      await openDocsPr(docs, 67, head, [DESIGN_DOC, { path: "docs/agents/docs.md", status: "modified" }]);
+      await send(docs, ciEvent(docs, 67, head, "success"));
+      expect(await send(docs, reviewEvent(docs, 67, head, "approved"))).toBe("applied");
+      expect(gh.latestCheck(head)).toMatchObject({ state: "pending", title: "Owner approval required" });
+      expect(gh.merges).toHaveLength(1); // the work PR only
+      const a = await pendingApproval(docs);
+      expect(a.reasons.join("\n")).toContain("docs/agents/docs.md");
+      expect(await decide(docs, a.id, "approved")).toBe("applied");
+      expect((await task(docs)).status).toBe("merged");
+      expect(docsDispatches()).toHaveLength(1);
+    });
+
+    it.each([
+      ["CI failure", 70],
+      ["QA changes requested", 72],
+      ["refused merge", 74],
+    ] as const)("%s on a docs PR goes to the owner: approve re-dispatches Docs-keeper (never the Developer), reject fails", async (kind, pr) => {
+      const { docs } = await merged(pr);
+      const docsPr = pr + 1;
+      const head = sha(`${docs}-1`);
+      await openDocsPr(docs, docsPr, head);
+      if (kind === "CI failure") {
+        expect(await send(docs, ciEvent(docs, docsPr, head, "failure"))).toBe("applied");
+      } else {
+        await send(docs, ciEvent(docs, docsPr, head, "success"));
+        if (kind === "refused merge") gh.prs.get(docsPr)!.mergeable = false;
+        const state = kind === "QA changes requested" ? "changes_requested" : "approved";
+        expect(await send(docs, reviewEvent(docs, docsPr, head, state))).toBe("applied");
+      }
+      expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "owner" });
+      const a = await pendingApproval(docs);
+      expect(a.reasons[1]).toBe("Approve to dispatch Docs-keeper again; reject to mark the task failed.");
+      expect(await sql("SELECT title FROM inbox_items WHERE ref_id = $1", [a.id])).toEqual([{ title: `Task ${docs} failed: needs a decision` }]);
+
+      expect(await decide(docs, a.id, "approved")).toBe("applied");
+      expect(docsDispatches()).toHaveLength(2);
+      expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: String(pr) });
+      expect(devDispatches()).toHaveLength(1); // the work task's only
+      expect(await task(docs)).toMatchObject({ waiting_on: "dev", attempts: 0, pr_number: docsPr });
+
+      // Docs-keeper pushes to its PR; CI fails again; the owner gives up.
+      const h2 = sha(`${docs}-2`);
+      expect(await push(docs, docsPr, h2)).toBe("applied");
+      expect(await send(docs, ciEvent(docs, docsPr, h2, "failure"))).toBe("applied");
+      const b = await pendingApproval(docs);
+      expect(await decide(docs, b.id, "rejected")).toBe("applied");
+      expect(await task(docs)).toMatchObject({ status: "failed", waiting_on: null });
+      expect(devDispatches()).toHaveLength(1);
+    });
+
+    describe("sweeps while Docs-keeper runs", () => {
+      it("no change (run succeeded after its start report, no PR): done, with no inbox item or event", async () => {
+        const { docs } = await merged(76);
+        expect(await send(docs, sweep(docs))).toBe("unchanged"); // no run listed yet
+        expect(gh.calls.find((c) => c.method === "findWorkflowRun")!.args).toEqual({
+          workflow: "agent-docs.yml",
+          displayTitle: `docs task ${docs}`,
+          createdAfter: new Date(clock.getTime() - 2 * 60_000).toISOString(),
+        });
+        const run = addDocsRun(docs, "in_progress");
+        await send(docs, startReport(docs));
+        advance(DOCS_NO_RUN_MINUTES + 10);
+        expect(await send(docs, sweep(docs))).toBe("unchanged");
+        Object.assign(run, { status: "completed", conclusion: "success" });
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(await task(docs)).toMatchObject({ status: "done", waiting_on: null });
+        expect(await events(docs)).toEqual(["task_assigned", "coding"]);
+        expect(await sql("SELECT id FROM approvals WHERE task_id = $1", [docs])).toEqual([]);
+        expect(await send(docs, sweep(docs))).toBe("finished");
+      });
+
+      it.each(["success", "skipped"])("run %s without a start report (jobs skipped): failed with a reason, no inbox item", async (conclusion) => {
+        const { docs } = await merged(78);
+        addDocsRun(docs, "completed", conclusion);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(await task(docs)).toMatchObject({ status: "failed", waiting_on: null });
+        expect(await sql("SELECT detail->>'reason' AS reason FROM agent_events WHERE task_id = $1 AND event_type = 'failed'", [docs])).toEqual([
+          { reason: "Docs-keeper did not run (agent workflows disabled or every job skipped)" },
+        ]);
+        expect(await sql("SELECT id FROM approvals WHERE task_id = $1", [docs])).toEqual([]);
+        expect(docsDispatches()).toHaveLength(1);
+      });
+
+      it.each(["failure", "timed_out"])("run %s: the owner decides; approving re-dispatches Docs-keeper", async (conclusion) => {
+        const { docs } = await merged(80);
+        await send(docs, startReport(docs));
+        addDocsRun(docs, "completed", conclusion);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        const a = await pendingApproval(docs);
+        expect(a.reasons[0]).toBe(`Task failed: the agent-docs.yml run ended ${conclusion}.`);
+        expect(await decide(docs, a.id, "approved")).toBe("applied");
+        expect(docsDispatches()).toHaveLength(2);
+        expect(await task(docs)).toMatchObject({ waiting_on: "dev" });
+      });
+
+      it("a cancelled run is redispatched once, then the owner decides", async () => {
+        const { docs } = await merged(82);
+        addDocsRun(docs, "completed", "cancelled");
+        advance(10);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(docsDispatches()).toHaveLength(2);
+        expect(await send(docs, sweep(docs))).toBe("unchanged"); // the cancelled run predates the redispatch
+        addDocsRun(docs, "completed", "cancelled");
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(docsDispatches()).toHaveLength(2);
+        expect((await pendingApproval(docs)).reasons[0]).toBe("Task failed: the agent-docs.yml run was cancelled, after one redispatch.");
+      });
+
+      it(`no run ${DOCS_NO_RUN_MINUTES} minutes after the dispatch: redispatched once, then the owner decides`, async () => {
+        const { docs } = await merged(84);
+        advance(DOCS_NO_RUN_MINUTES - 1);
+        expect(await send(docs, sweep(docs))).toBe("unchanged");
+        advance(2);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(docsDispatches()).toHaveLength(2);
+        expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: "84" });
+        advance(DOCS_NO_RUN_MINUTES + 1);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect(docsDispatches()).toHaveLength(2);
+        expect((await pendingApproval(docs)).reasons[0]).toBe(
+          `Task failed: no agent-docs.yml run started within ${DOCS_NO_RUN_MINUTES} minutes, after one redispatch.`,
+        );
+      });
+
+      it(`a run still going after ${DOCS_WAIT_LIMIT_MINUTES} minutes goes to the owner`, async () => {
+        const { docs } = await merged(86);
+        addDocsRun(docs, "queued");
+        advance(DOCS_WAIT_LIMIT_MINUTES - 1);
+        expect(await send(docs, sweep(docs))).toBe("unchanged");
+        advance(2);
+        expect(await send(docs, sweep(docs))).toBe("applied");
+        expect((await pendingApproval(docs)).reasons[0]).toBe(`Task failed: Docs-keeper did not finish within ${DOCS_WAIT_LIMIT_MINUTES} minutes.`);
+        expect(docsDispatches()).toHaveLength(1);
+      });
     });
   });
 

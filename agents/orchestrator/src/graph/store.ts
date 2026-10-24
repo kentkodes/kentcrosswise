@@ -70,6 +70,13 @@ export interface TaskStore {
    */
   createSubtasks(parentId: number, ownerTexts: readonly string[]): Promise<number[]>;
   getChildren(parentId: number): Promise<ChildTask[]>;
+  /**
+   * §4.2 step 8: the docs task of a merged task (a child row: queued, source `github`, is_private
+   * copied, fixed owner text naming the PR, thread `task-<id>`; the docs start sets the branch). A merged
+   * task has no other children (a split parent never merges, a subtask never splits), so an
+   * existing child is the docs task of a retried step and is returned instead.
+   */
+  createDocsTask(mergedId: number, pr: number, publicTitle: string | null): Promise<number>;
 }
 
 /** Statuses that hold an in-flight slot (D20). */
@@ -255,6 +262,34 @@ export class PgTaskStore implements TaskStore {
       }
       await client.query("COMMIT");
       return ids;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createDocsTask(mergedId: number, pr: number, publicTitle: string | null): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // The row lock serializes a retried merge step with itself.
+      await client.query("SELECT 1 FROM tasks WHERE id = $1 FOR UPDATE", [mergedId]);
+      const { rows: existing } = await client.query<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1 ORDER BY id LIMIT 1", [mergedId]);
+      let id = existing[0] ? Number(existing[0].id) : null;
+      if (id === null) {
+        const { rows } = await client.query<{ id: string }>(
+          `INSERT INTO tasks (parent_id, source, owner_text, public_title, is_private)
+           SELECT id, 'github', $2, $3, is_private FROM tasks WHERE id = $1
+           RETURNING id`,
+          [mergedId, `Docs-keeper update after PR #${pr}.`, publicTitle],
+        );
+        id = Number(rows[0]!.id);
+        await client.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = $1", [id]);
+      }
+      await client.query("COMMIT");
+      return id;
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw err;

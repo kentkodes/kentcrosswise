@@ -35,6 +35,16 @@ describe("parseTaskMessage", () => {
     expect(() => parse({ task_id: 7, agent: "nobody", event_type: "coding" })).toThrow(ReportFormatError);
   });
 
+  it("never lets a queue message start a docs task (the orchestrator builds that start itself)", () => {
+    for (const docs of [{ pr: 41 }, true]) {
+      expect(parse({ type: "task.created", task_id: 7, docs })).toEqual({ task_id: 7, input: { kind: "start", message_id: "msg-1" } });
+      expect(parse({ type: "task.created", task_id: 7, kind: "start", docs, resume: { docs } })).toEqual({
+        task_id: 7,
+        input: { kind: "start", message_id: "msg-1" },
+      });
+    }
+  });
+
   it("owner.decision from the console", () => {
     expect(parse(decision({ approval_id: APPROVAL.toUpperCase(), decision: "approved" }))).toEqual({
       task_id: 7,

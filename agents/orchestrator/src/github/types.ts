@@ -102,6 +102,23 @@ export type ArtifactResult =
    */
   | { found: false; reason: "no_run" | "no_artifact" };
 
+export interface FindWorkflowRunInput {
+  /** Workflow file name, e.g. `agent-docs.yml`. */
+  workflow: string;
+  /** The run's exact `display_title` (its `run-name`). */
+  displayTitle: string;
+  /** ISO time; only workflow_dispatch runs created at or after it count. */
+  createdAfter: string;
+}
+
+export interface WorkflowRunInfo {
+  id: number;
+  /** `queued`, `in_progress`, `completed`, ... */
+  status: string;
+  /** Set once completed: `success`, `failure`, `cancelled`, `skipped`, `timed_out`, ... */
+  conclusion: string | null;
+}
+
 export interface GitHubClient {
   createIssue(input: CreateIssueInput): Promise<CreatedIssue>;
   dispatchWorkflow(input: DispatchWorkflowInput): Promise<void>;
@@ -112,6 +129,8 @@ export interface GitHubClient {
   getDiff(pr: number): Promise<PrDiff>;
   /** The P2-13 merge-rules input (`@kcw/core/merge-input`) of the PR head's ci.yml run. */
   getArtifact(input: GetArtifactInput): Promise<ArtifactResult>;
+  /** The newest workflow_dispatch run of `workflow` with that display title created since `createdAfter`, or null. */
+  findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null>;
 }
 
 /**

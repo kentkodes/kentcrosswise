@@ -11,6 +11,7 @@ import {
   type CreateIssueInput,
   type CreatedIssue,
   type DispatchWorkflowInput,
+  type FindWorkflowRunInput,
   type GetArtifactInput,
   type GitHubClient,
   type MergePrInput,
@@ -18,6 +19,7 @@ import {
   type PostCheckInput,
   type PostedCheck,
   type PrDiff,
+  type WorkflowRunInfo,
 } from "./types";
 
 export type FakeMethod = keyof GitHubClient;
@@ -58,6 +60,8 @@ export class FakeGitHubClient implements GitHubClient {
   readonly headsWithoutRun = new Set<string>();
   /** Run ids that are still running (cancelRun of any other id returns `not_running`). */
   readonly runningRuns = new Set<number>();
+  /** Workflow runs findWorkflowRun searches; tests add and update them. */
+  readonly workflowRuns: (WorkflowRunInfo & { workflow: string; displayTitle: string; createdAt: string })[] = [];
   #failures = new Map<FakeMethod, GitHubApiError>();
   #nextId = 1;
 
@@ -144,5 +148,13 @@ export class FakeGitHubClient implements GitHubClient {
     const found = this.artifacts.get(input.headSha);
     if (!found) return { found: false, reason: this.headsWithoutRun.has(input.headSha) ? "no_run" : "no_artifact" };
     return { found: true, input: structuredClone(found), runId: 1, artifactId: 1 };
+  }
+
+  async findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null> {
+    this.#record("findWorkflowRun", input);
+    const run = this.workflowRuns
+      .filter((r) => r.workflow === input.workflow && r.displayTitle === input.displayTitle && Date.parse(r.createdAt) >= Date.parse(input.createdAfter))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id)[0];
+    return run ? { id: run.id, status: run.status, conclusion: run.conclusion } : null;
   }
 }

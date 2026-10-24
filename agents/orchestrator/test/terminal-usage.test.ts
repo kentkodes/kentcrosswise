@@ -16,7 +16,7 @@ describe("terminal task usage", () => {
       getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
       isPaused: async () => false,
       claimSlot: async () => true,
-      updateTask: async (_id: number, fields: TaskUpdate) => { if (fields.status) status = fields.status; },
+      updateTask: async (id: number, fields: TaskUpdate) => { if (id === taskId && fields.status) status = fields.status; },
       addEvent: async () => undefined,
       addUsage,
       createApproval: async () => { throw new Error("unexpected owner approval"); },
@@ -25,6 +25,7 @@ describe("terminal task usage", () => {
       loadContacts: async () => [],
       createSubtasks: async () => { throw new Error("unexpected split"); },
       getChildren: async () => [],
+      createDocsTask: async () => 2, // the merge creates the docs child (its own thread)
     };
     const github = new FakeGitHubClient();
     github.prs.set(41, { headSha: head, author: "developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
@@ -71,6 +72,7 @@ function fixture(initialStatus: TaskStatus = "queued") {
     loadContacts: async () => [],
     createSubtasks: async () => { throw new Error("unexpected split"); },
     getChildren: async () => [],
+    createDocsTask: async () => { throw new Error("unexpected docs task"); },
   };
   const github = new FakeGitHubClient();
   const saver = new MemorySaver();

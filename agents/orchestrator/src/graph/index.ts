@@ -69,11 +69,26 @@ export type TaskOutcome =
  *
  * If the task is split into subtasks, every child thread that has not started (or whose start
  * failed half-way) is then started here, so a redelivery or a sweep of the parent completes it.
+ * The same holds for the docs task of a merged task (§4.2 step 8).
  */
 export async function processTaskInput(graph: TaskGraph, taskId: number, input: TaskInput): Promise<TaskOutcome> {
   const outcome = await applyTaskInput(graph, taskId, input);
-  if (outcome !== "no_thread") await startSubtasks(graph, taskId, input.message_id);
+  if (outcome !== "no_thread") {
+    await startSubtasks(graph, taskId, input.message_id);
+    await startDocsTask(graph, taskId, input.message_id);
+  }
   return outcome;
+}
+
+async function startDocsTask(graph: TaskGraph, taskId: number, messageId: string): Promise<void> {
+  const task = (await graph.getState(threadConfig(taskId))).values.task;
+  if (task?.phase !== "done" || typeof task.docs_task !== "number" || task.pr_number === null) return;
+  // A started docs thread answers duplicate_start; a docs task never gets a docs task, so this never recurses further.
+  await processTaskInput(graph, task.docs_task, {
+    kind: "start",
+    docs: { pr: task.pr_number },
+    message_id: `${messageId}/docs-${task.docs_task}`,
+  });
 }
 
 async function startSubtasks(graph: TaskGraph, taskId: number, messageId: string): Promise<void> {
