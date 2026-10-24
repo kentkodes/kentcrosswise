@@ -1,5 +1,6 @@
 // kcw-report (P2-03): the last step of every agent workflow (DESIGN §4.1 step 6) sends
-// {task_id, agent, event_type, usage} to the orchestrator's SQS FIFO queue.
+// {task_id, agent, event_type?, usage?} to the orchestrator's SQS FIFO queue. Without --event-type
+// the report is usage-only (DESIGN §11 Q14(5)): the orchestrator records usage and no event.
 // Everything here is injectable so tests run with a fake SQS client; cli.ts wires in the real one.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -46,9 +47,10 @@ export class UsageError extends Error {
   override name = "UsageError";
 }
 
-export const HELP = `Usage: pnpm kcw-report --task-id <n> --agent <agent> --event-type <type> [options]
+export const HELP = `Usage: pnpm kcw-report --task-id <n> --agent <agent> [--event-type <type>] [options]
 
-Sends {task_id, agent, event_type, usage} to the orchestrator queue (SQS FIFO).
+Sends {task_id, agent, event_type, usage} to the orchestrator queue (SQS FIFO). Without
+--event-type the report is usage-only (no lifecycle event) and needs at least one usage line.
 
 Options:
   --provider <p> --model <m> --input-tokens <n> --output-tokens <n>   model usage of this step
@@ -86,11 +88,14 @@ function integer(flag: string, v: string | undefined): number | undefined {
   return Number(v);
 }
 
-/** Builds the report from parsed flags. Validation errors never quote a flag value. */
-export function reportFromFlags(v: Record<string, string | boolean | undefined>): AgentReport {
+/**
+ * Builds the report from parsed flags plus usage read elsewhere (the execution file). Without
+ * --event-type it is usage-only and needs at least one usage line. Errors never quote a flag value.
+ */
+export function reportFromFlags(v: Record<string, string | boolean | undefined>, extraUsage: readonly Usage[] = []): AgentReport {
   const str = (k: string) => (typeof v[k] === "string" ? (v[k] as string) : undefined);
-  if (str("task-id") === undefined || str("agent") === undefined || str("event-type") === undefined) {
-    throw new UsageError("--task-id, --agent and --event-type are required");
+  if (str("task-id") === undefined || str("agent") === undefined) {
+    throw new UsageError("--task-id and --agent are required");
   }
   const usage: Usage[] = [];
   const modelFlags = ["provider", "model", "input-tokens", "output-tokens"].filter((k) => str(k) !== undefined);
@@ -111,10 +116,14 @@ export function reportFromFlags(v: Record<string, string | boolean | undefined>)
     if (!/^\d+(\.\d+)?$/.test(minutes)) throw new UsageError("--minutes must be a non-negative number");
     usage.push({ kind: "actions_minutes", minutes: Number(minutes) });
   }
+  usage.push(...extraUsage);
+  if (str("event-type") === undefined && usage.length === 0) {
+    throw new UsageError("--event-type is required unless the report carries usage");
+  }
   return parseAgentReport({
     task_id: integer("task-id", str("task-id")),
     agent: str("agent"),
-    event_type: str("event-type"),
+    ...(str("event-type") !== undefined ? { event_type: str("event-type") } : {}),
     ...(usage.length > 0 ? { usage } : {}),
   });
 }
@@ -184,12 +193,12 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<vo
     deps.stdout(HELP);
     return;
   }
-  let report = reportFromFlags(values);
   const execFile = values["claude-execution-file"];
-  if (typeof execFile === "string" && execFile !== "") {
-    const extra = await readExecutionUsage(execFile, deps.readFile ?? ((p) => readFile(p, "utf8")));
-    if (extra.length > 0) report = parseAgentReport({ ...report, usage: [...(report.usage ?? []), ...extra] });
-  }
+  const extra =
+    typeof execFile === "string" && execFile !== ""
+      ? await readExecutionUsage(execFile, deps.readFile ?? ((p) => readFile(p, "utf8")))
+      : [];
+  const report = reportFromFlags(values, extra);
   if (values["dry-run"] === true) {
     deps.stdout(JSON.stringify(report, null, 2));
     return;
@@ -208,7 +217,7 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<vo
     throw new Error(`could not send the report to SQS (${name})`, { cause: err });
   }
   deps.stdout(
-    `kcw-report: sent ${report.event_type} from ${report.agent} for ${threadIdOf(report.task_id)}` +
+    `kcw-report: sent ${report.event_type ?? "usage"} from ${report.agent} for ${threadIdOf(report.task_id)}` +
       (messageId ? ` (message ${messageId})` : ""),
   );
 }

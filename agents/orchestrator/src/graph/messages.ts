@@ -5,7 +5,7 @@
 //   {type:"owner.decision", task_id, thread_id, resume:{approval_id, decision}}   inbox (§4.3)
 //   {type:"sweep", task_id, thread_id}                                   sweeper (§4.3, P2-17)
 //   {source:"github", delivery_id, task_id, thread_id, resume:{event, head_sha, payload}}   relay (P2-05)
-//   {task_id, agent, event_type, usage?}                                 kcw-report (P2-03)
+//   {task_id, agent, event_type?, usage?} (event, usage, or both)       kcw-report (P2-03)
 import { parseAgentReport, threadIdOf } from "@kcw/core/events";
 import { InputError } from "../handler";
 import type { GitHubInput, TaskInput } from "./types";
