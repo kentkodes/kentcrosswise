@@ -1,0 +1,613 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T00:00:00Z",
+  "title": "Design System: Kentcrosswise",
+  "extensions": {
+    "colorMeta": {
+      "apricot": {
+        "role": "primary",
+        "displayName": "Apricot Dusk",
+        "canonical": "#f8d9a8",
+        "oklch": "oklch(89.9% 0.072 79.0)",
+        "tonalRamp": [
+          "oklch(15% 0.072 79.0)",
+          "oklch(26% 0.072 79.0)",
+          "oklch(38% 0.072 79.0)",
+          "oklch(50% 0.072 79.0)",
+          "oklch(62% 0.072 79.0)",
+          "oklch(74% 0.072 79.0)",
+          "oklch(85% 0.072 79.0)",
+          "oklch(95% 0.072 79.0)"
+        ],
+        "purpose": "The one filled entrance; selection, focus ring on the scene, footer underline hover."
+      },
+      "apricot-lit": {
+        "role": "primary",
+        "displayName": "Lit Apricot",
+        "canonical": "#fbe3bc",
+        "oklch": "oklch(92.6% 0.057 79.9)",
+        "tonalRamp": [
+          "oklch(15% 0.057 79.9)",
+          "oklch(26% 0.057 79.9)",
+          "oklch(38% 0.057 79.9)",
+          "oklch(50% 0.057 79.9)",
+          "oklch(62% 0.057 79.9)",
+          "oklch(74% 0.057 79.9)",
+          "oklch(85% 0.057 79.9)",
+          "oklch(95% 0.057 79.9)"
+        ],
+        "purpose": "Entrance hover."
+      },
+      "entrance-ink": {
+        "role": "primary",
+        "displayName": "Entrance Ink",
+        "canonical": "#232a46",
+        "oklch": "oklch(29.3% 0.052 272.2)",
+        "tonalRamp": [
+          "oklch(15% 0.052 272.2)",
+          "oklch(26% 0.052 272.2)",
+          "oklch(38% 0.052 272.2)",
+          "oklch(50% 0.052 272.2)",
+          "oklch(62% 0.052 272.2)",
+          "oklch(74% 0.052 272.2)",
+          "oklch(85% 0.052 272.2)",
+          "oklch(95% 0.052 272.2)"
+        ],
+        "purpose": "Text and arrow on the apricot entrance."
+      },
+      "dusk-navy": {
+        "role": "secondary",
+        "displayName": "Dusk Navy",
+        "canonical": "#1b2340",
+        "oklch": "oklch(26.5% 0.055 270.6)",
+        "tonalRamp": [
+          "oklch(15% 0.055 270.6)",
+          "oklch(26% 0.055 270.6)",
+          "oklch(38% 0.055 270.6)",
+          "oklch(50% 0.055 270.6)",
+          "oklch(62% 0.055 270.6)",
+          "oklch(74% 0.055 270.6)",
+          "oklch(85% 0.055 270.6)",
+          "oklch(95% 0.055 270.6)"
+        ],
+        "purpose": "Body ground, footer, the night below the scene."
+      },
+      "ivory": {
+        "role": "secondary",
+        "displayName": "Ivory",
+        "canonical": "#f6f1e4",
+        "oklch": "oklch(95.8% 0.018 89.4)",
+        "tonalRamp": [
+          "oklch(15% 0.018 89.4)",
+          "oklch(26% 0.018 89.4)",
+          "oklch(38% 0.018 89.4)",
+          "oklch(50% 0.018 89.4)",
+          "oklch(62% 0.018 89.4)",
+          "oklch(74% 0.018 89.4)",
+          "oklch(85% 0.018 89.4)",
+          "oklch(95% 0.018 89.4)"
+        ],
+        "purpose": "All type on the scene and footer; translucent for outlines and rules there."
+      },
+      "greige-paper": {
+        "role": "neutral",
+        "displayName": "Greige Paper",
+        "canonical": "#eadbcd",
+        "oklch": "oklch(90.0% 0.025 65.6)",
+        "tonalRamp": [
+          "oklch(15% 0.025 65.6)",
+          "oklch(26% 0.025 65.6)",
+          "oklch(38% 0.025 65.6)",
+          "oklch(50% 0.025 65.6)",
+          "oklch(62% 0.025 65.6)",
+          "oklch(74% 0.025 65.6)",
+          "oklch(85% 0.025 65.6)",
+          "oklch(95% 0.025 65.6)"
+        ],
+        "purpose": "Hub window ground under the grain plate."
+      },
+      "panel-wash": {
+        "role": "neutral",
+        "displayName": "Panel Wash",
+        "canonical": "rgb(249 235 216 / 0.8)",
+        "oklch": "oklch(94.6% 0.029 75.7)",
+        "tonalRamp": [
+          "oklch(15% 0.029 75.7)",
+          "oklch(26% 0.029 75.7)",
+          "oklch(38% 0.029 75.7)",
+          "oklch(50% 0.029 75.7)",
+          "oklch(62% 0.029 75.7)",
+          "oklch(74% 0.029 75.7)",
+          "oklch(85% 0.029 75.7)",
+          "oklch(95% 0.029 75.7)"
+        ],
+        "purpose": "Translucent panel fill at 80% alpha."
+      },
+      "honey-select": {
+        "role": "neutral",
+        "displayName": "Honey Select",
+        "canonical": "#f4d7b3",
+        "oklch": "oklch(89.4% 0.057 73.0)",
+        "tonalRamp": [
+          "oklch(15% 0.057 73.0)",
+          "oklch(26% 0.057 73.0)",
+          "oklch(38% 0.057 73.0)",
+          "oklch(50% 0.057 73.0)",
+          "oklch(62% 0.057 73.0)",
+          "oklch(74% 0.057 73.0)",
+          "oklch(85% 0.057 73.0)",
+          "oklch(95% 0.057 73.0)"
+        ],
+        "purpose": "Current sidebar item; 45% for hover."
+      },
+      "label-chip": {
+        "role": "neutral",
+        "displayName": "Label Chip",
+        "canonical": "#f7e4d1",
+        "oklch": "oklch(92.9% 0.033 67.4)",
+        "tonalRamp": [
+          "oklch(15% 0.033 67.4)",
+          "oklch(26% 0.033 67.4)",
+          "oklch(38% 0.033 67.4)",
+          "oklch(50% 0.033 67.4)",
+          "oklch(62% 0.033 67.4)",
+          "oklch(74% 0.033 67.4)",
+          "oklch(85% 0.033 67.4)",
+          "oklch(95% 0.033 67.4)"
+        ],
+        "purpose": "Simulated data label fill."
+      },
+      "label-chip-edge": {
+        "role": "neutral",
+        "displayName": "Label Chip Edge",
+        "canonical": "#e6cfb9",
+        "oklch": "oklch(86.8% 0.039 66.0)",
+        "tonalRamp": [
+          "oklch(15% 0.039 66.0)",
+          "oklch(26% 0.039 66.0)",
+          "oklch(38% 0.039 66.0)",
+          "oklch(50% 0.039 66.0)",
+          "oklch(62% 0.039 66.0)",
+          "oklch(74% 0.039 66.0)",
+          "oklch(85% 0.039 66.0)",
+          "oklch(95% 0.039 66.0)"
+        ],
+        "purpose": "Simulated data label border."
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Paper Rule",
+        "canonical": "#e2d1c0",
+        "oklch": "oklch(87.0% 0.030 67.4)",
+        "tonalRamp": [
+          "oklch(15% 0.030 67.4)",
+          "oklch(26% 0.030 67.4)",
+          "oklch(38% 0.030 67.4)",
+          "oklch(50% 0.030 67.4)",
+          "oklch(62% 0.030 67.4)",
+          "oklch(74% 0.030 67.4)",
+          "oklch(85% 0.030 67.4)",
+          "oklch(95% 0.030 67.4)"
+        ],
+        "purpose": "Hairline dividers inside the hub."
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Ink",
+        "canonical": "#120e0b",
+        "oklch": "oklch(16.8% 0.009 59.0)",
+        "tonalRamp": [
+          "oklch(15% 0.009 59.0)",
+          "oklch(26% 0.009 59.0)",
+          "oklch(38% 0.009 59.0)",
+          "oklch(50% 0.009 59.0)",
+          "oklch(62% 0.009 59.0)",
+          "oklch(74% 0.009 59.0)",
+          "oklch(85% 0.009 59.0)",
+          "oklch(95% 0.009 59.0)"
+        ],
+        "purpose": "Primary text on paper."
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#7d7166",
+        "oklch": "oklch(55.6% 0.022 64.9)",
+        "tonalRamp": [
+          "oklch(15% 0.022 64.9)",
+          "oklch(26% 0.022 64.9)",
+          "oklch(38% 0.022 64.9)",
+          "oklch(50% 0.022 64.9)",
+          "oklch(62% 0.022 64.9)",
+          "oklch(74% 0.022 64.9)",
+          "oklch(85% 0.022 64.9)",
+          "oklch(95% 0.022 64.9)"
+        ],
+        "purpose": "Panel asides and descriptions."
+      },
+      "bark-focus": {
+        "role": "neutral",
+        "displayName": "Bark Focus",
+        "canonical": "#8a5a2b",
+        "oklch": "oklch(51.1% 0.089 62.8)",
+        "tonalRamp": [
+          "oklch(15% 0.089 62.8)",
+          "oklch(26% 0.089 62.8)",
+          "oklch(38% 0.089 62.8)",
+          "oklch(50% 0.089 62.8)",
+          "oklch(62% 0.089 62.8)",
+          "oklch(74% 0.089 62.8)",
+          "oklch(85% 0.089 62.8)",
+          "oklch(95% 0.089 62.8)"
+        ],
+        "purpose": "Focus ring on paper."
+      },
+      "toggle-slate": {
+        "role": "neutral",
+        "displayName": "Toggle Slate",
+        "canonical": "#4b4541",
+        "oklch": "oklch(39.5% 0.011 56.1)",
+        "tonalRamp": [
+          "oklch(15% 0.011 56.1)",
+          "oklch(26% 0.011 56.1)",
+          "oklch(38% 0.011 56.1)",
+          "oklch(50% 0.011 56.1)",
+          "oklch(62% 0.011 56.1)",
+          "oklch(74% 0.011 56.1)",
+          "oklch(85% 0.011 56.1)",
+          "oklch(95% 0.011 56.1)"
+        ],
+        "purpose": "Day/night toggle track."
+      },
+      "meadow-green": {
+        "role": "tertiary",
+        "displayName": "Meadow Green",
+        "canonical": "#1f8a68",
+        "oklch": "oklch(56.6% 0.108 166.4)",
+        "tonalRamp": [
+          "oklch(15% 0.108 166.4)",
+          "oklch(26% 0.108 166.4)",
+          "oklch(38% 0.108 166.4)",
+          "oklch(50% 0.108 166.4)",
+          "oklch(62% 0.108 166.4)",
+          "oklch(74% 0.108 166.4)",
+          "oklch(85% 0.108 166.4)",
+          "oklch(95% 0.108 166.4)"
+        ],
+        "purpose": "Happiness chart ink only."
+      },
+      "ember-coral": {
+        "role": "tertiary",
+        "displayName": "Ember Coral",
+        "canonical": "#e6604f",
+        "oklch": "oklch(65.6% 0.170 29.6)",
+        "tonalRamp": [
+          "oklch(15% 0.170 29.6)",
+          "oklch(26% 0.170 29.6)",
+          "oklch(38% 0.170 29.6)",
+          "oklch(50% 0.170 29.6)",
+          "oklch(62% 0.170 29.6)",
+          "oklch(74% 0.170 29.6)",
+          "oklch(85% 0.170 29.6)",
+          "oklch(95% 0.170 29.6)"
+        ],
+        "purpose": "Stress chart ink only."
+      },
+      "periwinkle-tile": {
+        "role": "tertiary",
+        "displayName": "Periwinkle Tile",
+        "canonical": "#e3e6f4",
+        "oklch": "oklch(92.7% 0.019 276.3)",
+        "tonalRamp": [
+          "oklch(15% 0.019 276.3)",
+          "oklch(26% 0.019 276.3)",
+          "oklch(38% 0.019 276.3)",
+          "oklch(50% 0.019 276.3)",
+          "oklch(62% 0.019 276.3)",
+          "oklch(74% 0.019 276.3)",
+          "oklch(85% 0.019 276.3)",
+          "oklch(95% 0.019 276.3)"
+        ],
+        "purpose": "Recent activity tile ground."
+      },
+      "periwinkle-ink": {
+        "role": "tertiary",
+        "displayName": "Periwinkle Ink",
+        "canonical": "#5166b0",
+        "oklch": "oklch(52.9% 0.119 270.0)",
+        "tonalRamp": [
+          "oklch(15% 0.119 270.0)",
+          "oklch(26% 0.119 270.0)",
+          "oklch(38% 0.119 270.0)",
+          "oklch(50% 0.119 270.0)",
+          "oklch(62% 0.119 270.0)",
+          "oklch(74% 0.119 270.0)",
+          "oklch(85% 0.119 270.0)",
+          "oklch(95% 0.119 270.0)"
+        ],
+        "purpose": "Recent activity tile icon."
+      },
+      "presence-green": {
+        "role": "tertiary",
+        "displayName": "Presence Green",
+        "canonical": "#2f9e5e",
+        "oklch": "oklch(62.1% 0.138 153.6)",
+        "tonalRamp": [
+          "oklch(15% 0.138 153.6)",
+          "oklch(26% 0.138 153.6)",
+          "oklch(38% 0.138 153.6)",
+          "oklch(50% 0.138 153.6)",
+          "oklch(62% 0.138 153.6)",
+          "oklch(74% 0.138 153.6)",
+          "oklch(85% 0.138 153.6)",
+          "oklch(95% 0.138 153.6)"
+        ],
+        "purpose": "Online dot on avatars."
+      },
+      "firefly-gold": {
+        "role": "tertiary",
+        "displayName": "Firefly Gold",
+        "canonical": "#ffd877",
+        "oklch": "oklch(89.6% 0.124 87.9)",
+        "tonalRamp": [
+          "oklch(15% 0.124 87.9)",
+          "oklch(26% 0.124 87.9)",
+          "oklch(38% 0.124 87.9)",
+          "oklch(50% 0.124 87.9)",
+          "oklch(62% 0.124 87.9)",
+          "oklch(74% 0.124 87.9)",
+          "oklch(85% 0.124 87.9)",
+          "oklch(95% 0.124 87.9)"
+        ],
+        "purpose": "Ambient scene lights."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Two-line headline on the scene, ivory. Stage (>=1100px, comp pixels): 50px/61px, -0.022em."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Kentcrosswise wordmark; stage 38px. Footer mark 24px; hub brand 22px (stage 24px)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Hub greeting; stage 35px/47px."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel titles; a 0.3px text stroke on the projected stage only."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Hub lede (stage 16.7px/26px); footer note 15px/1.6 at 60ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Sidebar items, names, activity titles, mood labels."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Panel asides and explore descriptions; timestamps 11px/15px."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "PT Serif digits, comma and full stop only (unicode-range), lining tabular; mood values 25px, counts 18px, axis labels 13.5px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "window-lift",
+        "value": "0 40px 80px -36px rgb(8 10 30 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.7)",
+        "purpose": "Hub window only."
+      },
+      {
+        "name": "entrance-glow",
+        "value": "0 10px 24px -14px rgb(20 16 40 / 0.6)",
+        "purpose": "Apricot entrance on the scene."
+      },
+      {
+        "name": "paper-whisper",
+        "value": "0 1px 2px rgb(120 90 60 / 0.08)",
+        "purpose": "Panels; 0.12 alpha on the Simulated data label."
+      },
+      {
+        "name": "toggle-well",
+        "value": "inset 0 1px 2px rgb(0 0 0 / 0.3)",
+        "purpose": "Recessed day/night track."
+      },
+      {
+        "name": "toggle-knob",
+        "value": "0 0 0 1px rgb(150 120 90 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3)",
+        "purpose": "Pressed toggle option."
+      },
+      {
+        "name": "cream-ring",
+        "value": "0 0 0 2px #fbf3e8",
+        "purpose": "Avatar separation ring (chart points use 1.5px #fbf2e6)."
+      },
+      {
+        "name": "firefly-glow",
+        "value": "0 0 calc(var(--size) * 3) calc(var(--size) * 0.8) rgb(255 205 110 / 0.45)",
+        "purpose": "Ambient light halo."
+      }
+    ],
+    "motion": [
+      {
+        "name": "dusk-veil",
+        "value": "opacity 2.4s cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Day-to-night veil cross-fade, toggle-driven; removed under reduced motion."
+      },
+      {
+        "name": "control-state",
+        "value": "0.2s ease",
+        "purpose": "Hover fills, borders, underline colour; entrance arrow 3px slide."
+      },
+      {
+        "name": "toggle-state",
+        "value": "background-color 0.4s ease, color 0.4s ease",
+        "purpose": "Day/night toggle buttons."
+      },
+      {
+        "name": "firefly-drift",
+        "value": "drift var(--dur) ease-in-out infinite alternate, glow calc(var(--dur) * 0.45) ease-in-out infinite alternate",
+        "purpose": "Fixed 14-light set, 9-15s cycles; transform and opacity only; paused offscreen; still 0.55 glow under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "639px",
+        "purpose": "Max width of the single-column layout; mood charts stack."
+      },
+      {
+        "name": "footer-stack",
+        "value": "899px",
+        "purpose": "Footer collapses to one column at and below."
+      },
+      {
+        "name": "tablet",
+        "value": "640px",
+        "purpose": "40px gutters, two-column hub grid."
+      },
+      {
+        "name": "stage",
+        "value": "1100px",
+        "purpose": "1505x1045 comp stage scaled to width; hub projected by matrix3d."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Entrance Button",
+      "kind": "button",
+      "refersTo": "button-entrance",
+      "description": "The single primary call to action; apricot pill with sliding arrow.",
+      "html": "<a class=\"ds-entrance\" href=\"#\">Explore the demo<svg class=\"ds-arrow\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></a>",
+      "css": ".ds-entrance{display:inline-flex;align-items:center;gap:16px;height:58px;padding:0 28px 0 32px;border-radius:999px;background:#f8d9a8;color:#232a46;font-family:Rosarivo,Georgia,serif;font-weight:400;font-size:20px;line-height:1;text-decoration:none;box-shadow:0 10px 24px -14px rgb(20 16 40 / 0.6);transition:background-color .2s ease}.ds-entrance:hover{background:#fbe3bc}.ds-entrance .ds-arrow{width:21px;height:21px;transition:translate .2s ease}.ds-entrance:hover .ds-arrow{translate:3px 0}.ds-entrance:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px}"
+    },
+    {
+      "name": "Sign-in Ghost Pill",
+      "kind": "button",
+      "refersTo": "button-sign-in",
+      "description": "Outline pill for sign in, set on the scene.",
+      "html": "<div class=\"ds-scene\"><a class=\"ds-signin\" href=\"#\">Sign in</a></div>",
+      "css": ".ds-scene{background:#1b2340;padding:24px}.ds-signin{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 22px;border:1.5px solid rgb(246 241 228 / 0.85);border-radius:999px;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;font-size:17px;line-height:1;text-decoration:none;transition:background-color .2s ease}.ds-signin:hover{background:rgb(246 241 228 / 0.12)}.ds-signin:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px}"
+    },
+    {
+      "name": "Site Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Ivory serif links on the scene; the current page is underlined.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link\" aria-current=\"page\" href=\"#\">Home</a><a class=\"ds-nav-link\" href=\"#\">Demo</a><a class=\"ds-nav-link\" href=\"#\">Office</a></nav>",
+      "css": ".ds-nav{display:flex;gap:20px;background:#1b2340;padding:24px}.ds-nav-link{position:relative;padding:6px 0;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;font-size:17px;line-height:1;text-decoration:none}.ds-nav-link[aria-current=page]::after{content:\"\";position:absolute;left:0;right:0;bottom:-4px;height:2px;background:currentColor;opacity:.85}.ds-nav-link:hover{color:#fff}.ds-nav-link:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px;border-radius:6px}"
+    },
+    {
+      "name": "Simulated Data Label",
+      "kind": "chip",
+      "refersTo": "simulated-label",
+      "description": "Always-visible label on any surface that shows demo data.",
+      "html": "<p class=\"ds-sim\">Simulated data<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 11v5.5M12 7.6v.1\"/></svg></p>",
+      "css": ".ds-sim{display:inline-flex;align-items:center;gap:7px;height:32px;margin:0;padding:0 14px;border:1px solid #e6cfb9;border-radius:999px;background:#f7e4d1;box-shadow:0 1px 2px rgb(120 90 60 / 0.12);color:#2a231e;font-family:Rosarivo,Georgia,serif;font-size:14px;line-height:1}.ds-sim svg{width:16px;height:16px}"
+    },
+    {
+      "name": "Hub Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Translucent cream panel on the paper hub, with title, muted aside and hairline-divided rows.",
+      "html": "<div class=\"ds-hub\"><section class=\"ds-panel\"><h3 class=\"ds-panel-title\">Following</h3><span class=\"ds-panel-aside\">Total</span><ul class=\"ds-list\"><li><span>YouTube</span><span class=\"ds-fig\">5,120</span></li><li><span>Instagram</span><span class=\"ds-fig\">4,709</span></li></ul></section></div>",
+      "css": ".ds-hub{background:#eadbcd;border-radius:22px;padding:18px 16px 20px;box-shadow:0 40px 80px -36px rgb(8 10 30 / 0.6),inset 0 1px 0 rgb(255 255 255 / 0.7)}.ds-panel{position:relative;padding:14px 14px 12px;border:1px solid #e5d4c3;border-radius:12px;background:rgb(249 235 216 / 0.8);box-shadow:0 1px 2px rgb(120 90 60 / 0.08);color:#120e0b;font-family:Rosarivo,Georgia,serif}.ds-panel-title{margin:0;font-weight:400;font-size:15px;line-height:22px}.ds-panel-aside{position:absolute;right:14px;top:16px;font-size:11.5px;line-height:22px;color:#7d7166}.ds-list{list-style:none;margin:8px 0 0;padding:0}.ds-list li{display:flex;justify-content:space-between;align-items:center;height:52px;font-size:13px}.ds-list li+li{border-top:1px solid #e2d1c0}.ds-fig{font-family:'PT Serif',Rosarivo,Georgia,serif;font-size:18px;font-variant-numeric:lining-nums tabular-nums}"
+    },
+    {
+      "name": "Hub Sidebar Item",
+      "kind": "nav",
+      "refersTo": "side-link",
+      "description": "Sidebar link with icon; honey fill when current.",
+      "html": "<div class=\"ds-side\"><a class=\"ds-side-link\" aria-current=\"page\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 11.5 12 5l8 6.5M6.5 10v9h11v-9M10 19v-5h4v5\"/></svg>Home</a><a class=\"ds-side-link\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 4h9l3 3v13H6z\"/></svg>Notes</a></div>",
+      "css": ".ds-side{display:grid;gap:4px;width:160px;padding:12px;background:#eadbcd}.ds-side-link{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;color:#1c1612;font-family:Rosarivo,Georgia,serif;font-size:13px;line-height:1;text-decoration:none;transition:background-color .2s ease}.ds-side-link svg{width:18px;height:18px;color:#241d18}.ds-side-link:hover{background:rgb(244 215 179 / 0.45)}.ds-side-link[aria-current=page]{background:#f4d7b3}.ds-side-link:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px;border-radius:6px}"
+    },
+    {
+      "name": "Day/Night Toggle",
+      "kind": "custom",
+      "refersTo": "day-night-toggle",
+      "description": "Two-option scene-light control; the only dark object on the paper.",
+      "html": "<div class=\"ds-toggle\" role=\"group\" aria-label=\"Scene light\"><button type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3.8\" fill=\"currentColor\"/><path d=\"M12 2.8v2.4m0 13.6v2.4M2.8 12h2.4m13.6 0h2.4M5.5 5.5l1.7 1.7m9.6 9.6 1.7 1.7m0-13-1.7 1.7m-9.6 9.6-1.7 1.7\"/></svg></button><button type=\"button\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z\"/></svg></button></div>",
+      "css": ".ds-toggle{display:inline-flex;align-items:center;justify-content:space-between;width:86px;height:40px;padding:3px;border-radius:999px;background:linear-gradient(90deg,#4b4541,#3c3a3d);box-shadow:inset 0 1px 2px rgb(0 0 0 / 0.3)}.ds-toggle button{display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:transparent;color:#ece4d8;cursor:pointer;transition:background-color .4s ease,color .4s ease}.ds-toggle button svg{width:19px;height:19px}.ds-toggle button[aria-pressed=true]{background:#f6e0bf;color:#3b3128;box-shadow:0 0 0 1px rgb(150 120 90 / 0.45),0 1px 3px rgb(0 0 0 / 0.3)}.ds-toggle button:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px}"
+    },
+    {
+      "name": "Explore Row",
+      "kind": "custom",
+      "refersTo": "explore-row",
+      "description": "Bordered cream link row with tile, name, description and trailing arrow.",
+      "html": "<a class=\"ds-explore\" href=\"#\"><span class=\"ds-explore-tile\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z\"/></svg></span><span class=\"ds-explore-name\">Explore the demo</span><span class=\"ds-explore-desc\">Try the full experience with simulated data.</span><svg class=\"ds-arrow\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></a>",
+      "css": ".ds-explore{display:grid;grid-template-columns:38px minmax(0,1fr) 16px;grid-template-rows:auto auto;column-gap:14px;row-gap:1px;align-items:center;min-height:54px;padding:8px 14px 8px 12px;border:1px solid #e3d1bf;border-radius:10px;background:rgb(249 233 213 / 0.85);color:#120e0b;font-family:Rosarivo,Georgia,serif;text-decoration:none;transition:background-color .2s ease,border-color .2s ease}.ds-explore:hover{background:rgb(255 248 236 / 0.9);border-color:#d9bfa3}.ds-explore:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px}.ds-explore-tile{grid-row:1/3;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:linear-gradient(145deg,#f9e2bf,#f6e7d3);color:#3a2f22}.ds-explore-tile svg{width:19px;height:19px}.ds-explore-name{font-size:14.5px;line-height:19px}.ds-explore-desc{grid-column:2;font-size:11.5px;line-height:17px;color:#7d7166}.ds-explore .ds-arrow{grid-column:3;grid-row:1/3;width:16px;height:16px;color:#3f3630}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Paper Window in the Meadow",
+    "overview": "A painted dusk landscape (lake, mountains, a meadow with wildflowers, a warm beige retro computer in the grass) holds up a large ivory-and-greige paper window that is the personal hub. The scene is atmosphere; the window is where everything readable lives. Ivory serif type sits on the sky for the few words that address the visitor; every name, number and chart sits on paper.\n\nThe system is warm, quiet and editorial. One serif at one weight carries every letter, with hierarchy made by size alone. Colour is a dusk palette: apricot for the single way in, navy for the night that closes the page, greige and peach-cream paper for the hub, and two restrained chart inks (meadow green, ember coral). Depth comes from layered translucent paper and soft, long ambient shadows, never from hard edges.\n\nMotion is bounded and optional: a 2.4s day-to-night veil cross-fade driven by an explicit two-option toggle, and a fixed set of drifting firefly lights that pause offscreen and hold still under reduced motion. Painted things (scene, computer, portraits, paper grain) are authored rasters with embedded provenance; everything interactive or textual is semantic native DOM and inline SVG.",
+    "keyCharacteristics": [
+      "One serif (Rosarivo 400) for all letters; PT Serif 400 supplies lining, tabular digits only.",
+      "A paper hub window as the container for all product UI, set into a painted scene.",
+      "Apricot as the single call-to-action fill; ivory text and outline pills on the scene.",
+      "Translucent layered paper and soft ambient shadows for depth.",
+      "Pills and gently rounded panels; no sharp corners on interactive surfaces.",
+      "Bounded, user-controlled day/night motion with a reduced-motion still state."
+    ],
+    "rules": [
+      {
+        "name": "The Single Apricot Rule",
+        "body": "Apricot fills exactly one control per view: the primary entrance. Elsewhere it appears only as selection, focus and underline accents, never as a second filled button.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Inks Rule",
+        "body": "Meadow green and ember coral are data inks. They mark chart lines, points and area washes and nothing else; chrome, buttons and text never borrow them.",
+        "section": "colors"
+      },
+      {
+        "name": "The Warm Ink Rule",
+        "body": "Text on paper is a warm brown-black, never neutral grey or pure black; muted text stays in the same warm family.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Weight Rule",
+        "body": "Every letter is Rosarivo 400. Hierarchy comes from size, colour and placement; there is no bold, no italic emphasis and no uppercase tracking.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lining Numbers Rule",
+        "body": "Any numeral that carries data is set in the figure stack with `lining-nums tabular-nums`, so columns of counts and values align.",
+        "section": "typography"
+      },
+      {
+        "name": "The Layered Paper Rule",
+        "body": "Inside the hub, depth is translucency, not shadow: an inset surface with a warm left-to-cool-right light gradient, then panels at 80-85% cream over the grain. A new panel takes the paper whisper, never the window lift.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Bounded Dusk Rule",
+        "body": "The scene's time of day changes only through the explicit toggle: a night veil cross-fades over 2.4s (`cubic-bezier(0.22, 1, 0.36, 1)`) and the lights brighten. Fireflies animate transform and opacity only, pause when the scene is offscreen, and under `prefers-reduced-motion` hold a still 0.55 glow with no transitions.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put all product UI (names, numbers, charts, lists) on the paper hub; keep only the wordmark, nav, headline, entrance and footer on the scene or navy.",
+      "**Do** set every letter in Rosarivo 400 and every data numeral in the PT Serif figure stack with lining, tabular numbers.",
+      "**Do** keep apricot to one filled control per view, and use the bark focus ring on paper and the apricot ring on the scene.",
+      "**Do** reflow below 1100px instead of scaling text down; keep chart labels at 11px or more on phones.",
+      "**Do** make painted elements authored rasters with embedded provenance, and build every control, label and chart as semantic DOM or inline SVG.",
+      "**Do** keep scene motion behind an explicit control, bounded in duration, paused offscreen and still under reduced motion.",
+      "**Do** show the Simulated data label wherever demo data appears."
+    ],
+    "donts": [
+      "**Don't** introduce a second font weight, bold emphasis, or a second letter face.",
+      "**Don't** use meadow green or ember coral outside data marks.",
+      "**Don't** put text, UI or numbers inside a raster plate; plates carry only scenery, objects, portraits and grain.",
+      "**Don't** give panels the window's deep shadow; inside the hub, depth is layered paper.",
+      "**Don't** copy artwork from the reference video; the scene must stay original.",
+      "**Don't** treat the 1100px stage's absolute comp coordinates as spacing tokens for new surfaces."
+    ]
+  }
+}

@@ -1,0 +1,1673 @@
+/*
+ * Public home, first viewport: approved composition 3 "Hub window"
+ * (.impeccable/mocks/03-hub-window.png, 1505x1045; boxes from .impeccable/build/spec.json).
+ *
+ * Base rules are a readable single-column flow for narrow screens. From 1100px the page becomes a
+ * 1505x1045 px stage laid out in comp pixels and scaled to the frame width. The hub window is laid
+ * out flat at 912x665 and projected onto the comp's tilted window with one matrix3d (the homography
+ * from the flat rectangle to the window corners 532,191 / 1440,151 / 1448,850 / 527,826).
+ * Scoped to this page: nothing here reaches owner routes.
+ */
+
+/* The root layout's globals.css centres a 48rem body; release it only while this page is mounted. */
+body:has(.page) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: #1b2340;
+}
+
+.page {
+  --ink: #120e0b;
+  --ink-muted: #7d7166;
+  --ivory: #f6f1e4;
+  --apricot: #f8d9a8;
+  --rule: #e2d1c0;
+  --panel: rgb(249 235 216 / 0.8);
+  font-family: var(--font-rosarivo), Georgia, serif;
+  /* Numbers: PT Serif lining figures (digits, comma, full stop only), letters fall through to Rosarivo. */
+  --figures: var(--font-figures), var(--font-rosarivo), Georgia, serif;
+  font-weight: 400;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
+.page ::selection {
+  background: var(--apricot);
+  color: var(--ink);
+}
+
+.page :focus-visible {
+  outline: 2px solid var(--apricot);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.hub :focus-visible {
+  outline-color: #8a5a2b;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.page ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.page p,
+.page h1,
+.page h2,
+.page h3 {
+  margin: 0;
+  font-weight: 400;
+}
+
+.page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---------- Frame and scenery ---------- */
+
+.frame {
+  container: hero / inline-size;
+  position: relative;
+  /* Below the painted scene the meadow fades into the night of the close. */
+  background: linear-gradient(#1f2617, #1b2340 70%);
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scenery {
+  position: relative;
+  grid-row: 1 / 3;
+  grid-column: 1;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Scene grade: the comp's upper sky is a softer, greyer blue than the raw plate, and its top edge
+   is free of cloud texture. Both are layers over the plate; the plate file is untouched. */
+.scenery::before,
+.scenery::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  pointer-events: none;
+}
+
+.scenery::before {
+  height: 440px;
+  background: linear-gradient(rgb(100 105 125 / 0.27) 0 250px, rgb(100 105 125 / 0) 440px);
+}
+
+.scenery::after {
+  height: 46px;
+  background: linear-gradient(rgb(41 74 137) 0, rgb(41 74 137 / 0.92) 22px, rgb(41 74 137 / 0) 46px);
+}
+
+.landscape,
+.computer {
+  display: block;
+  user-select: none;
+}
+
+.landscape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 28% 72%;
+}
+
+/* Narrow: the CRT sits in the meadow between the entrance and the hub. */
+.computer {
+  position: absolute;
+  z-index: 1;
+  left: max(12px, 4%);
+  bottom: 84px;
+  width: min(44%, 250px);
+  height: auto;
+}
+
+/* ---------- Motion: day to night, ambient lights ---------- */
+
+.nightVeil {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background:
+    radial-gradient(120% 70% at 30% 105%, rgb(40 30 10 / 0) 0, rgb(6 10 32 / 0.25) 70%),
+    linear-gradient(rgb(6 12 40 / 0.62), rgb(8 12 34 / 0.38) 55%, rgb(10 12 24 / 0.5));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 2.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.frame[data-time="night"] .nightVeil {
+  opacity: 1;
+}
+
+.fireflies {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+}
+
+.firefly {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6cf 0, #ffd877 45%, rgb(255 200 90 / 0) 72%);
+  box-shadow: 0 0 calc(var(--size) * 3) calc(var(--size) * 0.8) rgb(255 205 110 / 0.45);
+  opacity: 0.55;
+  animation: drift var(--dur) ease-in-out var(--delay) infinite alternate,
+    glow calc(var(--dur) * 0.45) ease-in-out var(--delay) infinite alternate;
+  will-change: transform, opacity;
+  transition: filter 2.4s ease;
+}
+
+.frame[data-time="night"] .firefly {
+  filter: brightness(1.35);
+}
+
+.frame[data-active="false"] .firefly {
+  animation-play-state: paused;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(var(--drift), calc(var(--drift) * -1.4 - 22px), 0);
+  }
+}
+
+@keyframes glow {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scenery,
+  .nightVeil,
+  .firefly,
+  .toggle button {
+    transition: none;
+  }
+
+  /* A still scene: lights hold a soft glow in place. */
+  .firefly {
+    animation: none;
+    opacity: 0.55;
+    will-change: auto;
+  }
+}
+
+/* ---------- Site header ---------- */
+
+.siteHeader {
+  position: relative;
+  z-index: 1;
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 20px 20px 0;
+  color: var(--ivory);
+}
+
+.wordmark {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.navList {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.navLink {
+  position: relative;
+  display: inline-block;
+  font-size: 17px;
+  line-height: 1;
+  padding: 6px 0;
+}
+
+.navLink[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.navLink:hover {
+  color: #fff;
+}
+
+.navSignIn {
+  position: relative;
+  padding-left: 20px;
+}
+
+.navSignIn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 34px;
+  width: 1px;
+  translate: 0 -50%;
+  background: rgb(246 241 228 / 0.35);
+}
+
+.signIn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 22px;
+  border: 1.5px solid rgb(246 241 228 / 0.85);
+  border-radius: 999px;
+  font-size: 17px;
+  line-height: 1;
+  transition: background-color 0.2s ease;
+}
+
+.signIn:hover {
+  background: rgb(246 241 228 / 0.12);
+}
+
+/* ---------- Intro ---------- */
+
+.main {
+  display: contents;
+}
+
+.intro {
+  position: relative;
+  z-index: 1;
+  grid-row: 2;
+  grid-column: 1;
+  padding: 56px 20px clamp(215px, 56vw, 320px);
+}
+
+.headline {
+  font-size: clamp(36px, 10vw, 50px);
+  line-height: 1.22;
+  color: var(--ivory);
+  text-wrap: balance;
+}
+
+.entrance {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 28px;
+  height: 58px;
+  padding: 0 28px 0 32px;
+  border-radius: 999px;
+  background: var(--apricot);
+  color: #232a46;
+  font-size: 20px;
+  line-height: 1;
+  box-shadow: 0 10px 24px -14px rgb(20 16 40 / 0.6);
+  transition: background-color 0.2s ease, translate 0.2s ease;
+}
+
+.entrance:hover {
+  background: #fbe3bc;
+}
+
+.entranceArrow {
+  width: 21px;
+  height: 21px;
+  transition: translate 0.2s ease;
+}
+
+.entrance:hover .entranceArrow {
+  translate: 3px 0;
+}
+
+/* ---------- Hub window: shared look ---------- */
+
+.hub {
+  position: relative;
+  z-index: 2;
+  grid-row: 3;
+  grid-column: 1;
+  width: calc(100% - 24px);
+  max-width: 920px;
+  margin: -72px auto 40px;
+  padding: 18px 16px 20px;
+  border-radius: 22px;
+  /* Greige paper (comp ~234,215,201); the surface layers add the warm left light. */
+  background: #eadbcd url("./plates/paper-surface.png") repeat;
+  background-size: 256px 256px;
+  box-shadow:
+    0 40px 80px -36px rgb(8 10 30 / 0.6),
+    inset 0 1px 0 rgb(255 255 255 / 0.7);
+  color: var(--ink);
+}
+
+.hubSurface {
+  position: absolute;
+  inset: 7px;
+  border: 1px solid rgb(150 118 92 / 0.26);
+  border-radius: 15px;
+  /* Warm light from the left (sidebar ~241,217,192) to a cooler, greyer right edge. */
+  background: linear-gradient(
+    90deg,
+    rgb(248 220 186 / 0.42) 0%,
+    rgb(236 213 194 / 0.3) 38%,
+    rgb(214 196 184 / 0.32) 100%
+  );
+  pointer-events: none;
+}
+
+.hubHeader {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.hubBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  font-size: 22px;
+  line-height: 1;
+  color: #231d19;
+}
+
+.hubLeaf {
+  width: 24px;
+  height: 24px;
+  color: #3a322b;
+}
+
+.simulated {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #e6cfb9;
+  border-radius: 999px;
+  background: #f7e4d1;
+  box-shadow: 0 1px 2px rgb(120 90 60 / 0.12);
+  font-size: 14px;
+  line-height: 1;
+  color: #2a231e;
+  white-space: nowrap;
+}
+
+.simulatedIcon {
+  width: 16px;
+  height: 16px;
+  color: #1f1915;
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 86px;
+  height: 40px;
+  padding: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4b4541, #3c3a3d);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.toggle button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #ece4d8;
+  cursor: pointer;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.toggle button[aria-pressed="true"] {
+  background: #f6e0bf;
+  color: #3b3128;
+  box-shadow: 0 0 0 1px rgb(150 120 90 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+.toggleDay,
+.toggleNight {
+  font: inherit;
+}
+
+.toggleIcon {
+  width: 19px;
+  height: 19px;
+}
+
+/* The comp draws the sun's disc and the moon as solid shapes. */
+.toggleIcon circle,
+.toggleNight .toggleIcon path {
+  fill: currentColor;
+}
+
+.iconFilled path,
+.iconFilled circle,
+.iconFilled rect {
+  fill: currentColor;
+}
+
+.sidebar {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+  scrollbar-width: thin;
+}
+
+.sideList {
+  display: flex;
+  gap: 4px;
+}
+
+.sideLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1;
+  color: #1c1612;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.sideLink:hover {
+  background: rgb(244 215 179 / 0.45);
+}
+
+.sideLink[aria-current="page"] {
+  background: #f4d7b3;
+}
+
+/* About 16px on screen after the hub projection, with the comp heavier stroke. */
+.sideIcon {
+  flex: none;
+  width: 20.5px;
+  height: 20.5px;
+  margin-inline: -1.5px;
+  color: #241d18;
+  stroke-width: 2;
+}
+
+/* About the label's cap height, in the same stroke as the sidebar icons. */
+.sideChevron {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-left: -7px;
+  color: #241d18;
+  stroke-width: 2.2;
+}
+
+/* Outline with a light fill (the comp's Following heart). */
+.iconSoft path {
+  fill: rgb(90 76 66 / 0.38);
+}
+
+.greeting {
+  position: relative;
+  margin-top: 20px;
+  font-size: 32px;
+  line-height: 1.3;
+  color: #14100e;
+}
+
+.hubIntro {
+  position: relative;
+  margin-top: 2px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #2c2520;
+}
+
+.panel {
+  position: relative;
+  margin-top: 16px;
+  padding: 14px 14px 12px;
+  border: 1px solid #e5d4c3;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgb(120 90 60 / 0.08);
+}
+
+.panelTitle {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.panelAside {
+  position: absolute;
+  right: 14px;
+  top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  line-height: 22px;
+  color: var(--ink-muted);
+}
+
+a.panelAside:hover {
+  color: var(--ink);
+}
+
+.asideArrow {
+  width: 12px;
+  height: 12px;
+}
+
+/* People */
+
+.peopleList {
+  margin-top: 10px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 52px;
+  border-radius: 8px;
+}
+
+.person:hover .personName {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.avatar {
+  position: relative;
+  flex: none;
+  width: 41px;
+  height: 41px;
+}
+
+.avatarImg {
+  display: block;
+  width: 41px;
+  height: 41px;
+  border-radius: 50%;
+  object-fit: cover;
+  /* The portrait plates are head-and-shoulders; frame the face as the comp does. */
+  object-view-box: inset(0% 0% 6% 0%);
+  box-shadow: 0 0 0 2px #fbf3e8;
+}
+
+.peopleList li:nth-child(2) .avatarImg {
+  object-view-box: inset(0% 7% 14% 7%);
+}
+
+.avatarDot {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  width: 13px;
+  height: 13px;
+  border: 2.5px solid #fdf7ee;
+  border-radius: 50%;
+  background: #2f9e5e;
+}
+
+.personName {
+  flex: 1;
+  margin-top: 4px;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.2;
+  color: #17120f;
+}
+
+.personChevron {
+  width: 13px;
+  height: 13px;
+  color: #5c5249;
+}
+
+/* Mood */
+
+.moodPanel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+}
+
+/* Phones: one chart per row so each spans the panel and its labels render at 11px or more. */
+@media (max-width: 639px) {
+  .moodPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .moodColStress {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+}
+
+.moodPanel .panelTitle {
+  grid-column: 1 / -1;
+}
+
+.moodCol {
+  margin-top: 14px;
+}
+
+.moodLabel {
+  font-size: 12px;
+  line-height: 20px;
+  color: #4a4038;
+}
+
+.moodValue {
+  margin-top: 2px;
+  font-family: var(--figures);
+  font-size: 25px;
+  line-height: 31px;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: #151210;
+}
+
+/* Mood chart: full column width in the flowing layouts, fixed 13.5px labels. Plot insets:
+   --pl/--pr/--pt/--pb; points and labels sit at percentages of the plot box. */
+.chart {
+  --pl: 30px;
+  --pr: 16px;
+  --pt: 10px;
+  --pb: 32px;
+  --xb: 0px;
+  --dot: 6px;
+  --ring: 1.5px;
+  position: relative;
+  width: 100%;
+  height: 150px;
+  margin-top: 12px;
+  font-family: var(--figures);
+  font-size: 13.5px;
+  line-height: 1;
+  color: #5f554c;
+}
+
+.chartPlot {
+  position: absolute;
+  left: var(--pl);
+  top: var(--pt);
+  width: calc(100% - var(--pl) - var(--pr));
+  height: calc(100% - var(--pt) - var(--pb));
+  overflow: visible;
+}
+
+.chartGrid {
+  stroke: #e3d4c3;
+  stroke-width: 1;
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--chart-ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartPoint,
+.chartY,
+.chartX {
+  position: absolute;
+}
+
+.chartPoint {
+  left: calc(var(--pl) + (100% - var(--pl) - var(--pr)) * var(--x));
+  top: calc(var(--pt) + (100% - var(--pt) - var(--pb)) * var(--y));
+  width: var(--dot);
+  height: var(--dot);
+  margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2);
+  border-radius: 50%;
+  background: var(--chart-ink);
+  box-shadow: 0 0 0 var(--ring) #fbf2e6;
+}
+
+.chartY {
+  left: 0;
+  top: calc(var(--pt) + (100% - var(--pt) - var(--pb)) * var(--y));
+  transform: translateY(-50%);
+}
+
+.chartX {
+  bottom: var(--xb);
+  left: calc(var(--pl) + (100% - var(--pl) - var(--pr)) * var(--x));
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.chartGreen {
+  --chart-ink: #1f8a68;
+}
+
+.chartCoral {
+  --chart-ink: #e6604f;
+}
+
+/* Area: a soft wash of the line colour fading out at the baseline. */
+.chartFillTop {
+  stop-color: var(--chart-ink);
+  stop-opacity: 0.3;
+}
+
+.chartFillBottom {
+  stop-color: var(--chart-ink);
+  stop-opacity: 0;
+}
+
+/* Following */
+
+.socialList {
+  margin-top: 8px;
+}
+
+.socialList li + li {
+  border-top: 1px solid var(--rule);
+}
+
+/* Mark, name, count: the counts share one right edge inside the panel padding. */
+.social {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+  height: 52px;
+}
+
+.socialMark {
+  width: 30px;
+  height: 30px;
+}
+
+.socialName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.2;
+  color: #17120f;
+}
+
+.socialCount {
+  justify-self: end;
+  font-family: var(--figures);
+  text-align: end;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink);
+}
+
+/* Recent activity */
+
+.activityList {
+  margin-top: 8px;
+}
+
+.activityList li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.activity {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  align-items: center;
+  padding: 7px 0;
+}
+
+.activityTile {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e3e6f4;
+  color: #5166b0;
+}
+
+.activityIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.activityTitle {
+  font-size: 12.8px;
+  line-height: 18px;
+  color: #17120f;
+}
+
+.activityWhen {
+  font-family: var(--figures);
+  font-size: 11px;
+  line-height: 15px;
+  color: #9a8d82;
+}
+
+/* Explore more */
+
+.exploreList {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.explore {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 1px;
+  align-items: center;
+  align-content: center;
+  min-height: 54px;
+  padding: 8px 14px 8px 12px;
+  border: 1px solid #e3d1bf;
+  border-radius: 10px;
+  background: rgb(249 233 213 / 0.85);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.explore:hover {
+  background: rgb(255 248 236 / 0.9);
+  border-color: #d9bfa3;
+}
+
+.exploreTile {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #f9e2bf, #f6e7d3);
+  color: #3a2f22;
+}
+
+.exploreIcon {
+  width: 19px;
+  height: 19px;
+}
+
+.exploreName {
+  font-size: 14.5px;
+  line-height: 19px;
+  color: var(--ink);
+}
+
+.exploreDesc {
+  grid-column: 2;
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--ink-muted);
+}
+
+.exploreArrow {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  width: 16px;
+  height: 16px;
+  color: #3f3630;
+}
+
+@media (min-width: 640px) and (max-width: 1099px) {
+  .intro {
+    padding-inline: 40px;
+  }
+
+  .siteHeader {
+    padding-inline: 40px;
+  }
+
+  .hub {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "head head"
+      "side side"
+      "greet greet"
+      "lede lede"
+      "people following"
+      "mood mood"
+      "activity explore";
+    column-gap: 16px;
+    width: calc(100% - 64px);
+    padding: 20px 22px 24px;
+  }
+
+  .hubHeader { grid-area: head; }
+  .sidebar { grid-area: side; }
+  .greeting { grid-area: greet; }
+  .hubIntro { grid-area: lede; }
+  .peoplePanel { grid-area: people; }
+  .followingPanel { grid-area: following; }
+  .moodPanel { grid-area: mood; }
+  .activityPanel { grid-area: activity; }
+  .explorePanel { grid-area: explore; }
+}
+
+/* ---------- Wide: the measured comp stage ---------- */
+
+@media (min-width: 1100px) {
+  /* The first viewport keeps the comp's proportions and scales with the window width only, so
+     hub text never shrinks for a short window (its foot may then sit below the fold). */
+  .frame {
+    width: 100%;
+    aspect-ratio: 1505 / 1045;
+    overflow: hidden;
+  }
+
+  .stage {
+    /* Unitless frame/comp ratio: tan(atan2(a, b)) = a / b. */
+    --s: tan(atan2(100cqw, 1505px));
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1505px;
+    height: 1045px;
+    transform-origin: 0 0;
+    transform: scale(var(--s));
+    will-change: transform;
+  }
+
+  .scenery {
+    position: absolute;
+    inset: 0;
+  }
+
+  .landscape {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-position: 50% 100%;
+  }
+
+  .computer {
+    z-index: auto;
+    bottom: auto;
+    left: 48px;
+    top: 519px;
+    width: 353px;
+    height: 267px;
+    object-fit: contain;
+  }
+
+  .siteHeader {
+    position: static;
+    display: block;
+    padding: 0;
+  }
+
+  .wordmark {
+    position: absolute;
+    left: 95px;
+    top: 31px;
+    font-size: 38px;
+    letter-spacing: -0.032em;
+  }
+
+  .navList {
+    display: block;
+  }
+
+  .navList > li {
+    position: absolute;
+    top: 37.5px;
+  }
+
+  .navList > li:nth-child(1) {
+    left: 1027px;
+  }
+
+  .navList > li:nth-child(2) {
+    left: 1116px;
+  }
+
+  .navList > li:nth-child(3) {
+    left: 1201px;
+  }
+
+  .navLink {
+    padding: 0;
+    font-size: 16.5px;
+    letter-spacing: -0.01em;
+  }
+
+  .navLink[aria-current="page"]::after {
+    bottom: -8px;
+  }
+
+  .navList > li.navSignIn {
+    left: 1283px;
+    top: 24px;
+    padding-left: 26px;
+  }
+
+  .navSignIn::before {
+    height: 38px;
+  }
+
+  .signIn {
+    width: 108px;
+    height: 48px;
+    padding: 0;
+    border-width: 2px;
+    border-color: rgb(240 244 250 / 0.9);
+    font-size: 16.5px;
+  }
+
+  .main {
+    display: block;
+  }
+
+  .intro {
+    position: static;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .headline {
+    position: absolute;
+    left: 93px;
+    top: 126px;
+    width: 440px;
+    font-size: 50px;
+    line-height: 61px;
+    letter-spacing: -0.022em;
+  }
+
+  .entrance {
+    position: absolute;
+    left: 94px;
+    top: 266px;
+    width: 244px;
+    height: 59px;
+    margin: 0;
+    padding: 0 0 0 32px;
+    gap: 19px;
+  }
+
+  /* Hub window: flat 912x665, projected onto the comp's tilted window. */
+  .hub {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 912px;
+    max-width: none;
+    height: 665px;
+    margin: 0;
+    padding: 0;
+    transform-origin: 0 0;
+    transform: matrix3d(
+      0.851769, -0.0589434, 0, -0.0000998924,
+      -0.0180776, 0.938338, 0, -0.0000200357,
+      0, 0, 1, 0,
+      532, 191, 0, 1
+    );
+  }
+
+  .hubHeader {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 0;
+    height: 72px;
+    display: block;
+    padding: 0;
+  }
+
+  .hubBrand {
+    position: absolute;
+    left: 28px;
+    top: 23px;
+    height: 43px;
+    gap: 9px;
+    font-size: 24px;
+  }
+
+  .hubLeaf {
+    width: 26px;
+    height: 26px;
+  }
+
+  .simulated {
+    position: absolute;
+    left: 635px;
+    top: 31px;
+    width: 131px;
+    height: 34px;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 0 0 4px;
+    font-size: 13.6px;
+  }
+
+  .hubToggle {
+    position: absolute;
+    left: 790px;
+    top: 30px;
+    width: 84px;
+    height: 33px;
+    padding: 1px 3px 1px 1px;
+  }
+
+  .toggle button {
+    width: 30px;
+    height: 31px;
+    border-radius: 16px;
+  }
+
+  .toggle button[aria-pressed="true"] {
+    width: 37px;
+  }
+
+  .sidebar {
+    position: absolute;
+    left: 8px;
+    top: 72px;
+    bottom: 8px;
+    width: 155px;
+    display: block;
+    overflow: visible;
+    padding: 0;
+    border-bottom: 0;
+    border-right: 1px solid var(--rule);
+  }
+
+  .sideList {
+    position: absolute;
+    left: 18px;
+    top: 27.5px;
+    width: 126px;
+    display: block;
+  }
+
+  .sideList > li + li {
+    margin-top: 3.5px;
+  }
+
+  .sideList > li:first-child {
+    margin-bottom: 6px;
+  }
+
+  .sideListLower {
+    top: 335px;
+    left: 17px;
+  }
+
+  .sideListLower > li:first-child {
+    margin-bottom: 0;
+  }
+
+  .sideListLower > li + li {
+    margin-top: 4px;
+  }
+
+  .sideListLower::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -15px;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .sideLink {
+    height: 38px;
+    padding: 0 0 0 13px;
+    gap: 11px;
+  }
+
+  .greeting {
+    position: absolute;
+    left: 179px;
+    top: 96px;
+    margin: 0;
+    font-size: 35px;
+    line-height: 47px;
+  }
+
+  .hubIntro {
+    position: absolute;
+    left: 190px;
+    top: 139px;
+    margin: 0;
+    font-size: 16.7px;
+    line-height: 26px;
+    white-space: nowrap;
+  }
+
+  .panel {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+  }
+
+  .panelTitle {
+    position: absolute;
+    left: 13px;
+    top: 15px;
+    /* Restores the comp's ink weight lost to the perspective projection. */
+    -webkit-text-stroke: 0.3px currentColor;
+  }
+
+  .peoplePanel .panelAside {
+    top: 17px;
+  }
+
+  .peoplePanel {
+    left: 180px;
+    top: 179px;
+    width: 212px;
+    height: 226px;
+  }
+
+  .peopleList {
+    position: absolute;
+    left: 14px;
+    right: 13px;
+    top: 48px;
+    margin: 0;
+  }
+
+  .person {
+    height: 55.6px;
+  }
+
+  .moodPanel {
+    display: block;
+    left: 401px;
+    top: 179px;
+    width: 301px;
+    height: 227px;
+  }
+
+  .moodPanel::after {
+    content: "";
+    position: absolute;
+    left: 154px;
+    top: 56px;
+    width: 1px;
+    height: 160px;
+    background: var(--rule);
+  }
+
+  .moodPanel .panelTitle {
+    left: 13px;
+    top: 17px;
+  }
+
+  .moodCol {
+    position: absolute;
+    left: 14px;
+    top: 60px;
+    width: 124px;
+    margin: 0;
+  }
+
+  .moodColStress {
+    left: 165px;
+    top: 62px;
+  }
+
+  .moodValue {
+    margin: -1px 0 0 4px;
+  }
+
+  .moodColStress .moodValue {
+    margin-left: 2px;
+  }
+
+  /* Desktop stage: the original 124x89 chart box, insets and 7.6px labels. */
+  .chart {
+    --pl: 19px;
+    --pr: 8px;
+    --pt: 7px;
+    --pb: 25px;
+    --xb: 5.5px;
+    --dot: 3.4px;
+    --ring: 0.9px;
+    width: 124px;
+    height: 89px;
+    margin-top: 13px;
+    font-size: 7.6px;
+  }
+
+  .chartGrid {
+    stroke-width: 0.6;
+  }
+
+  .chartLine {
+    stroke-width: 1.6;
+  }
+
+  .followingPanel {
+    left: 706px;
+    top: 184px;
+    width: 183px;
+    height: 228px;
+  }
+
+  /* The right edge of the hub projects larger; trim size and stroke so this title weighs the same
+     as Mood and People on screen. */
+  .followingPanel .panelTitle {
+    left: 11px;
+    top: 16px;
+    font-size: 14.3px;
+  }
+
+  .panelAside {
+    top: 19px;
+  }
+
+  .moodPanel .panelAside {
+    right: 20px;
+    top: 20px;
+  }
+
+  .followingPanel .panelAside {
+    right: 16px;
+    top: 17px;
+  }
+
+  .socialList {
+    position: absolute;
+    left: 13px;
+    right: 14px;
+    top: 51.5px;
+    margin: 0;
+  }
+
+  .social {
+    height: 51px;
+    column-gap: 9px;
+  }
+
+  .socialMark {
+    width: 31px;
+    height: 31px;
+  }
+
+  .socialName {
+    font-size: 12.4px;
+  }
+
+  .socialCount {
+    font-size: 16.4px;
+  }
+
+  .activityPanel {
+    left: 180px;
+    top: 422px;
+    width: 365px;
+    height: 212px;
+  }
+
+  .activityPanel .panelTitle {
+    top: 12px;
+    left: 12px;
+  }
+
+  .activityList {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    top: 46px;
+    margin: 0;
+  }
+
+  .activity {
+    height: 51.7px;
+    padding: 0;
+    align-items: start;
+    grid-template-columns: 35px 1fr;
+  }
+
+  .activityTile {
+    width: 35px;
+    height: 35px;
+    margin-top: 1px;
+  }
+
+  .activityTitle {
+    margin-top: 2px;
+  }
+
+  /* The content area reads lighter and warmer than the header and sidebar. */
+  .hubSurface::after {
+    content: "";
+    position: absolute;
+    left: 156px;
+    top: 65px;
+    right: 0;
+    bottom: 0;
+    border-bottom-right-radius: 14px;
+    /* The content ground is lit warmly at its left and settles to the greige paper on the right. */
+    background: linear-gradient(
+      90deg,
+      rgb(253 240 217 / 0.8) 0%,
+      rgb(253 240 217 / 0.74) 45%,
+      rgb(251 236 214 / 0.38) 82%,
+      rgb(250 234 214 / 0.04) 100%
+    );
+  }
+
+  .explorePanel {
+    background: rgb(244 228 207 / 0.85);
+    left: 556px;
+    top: 427px;
+    width: 334px;
+    height: 214px;
+  }
+
+  .explorePanel .panelTitle {
+    left: 12px;
+    top: 12px;
+    font-size: 13.8px;
+    letter-spacing: -0.005em;
+  }
+
+  .exploreList {
+    position: absolute;
+    left: 15px;
+    right: 14px;
+    top: 47px;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .explore {
+    height: 54px;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    column-gap: 12px;
+    padding-left: 8px;
+    padding-right: 10px;
+  }
+
+  .exploreTall {
+    height: 61px;
+  }
+
+  .exploreDesc {
+    font-size: 10.6px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .exploreName {
+    font-size: 13px;
+  }
+
+  .exploreTile {
+    width: 35px;
+    height: 35px;
+  }
+}
+
+/* ---------- Close ---------- */
+
+.footer {
+  border-top: 1px solid rgb(246 241 228 / 0.14);
+  background: #1b2340;
+  color: var(--ivory);
+}
+
+.footerInner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 16px 48px;
+  padding: 40px max(20px, 6.25vw) 48px;
+}
+
+.footerMark {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.footerNote {
+  max-width: 60ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgb(246 241 228 / 0.74);
+}
+
+.footerLinks {
+  display: flex;
+  gap: 28px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.footerLinks a {
+  text-decoration: underline;
+  text-decoration-color: rgb(248 217 168 / 0.5);
+  text-underline-offset: 5px;
+  transition: text-decoration-color 0.2s ease;
+}
+
+.footerLinks a:hover {
+  text-decoration-color: var(--apricot);
+}
+
+@media (max-width: 899px) {
+  .footerInner {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Hub sidebar scroll hint (narrow screens) ---------- */
+
+@media (max-width: 1099px) {
+  .sidebar {
+    --fade-start: 0px;
+    --fade-end: 0px;
+    scroll-padding-inline: 40px;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+  }
+
+  .sidebar[data-fade-start="true"] {
+    --fade-start: 44px;
+  }
+
+  .sidebar[data-fade-end="true"] {
+    --fade-end: 44px;
+  }
+
+  /* Keep focus rings inside the masked row visible. */
+  .sideLink:focus-visible {
+    outline-offset: -2px;
+  }
+}
