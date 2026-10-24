@@ -539,7 +539,7 @@ describe("task graph (P2-10)", () => {
     expect(await send(id, ciEvent(id, 52, head, "success"))).toBe("deferred");
     expect((await task(id)).waiting_on).toBe("dev");
     expect(qaDispatches()).toEqual([]);
-    expect(await sql("SELECT agent, model, input_tokens, cost_usd FROM usage_events WHERE task_id = $1 ORDER BY id", [id])).toEqual([
+    expect(await sql("SELECT agent, model, input_tokens, cost_usd FROM usage_events WHERE task_id = $1 ORDER BY agent", [id])).toEqual([
       { agent: "developer", model: "claude-haiku-5-5", input_tokens: 10, cost_usd: null },
       { agent: "qa", model: "claude-haiku-5-5", input_tokens: 7, cost_usd: null },
     ]);
