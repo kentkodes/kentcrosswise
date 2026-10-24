@@ -1,0 +1,12 @@
+{
+  "prompt": "Create a high-fidelity desktop website design comp for Kentcrosswise at a landscape 1440x1000 viewport, edge-to-edge with crisp readable UI, no browser frame. It is the public entrance to a personal hub built with AI agents, with a simulated demo rather than private user data. The primary visitor action is “Explore the demo”.\nUse the owner-approved world of a lush grassy hill, blue twilight sky, warm beige original unbranded retro computer, drifting luminous particles and delicate serif site lettering. This third composition is the boldest functional translation: a large, carefully crafted open hub window is the main working surface floating within the landscape, so visitors see a glimpse of the actual product immediately. The small physical computer remains a single supporting sculptural object in the same scene; do not repeat it. The window is part of the webpage, not a browser or a device mockup. Make the interface warmly tactile and very readable, integrated into the same palette rather than generic white cards.\nSite name “Kentcrosswise”. Navigation: “Home”, “Demo”, “Office”, “Sign in”. Main line: “A little space for your everyday.” Label the sample visibly “Simulated data”. Within the open hub show a natural information layout: “People” with Ivo Merriweather, Sol Ashdown and Dev Juniper; a “Mood” view with happiness 0.29 and stress 0.91; and “Following” with YouTube 5,120, Instagram 4,709, TikTok 3,946. Use a true data/chart/list composition, not equal marketing feature cards. Include a prominent “Explore the demo” control, an “Agent office” link and a small day/night control. Keep all text readable and claims factual; no prices, testimonials or invented biography.",
+  "approved": true,
+  "generator": "built-in image_gen",
+  "reference": "https://x.com/alimdesigner_/status/2082449286642737341",
+  "role": "homepage composition",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "approval": "Owner selected composition 3 in the active design conversation on 2026-10-23."
+}

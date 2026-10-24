@@ -1,0 +1,3408 @@
+{
+  "tool": "comp-spec",
+  "version": 1,
+  "createdAt": "2026-10-23T22:14:35.303Z",
+  "comp": ".impeccable/mocks/03-hub-window.png",
+  "warnings": [
+    "region landscape: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region hub-window: \"codeDrawn\": true set in the regions file (the painted-material refusal is overridden: code draws this region)",
+    "region hub-window: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region people-panel: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region mood-panel: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region following-panel: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region activity-panel: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region explore-panel: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region avatar-1: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region avatar-2: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region avatar-3: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)"
+  ],
+  "uncoveredInkCells": [],
+  "compSize": {
+    "width": 1505,
+    "height": 1045
+  },
+  "aspect": 1.4402,
+  "orientation": "landscape",
+  "palette": [
+    {
+      "hex": "#f4e2d2",
+      "coverage": 0.4559
+    },
+    {
+      "hex": "#37548f",
+      "coverage": 0.2522
+    },
+    {
+      "hex": "#3c3010",
+      "coverage": 0.1138
+    },
+    {
+      "hex": "#1b160e",
+      "coverage": 0.1118
+    },
+    {
+      "hex": "#664919",
+      "coverage": 0.0663
+    }
+  ],
+  "bands": [
+    {
+      "y": 0.1573,
+      "strength": 0.2635
+    },
+    {
+      "y": 0.2584,
+      "strength": 0.2271
+    },
+    {
+      "y": 0.3034,
+      "strength": 0.2091
+    },
+    {
+      "y": 0.809,
+      "strength": 0.2375
+    }
+  ],
+  "regions": [
+    {
+      "id": "landscape",
+      "kind": "plate",
+      "note": "Original dusk lake and mountain meadow, sky and flowers. Generate a clean scene without any UI, text or computer. Day/night tint changes independently.",
+      "grid": null,
+      "bleed": true,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 1
+      },
+      "px": {
+        "x": 0,
+        "y": 0,
+        "w": 1505,
+        "h": 1045
+      },
+      "aspect": 1.4402,
+      "palette": [
+        {
+          "hex": "#f4e2d2",
+          "coverage": 0.4559
+        },
+        {
+          "hex": "#37548f",
+          "coverage": 0.2522
+        },
+        {
+          "hex": "#3c3010",
+          "coverage": 0.1138
+        },
+        {
+          "hex": "#1b160e",
+          "coverage": 0.1118
+        },
+        {
+          "hex": "#664919",
+          "coverage": 0.0663
+        }
+      ],
+      "detail": {
+        "energy": 28.3664
+      },
+      "medium": "raster",
+      "plate": "assets/plates/landscape.png",
+      "text": null
+    },
+    {
+      "id": "retro-computer",
+      "kind": "plate",
+      "note": "Original warm beige CRT and keyboard decorative physical object with static landscape screen; transparent cutout separately composited on the meadow.",
+      "grid": null,
+      "box": {
+        "x": 0.0319,
+        "y": 0.4967,
+        "w": 0.2346,
+        "h": 0.2555
+      },
+      "px": {
+        "x": 48,
+        "y": 519,
+        "w": 353,
+        "h": 267
+      },
+      "aspect": 1.3221,
+      "palette": [
+        {
+          "hex": "#483928",
+          "coverage": 0.4532
+        },
+        {
+          "hex": "#b88862",
+          "coverage": 0.1777
+        },
+        {
+          "hex": "#32333f",
+          "coverage": 0.129
+        },
+        {
+          "hex": "#896754",
+          "coverage": 0.1253
+        },
+        {
+          "hex": "#181713",
+          "coverage": 0.1148
+        }
+      ],
+      "detail": {
+        "energy": 32.5691
+      },
+      "medium": "raster",
+      "plate": "assets/plates/retro-computer.png",
+      "text": null
+    },
+    {
+      "id": "wordmark",
+      "kind": "text",
+      "note": "Kentcrosswise ivory serif wordmark.",
+      "grid": null,
+      "box": {
+        "x": 0.0625,
+        "y": 0.023,
+        "w": 0.1767,
+        "h": 0.0421
+      },
+      "px": {
+        "x": 94,
+        "y": 24,
+        "w": 266,
+        "h": 44
+      },
+      "aspect": 6.0455,
+      "palette": [
+        {
+          "hex": "#194480",
+          "coverage": 0.8092
+        },
+        {
+          "hex": "#f4f3f0",
+          "coverage": 0.0738
+        },
+        {
+          "hex": "#143582",
+          "coverage": 0.0654
+        },
+        {
+          "hex": "#b8bdc9",
+          "coverage": 0.0269
+        },
+        {
+          "hex": "#4e6b90",
+          "coverage": 0.0246
+        }
+      ],
+      "detail": {
+        "energy": 51.6458
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 13,
+          "capHeightPx": 29.5,
+          "inkIsDark": false,
+          "allCaps": false,
+          "advance": 0.5085,
+          "advTall": 0.5763,
+          "advX": 0.5085,
+          "gap": 0.0847,
+          "xRatio": 0.678,
+          "stemW": 0.1071,
+          "contrast": 1.5819,
+          "serif": null,
+          "densTall": 0.3395,
+          "densX": 0.3897,
+          "weight": 0.3395
+        },
+        "widthClass": "condensed",
+        "weightClass": "light"
+      }
+    },
+    {
+      "id": "headline",
+      "kind": "text",
+      "note": "A little space for your everyday. Two-line large ivory serif headline.",
+      "grid": null,
+      "box": {
+        "x": 0.0611,
+        "y": 0.1129,
+        "w": 0.2711,
+        "h": 0.111
+      },
+      "px": {
+        "x": 92,
+        "y": 118,
+        "w": 408,
+        "h": 116
+      },
+      "aspect": 3.5172,
+      "palette": [
+        {
+          "hex": "#354e86",
+          "coverage": 0.8464
+        },
+        {
+          "hex": "#f5f0e1",
+          "coverage": 0.0888
+        },
+        {
+          "hex": "#556689",
+          "coverage": 0.0269
+        },
+        {
+          "hex": "#cbc6c7",
+          "coverage": 0.0265
+        },
+        {
+          "hex": "#a3a5b4",
+          "coverage": 0.0115
+        }
+      ],
+      "detail": {
+        "energy": 42.7787
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 2,
+          "glyphs": 24,
+          "capHeightPx": 43,
+          "inkIsDark": false,
+          "allCaps": false,
+          "advance": 0.4538,
+          "advTall": 0.3142,
+          "advX": 0.5115,
+          "gap": 0.0697,
+          "xRatio": 0.6218,
+          "stemW": 0.0956,
+          "contrast": 1.7789,
+          "serif": 1.7834,
+          "densTall": 0.3136,
+          "densX": 0.3553,
+          "weight": 0.3136
+        },
+        "widthClass": "condensed",
+        "weightClass": "light",
+        "chosen": {
+          "family": "Rosarivo",
+          "weight": 400,
+          "fontSizePx": 50,
+          "source": "index",
+          "fp": {
+            "lines": 1,
+            "glyphs": 24,
+            "capHeightPx": 43,
+            "inkIsDark": true,
+            "allCaps": false,
+            "advance": 0.5116,
+            "advTall": 0.5814,
+            "advX": 0.5116,
+            "gap": 0.0698,
+            "xRatio": 0.5666,
+            "stemW": 0.099,
+            "contrast": 1.7129,
+            "serif": 1.9066,
+            "densTall": 0.2962,
+            "densX": 0.3645,
+            "weight": 0.2962
+          },
+          "stamp": "3ab4216d1e4f"
+        }
+      }
+    },
+    {
+      "id": "nav-home",
+      "kind": "control",
+      "note": "Working home navigation link; sign-in outlined pill.",
+      "grid": null,
+      "box": {
+        "x": 0.6824,
+        "y": 0.023,
+        "w": 0.0319,
+        "h": 0.0478
+      },
+      "px": {
+        "x": 1027,
+        "y": 24,
+        "w": 48,
+        "h": 50
+      },
+      "aspect": 0.96,
+      "palette": [
+        {
+          "hex": "#2c5090",
+          "coverage": 0.8222
+        },
+        {
+          "hex": "#7e93b6",
+          "coverage": 0.0963
+        },
+        {
+          "hex": "#f5f5f6",
+          "coverage": 0.037
+        },
+        {
+          "hex": "#b2b6d4",
+          "coverage": 0.0296
+        },
+        {
+          "hex": "#4c6898",
+          "coverage": 0.0148
+        }
+      ],
+      "detail": {
+        "energy": 9.69
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-demo",
+      "kind": "control",
+      "note": "Working demo navigation link; sign-in outlined pill.",
+      "grid": null,
+      "box": {
+        "x": 0.7429,
+        "y": 0.023,
+        "w": 0.0312,
+        "h": 0.0478
+      },
+      "px": {
+        "x": 1118,
+        "y": 24,
+        "w": 47,
+        "h": 50
+      },
+      "aspect": 0.94,
+      "palette": [
+        {
+          "hex": "#2e4f8f",
+          "coverage": 0.8934
+        },
+        {
+          "hex": "#eeecf1",
+          "coverage": 0.0478
+        },
+        {
+          "hex": "#5f73a3",
+          "coverage": 0.0257
+        },
+        {
+          "hex": "#b8bed8",
+          "coverage": 0.0184
+        },
+        {
+          "hex": "#94a0c4",
+          "coverage": 0.0147
+        }
+      ],
+      "detail": {
+        "energy": 6.5133
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-office",
+      "kind": "control",
+      "note": "Working office navigation link; sign-in outlined pill.",
+      "grid": null,
+      "box": {
+        "x": 0.8,
+        "y": 0.023,
+        "w": 0.0299,
+        "h": 0.0478
+      },
+      "px": {
+        "x": 1204,
+        "y": 24,
+        "w": 45,
+        "h": 50
+      },
+      "aspect": 0.9,
+      "palette": [
+        {
+          "hex": "#2c4c88",
+          "coverage": 0.8863
+        },
+        {
+          "hex": "#9bacc2",
+          "coverage": 0.0431
+        },
+        {
+          "hex": "#6678a3",
+          "coverage": 0.0353
+        },
+        {
+          "hex": "#e0e6ee",
+          "coverage": 0.0314
+        },
+        {
+          "hex": "#283888",
+          "coverage": 0.0039
+        }
+      ],
+      "detail": {
+        "energy": 7.0978
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-sign-in",
+      "kind": "control",
+      "note": "Working sign-in navigation link; sign-in outlined pill.",
+      "grid": null,
+      "box": {
+        "x": 0.8684,
+        "y": 0.023,
+        "w": 0.0731,
+        "h": 0.0478
+      },
+      "px": {
+        "x": 1307,
+        "y": 24,
+        "w": 110,
+        "h": 50
+      },
+      "aspect": 2.2,
+      "palette": [
+        {
+          "hex": "#2a4a88",
+          "coverage": 0.8435
+        },
+        {
+          "hex": "#b6bbcf",
+          "coverage": 0.071
+        },
+        {
+          "hex": "#cad7df",
+          "coverage": 0.0371
+        },
+        {
+          "hex": "#8f9aba",
+          "coverage": 0.0258
+        },
+        {
+          "hex": "#5b73a0",
+          "coverage": 0.0226
+        }
+      ],
+      "detail": {
+        "energy": 17.6813
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "demo-entrance",
+      "kind": "control",
+      "note": "Pale apricot primary Explore the demo entrance with arrow.",
+      "grid": null,
+      "box": {
+        "x": 0.0625,
+        "y": 0.2545,
+        "w": 0.1628,
+        "h": 0.0574
+      },
+      "px": {
+        "x": 94,
+        "y": 266,
+        "w": 245,
+        "h": 60
+      },
+      "aspect": 4.0833,
+      "palette": [
+        {
+          "hex": "#f8d9a8",
+          "coverage": 0.8471
+        },
+        {
+          "hex": "#4b5787",
+          "coverage": 0.0586
+        },
+        {
+          "hex": "#d6b9a3",
+          "coverage": 0.0465
+        },
+        {
+          "hex": "#93825f",
+          "coverage": 0.0261
+        },
+        {
+          "hex": "#c9b182",
+          "coverage": 0.0217
+        }
+      ],
+      "detail": {
+        "energy": 24.5544
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "hub-window",
+      "kind": "chrome",
+      "note": "Native accessible hub layout container with border, header and sidebar. Separate children and external surface texture.",
+      "grid": null,
+      "codeDrawn": true,
+      "container": true,
+      "box": {
+        "x": 0.3515,
+        "y": 0.1445,
+        "w": 0.612,
+        "h": 0.6708
+      },
+      "px": {
+        "x": 529,
+        "y": 151,
+        "w": 921,
+        "h": 701
+      },
+      "aspect": 1.3138,
+      "palette": [
+        {
+          "hex": "#f4e2d2",
+          "coverage": 0.9186
+        },
+        {
+          "hex": "#c4b3a8",
+          "coverage": 0.0273
+        },
+        {
+          "hex": "#4a64a0",
+          "coverage": 0.0272
+        },
+        {
+          "hex": "#70531f",
+          "coverage": 0.0138
+        },
+        {
+          "hex": "#4a381b",
+          "coverage": 0.013
+        }
+      ],
+      "detail": {
+        "energy": 19.085
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "paper-surface",
+      "kind": "texture",
+      "note": "Warm ivory softly mottled paper material sample for window surface; generate seamless neutral texture without text or marks.",
+      "grid": null,
+      "box": {
+        "x": 0.8804,
+        "y": 0.2517,
+        "w": 0.0465,
+        "h": 0.0632
+      },
+      "px": {
+        "x": 1325,
+        "y": 263,
+        "w": 70,
+        "h": 66
+      },
+      "aspect": 1.0606,
+      "palette": [
+        {
+          "hex": "#e8d8c8",
+          "coverage": 1
+        }
+      ],
+      "detail": {
+        "energy": 0.2401
+      },
+      "medium": "raster",
+      "plate": "assets/plates/paper-surface.png",
+      "text": null
+    },
+    {
+      "id": "hub-brand",
+      "kind": "text",
+      "note": "Leaf symbol and Kentcrosswise brand in hub title bar.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.3734,
+        "y": 0.2029,
+        "w": 0.1216,
+        "h": 0.0325
+      },
+      "px": {
+        "x": 562,
+        "y": 212,
+        "w": 183,
+        "h": 34
+      },
+      "aspect": 5.3824,
+      "palette": [
+        {
+          "hex": "#e3d2c5",
+          "coverage": 0.8244
+        },
+        {
+          "hex": "#615851",
+          "coverage": 0.0562
+        },
+        {
+          "hex": "#baa9a2",
+          "coverage": 0.0463
+        },
+        {
+          "hex": "#372d2a",
+          "coverage": 0.0393
+        },
+        {
+          "hex": "#8d8076",
+          "coverage": 0.0337
+        }
+      ],
+      "detail": {
+        "energy": 40.7832
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 16,
+          "capHeightPx": 13.8,
+          "inkIsDark": true,
+          "allCaps": true,
+          "advance": 0.5787,
+          "advTall": 0.5787,
+          "advX": null,
+          "gap": 0.1808,
+          "xRatio": null,
+          "stemW": 0.1863,
+          "contrast": 1.3643,
+          "serif": 1.0326,
+          "densTall": 0.4657,
+          "densX": null,
+          "weight": 0.4657
+        },
+        "widthClass": "condensed",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "simulated-label",
+      "kind": "text",
+      "note": "Persistent Simulated data disclosure.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7668,
+        "y": 0.1847,
+        "w": 0.091,
+        "h": 0.0325
+      },
+      "px": {
+        "x": 1154,
+        "y": 193,
+        "w": 137,
+        "h": 34
+      },
+      "aspect": 4.0294,
+      "palette": [
+        {
+          "hex": "#f3dcc8",
+          "coverage": 0.9185
+        },
+        {
+          "hex": "#8c7c6f",
+          "coverage": 0.0326
+        },
+        {
+          "hex": "#bdab9b",
+          "coverage": 0.029
+        },
+        {
+          "hex": "#594944",
+          "coverage": 0.0199
+        }
+      ],
+      "detail": {
+        "energy": 17.3255
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 12,
+          "capHeightPx": 13.2,
+          "inkIsDark": true,
+          "allCaps": true,
+          "advance": 0.4553,
+          "advTall": 0.9864,
+          "advX": null,
+          "gap": 0.0759,
+          "xRatio": null,
+          "stemW": 0.1511,
+          "contrast": 1.1852,
+          "serif": 1.6659,
+          "densTall": 0.4656,
+          "densX": null,
+          "weight": 0.4656
+        },
+        "widthClass": "wide",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "day-night",
+      "kind": "control",
+      "note": "Accessible Day and Night selection with sun and moon.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.8744,
+        "y": 0.177,
+        "w": 0.0611,
+        "h": 0.0383
+      },
+      "px": {
+        "x": 1316,
+        "y": 185,
+        "w": 92,
+        "h": 40
+      },
+      "aspect": 2.3,
+      "palette": [
+        {
+          "hex": "#e4ccb9",
+          "coverage": 0.4316
+        },
+        {
+          "hex": "#504c49",
+          "coverage": 0.4175
+        },
+        {
+          "hex": "#f8e5b7",
+          "coverage": 0.0896
+        },
+        {
+          "hex": "#b59b82",
+          "coverage": 0.0472
+        },
+        {
+          "hex": "#7d6b50",
+          "coverage": 0.0142
+        }
+      ],
+      "detail": {
+        "energy": 13.6817
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "greeting",
+      "kind": "text",
+      "note": "Good evening. Native serif greeting.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4651,
+        "y": 0.2622,
+        "w": 0.1455,
+        "h": 0.0373
+      },
+      "px": {
+        "x": 700,
+        "y": 274,
+        "w": 219,
+        "h": 39
+      },
+      "aspect": 5.6154,
+      "palette": [
+        {
+          "hex": "#f7eadd",
+          "coverage": 0.7976
+        },
+        {
+          "hex": "#0e0c0c",
+          "coverage": 0.0829
+        },
+        {
+          "hex": "#504846",
+          "coverage": 0.0441
+        },
+        {
+          "hex": "#bdb7ad",
+          "coverage": 0.0431
+        },
+        {
+          "hex": "#988c88",
+          "coverage": 0.0323
+        }
+      ],
+      "detail": {
+        "energy": 55.6814
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 11,
+          "capHeightPx": 25.9,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6559,
+          "advTall": 0.4823,
+          "advX": 0.6559,
+          "gap": 0.0772,
+          "xRatio": 0.6559,
+          "stemW": 0.124,
+          "contrast": 1.621,
+          "serif": 1.1833,
+          "densTall": 0.3756,
+          "densX": 0.4278,
+          "weight": 0.3756
+        },
+        "widthClass": "normal",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "hub-intro",
+      "kind": "text",
+      "note": "A glimpse of your world; adapt unsupported agent claim to truthful simulated demo description.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4658,
+        "y": 0.2986,
+        "w": 0.3189,
+        "h": 0.0258
+      },
+      "px": {
+        "x": 701,
+        "y": 312,
+        "w": 480,
+        "h": 27
+      },
+      "aspect": 17.7778,
+      "palette": [
+        {
+          "hex": "#f7e9da",
+          "coverage": 0.8081
+        },
+        {
+          "hex": "#ccc4b8",
+          "coverage": 0.0577
+        },
+        {
+          "hex": "#a3988e",
+          "coverage": 0.0556
+        },
+        {
+          "hex": "#736762",
+          "coverage": 0.0556
+        },
+        {
+          "hex": "#4b3e3b",
+          "coverage": 0.0229
+        }
+      ],
+      "detail": {
+        "energy": 42.8644
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 40,
+          "capHeightPx": 13.7,
+          "inkIsDark": true,
+          "allCaps": true,
+          "advance": 0.5476,
+          "advTall": 0.6024,
+          "advX": null,
+          "gap": 0.0913,
+          "xRatio": null,
+          "stemW": 0.1641,
+          "contrast": 1.2993,
+          "serif": 1.1067,
+          "densTall": 0.4826,
+          "densX": null,
+          "weight": 0.4826
+        },
+        "widthClass": "condensed",
+        "weightClass": "medium"
+      }
+    },
+    {
+      "id": "sidebar-home",
+      "kind": "control",
+      "note": "Native home sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.2689,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 281,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f4d7b3",
+          "coverage": 0.9247
+        },
+        {
+          "hex": "#ad9375",
+          "coverage": 0.0366
+        },
+        {
+          "hex": "#655243",
+          "coverage": 0.0215
+        },
+        {
+          "hex": "#988572",
+          "coverage": 0.0108
+        },
+        {
+          "hex": "#332d23",
+          "coverage": 0.0065
+        }
+      ],
+      "detail": {
+        "energy": 9.6602
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-people",
+      "kind": "control",
+      "note": "Native people sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.312,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 326,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f3decb",
+          "coverage": 0.9188
+        },
+        {
+          "hex": "#6d6058",
+          "coverage": 0.0577
+        },
+        {
+          "hex": "#b2a296",
+          "coverage": 0.0171
+        },
+        {
+          "hex": "#383030",
+          "coverage": 0.0043
+        },
+        {
+          "hex": "#f8f8f8",
+          "coverage": 0.0021
+        }
+      ],
+      "detail": {
+        "energy": 9.3208
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-mood",
+      "kind": "control",
+      "note": "Native mood sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.3493,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 365,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f4dfc9",
+          "coverage": 0.9338
+        },
+        {
+          "hex": "#6c635c",
+          "coverage": 0.0278
+        },
+        {
+          "hex": "#c6b6ae",
+          "coverage": 0.0214
+        },
+        {
+          "hex": "#94847c",
+          "coverage": 0.0171
+        }
+      ],
+      "detail": {
+        "energy": 7.4874
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-following",
+      "kind": "control",
+      "note": "Native following sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.3876,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 405,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f5dcc9",
+          "coverage": 0.8996
+        },
+        {
+          "hex": "#b2a196",
+          "coverage": 0.047
+        },
+        {
+          "hex": "#6c5d58",
+          "coverage": 0.0363
+        },
+        {
+          "hex": "#453b35",
+          "coverage": 0.0128
+        },
+        {
+          "hex": "#f8f8f8",
+          "coverage": 0.0043
+        }
+      ],
+      "detail": {
+        "energy": 11.5335
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-notes",
+      "kind": "control",
+      "note": "Native notes sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.4249,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 444,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f3d8c8",
+          "coverage": 0.9293
+        },
+        {
+          "hex": "#534945",
+          "coverage": 0.0257
+        },
+        {
+          "hex": "#afa095",
+          "coverage": 0.0257
+        },
+        {
+          "hex": "#7c6e64",
+          "coverage": 0.0171
+        },
+        {
+          "hex": "#c8c8a8",
+          "coverage": 0.0021
+        }
+      ],
+      "detail": {
+        "energy": 10.0196
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-agents",
+      "kind": "control",
+      "note": "Native agents sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.4632,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 484,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f2d8c8",
+          "coverage": 0.9333
+        },
+        {
+          "hex": "#a29082",
+          "coverage": 0.0387
+        },
+        {
+          "hex": "#cdbda0",
+          "coverage": 0.0129
+        },
+        {
+          "hex": "#746860",
+          "coverage": 0.0086
+        },
+        {
+          "hex": "#484333",
+          "coverage": 0.0065
+        }
+      ],
+      "detail": {
+        "energy": 9.0818
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-office",
+      "kind": "control",
+      "note": "Native office sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.5531,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 578,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f0d8c7",
+          "coverage": 0.9095
+        },
+        {
+          "hex": "#aa988b",
+          "coverage": 0.0453
+        },
+        {
+          "hex": "#7f6c61",
+          "coverage": 0.0194
+        },
+        {
+          "hex": "#524842",
+          "coverage": 0.0172
+        },
+        {
+          "hex": "#f8f8e0",
+          "coverage": 0.0086
+        }
+      ],
+      "detail": {
+        "energy": 14.644
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "sidebar-settings",
+      "kind": "control",
+      "note": "Native settings sidebar link or functional preference control.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links",
+      "box": {
+        "x": 0.3674,
+        "y": 0.5923,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 553,
+        "y": 619,
+        "w": 116,
+        "h": 35
+      },
+      "aspect": 3.3143,
+      "palette": [
+        {
+          "hex": "#f5d9c8",
+          "coverage": 0.9183
+        },
+        {
+          "hex": "#8e7b6c",
+          "coverage": 0.0409
+        },
+        {
+          "hex": "#c4b0a0",
+          "coverage": 0.0172
+        },
+        {
+          "hex": "#564346",
+          "coverage": 0.0151
+        },
+        {
+          "hex": "#504838",
+          "coverage": 0.0086
+        }
+      ],
+      "detail": {
+        "energy": 12.1574
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "people-panel",
+      "kind": "chrome",
+      "note": "Native people panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "grid": null,
+      "container": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4631,
+        "y": 0.3407,
+        "w": 0.1355,
+        "h": 0.2096
+      },
+      "px": {
+        "x": 697,
+        "y": 356,
+        "w": 204,
+        "h": 219
+      },
+      "aspect": 0.9315,
+      "palette": [
+        {
+          "hex": "#f8eae0",
+          "coverage": 0.9187
+        },
+        {
+          "hex": "#beb4aa",
+          "coverage": 0.0353
+        },
+        {
+          "hex": "#231716",
+          "coverage": 0.0183
+        },
+        {
+          "hex": "#776c5e",
+          "coverage": 0.0151
+        },
+        {
+          "hex": "#764a36",
+          "coverage": 0.0126
+        }
+      ],
+      "detail": {
+        "energy": 13.6859
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "mood-panel",
+      "kind": "chrome",
+      "note": "Native mood panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "grid": null,
+      "container": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.6047,
+        "y": 0.3359,
+        "w": 0.2033,
+        "h": 0.2153
+      },
+      "px": {
+        "x": 910,
+        "y": 351,
+        "w": 306,
+        "h": 225
+      },
+      "aspect": 1.36,
+      "palette": [
+        {
+          "hex": "#f7e9da",
+          "coverage": 0.9689
+        },
+        {
+          "hex": "#c3b9ac",
+          "coverage": 0.0145
+        },
+        {
+          "hex": "#9c9189",
+          "coverage": 0.009
+        },
+        {
+          "hex": "#dbe8c8",
+          "coverage": 0.0041
+        },
+        {
+          "hex": "#121212",
+          "coverage": 0.0035
+        }
+      ],
+      "detail": {
+        "energy": 13.3257
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "following-panel",
+      "kind": "chrome",
+      "note": "Native following panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "grid": null,
+      "container": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.812,
+        "y": 0.333,
+        "w": 0.1296,
+        "h": 0.2239
+      },
+      "px": {
+        "x": 1222,
+        "y": 348,
+        "w": 195,
+        "h": 234
+      },
+      "aspect": 0.8333,
+      "palette": [
+        {
+          "hex": "#f7e8d8",
+          "coverage": 0.9471
+        },
+        {
+          "hex": "#0f0b0b",
+          "coverage": 0.0164
+        },
+        {
+          "hex": "#aca194",
+          "coverage": 0.015
+        },
+        {
+          "hex": "#f82f2e",
+          "coverage": 0.0119
+        },
+        {
+          "hex": "#3a332c",
+          "coverage": 0.0096
+        }
+      ],
+      "detail": {
+        "energy": 15.1404
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "activity-panel",
+      "kind": "chrome",
+      "note": "Native activity panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "grid": null,
+      "container": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4625,
+        "y": 0.5665,
+        "w": 0.2385,
+        "h": 0.199
+      },
+      "px": {
+        "x": 696,
+        "y": 592,
+        "w": 359,
+        "h": 208
+      },
+      "aspect": 1.726,
+      "palette": [
+        {
+          "hex": "#f7e7d7",
+          "coverage": 0.9559
+        },
+        {
+          "hex": "#7d7064",
+          "coverage": 0.019
+        },
+        {
+          "hex": "#b7ad9e",
+          "coverage": 0.0135
+        },
+        {
+          "hex": "#e6d6e4",
+          "coverage": 0.0077
+        },
+        {
+          "hex": "#4171cb",
+          "coverage": 0.004
+        }
+      ],
+      "detail": {
+        "energy": 13.9519
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "explore-panel",
+      "kind": "chrome",
+      "note": "Native explore panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "grid": null,
+      "container": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.709,
+        "y": 0.5713,
+        "w": 0.2352,
+        "h": 0.2086
+      },
+      "px": {
+        "x": 1067,
+        "y": 597,
+        "w": 354,
+        "h": 218
+      },
+      "aspect": 1.6239,
+      "palette": [
+        {
+          "hex": "#f6e5d1",
+          "coverage": 0.9648
+        },
+        {
+          "hex": "#b2a294",
+          "coverage": 0.015
+        },
+        {
+          "hex": "#807469",
+          "coverage": 0.0076
+        },
+        {
+          "hex": "#5b4e42",
+          "coverage": 0.0065
+        },
+        {
+          "hex": "#f8e4b4",
+          "coverage": 0.006
+        }
+      ],
+      "detail": {
+        "energy": 12.7209
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "people-title",
+      "kind": "text",
+      "note": "People panel title.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4724,
+        "y": 0.356,
+        "w": 0.0365,
+        "h": 0.0191
+      },
+      "px": {
+        "x": 711,
+        "y": 372,
+        "w": 55,
+        "h": 20
+      },
+      "aspect": 2.75,
+      "palette": [
+        {
+          "hex": "#f7ece6",
+          "coverage": 0.776
+        },
+        {
+          "hex": "#79786c",
+          "coverage": 0.088
+        },
+        {
+          "hex": "#d0cbc0",
+          "coverage": 0.048
+        },
+        {
+          "hex": "#131010",
+          "coverage": 0.048
+        },
+        {
+          "hex": "#989592",
+          "coverage": 0.04
+        }
+      ],
+      "detail": {
+        "energy": 21.3429
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 7,
+          "capHeightPx": 11.9,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.5304,
+          "advTall": 0.2931,
+          "advX": 0.5304,
+          "gap": 0.0558,
+          "xRatio": 0.6664,
+          "stemW": 0.1794,
+          "contrast": 1.5207,
+          "serif": 0.9625,
+          "densTall": 0.7141,
+          "densX": 0.5857,
+          "weight": 0.7141
+        },
+        "widthClass": "condensed",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "people-all",
+      "kind": "text",
+      "note": "View all link.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.5515,
+        "y": 0.356,
+        "w": 0.0385,
+        "h": 0.0201
+      },
+      "px": {
+        "x": 830,
+        "y": 372,
+        "w": 58,
+        "h": 21
+      },
+      "aspect": 2.7619,
+      "palette": [
+        {
+          "hex": "#f5eae3",
+          "coverage": 0.9286
+        },
+        {
+          "hex": "#b2a89a",
+          "coverage": 0.0714
+        }
+      ],
+      "detail": {
+        "energy": 7.4986
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 7,
+          "capHeightPx": 9.1,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.4231,
+          "advTall": 0.2576,
+          "advX": 1.1038,
+          "gap": 0.0368,
+          "xRatio": 0.6905,
+          "stemW": 0.2101,
+          "contrast": 1.3104,
+          "serif": 0.5278,
+          "densTall": 0.6157,
+          "densX": 0.5538,
+          "weight": 0.6157
+        },
+        "widthClass": "wide",
+        "weightClass": "bold"
+      }
+    },
+    {
+      "id": "mood-title",
+      "kind": "text",
+      "note": "Mood panel title.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.6153,
+        "y": 0.3531,
+        "w": 0.0352,
+        "h": 0.0201
+      },
+      "px": {
+        "x": 926,
+        "y": 369,
+        "w": 53,
+        "h": 21
+      },
+      "aspect": 2.5238,
+      "palette": [
+        {
+          "hex": "#f8ede4",
+          "coverage": 0.7857
+        },
+        {
+          "hex": "#c2bcaf",
+          "coverage": 0.1032
+        },
+        {
+          "hex": "#221616",
+          "coverage": 0.0794
+        },
+        {
+          "hex": "#645c58",
+          "coverage": 0.0317
+        }
+      ],
+      "detail": {
+        "energy": 16.5279
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 2,
+          "capHeightPx": 12.1,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 1.4154,
+          "advTall": 1.4154,
+          "advX": null,
+          "gap": 0.055,
+          "xRatio": 0.6527,
+          "stemW": 0.1798,
+          "contrast": 1.4489,
+          "serif": null,
+          "densTall": 0.4819,
+          "densX": null,
+          "weight": 0.4819
+        },
+        "widthClass": "wide",
+        "weightClass": "medium"
+      }
+    },
+    {
+      "id": "mood-range",
+      "kind": "text",
+      "note": "Last 7 days chart range.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7508,
+        "y": 0.3522,
+        "w": 0.0458,
+        "h": 0.0201
+      },
+      "px": {
+        "x": 1130,
+        "y": 368,
+        "w": 69,
+        "h": 21
+      },
+      "aspect": 3.2857,
+      "palette": [
+        {
+          "hex": "#f6e9d9",
+          "coverage": 0.8385
+        },
+        {
+          "hex": "#c1b3a7",
+          "coverage": 0.1615
+        }
+      ],
+      "detail": {
+        "energy": 9.0716
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 8,
+          "capHeightPx": 10,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.5644,
+          "advTall": 0.6971,
+          "advX": 0.5644,
+          "gap": 0.0332,
+          "xRatio": 0.7194,
+          "stemW": 0.1991,
+          "contrast": 1.2568,
+          "serif": 0.7357,
+          "densTall": 0.5133,
+          "densX": 0.6431,
+          "weight": 0.5133
+        },
+        "widthClass": "condensed",
+        "weightClass": "medium"
+      }
+    },
+    {
+      "id": "following-title",
+      "kind": "text",
+      "note": "Following panel title.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.8226,
+        "y": 0.3512,
+        "w": 0.0525,
+        "h": 0.0211
+      },
+      "px": {
+        "x": 1238,
+        "y": 367,
+        "w": 79,
+        "h": 22
+      },
+      "aspect": 3.5909,
+      "palette": [
+        {
+          "hex": "#f7ebdc",
+          "coverage": 0.8095
+        },
+        {
+          "hex": "#988e7f",
+          "coverage": 0.0714
+        },
+        {
+          "hex": "#4d483b",
+          "coverage": 0.0476
+        },
+        {
+          "hex": "#cac4b6",
+          "coverage": 0.0429
+        },
+        {
+          "hex": "#0d0b0b",
+          "coverage": 0.0286
+        }
+      ],
+      "detail": {
+        "energy": 27.1508
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 6,
+          "capHeightPx": 12.1,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6084,
+          "advTall": 0.636,
+          "advX": 0.5807,
+          "gap": 0.0553,
+          "xRatio": 0.6786,
+          "stemW": 0.1736,
+          "contrast": 1.4398,
+          "serif": 0.9605,
+          "densTall": 0.4751,
+          "densX": 0.6271,
+          "weight": 0.4751
+        },
+        "widthClass": "condensed",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "following-total",
+      "kind": "text",
+      "note": "Total column label.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.909,
+        "y": 0.3512,
+        "w": 0.0233,
+        "h": 0.0201
+      },
+      "px": {
+        "x": 1368,
+        "y": 367,
+        "w": 35,
+        "h": 21
+      },
+      "aspect": 1.6667,
+      "palette": [
+        {
+          "hex": "#f5e7d7",
+          "coverage": 0.8452
+        },
+        {
+          "hex": "#a69893",
+          "coverage": 0.0833
+        },
+        {
+          "hex": "#c8bdb3",
+          "coverage": 0.0714
+        }
+      ],
+      "detail": {
+        "energy": 4.8663
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 3,
+          "capHeightPx": 10.3,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.2587,
+          "advTall": 0.2587,
+          "advX": null,
+          "gap": 0.0809,
+          "xRatio": 0.6102,
+          "stemW": 0.1784,
+          "contrast": 1.5002,
+          "serif": 0.826,
+          "densTall": 0.6785,
+          "densX": null,
+          "weight": 0.6785
+        },
+        "widthClass": "compressed",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "happiness-label",
+      "kind": "text",
+      "note": "Happiness label.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.6153,
+        "y": 0.3914,
+        "w": 0.0518,
+        "h": 0.0182
+      },
+      "px": {
+        "x": 926,
+        "y": 409,
+        "w": 78,
+        "h": 19
+      },
+      "aspect": 4.1053,
+      "palette": [
+        {
+          "hex": "#f7ebe4",
+          "coverage": 0.8516
+        },
+        {
+          "hex": "#c6bfb3",
+          "coverage": 0.0769
+        },
+        {
+          "hex": "#8e8278",
+          "coverage": 0.0549
+        },
+        {
+          "hex": "#6d5d5d",
+          "coverage": 0.0165
+        }
+      ],
+      "detail": {
+        "energy": 15.8076
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 7,
+          "capHeightPx": 9.4,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6392,
+          "advTall": 0.5681,
+          "advX": 0.6392,
+          "gap": 0.0533,
+          "xRatio": 0.7352,
+          "stemW": 0.215,
+          "contrast": 1.4375,
+          "serif": 1.064,
+          "densTall": 0.5843,
+          "densX": 0.6698,
+          "weight": 0.5843
+        },
+        "widthClass": "normal",
+        "weightClass": "bold"
+      }
+    },
+    {
+      "id": "happiness-value",
+      "kind": "text",
+      "note": "Actual fixture happiness 0.29.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.6146,
+        "y": 0.4134,
+        "w": 0.0452,
+        "h": 0.0287
+      },
+      "px": {
+        "x": 925,
+        "y": 432,
+        "w": 68,
+        "h": 30
+      },
+      "aspect": 2.2667,
+      "palette": [
+        {
+          "hex": "#f7ebdf",
+          "coverage": 0.8202
+        },
+        {
+          "hex": "#131313",
+          "coverage": 0.057
+        },
+        {
+          "hex": "#c3bcb3",
+          "coverage": 0.057
+        },
+        {
+          "hex": "#8a8178",
+          "coverage": 0.0395
+        },
+        {
+          "hex": "#43403d",
+          "coverage": 0.0263
+        }
+      ],
+      "detail": {
+        "energy": 19.6059
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 3,
+          "capHeightPx": 18.4,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.653,
+          "advTall": 0.653,
+          "advX": null,
+          "gap": 0.2857,
+          "xRatio": 0.8134,
+          "stemW": 0.1541,
+          "contrast": 1.2057,
+          "serif": null,
+          "densTall": 0.4315,
+          "densX": null,
+          "weight": 0.4315
+        },
+        "widthClass": "normal",
+        "weightClass": "regular",
+        "chosen": {
+          "family": "PT Serif",
+          "weight": 400,
+          "fontSizePx": 25,
+          "source": "index",
+          "fp": {
+            "lines": 1,
+            "glyphs": 18,
+            "capHeightPx": 18.1,
+            "inkIsDark": true,
+            "allCaps": true,
+            "advance": 0.6365,
+            "advTall": 0.6365,
+            "advX": null,
+            "gap": 0.2491,
+            "xRatio": null,
+            "stemW": 0.1451,
+            "contrast": 1.2676,
+            "serif": 2.4259,
+            "densTall": 0.4281,
+            "densX": null,
+            "weight": 0.4281
+          },
+          "stamp": "6c5a1c3227e0"
+        }
+      }
+    },
+    {
+      "id": "stress-label",
+      "kind": "text",
+      "note": "Stress label.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7163,
+        "y": 0.3914,
+        "w": 0.0379,
+        "h": 0.0182
+      },
+      "px": {
+        "x": 1078,
+        "y": 409,
+        "w": 57,
+        "h": 19
+      },
+      "aspect": 3,
+      "palette": [
+        {
+          "hex": "#f7e9da",
+          "coverage": 0.9173
+        },
+        {
+          "hex": "#c5b8ab",
+          "coverage": 0.0376
+        },
+        {
+          "hex": "#787368",
+          "coverage": 0.0226
+        },
+        {
+          "hex": "#a39d8d",
+          "coverage": 0.0226
+        }
+      ],
+      "detail": {
+        "energy": 10.2954
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 2,
+          "capHeightPx": 9.7,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 1.5925,
+          "advTall": 1.0959,
+          "advX": 2.0891,
+          "gap": 0.0342,
+          "xRatio": 0.7102,
+          "stemW": 0.2288,
+          "contrast": 1.4225,
+          "serif": null,
+          "densTall": 0.4591,
+          "densX": 0.6107,
+          "weight": 0.4591
+        },
+        "widthClass": "wide",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "stress-value",
+      "kind": "text",
+      "note": "Actual fixture stress 0.91.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7163,
+        "y": 0.4134,
+        "w": 0.0472,
+        "h": 0.0287
+      },
+      "px": {
+        "x": 1078,
+        "y": 432,
+        "w": 71,
+        "h": 30
+      },
+      "aspect": 2.3667,
+      "palette": [
+        {
+          "hex": "#f7eadb",
+          "coverage": 0.8375
+        },
+        {
+          "hex": "#c1b7ad",
+          "coverage": 0.0542
+        },
+        {
+          "hex": "#0f0e0c",
+          "coverage": 0.0458
+        },
+        {
+          "hex": "#45423e",
+          "coverage": 0.0417
+        },
+        {
+          "hex": "#857e72",
+          "coverage": 0.0208
+        }
+      ],
+      "detail": {
+        "energy": 17.7524
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 3,
+          "capHeightPx": 18.4,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6522,
+          "advTall": 0.6522,
+          "advX": null,
+          "gap": 0.3125,
+          "xRatio": 0.7815,
+          "stemW": 0.1549,
+          "contrast": 1.5878,
+          "serif": null,
+          "densTall": 0.4446,
+          "densX": null,
+          "weight": 0.4446
+        },
+        "widthClass": "normal",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "activity-title",
+      "kind": "text",
+      "note": "Recent activity heading.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4718,
+        "y": 0.5789,
+        "w": 0.0864,
+        "h": 0.0211
+      },
+      "px": {
+        "x": 710,
+        "y": 605,
+        "w": 130,
+        "h": 22
+      },
+      "aspect": 5.9091,
+      "palette": [
+        {
+          "hex": "#f7eada",
+          "coverage": 0.8793
+        },
+        {
+          "hex": "#ada191",
+          "coverage": 0.046
+        },
+        {
+          "hex": "#85796f",
+          "coverage": 0.0431
+        },
+        {
+          "hex": "#1f160f",
+          "coverage": 0.0201
+        },
+        {
+          "hex": "#403434",
+          "coverage": 0.0115
+        }
+      ],
+      "detail": {
+        "energy": 32.0905
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 11,
+          "capHeightPx": 11.7,
+          "inkIsDark": true,
+          "allCaps": true,
+          "advance": 0.6123,
+          "advTall": 1.2531,
+          "advX": null,
+          "gap": 0.0427,
+          "xRatio": null,
+          "stemW": 0.1858,
+          "contrast": 1.3861,
+          "serif": 1.1728,
+          "densTall": 0.4995,
+          "densX": null,
+          "weight": 0.4995
+        },
+        "widthClass": "wide",
+        "weightClass": "medium"
+      }
+    },
+    {
+      "id": "explore-title",
+      "kind": "text",
+      "note": "Explore more heading.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7183,
+        "y": 0.5837,
+        "w": 0.0744,
+        "h": 0.0211
+      },
+      "px": {
+        "x": 1081,
+        "y": 610,
+        "w": 112,
+        "h": 22
+      },
+      "aspect": 5.0909,
+      "palette": [
+        {
+          "hex": "#f7eada",
+          "coverage": 0.8515
+        },
+        {
+          "hex": "#c0b9ab",
+          "coverage": 0.0528
+        },
+        {
+          "hex": "#867c6f",
+          "coverage": 0.0429
+        },
+        {
+          "hex": "#5a4d44",
+          "coverage": 0.0297
+        },
+        {
+          "hex": "#161111",
+          "coverage": 0.0231
+        }
+      ],
+      "detail": {
+        "energy": 31.5566
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 9,
+          "capHeightPx": 12.1,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.5804,
+          "advTall": 0.4353,
+          "advX": 0.5804,
+          "gap": 0.0829,
+          "xRatio": 0.6063,
+          "stemW": 0.1838,
+          "contrast": 1.3286,
+          "serif": 1.3002,
+          "densTall": 0.6882,
+          "densX": 0.5706,
+          "weight": 0.6882
+        },
+        "widthClass": "condensed",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "happiness-chart",
+      "kind": "chrome",
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.6153,
+        "y": 0.4555,
+        "w": 0.0824,
+        "h": 0.0842
+      },
+      "px": {
+        "x": 926,
+        "y": 476,
+        "w": 124,
+        "h": 88
+      },
+      "aspect": 1.4091,
+      "palette": [
+        {
+          "hex": "#f3e9d9",
+          "coverage": 0.9442
+        },
+        {
+          "hex": "#c5bbad",
+          "coverage": 0.0271
+        },
+        {
+          "hex": "#228a6c",
+          "coverage": 0.0144
+        },
+        {
+          "hex": "#9e958a",
+          "coverage": 0.008
+        },
+        {
+          "hex": "#76b49a",
+          "coverage": 0.0064
+        }
+      ],
+      "detail": {
+        "energy": 7.8861
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "stress-chart",
+      "kind": "chrome",
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7169,
+        "y": 0.4555,
+        "w": 0.0844,
+        "h": 0.0842
+      },
+      "px": {
+        "x": 1079,
+        "y": 476,
+        "w": 127,
+        "h": 88
+      },
+      "aspect": 1.4432,
+      "palette": [
+        {
+          "hex": "#f8e7d5",
+          "coverage": 0.9427
+        },
+        {
+          "hex": "#cabfb2",
+          "coverage": 0.0181
+        },
+        {
+          "hex": "#f8c2b0",
+          "coverage": 0.0149
+        },
+        {
+          "hex": "#f4564a",
+          "coverage": 0.0141
+        },
+        {
+          "hex": "#a79a93",
+          "coverage": 0.0102
+        }
+      ],
+      "detail": {
+        "energy": 7.7731
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "avatar-1",
+      "kind": "image",
+      "note": "Synthetic portrait of fictional demo contact Ivo Merriweather; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "grid": null,
+      "bleed": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4724,
+        "y": 0.3923,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "px": {
+        "x": 711,
+        "y": 410,
+        "w": 40,
+        "h": 42
+      },
+      "aspect": 0.9524,
+      "palette": [
+        {
+          "hex": "#f4ebe0",
+          "coverage": 0.366
+        },
+        {
+          "hex": "#cabcae",
+          "coverage": 0.3203
+        },
+        {
+          "hex": "#231716",
+          "coverage": 0.1176
+        },
+        {
+          "hex": "#ce9177",
+          "coverage": 0.1046
+        },
+        {
+          "hex": "#4a3021",
+          "coverage": 0.0915
+        }
+      ],
+      "detail": {
+        "energy": 9.7717
+      },
+      "medium": "raster",
+      "plate": "assets/plates/avatar-1.png",
+      "text": null
+    },
+    {
+      "id": "person-1",
+      "kind": "control",
+      "note": "Link to fictional fixture contact Ivo Merriweather.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "person-links",
+      "box": {
+        "x": 0.5056,
+        "y": 0.399,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "px": {
+        "x": 761,
+        "y": 417,
+        "w": 126,
+        "h": 29
+      },
+      "aspect": 4.3448,
+      "palette": [
+        {
+          "hex": "#f7ece6",
+          "coverage": 0.9084
+        },
+        {
+          "hex": "#8a877a",
+          "coverage": 0.0313
+        },
+        {
+          "hex": "#685c54",
+          "coverage": 0.0265
+        },
+        {
+          "hex": "#c8c2b8",
+          "coverage": 0.0193
+        },
+        {
+          "hex": "#3b2b2b",
+          "coverage": 0.0145
+        }
+      ],
+      "detail": {
+        "energy": 18.4777
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "avatar-2",
+      "kind": "image",
+      "note": "Synthetic portrait of fictional demo contact Sol Ashdown; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "grid": null,
+      "bleed": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4724,
+        "y": 0.444,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "px": {
+        "x": 711,
+        "y": 464,
+        "w": 40,
+        "h": 42
+      },
+      "aspect": 0.9524,
+      "palette": [
+        {
+          "hex": "#f6eee3",
+          "coverage": 0.3404
+        },
+        {
+          "hex": "#241414",
+          "coverage": 0.234
+        },
+        {
+          "hex": "#282113",
+          "coverage": 0.156
+        },
+        {
+          "hex": "#beb7ad",
+          "coverage": 0.1348
+        },
+        {
+          "hex": "#b27b5b",
+          "coverage": 0.1348
+        }
+      ],
+      "detail": {
+        "energy": 10.8348
+      },
+      "medium": "raster",
+      "plate": "assets/plates/avatar-2.png",
+      "text": null
+    },
+    {
+      "id": "person-2",
+      "kind": "control",
+      "note": "Link to fictional fixture contact Sol Ashdown.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "person-links",
+      "box": {
+        "x": 0.5056,
+        "y": 0.4507,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "px": {
+        "x": 761,
+        "y": 471,
+        "w": 126,
+        "h": 29
+      },
+      "aspect": 4.3448,
+      "palette": [
+        {
+          "hex": "#f7ebde",
+          "coverage": 0.9282
+        },
+        {
+          "hex": "#6b6255",
+          "coverage": 0.0239
+        },
+        {
+          "hex": "#90857d",
+          "coverage": 0.0239
+        },
+        {
+          "hex": "#c3bab1",
+          "coverage": 0.0167
+        },
+        {
+          "hex": "#4d3d3d",
+          "coverage": 0.0072
+        }
+      ],
+      "detail": {
+        "energy": 14.799
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "avatar-3",
+      "kind": "image",
+      "note": "Synthetic portrait of fictional demo contact Dev Juniper; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "grid": null,
+      "bleed": true,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.4724,
+        "y": 0.4957,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "px": {
+        "x": 711,
+        "y": 518,
+        "w": 40,
+        "h": 42
+      },
+      "aspect": 0.9524,
+      "palette": [
+        {
+          "hex": "#f5edde",
+          "coverage": 0.3063
+        },
+        {
+          "hex": "#bbaf9f",
+          "coverage": 0.2063
+        },
+        {
+          "hex": "#38271d",
+          "coverage": 0.1687
+        },
+        {
+          "hex": "#7f6f5f",
+          "coverage": 0.1625
+        },
+        {
+          "hex": "#916047",
+          "coverage": 0.1562
+        }
+      ],
+      "detail": {
+        "energy": 10.7704
+      },
+      "medium": "raster",
+      "plate": "assets/plates/avatar-3.png",
+      "text": null
+    },
+    {
+      "id": "person-3",
+      "kind": "control",
+      "note": "Link to fictional fixture contact Dev Juniper.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "person-links",
+      "box": {
+        "x": 0.5056,
+        "y": 0.5024,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "px": {
+        "x": 761,
+        "y": 525,
+        "w": 126,
+        "h": 29
+      },
+      "aspect": 4.3448,
+      "palette": [
+        {
+          "hex": "#f7eadb",
+          "coverage": 0.9329
+        },
+        {
+          "hex": "#706a5e",
+          "coverage": 0.0192
+        },
+        {
+          "hex": "#584a4a",
+          "coverage": 0.0168
+        },
+        {
+          "hex": "#cac6bd",
+          "coverage": 0.0168
+        },
+        {
+          "hex": "#9b908b",
+          "coverage": 0.0144
+        }
+      ],
+      "detail": {
+        "energy": 13.601
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "youtube-row",
+      "kind": "control",
+      "note": "Platform icon, label and actual seeded follower count YouTube 5,120.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows",
+      "box": {
+        "x": 0.8226,
+        "y": 0.3943,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 1238,
+        "y": 412,
+        "w": 166,
+        "h": 35
+      },
+      "aspect": 4.7429,
+      "palette": [
+        {
+          "hex": "#f7e9d9",
+          "coverage": 0.8655
+        },
+        {
+          "hex": "#f8332e",
+          "coverage": 0.0819
+        },
+        {
+          "hex": "#b0a99b",
+          "coverage": 0.0216
+        },
+        {
+          "hex": "#5b5346",
+          "coverage": 0.0155
+        },
+        {
+          "hex": "#f8b2a5",
+          "coverage": 0.0155
+        }
+      ],
+      "detail": {
+        "energy": 22.5814
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "instagram-row",
+      "kind": "control",
+      "note": "Platform icon, label and actual seeded follower count Instagram 4,709.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows",
+      "box": {
+        "x": 0.8226,
+        "y": 0.4459,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 1238,
+        "y": 466,
+        "w": 166,
+        "h": 35
+      },
+      "aspect": 4.7429,
+      "palette": [
+        {
+          "hex": "#f7e8d9",
+          "coverage": 0.9252
+        },
+        {
+          "hex": "#867d74",
+          "coverage": 0.0221
+        },
+        {
+          "hex": "#c4bfb5",
+          "coverage": 0.0204
+        },
+        {
+          "hex": "#f8d3a2",
+          "coverage": 0.017
+        },
+        {
+          "hex": "#51483c",
+          "coverage": 0.0153
+        }
+      ],
+      "detail": {
+        "energy": 28.8669
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "tiktok-row",
+      "kind": "control",
+      "note": "Platform icon, label and actual seeded follower count TikTok 3,946.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows",
+      "box": {
+        "x": 0.8226,
+        "y": 0.4976,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "px": {
+        "x": 1238,
+        "y": 520,
+        "w": 166,
+        "h": 35
+      },
+      "aspect": 4.7429,
+      "palette": [
+        {
+          "hex": "#f7e9d9",
+          "coverage": 0.8391
+        },
+        {
+          "hex": "#0c0909",
+          "coverage": 0.1073
+        },
+        {
+          "hex": "#575141",
+          "coverage": 0.0189
+        },
+        {
+          "hex": "#a89c8f",
+          "coverage": 0.0189
+        },
+        {
+          "hex": "#4e403e",
+          "coverage": 0.0158
+        }
+      ],
+      "detail": {
+        "energy": 28.5584
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "activity-one",
+      "kind": "control",
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries",
+      "box": {
+        "x": 0.4738,
+        "y": 0.6124,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "px": {
+        "x": 713,
+        "y": 640,
+        "w": 323,
+        "h": 45
+      },
+      "aspect": 7.1778,
+      "palette": [
+        {
+          "hex": "#f7e8d9",
+          "coverage": 0.9157
+        },
+        {
+          "hex": "#96877c",
+          "coverage": 0.0264
+        },
+        {
+          "hex": "#e3d6e3",
+          "coverage": 0.0245
+        },
+        {
+          "hex": "#bbb1a3",
+          "coverage": 0.017
+        },
+        {
+          "hex": "#6c5f56",
+          "coverage": 0.0164
+        }
+      ],
+      "detail": {
+        "energy": 20.6359
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "activity-two",
+      "kind": "control",
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries",
+      "box": {
+        "x": 0.4738,
+        "y": 0.6612,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "px": {
+        "x": 713,
+        "y": 691,
+        "w": 323,
+        "h": 45
+      },
+      "aspect": 7.1778,
+      "palette": [
+        {
+          "hex": "#f7e7d8",
+          "coverage": 0.928
+        },
+        {
+          "hex": "#c6b8a9",
+          "coverage": 0.025
+        },
+        {
+          "hex": "#9b8c82",
+          "coverage": 0.0188
+        },
+        {
+          "hex": "#4875cc",
+          "coverage": 0.0144
+        },
+        {
+          "hex": "#6c6057",
+          "coverage": 0.0138
+        }
+      ],
+      "detail": {
+        "energy": 15.6851
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "activity-three",
+      "kind": "control",
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "grid": null,
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries",
+      "box": {
+        "x": 0.4738,
+        "y": 0.71,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "px": {
+        "x": 713,
+        "y": 742,
+        "w": 323,
+        "h": 45
+      },
+      "aspect": 7.1778,
+      "palette": [
+        {
+          "hex": "#f7e7d8",
+          "coverage": 0.9389
+        },
+        {
+          "hex": "#bcafa2",
+          "coverage": 0.022
+        },
+        {
+          "hex": "#e4d6e4",
+          "coverage": 0.017
+        },
+        {
+          "hex": "#86776c",
+          "coverage": 0.012
+        },
+        {
+          "hex": "#4877c5",
+          "coverage": 0.0101
+        }
+      ],
+      "detail": {
+        "energy": 15.2418
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "explore-demo",
+      "kind": "control",
+      "note": "Working Explore the demo link and simulated data description.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7189,
+        "y": 0.6182,
+        "w": 0.2153,
+        "h": 0.0545
+      },
+      "px": {
+        "x": 1082,
+        "y": 646,
+        "w": 324,
+        "h": 57
+      },
+      "aspect": 5.6842,
+      "palette": [
+        {
+          "hex": "#f7e8d5",
+          "coverage": 0.9106
+        },
+        {
+          "hex": "#c3b3a3",
+          "coverage": 0.0618
+        },
+        {
+          "hex": "#f8e6b8",
+          "coverage": 0.0133
+        },
+        {
+          "hex": "#615348",
+          "coverage": 0.0074
+        },
+        {
+          "hex": "#302722",
+          "coverage": 0.0069
+        }
+      ],
+      "detail": {
+        "energy": 19.9726
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "explore-office",
+      "kind": "control",
+      "note": "Working Agent office link with factual description.",
+      "grid": null,
+      "parentId": "hub-window",
+      "box": {
+        "x": 0.7189,
+        "y": 0.6775,
+        "w": 0.2153,
+        "h": 0.0593
+      },
+      "px": {
+        "x": 1082,
+        "y": 708,
+        "w": 324,
+        "h": 62
+      },
+      "aspect": 5.2258,
+      "palette": [
+        {
+          "hex": "#f7e7d2",
+          "coverage": 0.9251
+        },
+        {
+          "hex": "#cabcae",
+          "coverage": 0.0214
+        },
+        {
+          "hex": "#928375",
+          "coverage": 0.0205
+        },
+        {
+          "hex": "#5e5348",
+          "coverage": 0.0205
+        },
+        {
+          "hex": "#f8e2b2",
+          "coverage": 0.0125
+        }
+      ],
+      "detail": {
+        "energy": 19.2915
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    }
+  ],
+  "compSha256": "c30860dafc7dceda6540cf09023cc74e7c98fd3e652351c8b140278e5808ef82",
+  "regionsSource": {
+    "path": ".impeccable/build/regions.json",
+    "sha256": "ce7323cfc00a5d33363251bfe8aa51dba3b24a9e26e513de05dae692d93881e4"
+  }
+}

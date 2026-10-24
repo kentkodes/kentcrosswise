@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "stage": "hero",
+  "id": "hero",
+  "title": "First viewport",
+  "comp": { "path": ".impeccable/mocks/03-hub-window.png", "width": 1505, "height": 1045 },
+  "components": [
+    {
+      "id": "first-viewport",
+      "name": "First viewport",
+      "medium": "HTML / CSS",
+      "note": "Assembled first viewport of apps/web/src/app/(public)/page.tsx: static snapshot of the production render (Next runtime scripts removed); hero gate passed at 86% (match).",
+      "box": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "preview": { "kind": "page", "path": ".impeccable/review/hero-page/index.html" },
+      "dependencies": [
+        ".impeccable/review/hero-page/03ahfnch3020k.css",
+        ".impeccable/review/hero-page/1ubk0406pqt8y.css",
+        ".impeccable/review/hero-page/Rosarivo_Regular-s.p.1kyc75rb7oq7k.ttf",
+        "assets/plates/avatar-1.png",
+        "assets/plates/avatar-2.png",
+        "assets/plates/avatar-3.png",
+        "assets/plates/landscape.png",
+        "assets/plates/paper-surface.png",
+        "assets/plates/retro-computer.png"
+      ]
+    }
+  ]
+}

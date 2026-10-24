@@ -1,0 +1,706 @@
+{
+  "draft": false,
+  "regions": [
+    {
+      "id": "landscape",
+      "kind": "plate",
+      "pixelBox": {
+        "x": 0,
+        "y": 0,
+        "w": 1505,
+        "h": 1045
+      },
+      "note": "Original dusk lake and mountain meadow, sky and flowers. Generate a clean scene without any UI, text or computer. Day/night tint changes independently.",
+      "bleed": true
+    },
+    {
+      "id": "retro-computer",
+      "kind": "plate",
+      "pixelBox": {
+        "x": 48,
+        "y": 519,
+        "w": 353,
+        "h": 267
+      },
+      "note": "Original warm beige CRT and keyboard decorative physical object with static landscape screen; transparent cutout separately composited on the meadow."
+    },
+    {
+      "id": "wordmark",
+      "kind": "text",
+      "pixelBox": {
+        "x": 94,
+        "y": 24,
+        "w": 266,
+        "h": 44
+      },
+      "note": "Kentcrosswise ivory serif wordmark."
+    },
+    {
+      "id": "headline",
+      "kind": "text",
+      "pixelBox": {
+        "x": 92,
+        "y": 118,
+        "w": 408,
+        "h": 116
+      },
+      "note": "A little space for your everyday. Two-line large ivory serif headline."
+    },
+    {
+      "id": "nav-home",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1027,
+        "y": 24,
+        "w": 48,
+        "h": 50
+      },
+      "note": "Working home navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-demo",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1118,
+        "y": 24,
+        "w": 47,
+        "h": 50
+      },
+      "note": "Working demo navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-office",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1204,
+        "y": 24,
+        "w": 45,
+        "h": 50
+      },
+      "note": "Working office navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-sign-in",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1307,
+        "y": 24,
+        "w": 110,
+        "h": 50
+      },
+      "note": "Working sign-in navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "demo-entrance",
+      "kind": "control",
+      "pixelBox": {
+        "x": 94,
+        "y": 266,
+        "w": 245,
+        "h": 60
+      },
+      "note": "Pale apricot primary Explore the demo entrance with arrow."
+    },
+    {
+      "id": "hub-window",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 529,
+        "y": 151,
+        "w": 921,
+        "h": 701
+      },
+      "note": "Native accessible hub layout container with border, header and sidebar. Separate children and external surface texture.",
+      "container": true,
+      "codeDrawn": true
+    },
+    {
+      "id": "paper-surface",
+      "kind": "texture",
+      "pixelBox": {
+        "x": 1325,
+        "y": 263,
+        "w": 70,
+        "h": 66
+      },
+      "note": "Warm ivory softly mottled paper material sample for window surface; generate seamless neutral texture without text or marks."
+    },
+    {
+      "id": "hub-brand",
+      "kind": "text",
+      "pixelBox": {
+        "x": 562,
+        "y": 212,
+        "w": 183,
+        "h": 34
+      },
+      "note": "Leaf symbol and Kentcrosswise brand in hub title bar.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "simulated-label",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1154,
+        "y": 193,
+        "w": 137,
+        "h": 34
+      },
+      "note": "Persistent Simulated data disclosure.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "day-night",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1316,
+        "y": 185,
+        "w": 92,
+        "h": 40
+      },
+      "note": "Accessible Day and Night selection with sun and moon.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "greeting",
+      "kind": "text",
+      "pixelBox": {
+        "x": 700,
+        "y": 274,
+        "w": 219,
+        "h": 39
+      },
+      "note": "Good evening. Native serif greeting.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "hub-intro",
+      "kind": "text",
+      "pixelBox": {
+        "x": 701,
+        "y": 312,
+        "w": 480,
+        "h": 27
+      },
+      "note": "A glimpse of your world; adapt unsupported agent claim to truthful simulated demo description.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "sidebar-home",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 281,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native home sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-people",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 326,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native people sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-mood",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 365,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native mood sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-following",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 405,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native following sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-notes",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 444,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native notes sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-agents",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 484,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native agents sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-office",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 578,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native office sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "sidebar-settings",
+      "kind": "control",
+      "pixelBox": {
+        "x": 553,
+        "y": 619,
+        "w": 116,
+        "h": 35
+      },
+      "note": "Native settings sidebar link or functional preference control.",
+      "parentId": "hub-window",
+      "reviewGroup": "sidebar-links"
+    },
+    {
+      "id": "people-panel",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 697,
+        "y": 356,
+        "w": 204,
+        "h": 219
+      },
+      "note": "Native people panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "parentId": "hub-window",
+      "container": true
+    },
+    {
+      "id": "mood-panel",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 910,
+        "y": 351,
+        "w": 306,
+        "h": 225
+      },
+      "note": "Native mood panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "parentId": "hub-window",
+      "container": true
+    },
+    {
+      "id": "following-panel",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 1222,
+        "y": 348,
+        "w": 195,
+        "h": 234
+      },
+      "note": "Native following panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "parentId": "hub-window",
+      "container": true
+    },
+    {
+      "id": "activity-panel",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 696,
+        "y": 592,
+        "w": 359,
+        "h": 208
+      },
+      "note": "Native activity panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "parentId": "hub-window",
+      "container": true
+    },
+    {
+      "id": "explore-panel",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 1067,
+        "y": 597,
+        "w": 354,
+        "h": 218
+      },
+      "note": "Native explore panel layout with thin warm rule and subtle ivory fill; children separately mapped.",
+      "parentId": "hub-window",
+      "container": true
+    },
+    {
+      "id": "people-title",
+      "kind": "text",
+      "pixelBox": {
+        "x": 711,
+        "y": 372,
+        "w": 55,
+        "h": 20
+      },
+      "note": "People panel title.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "people-all",
+      "kind": "text",
+      "pixelBox": {
+        "x": 830,
+        "y": 372,
+        "w": 58,
+        "h": 21
+      },
+      "note": "View all link.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "mood-title",
+      "kind": "text",
+      "pixelBox": {
+        "x": 926,
+        "y": 369,
+        "w": 53,
+        "h": 21
+      },
+      "note": "Mood panel title.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "mood-range",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1130,
+        "y": 368,
+        "w": 69,
+        "h": 21
+      },
+      "note": "Last 7 days chart range.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "following-title",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1238,
+        "y": 367,
+        "w": 79,
+        "h": 22
+      },
+      "note": "Following panel title.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "following-total",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1368,
+        "y": 367,
+        "w": 35,
+        "h": 21
+      },
+      "note": "Total column label.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "happiness-label",
+      "kind": "text",
+      "pixelBox": {
+        "x": 926,
+        "y": 409,
+        "w": 78,
+        "h": 19
+      },
+      "note": "Happiness label.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "happiness-value",
+      "kind": "text",
+      "pixelBox": {
+        "x": 925,
+        "y": 432,
+        "w": 68,
+        "h": 30
+      },
+      "note": "Actual fixture happiness 0.29.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "stress-label",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1078,
+        "y": 409,
+        "w": 57,
+        "h": 19
+      },
+      "note": "Stress label.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "stress-value",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1078,
+        "y": 432,
+        "w": 71,
+        "h": 30
+      },
+      "note": "Actual fixture stress 0.91.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "activity-title",
+      "kind": "text",
+      "pixelBox": {
+        "x": 710,
+        "y": 605,
+        "w": 130,
+        "h": 22
+      },
+      "note": "Recent activity heading.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "explore-title",
+      "kind": "text",
+      "pixelBox": {
+        "x": 1081,
+        "y": 610,
+        "w": 112,
+        "h": 22
+      },
+      "note": "Explore more heading.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "happiness-chart",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 926,
+        "y": 476,
+        "w": 124,
+        "h": 88
+      },
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "stress-chart",
+      "kind": "chrome",
+      "pixelBox": {
+        "x": 1079,
+        "y": 476,
+        "w": 127,
+        "h": 88
+      },
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "avatar-1",
+      "kind": "image",
+      "pixelBox": {
+        "x": 711,
+        "y": 410,
+        "w": 40,
+        "h": 42
+      },
+      "note": "Synthetic portrait of fictional demo contact Ivo Merriweather; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "parentId": "hub-window",
+      "bleed": true
+    },
+    {
+      "id": "person-1",
+      "kind": "control",
+      "pixelBox": {
+        "x": 761,
+        "y": 417,
+        "w": 126,
+        "h": 29
+      },
+      "note": "Link to fictional fixture contact Ivo Merriweather.",
+      "parentId": "hub-window",
+      "reviewGroup": "person-links"
+    },
+    {
+      "id": "avatar-2",
+      "kind": "image",
+      "pixelBox": {
+        "x": 711,
+        "y": 464,
+        "w": 40,
+        "h": 42
+      },
+      "note": "Synthetic portrait of fictional demo contact Sol Ashdown; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "parentId": "hub-window",
+      "bleed": true
+    },
+    {
+      "id": "person-2",
+      "kind": "control",
+      "pixelBox": {
+        "x": 761,
+        "y": 471,
+        "w": 126,
+        "h": 29
+      },
+      "note": "Link to fictional fixture contact Sol Ashdown.",
+      "parentId": "hub-window",
+      "reviewGroup": "person-links"
+    },
+    {
+      "id": "avatar-3",
+      "kind": "image",
+      "pixelBox": {
+        "x": 711,
+        "y": 518,
+        "w": 40,
+        "h": 42
+      },
+      "note": "Synthetic portrait of fictional demo contact Dev Juniper; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "parentId": "hub-window",
+      "bleed": true
+    },
+    {
+      "id": "person-3",
+      "kind": "control",
+      "pixelBox": {
+        "x": 761,
+        "y": 525,
+        "w": 126,
+        "h": 29
+      },
+      "note": "Link to fictional fixture contact Dev Juniper.",
+      "parentId": "hub-window",
+      "reviewGroup": "person-links"
+    },
+    {
+      "id": "youtube-row",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1238,
+        "y": 412,
+        "w": 166,
+        "h": 35
+      },
+      "note": "Platform icon, label and actual seeded follower count YouTube 5,120.",
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows"
+    },
+    {
+      "id": "instagram-row",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1238,
+        "y": 466,
+        "w": 166,
+        "h": 35
+      },
+      "note": "Platform icon, label and actual seeded follower count Instagram 4,709.",
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows"
+    },
+    {
+      "id": "tiktok-row",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1238,
+        "y": 520,
+        "w": 166,
+        "h": 35
+      },
+      "note": "Platform icon, label and actual seeded follower count TikTok 3,946.",
+      "parentId": "hub-window",
+      "reviewGroup": "social-rows"
+    },
+    {
+      "id": "activity-one",
+      "kind": "control",
+      "pixelBox": {
+        "x": 713,
+        "y": 640,
+        "w": 323,
+        "h": 45
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries"
+    },
+    {
+      "id": "activity-two",
+      "kind": "control",
+      "pixelBox": {
+        "x": 713,
+        "y": 691,
+        "w": 323,
+        "h": 45
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries"
+    },
+    {
+      "id": "activity-three",
+      "kind": "control",
+      "pixelBox": {
+        "x": 713,
+        "y": 742,
+        "w": 323,
+        "h": 45
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment.",
+      "parentId": "hub-window",
+      "reviewGroup": "activity-entries"
+    },
+    {
+      "id": "explore-demo",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1082,
+        "y": 646,
+        "w": 324,
+        "h": 57
+      },
+      "note": "Working Explore the demo link and simulated data description.",
+      "parentId": "hub-window"
+    },
+    {
+      "id": "explore-office",
+      "kind": "control",
+      "pixelBox": {
+        "x": 1082,
+        "y": 708,
+        "w": 324,
+        "h": 62
+      },
+      "note": "Working Agent office link with factual description.",
+      "parentId": "hub-window"
+    }
+  ]
+}

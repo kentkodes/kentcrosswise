@@ -1,0 +1,749 @@
+{
+  "schemaVersion": 3,
+  "stage": "components",
+  "id": "components",
+  "title": "Plan and asset review",
+  "comp": {
+    "path": ".impeccable/mocks/03-hub-window.png",
+    "width": 1505,
+    "height": 1045
+  },
+  "specSha256": "e8dc71e6000b4de42a3342c4a3c01ecbbe146166059f9a63c69275082908974f",
+  "components": [
+    {
+      "id": "hub-window",
+      "name": "Hub window",
+      "kind": "chrome",
+      "role": "plan",
+      "box": {
+        "x": 0.3515,
+        "y": 0.1445,
+        "w": 0.612,
+        "h": 0.6708
+      },
+      "note": "Native accessible hub layout container with border, header and sidebar. Separate children and external surface texture.",
+      "medium": "code",
+      "preview": {
+        "kind": "comp-crop"
+      },
+      "codeDrawn": true,
+      "dependencies": []
+    },
+    {
+      "id": "landscape",
+      "name": "Landscape",
+      "kind": "plate",
+      "role": "asset",
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 1
+      },
+      "note": "Original dusk lake and mountain meadow, sky and flowers. Generate a clean scene without any UI, text or computer. Day/night tint changes independently.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/landscape.png"
+      },
+      "dependencies": []
+    },
+    {
+      "id": "retro-computer",
+      "name": "Retro computer",
+      "kind": "plate",
+      "role": "asset",
+      "box": {
+        "x": 0.0319,
+        "y": 0.4967,
+        "w": 0.2346,
+        "h": 0.2555
+      },
+      "note": "Original warm beige CRT and keyboard decorative physical object with static landscape screen; transparent cutout separately composited on the meadow.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/retro-computer.png"
+      },
+      "dependencies": []
+    },
+    {
+      "id": "paper-surface",
+      "name": "Paper surface",
+      "kind": "texture",
+      "role": "asset",
+      "box": {
+        "x": 0.8804,
+        "y": 0.2517,
+        "w": 0.0465,
+        "h": 0.0632
+      },
+      "note": "Warm ivory softly mottled paper material sample for window surface; generate seamless neutral texture without text or marks.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/paper-surface.png"
+      },
+      "dependencies": []
+    },
+    {
+      "id": "avatar-1",
+      "name": "Avatar 1",
+      "kind": "image",
+      "role": "asset",
+      "box": {
+        "x": 0.4724,
+        "y": 0.3923,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "note": "Synthetic portrait of fictional demo contact Ivo Merriweather; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/avatar-1.png"
+      },
+      "dependencies": []
+    },
+    {
+      "id": "avatar-2",
+      "name": "Avatar 2",
+      "kind": "image",
+      "role": "asset",
+      "box": {
+        "x": 0.4724,
+        "y": 0.444,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "note": "Synthetic portrait of fictional demo contact Sol Ashdown; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/avatar-2.png"
+      },
+      "dependencies": []
+    },
+    {
+      "id": "avatar-3",
+      "name": "Avatar 3",
+      "kind": "image",
+      "role": "asset",
+      "box": {
+        "x": 0.4724,
+        "y": 0.4957,
+        "w": 0.0266,
+        "h": 0.0402
+      },
+      "note": "Synthetic portrait of fictional demo contact Dev Juniper; independent circular avatar asset. Intentionally circular-cropped portrait in the UI.",
+      "medium": "raster",
+      "preview": {
+        "kind": "image",
+        "path": "assets/plates/avatar-3.png"
+      },
+      "dependencies": []
+    }
+  ],
+  "codeRegions": [
+    {
+      "id": "wordmark",
+      "name": "Wordmark",
+      "kind": "text",
+      "box": {
+        "x": 0.0625,
+        "y": 0.023,
+        "w": 0.1767,
+        "h": 0.0421
+      },
+      "note": "Kentcrosswise ivory serif wordmark."
+    },
+    {
+      "id": "headline",
+      "name": "Headline",
+      "kind": "text",
+      "box": {
+        "x": 0.0611,
+        "y": 0.1129,
+        "w": 0.2711,
+        "h": 0.111
+      },
+      "note": "A little space for your everyday. Two-line large ivory serif headline."
+    },
+    {
+      "id": "nav-home",
+      "name": "Nav home",
+      "kind": "control",
+      "box": {
+        "x": 0.6824,
+        "y": 0.023,
+        "w": 0.0319,
+        "h": 0.0478
+      },
+      "note": "Working home navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-demo",
+      "name": "Nav demo",
+      "kind": "control",
+      "box": {
+        "x": 0.7429,
+        "y": 0.023,
+        "w": 0.0312,
+        "h": 0.0478
+      },
+      "note": "Working demo navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-office",
+      "name": "Nav office",
+      "kind": "control",
+      "box": {
+        "x": 0.8,
+        "y": 0.023,
+        "w": 0.0299,
+        "h": 0.0478
+      },
+      "note": "Working office navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "nav-sign-in",
+      "name": "Nav sign in",
+      "kind": "control",
+      "box": {
+        "x": 0.8684,
+        "y": 0.023,
+        "w": 0.0731,
+        "h": 0.0478
+      },
+      "note": "Working sign-in navigation link; sign-in outlined pill."
+    },
+    {
+      "id": "demo-entrance",
+      "name": "Demo entrance",
+      "kind": "control",
+      "box": {
+        "x": 0.0625,
+        "y": 0.2545,
+        "w": 0.1628,
+        "h": 0.0574
+      },
+      "note": "Pale apricot primary Explore the demo entrance with arrow."
+    },
+    {
+      "id": "hub-brand",
+      "name": "Hub brand",
+      "kind": "text",
+      "box": {
+        "x": 0.3734,
+        "y": 0.2029,
+        "w": 0.1216,
+        "h": 0.0325
+      },
+      "note": "Leaf symbol and Kentcrosswise brand in hub title bar."
+    },
+    {
+      "id": "simulated-label",
+      "name": "Simulated label",
+      "kind": "text",
+      "box": {
+        "x": 0.7668,
+        "y": 0.1847,
+        "w": 0.091,
+        "h": 0.0325
+      },
+      "note": "Persistent Simulated data disclosure."
+    },
+    {
+      "id": "day-night",
+      "name": "Day night",
+      "kind": "control",
+      "box": {
+        "x": 0.8744,
+        "y": 0.177,
+        "w": 0.0611,
+        "h": 0.0383
+      },
+      "note": "Accessible Day and Night selection with sun and moon."
+    },
+    {
+      "id": "greeting",
+      "name": "Greeting",
+      "kind": "text",
+      "box": {
+        "x": 0.4651,
+        "y": 0.2622,
+        "w": 0.1455,
+        "h": 0.0373
+      },
+      "note": "Good evening. Native serif greeting."
+    },
+    {
+      "id": "hub-intro",
+      "name": "Hub intro",
+      "kind": "text",
+      "box": {
+        "x": 0.4658,
+        "y": 0.2986,
+        "w": 0.3189,
+        "h": 0.0258
+      },
+      "note": "A glimpse of your world; adapt unsupported agent claim to truthful simulated demo description."
+    },
+    {
+      "id": "sidebar-home",
+      "name": "Sidebar home",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.2689,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native home sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-people",
+      "name": "Sidebar people",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.312,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native people sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-mood",
+      "name": "Sidebar mood",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.3493,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native mood sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-following",
+      "name": "Sidebar following",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.3876,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native following sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-notes",
+      "name": "Sidebar notes",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.4249,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native notes sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-agents",
+      "name": "Sidebar agents",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.4632,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native agents sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-office",
+      "name": "Sidebar office",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.5531,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native office sidebar link or functional preference control."
+    },
+    {
+      "id": "sidebar-settings",
+      "name": "Sidebar settings",
+      "kind": "control",
+      "box": {
+        "x": 0.3674,
+        "y": 0.5923,
+        "w": 0.0771,
+        "h": 0.0335
+      },
+      "note": "Native settings sidebar link or functional preference control."
+    },
+    {
+      "id": "people-panel",
+      "name": "People panel",
+      "kind": "chrome",
+      "box": {
+        "x": 0.4631,
+        "y": 0.3407,
+        "w": 0.1355,
+        "h": 0.2096
+      },
+      "note": "Native people panel layout with thin warm rule and subtle ivory fill; children separately mapped."
+    },
+    {
+      "id": "mood-panel",
+      "name": "Mood panel",
+      "kind": "chrome",
+      "box": {
+        "x": 0.6047,
+        "y": 0.3359,
+        "w": 0.2033,
+        "h": 0.2153
+      },
+      "note": "Native mood panel layout with thin warm rule and subtle ivory fill; children separately mapped."
+    },
+    {
+      "id": "following-panel",
+      "name": "Following panel",
+      "kind": "chrome",
+      "box": {
+        "x": 0.812,
+        "y": 0.333,
+        "w": 0.1296,
+        "h": 0.2239
+      },
+      "note": "Native following panel layout with thin warm rule and subtle ivory fill; children separately mapped."
+    },
+    {
+      "id": "activity-panel",
+      "name": "Activity panel",
+      "kind": "chrome",
+      "box": {
+        "x": 0.4625,
+        "y": 0.5665,
+        "w": 0.2385,
+        "h": 0.199
+      },
+      "note": "Native activity panel layout with thin warm rule and subtle ivory fill; children separately mapped."
+    },
+    {
+      "id": "explore-panel",
+      "name": "Explore panel",
+      "kind": "chrome",
+      "box": {
+        "x": 0.709,
+        "y": 0.5713,
+        "w": 0.2352,
+        "h": 0.2086
+      },
+      "note": "Native explore panel layout with thin warm rule and subtle ivory fill; children separately mapped."
+    },
+    {
+      "id": "people-title",
+      "name": "People title",
+      "kind": "text",
+      "box": {
+        "x": 0.4724,
+        "y": 0.356,
+        "w": 0.0365,
+        "h": 0.0191
+      },
+      "note": "People panel title."
+    },
+    {
+      "id": "people-all",
+      "name": "People all",
+      "kind": "text",
+      "box": {
+        "x": 0.5515,
+        "y": 0.356,
+        "w": 0.0385,
+        "h": 0.0201
+      },
+      "note": "View all link."
+    },
+    {
+      "id": "mood-title",
+      "name": "Mood title",
+      "kind": "text",
+      "box": {
+        "x": 0.6153,
+        "y": 0.3531,
+        "w": 0.0352,
+        "h": 0.0201
+      },
+      "note": "Mood panel title."
+    },
+    {
+      "id": "mood-range",
+      "name": "Mood range",
+      "kind": "text",
+      "box": {
+        "x": 0.7508,
+        "y": 0.3522,
+        "w": 0.0458,
+        "h": 0.0201
+      },
+      "note": "Last 7 days chart range."
+    },
+    {
+      "id": "following-title",
+      "name": "Following title",
+      "kind": "text",
+      "box": {
+        "x": 0.8226,
+        "y": 0.3512,
+        "w": 0.0525,
+        "h": 0.0211
+      },
+      "note": "Following panel title."
+    },
+    {
+      "id": "following-total",
+      "name": "Following total",
+      "kind": "text",
+      "box": {
+        "x": 0.909,
+        "y": 0.3512,
+        "w": 0.0233,
+        "h": 0.0201
+      },
+      "note": "Total column label."
+    },
+    {
+      "id": "happiness-label",
+      "name": "Happiness label",
+      "kind": "text",
+      "box": {
+        "x": 0.6153,
+        "y": 0.3914,
+        "w": 0.0518,
+        "h": 0.0182
+      },
+      "note": "Happiness label."
+    },
+    {
+      "id": "happiness-value",
+      "name": "Happiness value",
+      "kind": "text",
+      "box": {
+        "x": 0.6146,
+        "y": 0.4134,
+        "w": 0.0452,
+        "h": 0.0287
+      },
+      "note": "Actual fixture happiness 0.29."
+    },
+    {
+      "id": "stress-label",
+      "name": "Stress label",
+      "kind": "text",
+      "box": {
+        "x": 0.7163,
+        "y": 0.3914,
+        "w": 0.0379,
+        "h": 0.0182
+      },
+      "note": "Stress label."
+    },
+    {
+      "id": "stress-value",
+      "name": "Stress value",
+      "kind": "text",
+      "box": {
+        "x": 0.7163,
+        "y": 0.4134,
+        "w": 0.0472,
+        "h": 0.0287
+      },
+      "note": "Actual fixture stress 0.91."
+    },
+    {
+      "id": "activity-title",
+      "name": "Activity title",
+      "kind": "text",
+      "box": {
+        "x": 0.4718,
+        "y": 0.5789,
+        "w": 0.0864,
+        "h": 0.0211
+      },
+      "note": "Recent activity heading."
+    },
+    {
+      "id": "explore-title",
+      "name": "Explore title",
+      "kind": "text",
+      "box": {
+        "x": 0.7183,
+        "y": 0.5837,
+        "w": 0.0744,
+        "h": 0.0211
+      },
+      "note": "Explore more heading."
+    },
+    {
+      "id": "happiness-chart",
+      "name": "Happiness chart",
+      "kind": "chrome",
+      "box": {
+        "x": 0.6153,
+        "y": 0.4555,
+        "w": 0.0824,
+        "h": 0.0842
+      },
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels."
+    },
+    {
+      "id": "stress-chart",
+      "name": "Stress chart",
+      "kind": "chrome",
+      "box": {
+        "x": 0.7169,
+        "y": 0.4555,
+        "w": 0.0844,
+        "h": 0.0842
+      },
+      "note": "Native SVG line chart driven by actual fixture days, including axis and labels."
+    },
+    {
+      "id": "person-1",
+      "name": "Person 1",
+      "kind": "control",
+      "box": {
+        "x": 0.5056,
+        "y": 0.399,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "note": "Link to fictional fixture contact Ivo Merriweather."
+    },
+    {
+      "id": "person-2",
+      "name": "Person 2",
+      "kind": "control",
+      "box": {
+        "x": 0.5056,
+        "y": 0.4507,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "note": "Link to fictional fixture contact Sol Ashdown."
+    },
+    {
+      "id": "person-3",
+      "name": "Person 3",
+      "kind": "control",
+      "box": {
+        "x": 0.5056,
+        "y": 0.5024,
+        "w": 0.0837,
+        "h": 0.0278
+      },
+      "note": "Link to fictional fixture contact Dev Juniper."
+    },
+    {
+      "id": "youtube-row",
+      "name": "Youtube row",
+      "kind": "control",
+      "box": {
+        "x": 0.8226,
+        "y": 0.3943,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "note": "Platform icon, label and actual seeded follower count YouTube 5,120."
+    },
+    {
+      "id": "instagram-row",
+      "name": "Instagram row",
+      "kind": "control",
+      "box": {
+        "x": 0.8226,
+        "y": 0.4459,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "note": "Platform icon, label and actual seeded follower count Instagram 4,709."
+    },
+    {
+      "id": "tiktok-row",
+      "name": "Tiktok row",
+      "kind": "control",
+      "box": {
+        "x": 0.8226,
+        "y": 0.4976,
+        "w": 0.1103,
+        "h": 0.0335
+      },
+      "note": "Platform icon, label and actual seeded follower count TikTok 3,946."
+    },
+    {
+      "id": "activity-one",
+      "name": "Activity one",
+      "kind": "control",
+      "box": {
+        "x": 0.4738,
+        "y": 0.6124,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment."
+    },
+    {
+      "id": "activity-two",
+      "name": "Activity two",
+      "kind": "control",
+      "box": {
+        "x": 0.4738,
+        "y": 0.6612,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment."
+    },
+    {
+      "id": "activity-three",
+      "name": "Activity three",
+      "kind": "control",
+      "box": {
+        "x": 0.4738,
+        "y": 0.71,
+        "w": 0.2146,
+        "h": 0.0431
+      },
+      "note": "Native fixture entry with type icon, real seeded text and date; replace unsupported mock agent accomplishment."
+    },
+    {
+      "id": "explore-demo",
+      "name": "Explore demo",
+      "kind": "control",
+      "box": {
+        "x": 0.7189,
+        "y": 0.6182,
+        "w": 0.2153,
+        "h": 0.0545
+      },
+      "note": "Working Explore the demo link and simulated data description."
+    },
+    {
+      "id": "explore-office",
+      "name": "Explore office",
+      "kind": "control",
+      "box": {
+        "x": 0.7189,
+        "y": 0.6775,
+        "w": 0.2153,
+        "h": 0.0593
+      },
+      "note": "Working Agent office link with factual description."
+    }
+  ]
+}
