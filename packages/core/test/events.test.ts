@@ -72,8 +72,18 @@ describe("parseAgentReport", () => {
     );
   });
 
+  it("accepts a usage-only report without event_type", () => {
+    const usage = [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 10, output_tokens: 2 }];
+    const report = parseAgentReport({ task_id: 4, agent: "qa", usage });
+    expect(report).toEqual({ task_id: 4, agent: "qa", usage });
+    expect(report).not.toHaveProperty("event_type");
+  });
+
   it.each([
     [null, /object/],
+    [{ task_id: 1, agent: "qa" }, /event_type, usage, or both/],
+    [{ task_id: 1, agent: "qa", usage: [] }, /event_type, usage, or both/],
+    [{ task_id: 1, agent: "qa", event_type: null, usage: [{ kind: "actions_minutes", minutes: 1 }] }, /event_type/],
     [{ task_id: "1", agent: "qa", event_type: "approved" }, /task_id/],
     [{ task_id: 1.5, agent: "qa", event_type: "approved" }, /task_id/],
     [{ task_id: 1, agent: "boss", event_type: "approved" }, /agent/],

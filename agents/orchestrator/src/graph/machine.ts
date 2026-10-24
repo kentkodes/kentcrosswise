@@ -14,6 +14,9 @@ import { publicText } from "../nodes/public-title";
 import type { TaskRecord, TaskStatus, TaskStore } from "./store";
 import {
   DEV_WORKFLOW,
+  DOCS_NO_RUN_MINUTES,
+  DOCS_WAIT_LIMIT_MINUTES,
+  DOCS_WORKFLOW,
   INCOMPLETE_INPUT_TIMEOUT_MINUTES,
   IN_FLIGHT_LIMIT,
   MAX_ATTEMPTS,
@@ -21,6 +24,7 @@ import {
   PlannerOutputError,
   WAIT_LIMIT_MINUTES,
   branchOf,
+  docsRunName,
   waitingOnOf,
   type DevMode,
   type GitHubInput,
@@ -59,6 +63,9 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   no_artifact: "the ci.yml run has no merge-rules-input artifact",
 };
 
+/** Allowance for clock skew between the orchestrator and GitHub when looking up a docs run. */
+const DOCS_RUN_CLOCK_SLACK_MS = 2 * 60_000;
+
 const isCiRun = (i: Extract<GitHubInput, { event: "workflow_run" }>) =>
   i.action === "completed" &&
   i.trigger === "pull_request" &&
@@ -94,12 +101,27 @@ class Machine {
   minutesSince(iso: string | null): number {
     return iso === null ? 0 : (this.now().getTime() - Date.parse(iso)) / 60_000;
   }
+  /** A docs task (§4.2 step 8): Docs-keeper instead of the planner and the Developer. */
+  get isDocs(): boolean {
+    return this.d.kind === "docs";
+  }
+  /** What approving a failed Developer step restarts: a docs task has no Developer. */
+  get devRetry(): RetryTarget {
+    return this.isDocs ? "docs" : "dev";
+  }
 
   // ------------------------------------------------------------------ entry
 
   async run(input: TaskInput): Promise<void> {
     const d = this.d;
     d.last_message_id = input.message_id;
+
+    // The docs kind comes only from the orchestrator's own start input (index.ts startDocsTask),
+    // captured before the pause check so a start deferred while paused still takes the docs path.
+    if (input.kind === "start" && input.docs && d.kind === undefined && d.phase === "queued") {
+      d.kind = "docs";
+      d.docs_pr = input.docs.pr;
+    }
 
     // Reports only add office events and usage; they never drive the PR loop (GitHub does).
     if (input.kind === "report") {
@@ -201,18 +223,24 @@ class Machine {
     }
     const status: TaskStatus = phase === "done" ? (finalStatus ?? "done") : phase === "queued" ? "queued" : "waiting";
     const agent: AgentName | null =
-      phase === "dev" ? "developer" : phase === "qa" ? "qa" : phase === "done" ? null : "orchestrator";
+      phase === "dev" ? (this.isDocs ? "docs" : "developer") : phase === "qa" ? "qa" : phase === "done" ? null : "orchestrator";
     await this.store.updateTask(this.id, { status, waiting_on: waitingOnOf(phase), agent });
   }
 
   async report(r: AgentReport): Promise<StepOutcome> {
     if (r.usage && r.usage.length > 0) await this.store.addUsage(this.id, r.agent, r.usage);
-    const expected: AgentName | null = this.d.phase === "dev" ? "developer" : this.d.phase === "qa" ? "qa" : null;
+    // A usage-only report (DESIGN §11 Q14(5)) has no lifecycle meaning: no event, no status change.
+    if (r.event_type === undefined) return "unchanged";
+    const expected: AgentName | null =
+      this.d.phase === "dev" ? (this.isDocs ? "docs" : "developer") : this.d.phase === "qa" ? "qa" : null;
     if (r.agent !== expected) {
       this.d.stale += 1;
       this.log(`stale report from ${r.agent} in phase ${this.d.phase}`);
       return "stale";
     }
+    // Bookkeeping only (the docs sweep tells a no-change run from one that never ran); reports
+    // still never drive the loop.
+    if (this.isDocs && r.event_type === "coding") this.d.docs_started = true;
     await this.event(r.event_type, r.agent, { source: "report" });
     return "applied";
   }
@@ -232,7 +260,18 @@ class Machine {
       return "queued";
     }
 
-    return this.plan(task);
+    return this.isDocs ? this.startDocs() : this.plan(task);
+  }
+
+  /** §4.2 step 8: a docs task skips the planner, the public-title node and the issue. */
+  async startDocs(): Promise<StepOutcome> {
+    const pr = this.d.docs_pr;
+    if (typeof pr !== "number") return this.finish("failed", "the docs task has no merged PR");
+    // Matches the docs PR title (agent-publish pullText); also the squash commit title.
+    this.d.issue_title = `docs: update after #${pr}`;
+    await this.store.updateTask(this.id, { branch: branchOf(this.id) });
+    await this.dispatchDocs();
+    return "applied";
   }
 
   /**
@@ -329,6 +368,17 @@ class Machine {
     await this.enter("dev");
   }
 
+  async dispatchDocs(reason?: string): Promise<void> {
+    const d = this.d;
+    await this.github.dispatchWorkflow({
+      workflow: DOCS_WORKFLOW,
+      inputs: { task_id: String(this.id), pr: String(d.docs_pr) },
+    });
+    d.docs_started = false; // this run's start report sets it
+    await this.event("task_assigned", "docs", { pr: d.docs_pr, attempts: d.attempts, ...(reason && { reason }) });
+    await this.enter("dev");
+  }
+
   async dispatchQa(reason?: string): Promise<void> {
     await this.github.dispatchWorkflow({
       workflow: QA_WORKFLOW,
@@ -350,7 +400,7 @@ class Machine {
       d.head_sha = i.head_sha;
       d.ci = null;
       await this.store.updateTask(this.id, { pr_number: i.pr_number, head_sha: i.head_sha });
-      await this.event("pr_opened", "developer", { pr: i.pr_number });
+      await this.event("pr_opened", this.isDocs ? "docs" : "developer", { pr: i.pr_number });
     } else {
       // A fix: new commits on the same PR.
       if (i.pr_number !== d.pr_number || i.head_sha === d.head_sha) return undefined;
@@ -410,6 +460,11 @@ class Machine {
     const d = this.d;
     d.attempts += 1;
     await this.store.updateTask(this.id, { attempts: d.attempts });
+    if (this.isDocs) {
+      // No Developer fixes a docs PR: the owner decides (approve re-dispatches Docs-keeper).
+      await this.toOwnerFailure(`${what} on the docs PR.`, "docs");
+      return;
+    }
     if (d.attempts < MAX_ATTEMPTS) {
       await this.dispatchDev("fix");
       return;
@@ -515,11 +570,24 @@ class Machine {
     const res = await this.github.merge({ pr, headSha, title: `${d.issue_title ?? PRIVATE_TITLE} (#${pr})` });
     if (res.merged) {
       await this.event("merged", "orchestrator", { pr, sha: res.sha });
+      // §4.2 step 8: Docs-keeper follows every merged work PR, never a docs PR (no loop).
+      if (!this.isDocs) await this.createDocsTask(pr);
       await this.enter("done", "merged");
       return;
     }
     if (res.reason === "head_changed") return this.incomplete("head_moved"); // the push event moves it back to CI
-    await this.toOwnerFailure("GitHub refused the merge (conflicts or a required check).", "dev");
+    await this.toOwnerFailure("GitHub refused the merge (conflicts or a required check).", this.devRetry);
+  }
+
+  /** The docs child of this merged task (idempotent); the handler starts its thread (index.ts `startDocsTask`). */
+  async createDocsTask(pr: number): Promise<void> {
+    const sanitizer = createSanitizer({
+      contacts: await this.store.loadContacts(),
+      ...(this.deps.blocklist && { blocklist: this.deps.blocklist }),
+    });
+    const title = `Docs update after #${pr}`;
+    this.d.docs_task = await this.store.createDocsTask(this.id, pr, sanitizer.check(title).ok ? title : null);
+    this.log(`docs task task-${this.d.docs_task}`);
   }
 
   // ------------------------------------------------------------------ owner (§4.3 owner decisions)
@@ -543,7 +611,13 @@ class Machine {
    */
   async toOwnerFailure(what: string, retry: RetryTarget): Promise<void> {
     const again =
-      retry === "qa" ? "dispatch QA again" : retry === "plan" ? "plan the task again" : `give the Developer ${MAX_ATTEMPTS} more attempts`;
+      retry === "qa"
+        ? "dispatch QA again"
+        : retry === "plan"
+          ? "plan the task again"
+          : retry === "docs"
+            ? "dispatch Docs-keeper again"
+            : `give the Developer ${MAX_ATTEMPTS} more attempts`;
     await this.toOwner("failure", "critical_pr", [`Task failed: ${what}`, `Approve to ${again}; reject to mark the task failed.`], `Task ${this.id} failed: needs a decision`);
     this.d.retry = retry;
   }
@@ -586,6 +660,10 @@ class Machine {
     }
     if (d.retry === "qa") {
       await this.dispatchQa("owner retry");
+    } else if (d.retry === "docs") {
+      d.attempts = 0;
+      await this.store.updateTask(this.id, { attempts: 0 });
+      await this.dispatchDocs("owner retry");
     } else {
       d.attempts = 0;
       await this.store.updateTask(this.id, { attempts: 0 });
@@ -605,12 +683,13 @@ class Machine {
   async timeout(): Promise<StepOutcome> {
     const d = this.d;
     const phase = d.phase as "dev" | "ci" | "qa";
+    if (phase === "dev" && this.isDocs) return this.docsSweep();
     const limit = WAIT_LIMIT_MINUTES[phase];
     if (this.minutesSince(d.waiting_since) < limit) return "unchanged";
     const reason = `timeout after ${limit} min`;
     if (phase === "ci") {
       // CI is not an agent workflow: there is nothing to redispatch.
-      await this.toOwnerFailure(`CI did not finish within ${limit} minutes.`, "dev");
+      await this.toOwnerFailure(`CI did not finish within ${limit} minutes.`, this.devRetry);
     } else if (!d.redispatched) {
       // Redispatch once (§4.3).
       if (phase === "dev") await this.dispatchDev(d.dev_mode, reason);
@@ -622,6 +701,55 @@ class Machine {
         phase === "dev" ? "dev" : "qa",
       );
     }
+    return "applied";
+  }
+
+  /**
+   * A docs task waiting on Docs-keeper (phase `dev`). A run that changes nothing opens no PR, so
+   * the sweep reads the run's state, found by its run-name (the dispatch API returns no run id).
+   */
+  async docsSweep(): Promise<StepOutcome> {
+    const d = this.d;
+    const waited = this.minutesSince(d.waiting_since);
+    const since = Date.parse(d.waiting_since ?? this.now().toISOString()) - DOCS_RUN_CLOCK_SLACK_MS;
+    const run = await this.github.findWorkflowRun({
+      workflow: DOCS_WORKFLOW,
+      displayTitle: docsRunName(this.id),
+      createdAfter: new Date(since).toISOString(),
+    });
+    if (run === null) {
+      if (waited < DOCS_NO_RUN_MINUTES) return "unchanged";
+      return this.redispatchDocsOnce(`no ${DOCS_WORKFLOW} run started within ${DOCS_NO_RUN_MINUTES} minutes`);
+    }
+    if (run.status !== "completed") {
+      if (waited < DOCS_WAIT_LIMIT_MINUTES) return "unchanged";
+      await this.toOwnerFailure(`Docs-keeper did not finish within ${DOCS_WAIT_LIMIT_MINUTES} minutes.`, "docs");
+      return "applied";
+    }
+    if (run.conclusion === "success" || run.conclusion === "skipped") {
+      // No start report: every job was skipped (KCW_AGENT_WORKFLOWS_ENABLED not true). No inbox item.
+      if (!d.docs_started) return this.finish("failed", "Docs-keeper did not run (agent workflows disabled or every job skipped)");
+      if (d.pr_number === null) {
+        this.log("no docs change");
+        await this.enter("done", "done");
+        return "applied";
+      }
+      await this.toOwnerFailure(`Docs-keeper finished without new commits on PR #${d.pr_number}.`, "docs");
+      return "applied";
+    }
+    // The sweeper cancels agent runs on pause-all.
+    if (run.conclusion === "cancelled") return this.redispatchDocsOnce(`the ${DOCS_WORKFLOW} run was cancelled`);
+    await this.toOwnerFailure(`the ${DOCS_WORKFLOW} run ended ${run.conclusion ?? "without a conclusion"}.`, "docs");
+    return "applied";
+  }
+
+  async redispatchDocsOnce(reason: string): Promise<StepOutcome> {
+    if (this.d.redispatched) {
+      await this.toOwnerFailure(`${reason}, after one redispatch.`, "docs");
+      return "applied";
+    }
+    await this.dispatchDocs(reason);
+    this.d.redispatched = true;
     return "applied";
   }
 }

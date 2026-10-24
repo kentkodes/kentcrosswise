@@ -101,6 +101,9 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(workPrompt).toContain("Read may access trusted root guidance/context and payload data");
     expect(workPrompt).toContain("status has no flags");
   });
+  if(agent==='docs') it("names each run after its docs task (the orchestrator's docs sweep finds runs by it)",()=>{
+    expect(yml).toMatch(/^name: agent-docs\nrun-name: docs task \$\{\{ inputs\.task_id \}\}\n/);
+  });
   if(agent==='docs') it("checks the edited payload documentation instead of the trusted root",()=>{
     expect(job.work).toContain('Bash(node payload/scripts/check-agent-docs.mjs)');
     expect(job.work).not.toContain('Bash(node scripts/check-agent-docs.mjs)');

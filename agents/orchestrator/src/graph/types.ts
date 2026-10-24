@@ -4,6 +4,19 @@ import type { AgentReport } from "@kcw/core/events";
 /** Agent workflows the orchestrator dispatches (§4.1). */
 export const DEV_WORKFLOW = "agent-developer.yml";
 export const QA_WORKFLOW = "agent-qa.yml";
+export const DOCS_WORKFLOW = "agent-docs.yml";
+
+/**
+ * The `run-name` of an agent-docs.yml run (the workflow sets `run-name: docs task <task_id>`).
+ * The dispatch API returns no run id, so the docs sweep finds the run by this title.
+ */
+export const docsRunName = (taskId: number): string => `docs task ${taskId}`;
+
+/** Docs task sweep (§4.3): a run still queued or in progress after this many minutes goes to the owner (job timeouts sum to 95). */
+export const DOCS_WAIT_LIMIT_MINUTES = 150;
+
+/** Docs task sweep: no agent-docs.yml run this long after the dispatch means it was lost (redispatch once). */
+export const DOCS_NO_RUN_MINUTES = 30;
 
 /** §4.2 step 5: a failure while attempts < 3 goes back to the Developer; the third goes to the owner. */
 export const MAX_ATTEMPTS = 3;
@@ -44,8 +57,14 @@ export type OwnerWait = "issue_text" | "critical" | "failure";
 
 export type DevMode = "implement" | "fix";
 
-/** What approving a failure restarts: the Developer, QA, or planning (planner or public-title output invalid). */
-export type RetryTarget = "dev" | "qa" | "plan";
+/**
+ * What approving a failure restarts: the Developer, QA, planning (planner or public-title output
+ * invalid), or Docs-keeper (a docs task has no Developer).
+ */
+export type RetryTarget = "dev" | "qa" | "plan" | "docs";
+
+/** A work task runs the PR loop for owner text; a docs task runs Docs-keeper after a merge (§4.2 step 8). */
+export type TaskKind = "work" | "docs";
 
 /** Why the merge step is waiting (Q11). */
 export type IncompleteReason = "ci_not_finished" | "head_moved" | "diff_incomplete" | "no_run" | "no_artifact";
@@ -87,7 +106,11 @@ export type Decision = "approved" | "rejected";
 
 /** One validated queue message for a task thread. `message_id` (the SQS message id) detects redeliveries. */
 export type TaskInput = (
-  | { kind: "start" }
+  /**
+   * `docs` is set only by the orchestrator itself (index.ts `startDocsTask`) when it starts the
+   * docs task of a merged PR; `parseTaskMessage` never produces it, so a queue message cannot.
+   */
+  | { kind: "start"; docs?: { pr: number } }
   | { kind: "report"; report: AgentReport }
   | GitHubInput
   | { kind: "decision"; approval_id: string; decision: Decision }
@@ -98,7 +121,7 @@ export type TaskInput = (
 export type StepOutcome =
   | "applied" // the task moved on
   | "stale" // unexpected or outdated input: recorded, the thread waits on as before
-  | "unchanged" // a sweep with nothing to do
+  | "unchanged" // a sweep with nothing to do, or a usage-only report
   | "deferred" // agents_paused: kept and processed on unpause
   | "paused" // a sweep while agents_paused
   | "queued"; // not started yet (paused or in-flight limit)
@@ -134,6 +157,14 @@ export interface TaskData {
   last_outcome: StepOutcome | null;
   /** Child task ids, once the planner split the task (phase `children`). */
   children: number[];
+  /** Absent in checkpoints written before docs tasks existed: those are work tasks. */
+  kind?: TaskKind;
+  /** Docs task: the merged PR Docs-keeper documents. */
+  docs_pr?: number | null;
+  /** Work task: the docs task created when its PR merged. */
+  docs_task?: number | null;
+  /** Docs task: the current agent-docs.yml run sent its start report (`coding`). */
+  docs_started?: boolean;
 }
 
 export function initialTaskData(): TaskData {

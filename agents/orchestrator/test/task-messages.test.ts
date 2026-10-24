@@ -33,6 +33,22 @@ describe("parseTaskMessage", () => {
       input: { kind: "report", report: { task_id: 7, agent: "developer", event_type: "coding" }, message_id: "msg-1" },
     });
     expect(() => parse({ task_id: 7, agent: "nobody", event_type: "coding" })).toThrow(ReportFormatError);
+    const usage = [{ kind: "actions_minutes", minutes: 1 }];
+    expect(parse({ task_id: 7, agent: "qa", usage })).toEqual({
+      task_id: 7,
+      input: { kind: "report", report: { task_id: 7, agent: "qa", usage }, message_id: "msg-1" },
+    });
+    expect(() => parse({ task_id: 7, agent: "qa" })).toThrow(ReportFormatError);
+  });
+
+  it("never lets a queue message start a docs task (the orchestrator builds that start itself)", () => {
+    for (const docs of [{ pr: 41 }, true]) {
+      expect(parse({ type: "task.created", task_id: 7, docs })).toEqual({ task_id: 7, input: { kind: "start", message_id: "msg-1" } });
+      expect(parse({ type: "task.created", task_id: 7, kind: "start", docs, resume: { docs } })).toEqual({
+        task_id: 7,
+        input: { kind: "start", message_id: "msg-1" },
+      });
+    }
   });
 
   it("owner.decision from the console", () => {

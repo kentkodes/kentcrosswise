@@ -73,6 +73,26 @@ describe("console data as web_rw", () => {
     await expect(asRw((db) => listEvents(db, []))).resolves.toEqual([]);
   });
 
+  it("marks docs tasks (children of a merged task, source github) and never resends them", async () => {
+    const merged = await asRw((db) => createTask(db, { ownerText: "Merged work", isPrivate: true }));
+    const { rows } = await pg.query<{ id: string }>(
+      "INSERT INTO tasks (parent_id, source, owner_text, is_private) VALUES ($1, 'github', 'Docs-keeper update after PR #9.', true) RETURNING id",
+      [merged],
+    );
+    const docs = Number(rows[0]!.id);
+    const subtask = Number(
+      (await pg.query<{ id: string }>("INSERT INTO tasks (parent_id, source, owner_text) VALUES ($1, 'console', 'Part') RETURNING id", [merged]))
+        .rows[0]!.id,
+    );
+    const tasks = await asRw((db) => listTasks(db));
+    expect(tasks.find((t) => t.id === docs)).toMatchObject({ parentId: merged, isDocs: true, status: "queued" });
+    expect(tasks.find((t) => t.id === subtask)).toMatchObject({ parentId: merged, isDocs: false });
+    expect(tasks.find((t) => t.id === merged)).toMatchObject({ parentId: null, isDocs: false });
+    await expect(asRw((db) => queuedTaskExists(db, docs))).resolves.toBe(false);
+    await expect(asRw((db) => queuedTaskExists(db, subtask))).resolves.toBe(true);
+    await pg.query("DELETE FROM tasks WHERE id = ANY($1::bigint[])", [[docs, subtask, merged]]);
+  });
+
   it("reads and sets the two pause switches", async () => {
     await expect(asRw(getFlags)).resolves.toEqual({ agents_paused: false, pipelines_paused: false });
     await asRw((db) => setFlag(db, "agents_paused", true));

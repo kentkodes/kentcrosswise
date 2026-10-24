@@ -16,7 +16,7 @@ describe("terminal task usage", () => {
       getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
       isPaused: async () => false,
       claimSlot: async () => true,
-      updateTask: async (_id: number, fields: TaskUpdate) => { if (fields.status) status = fields.status; },
+      updateTask: async (id: number, fields: TaskUpdate) => { if (id === taskId && fields.status) status = fields.status; },
       addEvent: async () => undefined,
       addUsage,
       createApproval: async () => { throw new Error("unexpected owner approval"); },
@@ -25,6 +25,7 @@ describe("terminal task usage", () => {
       loadContacts: async () => [],
       createSubtasks: async () => { throw new Error("unexpected split"); },
       getChildren: async () => [],
+      createDocsTask: async () => 2, // the merge creates the docs child (its own thread)
     };
     const github = new FakeGitHubClient();
     github.prs.set(41, { headSha: head, author: "developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
@@ -71,6 +72,7 @@ function fixture(initialStatus: TaskStatus = "queued") {
     loadContacts: async () => [],
     createSubtasks: async () => { throw new Error("unexpected split"); },
     getChildren: async () => [],
+    createDocsTask: async () => { throw new Error("unexpected docs task"); },
   };
   const github = new FakeGitHubClient();
   const saver = new MemorySaver();
@@ -105,6 +107,23 @@ describe("reports on ended checkpoints", () => {
     expect(snapshot.next).toEqual([]);
     expect(snapshot.tasks).toEqual([]);
     expect(f.status()).toBe(status);
+    expect(f.store.updateTask).not.toHaveBeenCalled();
+    expect(f.store.addEvent).not.toHaveBeenCalled();
+    expect(f.github.calls).toEqual([]);
+  });
+
+  it("records a late usage-only report with no event, status change or stale count", async () => {
+    const f = await terminal();
+    const input = finalReport("late-usage-only");
+    const { event_type: _omitted, ...usageOnly } = input.report;
+    const staleBefore = (await f.graph.getState(threadConfig(1))).values.task.stale;
+    expect(await processTaskInput(f.graph, 1, { ...input, report: usageOnly })).toBe("unchanged");
+    expect(f.store.addUsage).toHaveBeenCalledExactlyOnceWith(1, "qa", usage);
+    const snapshot = await f.graph.getState(threadConfig(1));
+    expect(snapshot.values.task.phase).toBe("done");
+    expect(snapshot.values.task.stale).toBe(staleBefore);
+    expect(snapshot.next).toEqual([]);
+    expect(f.status()).toBe("merged");
     expect(f.store.updateTask).not.toHaveBeenCalled();
     expect(f.store.addEvent).not.toHaveBeenCalled();
     expect(f.github.calls).toEqual([]);

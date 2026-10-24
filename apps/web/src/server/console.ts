@@ -26,9 +26,17 @@ export class InputError extends Error {
 
 // ---------------------------------------------------------------- tasks
 
+/**
+ * A docs task (DESIGN §4.2 step 8): the orchestrator's child row of a merged task, source `github`.
+ * Its parent is the merged task it documents, not a split parent.
+ */
+const IS_DOCS_TASK = "(source = 'github' AND parent_id IS NOT NULL)";
+
 export interface TaskRow {
   id: number;
   parentId: number | null;
+  /** A docs task: `parentId` is the merged task it documents. */
+  isDocs: boolean;
   createdAt: string;
   updatedAt: string;
   status: string;
@@ -68,6 +76,7 @@ export async function listTasks(db: Queryable, limit = 50): Promise<TaskRow[]> {
   const { rows } = await db.query<{
     id: string;
     parent_id: string | null;
+    is_docs: boolean;
     created_at: Date;
     updated_at: Date;
     status: string;
@@ -78,14 +87,15 @@ export async function listTasks(db: Queryable, limit = 50): Promise<TaskRow[]> {
     pr_number: number | null;
     attempts: number;
   }>(
-    `SELECT id, parent_id, created_at, updated_at, status, waiting_on, is_private, public_title, owner_text,
-            pr_number, attempts
+    `SELECT id, parent_id, ${IS_DOCS_TASK} AS is_docs, created_at, updated_at, status, waiting_on, is_private,
+            public_title, owner_text, pr_number, attempts
        FROM tasks ORDER BY id DESC LIMIT $1`,
     [limit],
   );
   return rows.map((r) => ({
     id: Number(r.id),
     parentId: r.parent_id === null ? null : Number(r.parent_id),
+    isDocs: r.is_docs,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     status: r.status,
@@ -111,9 +121,12 @@ export async function listEvents(db: Queryable, taskIds: readonly number[], perT
   return rows.map((r) => ({ id: Number(r.id), ts: iso(r.ts), taskId: Number(r.task_id), agent: r.agent, type: r.event_type }));
 }
 
-/** A task whose task.created message may be (re)sent: only while it is still queued. */
+/**
+ * A task whose task.created message may be (re)sent: only while it is still queued, and never a
+ * docs task (the orchestrator starts those itself; a task.created would plan it as owner work).
+ */
 export async function queuedTaskExists(db: Queryable, id: number): Promise<boolean> {
-  const { rows } = await db.query("SELECT 1 FROM tasks WHERE id = $1 AND status = 'queued'", [id]);
+  const { rows } = await db.query(`SELECT 1 FROM tasks WHERE id = $1 AND status = 'queued' AND NOT ${IS_DOCS_TASK}`, [id]);
   return rows.length > 0;
 }
 

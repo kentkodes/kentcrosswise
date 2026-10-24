@@ -36,13 +36,18 @@ export type Usage =
   | { kind: "model"; provider: string; model: string; input_tokens: number; output_tokens: number }
   | { kind: "actions_minutes"; minutes: number };
 
-/** What `kcw-report` puts on the orchestrator queue: `{task_id, agent, event_type, usage}`. */
+/**
+ * What `kcw-report` puts on the orchestrator queue: `{task_id, agent, event_type?, usage?}`.
+ * A report carries an event, usage, or both. A usage-only report (no `event_type`, DESIGN §11
+ * Q14(5)) records usage and adds no lifecycle event.
+ */
 export interface AgentReport {
   /** `tasks.id` (a positive integer; the LangGraph thread is `task-<id>`). */
   task_id: number;
   agent: AgentName;
-  event_type: EventType;
-  /** Optional; omitted when the step used no model and no billed minutes. */
+  /** Optional when `usage` is present: a usage-only report has no lifecycle event. */
+  event_type?: EventType;
+  /** Optional; omitted when the step used no model and no billed minutes. Required without `event_type`. */
   usage?: Usage[];
 }
 
@@ -91,11 +96,16 @@ export function parseAgentReport(x: unknown): AgentReport {
     throw new ReportFormatError("task_id must be a positive integer");
   }
   if (!isAgentName(agent)) throw new ReportFormatError(`agent must be one of ${AGENTS.join(", ")}`);
-  if (!isEventType(event_type)) throw new ReportFormatError(`event_type must be one of ${EVENT_TYPES.join(", ")}`);
-  const out: AgentReport = { task_id, agent, event_type };
+  if (event_type !== undefined && !isEventType(event_type)) {
+    throw new ReportFormatError(`event_type must be one of ${EVENT_TYPES.join(", ")}`);
+  }
+  const out: AgentReport = event_type === undefined ? { task_id, agent } : { task_id, agent, event_type };
   if (usage !== undefined) {
     if (!Array.isArray(usage)) throw new ReportFormatError("usage must be an array");
     if (usage.length > 0) out.usage = usage.map(parseUsage);
+  }
+  if (out.event_type === undefined && out.usage === undefined) {
+    throw new ReportFormatError("report needs an event_type, usage, or both");
   }
   return out;
 }

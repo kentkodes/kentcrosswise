@@ -225,6 +225,42 @@ describe("REST calls", () => {
     );
     expect((await client.getDiff(3)).complete).toBe(false);
   });
+
+  it("findWorkflowRun lists the workflow's dispatch runs since a time and takes the newest exact title", async () => {
+    const run = (id: number, title: string, created: string, status = "completed", conclusion: string | null = "success") => ({
+      id,
+      display_title: title,
+      created_at: created,
+      status,
+      conclusion,
+    });
+    mock.on("GET", "/repos/o/r/actions/workflows/agent-docs.yml/runs", () =>
+      json(200, {
+        total_count: 5,
+        workflow_runs: [
+          run(1, "docs task 7", "2026-10-24T10:00:00Z", "completed", "cancelled"),
+          run(2, "docs task 70", "2026-10-24T10:20:00Z"), // another task: the title must match exactly
+          run(3, "docs task 7", "2026-10-24T10:10:00Z", "in_progress", null),
+          run(4, "docs task 7", "2026-10-24T09:00:00Z"), // before createdAfter (ignored even if GitHub returns it)
+        ],
+      }),
+    );
+    const found = await client.findWorkflowRun({ workflow: "agent-docs.yml", displayTitle: "docs task 7", createdAfter: "2026-10-24T09:58:00.000Z" });
+    expect(found).toEqual({ id: 3, status: "in_progress", conclusion: null });
+    const q = mock.api[0]!.url.searchParams;
+    expect(q.get("event")).toBe("workflow_dispatch");
+    expect(q.get("created")).toBe(">=2026-10-24T09:58:00.000Z");
+    expect(q.get("per_page")).toBe("30");
+
+    await expect(
+      client.findWorkflowRun({ workflow: "agent-docs.yml", displayTitle: "docs task 8", createdAfter: "2026-10-24T09:58:00.000Z" }),
+    ).resolves.toBeNull();
+    mock.routes.unshift((c) => (c.url.pathname.endsWith("/agent-docs.yml/runs") ? json(403, { message: "no" }) : undefined));
+    await expect(client.findWorkflowRun({ workflow: "agent-docs.yml", displayTitle: "x", createdAfter: "2026-10-24T09:58:00.000Z" })).rejects.toMatchObject({
+      name: "GitHubApiError",
+      status: 403,
+    });
+  });
 });
 
 describe("getArtifact", () => {

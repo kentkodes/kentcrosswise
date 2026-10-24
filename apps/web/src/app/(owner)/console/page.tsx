@@ -52,10 +52,10 @@ function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]
         <span data-field="visibility">{task.isPrivate ? "private" : "public"}</span>
         {task.publicTitle ? <> · public title: {task.publicTitle}</> : null}
         {task.prNumber ? <> · PR #{task.prNumber}</> : null}
-        {task.parentId ? <> · subtask of #{task.parentId}</> : null}
+        {task.parentId ? (task.isDocs ? <> · docs update after #{task.parentId}</> : <> · subtask of #{task.parentId}</>) : null}
       </p>
       <p data-field="text">{task.ownerText}</p>
-      {task.status === "queued" && canSend ? (
+      {task.status === "queued" && canSend && !task.isDocs ? (
         <form action={resendTaskAction}>
           <input type="hidden" name="task_id" value={task.id} />
           <button type="submit">Resend to orchestrator</button>

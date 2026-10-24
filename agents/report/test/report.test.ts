@@ -103,6 +103,21 @@ describe("kcw-report CLI", () => {
     });
   });
 
+  it("sends a usage-only report without --event-type", async () => {
+    const c = cli([
+      "--task-id", "42", "--agent", "qa",
+      "--provider", "anthropic", "--model", "claude-haiku-5-5", "--input-tokens", "10", "--output-tokens", "2",
+      "--queue-url", QUEUE,
+    ]);
+    await c.run;
+    expect(JSON.parse(c.sqs.sent[0]!.MessageBody!)).toEqual({
+      task_id: 42,
+      agent: "qa",
+      usage: [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 10, output_tokens: 2 }],
+    });
+    expect(c.out).toEqual(["kcw-report: sent usage from qa for task-42 (message m-1)"]);
+  });
+
   it("--queue-url wins over the environment", async () => {
     const c = cli([...BASE, "--queue-url", QUEUE], { env: { [QUEUE_URL_ENV]: "https://other.invalid/q" } });
     await c.run;
@@ -130,6 +145,7 @@ describe("kcw-report CLI", () => {
 
   it.each([
     [["--agent", "developer", "--event-type", "coding"], /required/],
+    [["--task-id", "1", "--agent", "developer"], /--event-type is required unless the report carries usage/],
     [["--task-id", "0", "--agent", "developer", "--event-type", "coding"], /task_id/],
     [["--task-id", "4x", "--agent", "developer", "--event-type", "coding"], /--task-id/],
     [["--task-id", "1", "--agent", "intern", "--event-type", "coding"], /agent must be one of/],
@@ -202,6 +218,28 @@ describe("--claude-execution-file", () => {
     const r = run("/x/missing.json");
     await r.p;
     expect(JSON.parse(r.sqs.sent[0]!.MessageBody!)).toEqual({ task_id: 42, agent: "developer", event_type: "pr_opened" });
+  });
+
+  it("sends usage-only from the file without --event-type, and rejects a usage-only report with no usage", async () => {
+    const files: Record<string, string> = { "/x/exec.json": JSON.stringify(EXEC) };
+    const go = (file: string) => {
+      const sqs = new FakeSqs();
+      const p = runCli(["--task-id", "42", "--agent", "developer", "--queue-url", QUEUE, "--claude-execution-file", file], {
+        env: {}, sqs, stdout: () => {},
+        readFile: async (path) => { const v = files[path]; if (v === undefined) throw new Error("ENOENT"); return v; },
+      });
+      return { p, sqs };
+    };
+    const ok = go("/x/exec.json");
+    await ok.p;
+    expect(JSON.parse(ok.sqs.sent[0]!.MessageBody!)).toEqual({
+      task_id: 42,
+      agent: "developer",
+      usage: [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 1110, output_tokens: 50 }],
+    });
+    const empty = go("/x/missing.json");
+    await expect(empty.p).rejects.toBeInstanceOf(UsageError);
+    expect(empty.sqs.sent).toEqual([]);
   });
 
   it("ignores an empty path (output of a skipped Claude step)", async () => {
