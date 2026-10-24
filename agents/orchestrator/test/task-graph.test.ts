@@ -551,11 +551,15 @@ describe("task graph (P2-10)", () => {
     expect(await send(id, prEvent(id, "opened", 52, head))).toBe("deferred");
     const usage = [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 10, output_tokens: 5 }];
     expect(await send(id, { task_id: id, agent: "developer", event_type: "coding", usage })).toBe("applied");
+    // Usage-only (Q14(5)): recorded even from an agent outside its phase, with no event or stale count.
+    const qaUsage = [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 7, output_tokens: 1 }];
+    expect(await send(id, { task_id: id, agent: "qa", usage: qaUsage })).toBe("unchanged");
     expect(await send(id, ciEvent(id, 52, head, "success"))).toBe("deferred");
     expect((await task(id)).waiting_on).toBe("dev");
     expect(qaDispatches()).toEqual([]);
-    expect(await sql("SELECT agent, model, input_tokens, cost_usd FROM usage_events WHERE task_id = $1", [id])).toEqual([
+    expect(await sql("SELECT agent, model, input_tokens, cost_usd FROM usage_events WHERE task_id = $1 ORDER BY agent", [id])).toEqual([
       { agent: "developer", model: "claude-haiku-5-5", input_tokens: 10, cost_usd: null },
+      { agent: "qa", model: "claude-haiku-5-5", input_tokens: 7, cost_usd: null },
     ]);
 
     await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");

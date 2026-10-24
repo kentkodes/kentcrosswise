@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { candidateBundle, parseTrustedContext, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
+import { candidateBundle, parseTrustedContext, readAdvisoryUsage, reportMessages, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
 const context = { version: 1, agent: "qa", repo: "owner/repo", taskId: 2, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha };
@@ -11,6 +11,21 @@ const dirs: string[] = [];
 const dir = () => { const p=mkdtempSync(path.join(tmpdir(),"kcw-boundary-")); dirs.push(p); return p; };
 afterEach(() => { for(const p of dirs.splice(0)) rmSync(p,{recursive:true,force:true}); vi.unstubAllEnvs(); });
 const gh = (values: unknown[]) => ({ repo: "owner/repo", token: "synthetic", fetch: vi.fn(async () => Response.json(values.shift())) as unknown as typeof fetch });
+describe("report messages",()=>{
+  const u=(n:number)=>({kind:"model" as const,provider:"anthropic" as const,model:"claude-haiku-5-5",input_tokens:n,output_tokens:1});
+  it("starts with the lifecycle event and ends successfully with usage only (Q14(5))",()=>{
+    expect(reportMessages("developer","start","success",[u(1)])).toEqual([{event:"coding"}]);
+    expect(reportMessages("qa","start",undefined,[])).toEqual([{event:"qa_reviewing"}]);
+    expect(reportMessages("qa","end","success",[u(1),u(2)])).toEqual([{usage:u(1)},{usage:u(2)}]);
+    expect(reportMessages("developer","end","success",[])).toEqual([]);
+  });
+  it("still reports failed once on any unsuccessful end, with or without usage",()=>{
+    for(const result of ["failure","cancelled","skipped",undefined]) {
+      expect(reportMessages("docs","end",result,[])).toEqual([{event:"failed"}]);
+      expect(reportMessages("scraper","end",result,[u(1),u(2)])).toEqual([{event:"failed",usage:u(1)},{usage:u(2)}]);
+    }
+  });
+});
 describe("trusted authority",()=>{
   it("fails empty code tasks while allowing validated PR retries and docs no-op",()=>{
     for(const agent of ["developer", "scraper"] as const) {
