@@ -6,7 +6,7 @@ Commands are PowerShell. **Never paste a password or connection string into chat
 
 ## Names
 
-Migration 0001 creates NOLOGIN **group roles** (`web_rw`, `web_public`, `orch_rw`, `pipeline_rw`, `migrator`). Nothing logs in as them: each runtime has a **login user** that is a member of one group role. Login users end in `_app` so they never clash with a group role name.
+Migration 0001 creates NOLOGIN **group roles** (`web_rw`, `web_public`, `orch_rw`, `pipeline_rw`, `migrator`); 0005 adds `relay_rw` for the webhook relay. Nothing logs in as them: each runtime has a **login user** that is a member of one group role. Login users end in `_app` so they never clash with a group role name.
 
 | Login user | Created in | Member of | Secret, key | Endpoint |
 |---|---|---|---|---|
@@ -14,7 +14,7 @@ Migration 0001 creates NOLOGIN **group roles** (`web_rw`, `web_public`, `orch_rw
 | `web_app` | SQL (step 3) | `web_rw` | `kcw/prod/web`, `db_url` | pooled |
 | `web_public_app` | SQL (step 3) | `web_public` | `kcw/prod/web`, `db_url_public` | pooled |
 | `orch_app` | SQL (step 3) | `orch_rw` | `kcw/prod/orchestrator`, `db_url` | pooled |
-| `relay_app` | SQL (step 3) | `orch_rw` for now (step 3.3) | `kcw/prod/relay`, `db_url` | pooled |
+| `relay_app` | SQL (step 3) | `relay_rw` (prod was set up with `orch_rw`: switch it in step 3.3) | `kcw/prod/relay`, `db_url` | pooled |
 | `pipeline_app` | later | `pipeline_rw` | `kcw/prod/pipeline`, `db_url` | pooled |
 
 `kcw/prod/pipeline` waits for Phase 3 (no pipeline Lambda reads it yet); create `pipeline_app` the same way as the others then.
@@ -38,7 +38,7 @@ Database: `kentcrosswise` on the project's default branch.
 2. **Postgres database → Databases → Add database** `kentcrosswise`, owner **`migrator_app`** → Create.
 
 Why this is enough, and why both are needed:
-- A role created in the console is a member of `neon_superuser`, which gives it `CREATEROLE`: migration 0001 creates the five group roles. On Postgres 16+, the role that creates a role gets `ADMIN` on it, so `migrator_app` can later grant those group roles to the login users (step 3).
+- A role created in the console is a member of `neon_superuser`, which gives it `CREATEROLE`: migration 0001 creates the five group roles (0005 adds `relay_rw`). On Postgres 16+, the role that creates a role gets `ADMIN` on it, so `migrator_app` can later grant those group roles to the login users (step 3).
 - As owner of `kentcrosswise`, `migrator_app` has `CREATE` on the database (0002 runs `CREATE SCHEMA lg` for the LangGraph checkpointer) and owns its `public` schema (Postgres 15+ gives `CREATE` on `public` only to the database owner; 0001 creates tables there and grants `USAGE` on it).
 - It owns every table, the view and schema `lg`, so it can grant on them. `v_public_agent_events` runs with its owner's rights, which is what lets `web_public` read it without table grants.
 - Do not grant it anything else, and do not use the project's default `neondb_owner` / `neondb` for the app.
@@ -49,7 +49,7 @@ This model was rehearsed on PGlite (Postgres 18) with a non-superuser that has o
 
 1. Neon → project dashboard → **Connect**: database `kentcrosswise`, role `migrator_app`, **Connection pooling off**. Copy the connection string. The host must **not** contain `-pooler`.
 2. Secrets Manager → `kcw/prod/migrator` → **Retrieve secret value** → **Edit** (or **Set secret value** if it has none) → **Key/value**: key `db_url`, value = the string, with `sslmode=require&channel_binding=require` replaced by `sslmode=verify-full` → **Save**.
-3. Tell the Liaison "migrator secret filled". The Liaison merges the PR `kcw/prod-db-strict-migrate` (it removes `--skip-if-unset` from `deploy.yml`), which runs `deploy.yml` on main. The **Migrate prod** step must apply `0001_hub_essays`, `0002_agent_system` and `0003_orchestrator_inbox`.
+3. Tell the Liaison "migrator secret filled". The Liaison merges the PR `kcw/prod-db-strict-migrate` (it removes `--skip-if-unset` from `deploy.yml`), which runs `deploy.yml` on main. The **Migrate prod** step must apply every file in `packages/db/migrations` (`0001_hub_essays` through `0005_relay_role` at the time of writing).
 
    Do it in this order: once that PR is merged, a missing or wrong `kcw/prod/migrator` fails every deploy at **Migrate prod**.
 4. Neon → **SQL Editor**, branch = default, database **`kentcrosswise`**. Run:
@@ -58,10 +58,10 @@ This model was rehearsed on PGlite (Postgres 18) with a non-superuser that has o
    SELECT current_user;
    SELECT version, name FROM schema_migrations ORDER BY version;
    SELECT rolname FROM pg_roles
-   WHERE rolname IN ('web_rw', 'web_public', 'orch_rw', 'pipeline_rw', 'migrator') ORDER BY 1;
+   WHERE rolname IN ('web_rw', 'web_public', 'orch_rw', 'pipeline_rw', 'migrator', 'relay_rw') ORDER BY 1;
    ```
 
-   Expected: `migrator_app` (the editor connects as the database owner; **if it shows any other role, stop and tell the Liaison**: step 3 then needs a different client), 3 migrations, 5 roles.
+   Expected: `migrator_app` (the editor connects as the database owner; **if it shows any other role, stop and tell the Liaison**: step 3 then needs a different client), every migration file listed, 6 roles.
 
 ## 3. Login users, grants and secrets
 
@@ -83,7 +83,7 @@ $users = [ordered]@{
   web_app        = @{ role = "web_rw";     secret = "kcw/prod/web";          key = "db_url" }
   web_public_app = @{ role = "web_public"; secret = "kcw/prod/web";          key = "db_url_public" }
   orch_app       = @{ role = "orch_rw";    secret = "kcw/prod/orchestrator"; key = "db_url" }
-  relay_app      = @{ role = "orch_rw";    secret = "kcw/prod/relay";        key = "db_url" }  # interim, see 3.3
+  relay_app      = @{ role = "relay_rw";   secret = "kcw/prod/relay";        key = "db_url" }  # migration 0005, see 3.3
 }
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $sql = foreach ($u in $users.Keys) {
@@ -121,7 +121,7 @@ GRANT web_public TO web_public_app;
 CREATE ROLE orch_app LOGIN PASSWORD '<generated>';
 GRANT orch_rw TO orch_app;
 CREATE ROLE relay_app LOGIN PASSWORD '<generated>';
-GRANT orch_rw TO relay_app;
+GRANT relay_rw TO relay_app;
 GRANT CONNECT ON DATABASE kentcrosswise TO web_app, web_public_app, orch_app, relay_app;
 ```
 
@@ -129,37 +129,41 @@ GRANT CONNECT ON DATABASE kentcrosswise TO web_app, web_public_app, orch_app, re
 - A plain `GRANT` gives `INHERIT` and `SET`. The orchestrator and the relay use the group role's rights directly (`INHERIT`); the web app switches with `SET LOCAL ROLE web_rw` / `web_public` (`SET`).
 - `web_app` and `web_public_app` are separate users so the public API's URL cannot reach owner data even if `SET LOCAL ROLE` were skipped.
 
-### 3.3 The relay's role (finding)
+### 3.3 The relay's role (`relay_rw`, migration 0005)
 
-The relay (`agents/webhook-relay/src/store.ts`) runs exactly:
+The relay (`agents/webhook-relay/src/store.ts`) runs exactly these statements:
 - `INSERT INTO inbound_events (delivery_id, source) … ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id` (dedupe claim),
 - `DELETE FROM inbound_events WHERE delivery_id = $1` (release after a failed enqueue),
-- `SELECT id FROM tasks WHERE pr_number = $1 …` and `… WHERE github_issue = $1 …` (task lookup).
+- `SELECT id FROM tasks WHERE pr_number = $1 …` and `… WHERE github_issue = $1 …` (task lookup),
+- `INSERT INTO usage_events (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key) SELECT …, (SELECT id FROM tasks WHERE id = $4), $5 ON CONFLICT (dedupe_key) DO NOTHING RETURNING id` (Actions minutes, since P2-15).
 
-That needs `INSERT`, `DELETE` and `SELECT (delivery_id)` on `inbound_events` (`RETURNING` and the `WHERE` need the column's `SELECT`; `INSERT` alone is refused), and `SELECT (id, pr_number, github_issue)` on `tasks`.
+Migration `0005_relay_role.sql` creates the NOLOGIN group role `relay_rw` with exactly what those need:
 
-**No group role from 0001-0003 fits exactly.** `pipeline_rw` and `web_public` lack these grants. `web_rw` and `orch_rw` include them but give much more: `web_rw` reaches every owner table (diary, contacts, …); `orch_rw` can write every agent table (tasks, approvals, `system_flags`, so it could unpause agents), the `lg` checkpoints, contact names and inbox inserts. The runbook uses **`orch_rw` for now**, the narrower of the two, so the relay works from day one; its separate secret still keeps the orchestrator's App key away from it (DESIGN §11 Q8).
+| Object | Grant | Why |
+|---|---|---|
+| schema `public` | `USAGE` | reach the tables |
+| `inbound_events` | `INSERT (delivery_id, source)`, `SELECT (delivery_id)`, `DELETE` | the claim's columns; `delivery_id` is read by the `ON CONFLICT` arbiter, `RETURNING` and the release's `WHERE`; `DELETE` has no column form |
+| `tasks` | `SELECT (id, pr_number, github_issue)` | the lookups and the task-exists subquery |
+| `usage_events` | `INSERT (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)`, `SELECT (id, dedupe_key)` | the inserted columns; `dedupe_key` is the arbiter, `id` is returned |
 
-**Proposed follow-up (needs owner approval; not written yet):** a new migration with the next free number:
+Column `SELECT` is needed for every column used as the `ON CONFLICT` target, in `RETURNING` or in a `WHERE` (checked on PGlite: without it each statement is refused). `received_at` and `usage_events.id` keep their defaults, and no sequence is involved (text and uuid keys). The task id foreign key is checked with the table owner's rights, so no `REFERENCES` grant. Nothing else: no `UPDATE`, no other columns (`tasks.owner_text`, `usage_events.cost_usd` reads), no other table, view or schema. `packages/db/test/relay-role.test.ts` asserts that exact grant set from the catalog and the refusals; the relay's own store test runs its real queries as a `relay_rw` member.
+
+Like every migration, 0005 creates only the group role; login users stay outside the repo. When prod was wired (step 3, 2026-10-23) `relay_app` was made a member of `orch_rw` as an interim, because no narrower role existed. `orch_rw` can write every agent table (tasks, approvals, `system_flags`, so it could unpause agents), the `lg` checkpoints, contact names and inbox inserts.
+
+**Switch `relay_app` to `relay_rw` (owner-run, once).** After the `deploy.yml` run that applies `0005_relay_role` is green, open the SQL Editor (database **`kentcrosswise`**, connected as `migrator_app`, which created `relay_rw` and so holds `ADMIN` on it) and run:
 
 ```sql
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'relay_rw') THEN
-    CREATE ROLE relay_rw NOLOGIN;
-  END IF;
-END
-$$;
-GRANT USAGE ON SCHEMA public TO relay_rw;
-GRANT SELECT (delivery_id), INSERT, DELETE ON inbound_events TO relay_rw;
-GRANT SELECT (id, pr_number, github_issue) ON tasks TO relay_rw;
+SELECT version, name FROM schema_migrations WHERE version = '0005';  -- expect 1 row: 0005, relay_role
+
+BEGIN;
+GRANT relay_rw TO relay_app;
+REVOKE orch_rw FROM relay_app;
+COMMIT;
 ```
 
-This exact grant set was checked on PGlite: all four relay statements succeed and `tasks.owner_text` and `agent_events` are refused. Once it is deployed, swap the membership in the SQL Editor: `GRANT relay_rw TO relay_app; REVOKE orch_rw FROM relay_app;`. DESIGN §3.4 would then list `relay_rw`.
+One transaction, so the relay never holds neither role. The relay opens one connection per delivery and keeps no session state, so the next delivery runs with `relay_rw` only; no redeploy and no secret change (the user and password stay the same). Then run the checks in 3.4 and tell the Liaison "relay role switched"; the Liaison repeats the relay checks of step 5.5 (a lookup, a duplicate) and confirms a `workflow_run` still records Actions minutes.
 
-**Since P2-15 (#22)** the relay also records Actions minutes: `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING` into `usage_events`, after checking the task exists. The grant set above does not cover that yet; the `relay_rw` migration must add `INSERT` on `usage_events` (and whatever its identity column and conflict target need) and be re-checked on PGlite. `orch_rw` already covers it, so the interim membership works.
-
-If you would rather not give the relay `orch_rw` even for a while: in the script, drop `relay_app` from `$users` and create it after the migration. Until then, deliveries that need the database get `error (db)` (HTTP 500) and GitHub marks them failed; they can be redelivered later.
+Rollback (same editor): `BEGIN; GRANT orch_rw TO relay_app; REVOKE relay_rw FROM relay_app; COMMIT;`.
 
 ### 3.4 Check (SQL Editor, database `kentcrosswise`)
 
@@ -172,7 +176,7 @@ WHERE m.rolname IN ('web_app', 'web_public_app', 'orch_app', 'relay_app')
 ORDER BY 1, 2;
 ```
 
-Expected 4 rows, all `true`/`true`: `orch_app`→`orch_rw`, `relay_app`→`orch_rw`, `web_app`→`web_rw`, `web_public_app`→`web_public`.
+Expected 4 rows, all `true`/`true`: `orch_app`→`orch_rw`, `relay_app`→`relay_rw`, `web_app`→`web_rw`, `web_public_app`→`web_public`. (Before the 3.3 switch, prod shows `relay_app`→`orch_rw` instead.)
 
 ```sql
 SELECT
@@ -182,8 +186,12 @@ SELECT
   has_table_privilege('orch_app', 'diary_entries', 'SELECT')               AS orch_diary,        -- false
   has_column_privilege('orch_app', 'contacts', 'name', 'SELECT')           AS orch_contact_name, -- true
   has_schema_privilege('orch_app', 'lg', 'CREATE')                         AS orch_lg,           -- true
-  has_table_privilege('relay_app', 'inbound_events', 'INSERT')             AS relay_dedupe,      -- true
+  has_column_privilege('relay_app', 'inbound_events', 'delivery_id', 'INSERT') AS relay_dedupe,  -- true
   has_column_privilege('relay_app', 'tasks', 'pr_number', 'SELECT')        AS relay_task_lookup, -- true
+  has_column_privilege('relay_app', 'usage_events', 'dedupe_key', 'INSERT') AS relay_minutes,    -- true
+  has_column_privilege('relay_app', 'tasks', 'owner_text', 'SELECT')       AS relay_owner_text,  -- false
+  has_table_privilege('relay_app', 'system_flags', 'UPDATE')               AS relay_flags,       -- false
+  pg_has_role('relay_app', 'orch_rw', 'MEMBER')                            AS relay_is_orch,     -- false
   pg_has_role('web_app', 'neon_superuser', 'MEMBER')                       AS web_is_admin;      -- false
 ```
 
@@ -226,7 +234,7 @@ Prod URL: `terraform -chdir=infra/prod output -raw url` (currently `https://d36w
 - **Full reset (only while prod holds no real data; not rehearsed):**
   1. Neon → Databases → delete `kentcrosswise` (drops all tables, schema `lg` with its checkpoints, and `schema_migrations`).
   2. Add database `kentcrosswise` again, owner `migrator_app`; open the SQL Editor on it and run
-     `DROP ROLE IF EXISTS web_app, web_public_app, orch_app, relay_app, web_rw, web_public, orch_rw, pipeline_rw, migrator;`
+     `DROP ROLE IF EXISTS web_app, web_public_app, orch_app, relay_app, web_rw, web_public, orch_rw, pipeline_rw, migrator, relay_rw;`
   3. Re-run `deploy.yml` (migrations recreate everything), then step 3 again with new passwords (the old URLs no longer work).
 
 ## 7. Live results (2026-10-23)
