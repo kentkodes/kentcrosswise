@@ -2,11 +2,12 @@
 // Home, first viewport: approved composition 3 "Hub window" (.impeccable/mocks/03-hub-window.png).
 import Image from "next/image";
 import Link from "next/link";
-import { figures, rosarivo } from "./_home/fonts";
 import { HubWindow } from "./_home/hub-window";
 import { Fireflies } from "./_home/fireflies";
 import { ArrowRight } from "./_home/icons";
 import { SceneFrame } from "./_home/scene";
+import { figures, rosarivo } from "./_site/fonts";
+import { SiteHeader } from "./_site/site-header";
 import s from "./_home/home.module.css";
 import landscape from "./_home/plates/landscape.png";
 import retroComputer from "./_home/plates/retro-computer.png";
@@ -23,36 +24,7 @@ export default function HomePage() {
             <Fireflies />
           </div>
 
-          <header className={s.siteHeader}>
-            <Link className={s.wordmark} href="/">
-              Kentcrosswise
-            </Link>
-            <nav className={s.siteNav} aria-label="Main">
-              <ul className={s.navList}>
-                <li>
-                  <Link className={s.navLink} href="/" aria-current="page">
-                    Home
-                  </Link>
-                </li>
-                <li>
-                  <Link className={s.navLink} href="/demo">
-                    Demo
-                  </Link>
-                </li>
-                <li>
-                  <Link className={s.navLink} href="/office">
-                    Office
-                  </Link>
-                </li>
-                <li className={s.navSignIn}>
-                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Auth.js route handler, needs a full page load */}
-                  <a className={s.signIn} href="/api/auth/signin">
-                    Sign in
-                  </a>
-                </li>
-              </ul>
-            </nav>
-          </header>
+          <SiteHeader current="/" stage className={s.siteHeader} />
 
           <main className={s.main}>
             <div className={s.intro}>

@@ -235,87 +235,13 @@ body:has(.page) {
   }
 }
 
-/* ---------- Site header ---------- */
+/* ---------- Site header (shared, see ../_site/site-header.module.css): placement only ---------- */
 
 .siteHeader {
   position: relative;
   z-index: 1;
   grid-row: 1;
   grid-column: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding: 20px 20px 0;
-  color: var(--ivory);
-}
-
-.wordmark {
-  font-size: 30px;
-  line-height: 1;
-}
-
-.navList {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.navLink {
-  position: relative;
-  display: inline-block;
-  font-size: 17px;
-  line-height: 1;
-  padding: 6px 0;
-}
-
-.navLink[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  background: currentColor;
-  opacity: 0.85;
-}
-
-.navLink:hover {
-  color: #fff;
-}
-
-.navSignIn {
-  position: relative;
-  padding-left: 20px;
-}
-
-.navSignIn::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  height: 34px;
-  width: 1px;
-  translate: 0 -50%;
-  background: rgb(246 241 228 / 0.35);
-}
-
-.signIn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 22px;
-  border: 1.5px solid rgb(246 241 228 / 0.85);
-  border-radius: 999px;
-  font-size: 17px;
-  line-height: 1;
-  transition: background-color 0.2s ease;
-}
-
-.signIn:hover {
-  background: rgb(246 241 228 / 0.12);
 }
 
 /* ---------- Intro ---------- */
@@ -990,10 +916,6 @@ a.panelAside:hover {
     padding-inline: 40px;
   }
 
-  .siteHeader {
-    padding-inline: 40px;
-  }
-
   .hub {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1070,66 +992,6 @@ a.panelAside:hover {
 
   .siteHeader {
     position: static;
-    display: block;
-    padding: 0;
-  }
-
-  .wordmark {
-    position: absolute;
-    left: 95px;
-    top: 31px;
-    font-size: 38px;
-    letter-spacing: -0.032em;
-  }
-
-  .navList {
-    display: block;
-  }
-
-  .navList > li {
-    position: absolute;
-    top: 37.5px;
-  }
-
-  .navList > li:nth-child(1) {
-    left: 1027px;
-  }
-
-  .navList > li:nth-child(2) {
-    left: 1116px;
-  }
-
-  .navList > li:nth-child(3) {
-    left: 1201px;
-  }
-
-  .navLink {
-    padding: 0;
-    font-size: 16.5px;
-    letter-spacing: -0.01em;
-  }
-
-  .navLink[aria-current="page"]::after {
-    bottom: -8px;
-  }
-
-  .navList > li.navSignIn {
-    left: 1283px;
-    top: 24px;
-    padding-left: 26px;
-  }
-
-  .navSignIn::before {
-    height: 38px;
-  }
-
-  .signIn {
-    width: 108px;
-    height: 48px;
-    padding: 0;
-    border-width: 2px;
-    border-color: rgb(240 244 250 / 0.9);
-    font-size: 16.5px;
   }
 
   .main {

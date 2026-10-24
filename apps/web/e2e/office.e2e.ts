@@ -51,7 +51,7 @@ test("a bad cursor is a 400", async ({ request }) => {
 
 test("the office page lists the events as text", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Office" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Agent office" }).click();
   await expect(page).toHaveURL(/\/office$/);
   await expect(page.getByRole("heading", { level: 1, name: "Agent office" })).toBeVisible();
   const items = page.getByTestId("agent-events").locator("li");
