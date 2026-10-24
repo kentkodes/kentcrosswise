@@ -120,6 +120,19 @@ export function readAdvisoryUsage(dir: string, kind: "candidate" | "decision" = 
   } catch { return []; } // Advisory data cannot suppress a trusted lifecycle failure event.
 }
 
+export interface ReportMessage { event?: "coding" | "qa_reviewing" | "failed"; usage?: AdvisoryUsage }
+/**
+ * The kcw-report messages of a start or final report (one usage line each). Start sends the
+ * lifecycle event; a successful end sends usage only and nothing without usage (DESIGN §11 Q14(5));
+ * any other end sends `failed` once, with or without usage.
+ */
+export function reportMessages(agent: WorkflowAgent, phase: "start" | "end", publishResult: string | undefined, usage: readonly AdvisoryUsage[]): ReportMessage[] {
+  if (phase === "start") return [{ event: agent === "qa" ? "qa_reviewing" : "coding" }];
+  if (publishResult === "success") return usage.map((u) => ({ usage: u }));
+  if (usage.length === 0) return [{ event: "failed" }];
+  return usage.map((u, i) => (i === 0 ? { event: "failed", usage: u } : { usage: u }));
+}
+
 export async function requireArtifact(gh: GhOptions, id: string | undefined, name: string, runId: string): Promise<void> {
   if (!id || !/^[1-9][0-9]{0,15}$/.test(id)) throw new Error("missing immutable artifact id");
   const artifact = await ghGet<{ id: number; name: string; expired: boolean; size_in_bytes: number; workflow_run?: { id: number; head_sha: string } }>(gh,
