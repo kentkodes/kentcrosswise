@@ -8,7 +8,7 @@ export const QUEUE_URL_ENV = "KCW_ORCHESTRATOR_QUEUE_URL";
 
 /**
  * What the relay puts on `orchestrator-in` (§4.3 `{thread_id, resume: {event, head_sha, payload}}`).
- * `source` tells it apart from kcw-report messages (`AgentReport`, which has `agent`/`event_type`).
+ * `source` tells it apart from kcw-report messages (`AgentReport`, which has `agent` and an optional `event_type`).
  */
 export interface GitHubEventMessage {
   source: "github";
