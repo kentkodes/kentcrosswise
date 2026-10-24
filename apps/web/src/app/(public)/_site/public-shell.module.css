@@ -1,0 +1,65 @@
+/*
+ * Shared look of /demo and /office (DESIGN.md: dusk navy ground, ivory type, Rosarivo 400).
+ * Scoped to these pages: nothing here reaches owner routes or the home page.
+ */
+
+/* The root layout's globals.css centres a 48rem body; release it only while a shell is mounted. */
+body:has(.shell) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: #1b2340;
+}
+
+.shell {
+  min-height: 100svh;
+  background: #1b2340;
+  color: #f6f1e4;
+  color-scheme: dark;
+  font-family: var(--font-rosarivo), Georgia, serif;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.shell ::selection {
+  background: #f8d9a8;
+  color: #120e0b;
+}
+
+.shell :focus-visible {
+  outline: 2px solid #f8d9a8;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Content keeps its own markup; it only gets the readable measure and the shared gutters.
+   One weight (DESIGN.md): headings are not synthesised bold. */
+.content {
+  box-sizing: border-box;
+  max-width: calc(48rem + 40px);
+  padding: 40px 20px 64px;
+  overflow-wrap: anywhere;
+}
+
+.content h1,
+.content h2,
+.content h3 {
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+@media (min-width: 640px) {
+  .content {
+    max-width: calc(48rem + 80px);
+    padding-inline: 40px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .content {
+    max-width: calc(48rem + 2 * max(40px, 6.25vw));
+    padding-inline: max(40px, 6.25vw);
+  }
+}
