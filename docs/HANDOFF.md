@@ -1,6 +1,24 @@
 # Kentcrosswise project handoff
 
-**Current state — 2026-10-23 20:45 UTC:** #26 and #28 are merged and deployed; #26 passed all required CI and deployment smoke checks. The required model key is present, and post-deployment read-only metadata confirms the orchestrator login owns the checkpoint tables. There are no tasks or saved graph checkpoints. The GitHub workflow flag is false and real intake remains held; deployment does not establish real graph execution or paid model-key validity.
+**Current state — 2026-10-24:** successfully fetched `origin/main` is `d54526de3257ee0376332f3faf4cdc2ef73b5a35` (remote/default branch: `kentkodes/kentcrosswise`, `main`). The public homepage (#38) and late terminal usage fix (#37) are merged. Their successful deployment runs were recorded on 2026-10-24; this continuation did not recheck the live site. Four follow-up PRs remain open, with all four checks successful and merge state CLEAN at their exact heads below. Green checks do not authorize merging.
+
+| Open PR | Exact observed head | Fresh GitHub check observation, 2026-10-24 |
+|---|---|---|
+| [#39: usage-only agent reports](https://github.com/kentkodes/kentcrosswise/pull/39) | `3e9ed8a4b4ecd6255e88006b56fe7f7daef55ff6` | [CI 40106227217](https://github.com/kentkodes/kentcrosswise/actions/runs/40106227217): checks, preview, prod-plan and ci/required SUCCESS; CLEAN |
+| [#40: narrow relay DB role](https://github.com/kentkodes/kentcrosswise/pull/40) | `0a6a552cdfe327adaff84288b541a9d3f6424c84` | [CI 40105420707](https://github.com/kentkodes/kentcrosswise/actions/runs/40105420707): all four SUCCESS; CLEAN |
+| [#41: automatic Docs-keeper dispatch](https://github.com/kentkodes/kentcrosswise/pull/41) | `6b21dbd50c6021fca72e155088e39ea210e53a2c` | [CI 40107437396](https://github.com/kentkodes/kentcrosswise/actions/runs/40107437396): all four SUCCESS; CLEAN |
+| [#42: shared public navigation](https://github.com/kentkodes/kentcrosswise/pull/42) | `24b67e0794390872e99d41d7ee0832c47c715d1d` | [CI 40109037595](https://github.com/kentkodes/kentcrosswise/actions/runs/40109037595): all four SUCCESS; CLEAN |
+
+- #38 merged as `ebbf4233140a6c98b635c55f6b14ba30650c85a4`; [deploy 40098242337](https://github.com/kentkodes/kentcrosswise/actions/runs/40098242337) succeeded. #37 merged as current main `d54526de3257ee0376332f3faf4cdc2ef73b5a35`; [deploy 40099200332](https://github.com/kentkodes/kentcrosswise/actions/runs/40099200332) succeeded. These are recorded deployment observations, not a fresh visual or graph E2E check.
+- Q12/Q13 are owner-confirmed as built. Haiku prices/defaults are approved; the owner-run price SQL has not been executed. U13/final-ruleset verification remains for a separately authorized live run. #40 adds migration 0005 `relay_rw`; the owner's membership switch in [production DB runbook §3.3](runbooks/prod-db.md#33-the-relays-role-finding) is still pending after merge/deploy. #41 dispatches the Docs child task at merge. #42 checks the session in the browser and keeps public pages static; the owner approved the screenshots and that approach. None of these open candidates is merged or deployed.
+- The homepage's plan/assets/hero approvals and completed four-round finish review remain valid. Root `DESIGN.md` names are owner-confirmed; agent-claim copy is accepted for the simulated trial and must be revisited before launch. The engine's final ship record remains open because the native landscape is 1505×1045, below its 1536px minimum width. Two built-in regeneration attempts on 2026-10-24 requested 2560×1776 but both actual PNG headers remain 1505×1045. Neither replaced the shipped asset; no resizing or successful resolution-gate closure is claimed. Image optimization remains a follow-up.
+- Current work: `frontend/landscape-resolution-20261024`, based on the fetched main above; handoff synchronization and landscape regeneration are authorized by the current user request. No merge, deploy, infrastructure, secret read, paid fallback or real graph/model run is authorized by that request. A paid fallback requires a separately scoped decision. The workflow flag/real-intake hold below is the last recorded observation, not a fresh production probe.
+
+The authoritative decisions and next actions below supersede the older pending states. The dated rollout, terminal-fix candidate and frontend preparation entries retain history; their then-current refs, unimplemented claims and approval waits are not today's status.
+
+### Historical rollout snapshot — 2026-10-23 20:45 UTC
+
+#26 and #28 were merged and deployed. The required model key was present, read-only metadata showed checkpoint-table ownership and zero tasks/checkpoints, and the GitHub workflow flag was false. These historical observations do not establish current live DB/queue state, real graph execution or paid model-key validity.
 
 ## Observation and provenance
 
@@ -51,18 +69,23 @@
 
 ## Decisions and security holds
 
-- Q14/Q15 isolation rollout, stronger governance/import/configuration/all-lockfile policy, publisher key fix and independent Developer/QA canary are verified. The retired shared-role boundary and isolated App identities remain in force. Earlier probes and the canary do not authorize real intake.
-- Q12 remains pending: 1–5 nonrecursive subtasks; parent waits outside the in-flight limit; bounded retry/escalation. Q13 remains pending despite historical resolved placement: stored/effective-date cost or “no price,” deduped wall-clock Actions minutes without duplicates, UTC ranges. See [DESIGN §11](DESIGN.md#11-spec-conflicts-and-open-questions); semantics were not changed.
-- U13/final ruleset and model pricing remain open ([DESIGN §10](DESIGN.md#10-unverified-items-status)); relay still uses interim `orch_rw` pending a narrower approved role.
-- Native adapter runtime loading and Docs/Scraper model execution remain unverified. Actual failed-delivery retry, paid graph execution, real task persistence/interrupt/resume and full [P2-18 console → issue → PR → QA → merge → deploy E2E](DESIGN.md#8-phase-2-agent-system-local-sub-agents) remain open.
-- Authorization covers the original conditional #26 continuation and the separately approved #28/log, presence-only and read-only metadata checks within their conditions. Keep GitHub workflows disabled and real intake held; no further canary, paid task or workflow enablement is implied. Recheck exact current authorization before dependent external actions.
+- Current decisions (2026-10-24) supersede the historical rollout snapshot: the owner confirmed Q12 (1–5 nonrecursive subtasks, parent outside the in-flight limit, bounded retry/escalation) and Q13 (effective-date stored costs or “no price,” deduped Actions minutes, UTC ranges) as built. The architectural DESIGN status on main may lag these decisions; reconcile it with the candidate PRs when merging.
+- The owner approved Haiku prices and defaults; the prepared SQL is for the owner to run and remains unexecuted. U13 App-approval counting must be checked during a separately authorized live run before switching to the final ruleset. No paid P2-18 test or spend ceiling has been decided; admin identity Q5 is also undecided.
+- #40 is the approved narrow-role candidate, not a completed production switch: the relay last used interim `orch_rw`. After its merge/deploy the owner must perform the runbook membership switch, then update this record. #41 is the approved automatic Docs-dispatch candidate, not proof that a real Docs task has run. Usage-only reports (#39) and shared navigation (#42) also await merge decisions.
+- Q14/Q15 isolation/governance, the separate App identities and security boundary remain in force. Native adapter runtime loading, Docs/Scraper model execution, actual failed-delivery retry, paid graph execution, real-task persistence/interrupt/resume and full [P2-18 E2E](DESIGN.md#8-phase-2-agent-system-local-sub-agents) remain unverified.
+- Keep workflows disabled and real intake held as last recorded. No flag/configuration/DB/queue probe was made in this continuation. Historical canary, secret-presence and read-only metadata permissions do not authorize another canary, live task, secret read or workflow enablement. Verify original authorization and current conditions before a dependent external action; this public handoff transfers context, not approval.
 
 ## Remaining work and next action
 
-1. Publish this factual docs-only follow-up through ordinary review/CI. Exact reviewed/merged tree equality and deployment success are verified; keep deployment and live-task claims distinct. Keep local/private context outside the public repository.
-2. Resolve remaining owner decisions before a controlled graph test. Such a test needs separate authorization defining task/model scope and verification; no live test follows automatically from this rollout.
-3. Keep `KCW_AGENT_WORKFLOWS_ENABLED=false` and real intake held pending user readiness and a specifically scoped decision. Do not create a paid graph task merely to close verification gaps.
-4. Resolve Q12/Q13, U13/final ruleset, model prices and relay role with the owner; separately scope actual redelivery, native adapter/Docs/Scraper and P2-18 validation.
+1. Publish this factual handoff reconciliation through ordinary PR review/CI, keeping local/private context outside the public repository. The current request authorizes this synchronization and background regeneration, not a merge or deploy.
+2. Continue landscape regeneration only within the approved generator scope. Both new built-in attempts missed the native-width requirement; preserve the deployed art until a compliant candidate exists. Inspect native PNG dimensions and composition, then complete the required review/gate checks. Do not resample a smaller image or claim the engine ship record is closed. Image optimization and any paid fallback need their own scoped decision.
+3. Ask for the owner's merge decisions for #39–42; recheck exact heads, CI and conflicts before each merge. #39/#40/#41 overlap architectural DESIGN status, so reconcile one at a time. After #40 deploys, the owner performs the narrow-role membership switch; the approved model-price SQL is also an owner-run action.
+4. Keep paid/live P2-18 and enablement held until task/model scope, spend ceiling, admin identity and verification are explicitly decided. Check U13 during that run and separately verify native adapters, Docs/Scraper execution and actual failed-delivery retry.
+5. Before launch revisit the homepage agent-claim copy and outstanding visual advisories; image weight/browser/device coverage remain documented follow-ups. The owner's later Stardew-Valley-inspired animated public agent office is future direction, not scheduled implementation; use original art and plan it with design questions when requested.
+
+## Historical implementation chronology
+
+The following entries describe what was true at their dated stages. #37 and #38 have since merged, approvals progressed, and the current snapshot above supersedes earlier waits and candidate-only claims.
 
 ## Late terminal report usage — local fix candidate, 2026-10-23
 
