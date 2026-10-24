@@ -207,6 +207,8 @@ class Machine {
 
   async report(r: AgentReport): Promise<StepOutcome> {
     if (r.usage && r.usage.length > 0) await this.store.addUsage(this.id, r.agent, r.usage);
+    // A usage-only report (DESIGN §11 Q14(5)) has no lifecycle meaning: no event, no status change.
+    if (r.event_type === undefined) return "unchanged";
     const expected: AgentName | null = this.d.phase === "dev" ? "developer" : this.d.phase === "qa" ? "qa" : null;
     if (r.agent !== expected) {
       this.d.stale += 1;

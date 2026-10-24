@@ -4,7 +4,7 @@ import path from "node:path";
 import { gatherContext, linkedIssue, parseInputs } from "./lib/agent-context";
 import { ghGet, type GhPull } from "./lib/agent-github";
 import { AGENT_CONFIGS, isWorkflowAgent } from "./lib/agents";
-import { candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
+import { candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, reportMessages, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
 import { ensurePull, parseReviewDecision, pullText, pushCommits, runGit, submitReview } from "./lib/agent-publish";
 import { parseArgs } from "./lib/args";
 import { runMain } from "./lib/main";
@@ -105,11 +105,11 @@ await runMain(async () => {
     writeFileSync("decision/usage.json", JSON.stringify(executionUsage())); return;
   }
   if (command === "report") {
-    const usage = args.phase === "start" ? [] : [...readAdvisoryUsage("candidate"), ...readAdvisoryUsage("decision", "decision")];
-    const event = args.phase === "start" || process.env.KCW_PUBLISH_RESULT === "success" ? (c.agent === "qa" ? "qa_reviewing" : "coding") : "failed";
-    for (const [i,u] of (usage.length ? usage : [undefined]).entries()) await runCli([
-      "--task-id", String(c.taskId), "--agent", c.agent, "--event-type", event,
-      "--dedupe-id", `run-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${args.phase === "start" ? "start" : "end"}-${i}`,
+    const phase = args.phase === "start" ? "start" : "end";
+    const usage = phase === "start" ? [] : [...readAdvisoryUsage("candidate"), ...readAdvisoryUsage("decision", "decision")];
+    for (const [i,{ event, usage: u }] of reportMessages(c.agent, phase, process.env.KCW_PUBLISH_RESULT, usage).entries()) await runCli([
+      "--task-id", String(c.taskId), "--agent", c.agent, ...(event ? ["--event-type", event] : []),
+      "--dedupe-id", `run-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${phase}-${i}`,
       ...(u ? ["--provider", u.provider, "--model", u.model, "--input-tokens", String(u.input_tokens), "--output-tokens", String(u.output_tokens)] : []),
     ], { env: process.env, stdout: console.log });
     return;

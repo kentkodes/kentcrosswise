@@ -98,7 +98,7 @@ export type TaskInput = (
 export type StepOutcome =
   | "applied" // the task moved on
   | "stale" // unexpected or outdated input: recorded, the thread waits on as before
-  | "unchanged" // a sweep with nothing to do
+  | "unchanged" // a sweep with nothing to do, or a usage-only report
   | "deferred" // agents_paused: kept and processed on unpause
   | "paused" // a sweep while agents_paused
   | "queued"; // not started yet (paused or in-flight limit)

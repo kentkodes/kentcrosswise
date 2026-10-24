@@ -110,6 +110,23 @@ describe("reports on ended checkpoints", () => {
     expect(f.github.calls).toEqual([]);
   });
 
+  it("records a late usage-only report with no event, status change or stale count", async () => {
+    const f = await terminal();
+    const input = finalReport("late-usage-only");
+    const { event_type: _omitted, ...usageOnly } = input.report;
+    const staleBefore = (await f.graph.getState(threadConfig(1))).values.task.stale;
+    expect(await processTaskInput(f.graph, 1, { ...input, report: usageOnly })).toBe("unchanged");
+    expect(f.store.addUsage).toHaveBeenCalledExactlyOnceWith(1, "qa", usage);
+    const snapshot = await f.graph.getState(threadConfig(1));
+    expect(snapshot.values.task.phase).toBe("done");
+    expect(snapshot.values.task.stale).toBe(staleBefore);
+    expect(snapshot.next).toEqual([]);
+    expect(f.status()).toBe("merged");
+    expect(f.store.updateTask).not.toHaveBeenCalled();
+    expect(f.store.addEvent).not.toHaveBeenCalled();
+    expect(f.github.calls).toEqual([]);
+  });
+
   it("does not record the immediate redelivery twice, including after a fresh graph instance", async () => {
     const f = await terminal();
     await processTaskInput(f.graph, 1, finalReport());
