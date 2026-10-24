@@ -195,7 +195,7 @@ describe("built Lambda bundles", () => {
     orchDb = await servePglite(db, { role: "orch_rw" });
     relayPg = await PGlite.create();
     await migrate(fromPglite(relayPg));
-    relayDb = await servePglite(relayPg);
+    relayDb = await servePglite(relayPg, { role: "relay_rw" }); // the relay's own grants (0005)
   }, 180_000);
 
   afterAll(async () => {
