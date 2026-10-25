@@ -1,5 +1,5 @@
 // The simulated hub window on the home page. Real DOM, laid out flat (912x665) and tilted onto the
-// comp's window with a CSS matrix3d (see home.module.css). Every value shown comes from @kcw/demo-data.
+// comp's window with a CSS matrix3d (see home.module.css). Hub fixtures are simulated; activity is public.
 import type { CSSProperties } from "react";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
@@ -9,7 +9,6 @@ import {
   Bars,
   Building,
   ChevronRight,
-  Document,
   External,
   Gear,
   Heart,
@@ -19,12 +18,12 @@ import {
   Leaf,
   Note,
   People,
-  Play,
   Sparkle,
   TikTokMark,
   YouTubeMark,
 } from "./icons";
 import { DayNightToggle } from "./scene";
+import { RecentActivity } from "./recent-activity";
 import { SidebarScroller } from "./sidebar-scroller";
 import s from "./home.module.css";
 import avatar1 from "./plates/avatar-1.png";
@@ -40,13 +39,6 @@ const SIDEBAR = [
   { label: "Following", href: "/demo", Icon: Heart, soft: true },
   { label: "Notes", href: "/demo", Icon: Note },
   { label: "Agents", href: "/office", Icon: Sparkle },
-] as const;
-
-// Copied verbatim from the approved comp for the first-viewport build (see the hero review notes).
-const ACTIVITY = [
-  { title: "Captured a note from today’s conversation", when: "2h ago", Icon: Document },
-  { title: "Summarized a YouTube video", when: "5h ago", Icon: Play },
-  { title: "Updated people insights", when: "1d ago", Icon: People },
 ] as const;
 
 const PLATFORM = {
@@ -171,7 +163,7 @@ export function HubWindow() {
         <p className={s.simulated}>
           Simulated data
           <Info className={s.simulatedIcon} />
-          <span className={s.srOnly}>: every person, number and entry in this window is generated example data.</span>
+          <span className={s.srOnly}>: people, mood and following are simulated. Agent activity comes from the real public feed.</span>
         </p>
         <DayNightToggle className={s.hubToggle} />
       </header>
@@ -213,7 +205,7 @@ export function HubWindow() {
       <h2 id="hub-greeting" className={s.greeting}>
         Good evening.
       </h2>
-      <p className={s.hubIntro}>Here&rsquo;s a glimpse of your world, powered by your AI agents.</p>
+      <p className={s.hubIntro}>A sample hub, with real public activity from the agents building this site.</p>
 
       <section className={`${s.panel} ${s.peoplePanel}`} aria-labelledby="hub-people">
         <h3 id="hub-people" className={s.panelTitle}>
@@ -281,17 +273,7 @@ export function HubWindow() {
         <h3 id="hub-activity" className={s.panelTitle}>
           Recent activity
         </h3>
-        <ul className={s.activityList}>
-          {ACTIVITY.map(({ title, when, Icon }) => (
-            <li key={title} className={s.activity}>
-              <span className={s.activityTile}>
-                <Icon className={`${s.activityIcon} ${Icon === People ? s.iconFilled : ""}`} />
-              </span>
-              <span className={s.activityTitle}>{title}</span>
-              <span className={s.activityWhen}>{when}</span>
-            </li>
-          ))}
-        </ul>
+        <RecentActivity />
       </section>
 
       <section className={`${s.panel} ${s.explorePanel}`} aria-labelledby="hub-explore">
@@ -314,8 +296,8 @@ export function HubWindow() {
               <span className={s.exploreTile}>
                 <Building className={s.exploreIcon} />
               </span>
-              <span className={s.exploreName}>Agent office</span>
-              <span className={s.exploreDesc}>See and manage your AI agents.</span>
+              <span className={s.exploreName}>View agent activity</span>
+              <span className={s.exploreDesc}>Real events from building this site.</span>
               <External className={s.exploreArrow} />
             </Link>
           </li>

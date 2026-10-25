@@ -1,79 +1,73 @@
 "use client";
-// Polls /api/public/agent-events every 5 s (D11) and lists the events, newest first.
-import { useEffect, useState } from "react";
-
-interface FeedEvent {
-  id: number;
-  ts: string;
-  agent: string;
-  type: string;
-  title: string;
-}
-
-type Feed = { available: true; events: FeedEvent[] } | { available: false; events: []; note: string };
-
-const POLL_MS = 5_000;
-const KEEP = 100;
+import { useEffect, useRef, useState } from "react";
+import { advancePlayback, emptyPlayback, receiveEvents, timestamp } from "../_site/activity";
+import { useActivity } from "../_site/use-activity";
+import s from "./office.module.css";
 
 export function OfficeFeed() {
-  const [events, setEvents] = useState<FeedEvent[]>([]);
-  const [note, setNote] = useState<string | undefined>();
-  const [loaded, setLoaded] = useState(false);
+  const { events, status } = useActivity();
+  const [playback, setPlayback] = useState(emptyPlayback);
+  const [paused, setPaused] = useState(false);
+  const [reduced, setReduced] = useState(true);
+  const [visible, setVisible] = useState(false);
+  const [inView, setInView] = useState(false);
+  const panel = useRef<HTMLElement>(null);
+  const playing = !paused && !reduced && visible && inView;
 
   useEffect(() => {
-    let cancelled = false;
-    let lastId: number | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const poll = async () => {
-      try {
-        const url = lastId === undefined ? "/api/public/agent-events" : `/api/public/agent-events?since=${lastId}`;
-        const res = await fetch(url);
-        const feed = (await res.json()) as Feed;
-        if (cancelled) return;
-        if (feed.available) {
-          setNote(undefined);
-          if (feed.events.length > 0) {
-            lastId = feed.events[feed.events.length - 1]!.id;
-            setEvents((prev) => {
-              const seen = new Set(prev.map((e) => e.id));
-              return [...prev, ...feed.events.filter((e) => !seen.has(e.id))].slice(-KEEP);
-            });
-          }
-        } else {
-          setNote(feed.note);
-        }
-      } catch {
-        if (!cancelled) setNote("The agent feed is unavailable right now.");
-      } finally {
-        if (!cancelled) {
-          setLoaded(true);
-          timer = setTimeout(poll, POLL_MS);
-        }
-      }
-    };
-    void poll();
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motion = () => setReduced(preference.matches);
+    const visibility = () => setVisible(document.visibilityState === "visible");
+    motion();
+    visibility();
+    preference.addEventListener("change", motion);
+    document.addEventListener("visibilitychange", visibility);
+    const observer = new IntersectionObserver(([entry]) => setInView(!!entry?.isIntersecting));
+    if (panel.current) observer.observe(panel.current);
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
+      preference.removeEventListener("change", motion);
+      document.removeEventListener("visibilitychange", visibility);
+      observer.disconnect();
     };
   }, []);
 
-  if (!loaded) return <p>Loading events...</p>;
-  return (
-    <section aria-label="Agent events">
-      {note ? <p role="status">{note}</p> : null}
-      {events.length === 0 && !note ? <p>No agent events yet.</p> : null}
-      <ol data-testid="agent-events" reversed>
-        {[...events].reverse().map((e) => (
-          <li key={e.id} data-event-id={e.id}>
-            <time dateTime={e.ts}>{new Date(e.ts).toISOString().replace("T", " ").slice(0, 19)} UTC</time>{" "}
-            <span data-field="agent">{e.agent}</span> <span data-field="type">{e.type.replaceAll("_", " ")}</span>
-            {": "}
-            <span data-field="title">{e.title}</span>
-          </li>
-        ))}
-      </ol>
+  useEffect(() => {
+    if (status === "ready" || events.length) setPlayback((previous) => receiveEvents(previous, events, playing));
+  }, [events, status, playing]);
+
+  useEffect(() => {
+    if (!playing || !playback.current) return;
+    const timer = setTimeout(() => setPlayback(advancePlayback), 4_000);
+    return () => clearTimeout(timer);
+  }, [playing, playback]);
+
+  const current = playback.current;
+  return <section aria-label="Agent events" className={s.feed}>
+    <section ref={panel} className={s.playback} aria-labelledby="playback-title" data-testid="activity-playback" data-playing={playing}>
+      <h2 id="playback-title">{status === "error" ? "Activity replay · cached" : playback.mode === "live" ? "Live feed · new event" : "Activity replay"}</h2>
+      {status === "error" ? <p role="status">The agent feed is unavailable. {events.length ? "Showing cached events; updates will retry shortly." : "Retrying shortly."}</p> : null}
+      {!current ? <p role="status">{status === "loading" ? "Loading agent activity…" : status === "ready" ? "No public agent events yet." : "No cached events to replay."}</p> : <>
+        <div className={s.current} data-event-id={current.id}>
+          <p className={s.eventTitle}>{current.title}</p>
+          <p>{current.agent} · {current.type.replaceAll("_", " ")}</p>
+          <time dateTime={current.ts}>{timestamp(current.ts)}</time>
+        </div>
+        <p className={s.explanation}>{status === "error" ? "Cached replay" : playback.mode === "live" ? "Newly received from the public feed" : `Replaying ${playback.events.length} recorded events`} · original event time shown</p>
+      </>}
+      <div className={s.controls}>
+        <button type="button" disabled={!current || reduced} onClick={() => setPaused(!paused)}>{reduced ? "Autoplay off" : paused ? "Resume" : "Pause"}</button>
+        <button type="button" disabled={!current} onClick={() => setPlayback(advancePlayback)}>Next event</button>
+        <span>{reduced ? "Reduced motion · use Next event" : paused ? "Playback paused" : "Advances every 4 seconds while visible"}</span>
+      </div>
     </section>
-  );
+    <h2>Recorded events</h2>
+    <p>The latest public events, newest first. This list stays available while playback is paused.</p>
+    <ol className={s.events} data-testid="agent-events" reversed>
+      {[...events].reverse().map((event) => <li key={event.id} data-event-id={event.id}>
+        <time dateTime={event.ts}>{timestamp(event.ts)}</time>{" "}
+        <span data-field="agent">{event.agent}</span>{" "}<span data-field="type">{event.type.replaceAll("_", " ")}</span>{": "}
+        <span data-field="title">{event.title}</span>
+      </li>)}
+    </ol>
+  </section>;
 }
