@@ -1,7 +1,7 @@
 {
   "tool": "comp-spec",
   "version": 1,
-  "createdAt": "2026-10-23T22:14:35.303Z",
+  "createdAt": "2026-10-25T21:31:31.621Z",
   "comp": ".impeccable/mocks/03-hub-window.png",
   "warnings": [
     "region landscape: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
@@ -3403,6 +3403,6 @@
   "compSha256": "c30860dafc7dceda6540cf09023cc74e7c98fd3e652351c8b140278e5808ef82",
   "regionsSource": {
     "path": ".impeccable/build/regions.json",
-    "sha256": "ce7323cfc00a5d33363251bfe8aa51dba3b24a9e26e513de05dae692d93881e4"
+    "sha256": "f708fa62088edc476dbc9baaa7b53b629e480fb7bfc4540b000298023ae63218"
   }
 }

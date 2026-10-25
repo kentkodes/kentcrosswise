@@ -1,0 +1,32 @@
+{
+  "generated_date": "2026-10-25",
+  "status": "owner_accepted_integrated_locally",
+  "model": "gpt-image-2",
+  "operation": "reference-image edit",
+  "prompt": "landscape-2560x1776.txt",
+  "reference": "../../apps/web/src/app/(public)/_home/plates/landscape.png",
+  "reference_sha256": "813fc0f6e5d0f14cfad06bad21829a30bdcc84d3b79a6e09cfc21588f4136b41",
+  "output": "../../output/imagegen/landscape-2560x1776.png",
+  "request": {
+    "size": "2560x1776",
+    "quality": "high",
+    "output_format": "png"
+  },
+  "verified": {
+    "format": "PNG",
+    "mode": "RGB",
+    "width": 2560,
+    "height": 1776,
+    "bytes": 7666540,
+    "sha256": "d8bb1058a9b6b026740925fc102745692fbf35100b44a0e1aad48fb740bbd312",
+    "verification": "Liaison independently verified with Pillow and viewed composition"
+  },
+  "local_resampling": false,
+  "shipping_asset_replaced": true,
+  "shipping_asset": "../../apps/web/src/app/(public)/_home/plates/landscape.png",
+  "shipping_asset_sha256": "d8bb1058a9b6b026740925fc102745692fbf35100b44a0e1aad48fb740bbd312",
+  "delivery": "Existing Next.js image optimization with sizes=100vw; native source preserved byte-identically",
+  "owner_review": "accepted 2026-10-25 (current chat)",
+  "build_gates": "Native check-plate passed (2560x1776). Responsive rerun no longer reports landscape size; it refuses existing explore-title fidelity (58%, structure 67%). Finish remains open; no forced pass or review receipt was created.",
+  "local_verification": "Production Next build, lint, typecheck and 78 web tests passed. Sixteen browser captures at widths 1440/390/768/1024 cover day/night and reduced motion, with no overflow, missing images or runtime errors. Optimized WebP responses returned 200; desktop 381460 bytes and phone 54750 bytes."
+}

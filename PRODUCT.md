@@ -8,7 +8,7 @@ web
 
 ## Users
 
-The owner uses a private personal hub. Logged-out visitors explore a public demonstration made entirely from deterministic synthetic data and a sanitized agent event feed.
+The owner uses a private personal hub. Logged-out visitors explore a public hub demonstration with deterministic synthetic personal data alongside a separately identified real sanitized agent event feed.
 
 ## Product Purpose
 
@@ -24,11 +24,11 @@ Visitors arrive on phones and desktop browsers. Their primary action is to under
 
 ## Capabilities and Constraints
 
-- Existing public routes: home, demo and an agent-office text feed. The current demo contains synthetic contacts, mood and social snapshots.
+- Existing public routes: home, demo and an agent-office text feed. The demo contains synthetic contacts, mood and social snapshots. Current local changes show three real recent homepage events and a text-office replay of up to the latest 20 recorded events, clearly labeled Replay with original timestamps; no invented fallback fills an empty feed.
 - This frontend pass covers the public home/demo and shared navigation, followed later by the owner console.
 - Public pages use only `@kcw/demo-data` and the existing permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication/infrastructure.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behavior are required.
-- The private hub feature set, pixel-art office and X-ray system are later product work; this pass must not claim they already exist.
+- The private hub feature set, full pixel-art office scene and X-ray system are later product work. The text-office playback foundation is implemented locally with an accessible list, pause/resume/next, reduced-motion manual stepping and hidden/offscreen pause; it does not establish the later artwork. Current changes are prepared for draft review, with no merge or deployment.
 
 ## Brand Commitments
 
@@ -40,7 +40,7 @@ The existing repository, approved product specs, working public pages, and deter
 
 ## Product Principles
 
-- Let visitors experience the hub through a clearly labeled simulation.
+- Label simulated hub data clearly; distinguish real sanitized agent activity and historical Replay with original timestamps.
 - Give the homepage personality while keeping working views readable.
 - Keep private data and owner controls separate from public exploration.
 - Make motion optional and navigation obvious.
