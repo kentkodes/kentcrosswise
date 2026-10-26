@@ -24,7 +24,30 @@ colors:
   periwinkle-ink: "#5166b0"
   presence-green: "#2f9e5e"
   firefly-gold: "#ffd877"
+  office-control: "#252e49"
+  office-control-edge: "#aaa28f"
+  office-muted: "#e5d8bf"
+  office-hover: "#3d465e"
+  office-divider: "#847d78"
+  office-teal: "#67baa6"
+  office-amber: "#e4ad55"
 typography:
+  office-label:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "14px"
+    fontWeight: 400
+  office-state:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "21px"
+    fontWeight: 400
+  office-role:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "28px"
+    fontWeight: 400
+  office-heading:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "clamp(30px, 4vw, 44px)"
+    fontWeight: 400
   display:
     fontFamily: "Rosarivo, Georgia, serif"
     fontSize: "clamp(36px, 10vw, 50px)"
@@ -69,6 +92,7 @@ typography:
     lineHeight: "31px"
     fontFeature: "lnum, tnum"
 rounded:
+  office-target: "4px"
   pill: "999px"
   window: "22px"
   surface: "15px"
@@ -84,6 +108,10 @@ spacing:
   gutter: "20px"
   gutter-wide: "40px"
 components:
+  office-target:
+    rounded: "{rounded.office-target}"
+    width: "44px"
+    height: "44px"
   button-entrance:
     backgroundColor: "{colors.apricot}"
     textColor: "{colors.entrance-ink}"
@@ -319,11 +347,27 @@ A 32px periwinkle tile with an icon, a 12.8px title and an 11px figure-stack tim
 
 The owner-accepted landscape is now native 2560×1776 and integrated byte-identically, served with Next Image optimization through the existing image route. The scenery remains an original dusk lake, meadow, mountains and fireflies; the CRT is a separate plate. Locally measured WebP responses are 381,460 bytes for desktop and 54,750 bytes for phone. Other plates retain their existing formats. This integration is prepared for draft review; no merge or deployment has occurred.
 
-Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The text office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion uses manual stepping, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty; the full pixel-art office scene remains future design work.
+Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The text office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion uses manual stepping, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty. A separate local fictional office preview now explores the approved pixel scene; full-team real-feed integration remains future work.
 
 ## Open items
 
 1. **Formal finish remains open:** the native landscape passes its resolution plate check, and 16 local viewport/light/motion checks passed. Responsive/finish still report existing explore-title fidelity (58%) and navigation advisories. No forced pass or fabricated receipt was used; the older receipt file could not be verified. Do not claim current receipt validity or a completed engine ship record.
 2. **Verification:** combined focused web/scripts tests (93), lint/typecheck and the full production OpenNext build passed independently. The full dev-server browser run passed 29/31, including all activity tests; both console controls that timed out there passed targeted production-preview isolation (2/2 in 50.4 seconds, installed Chrome, one worker, `PW_SERVER=start`) without a form source fix. The full 31-test production suite was not rerun; the final full Vitest suite independently passed 66 files/1,105 tests in 123.03 seconds outside the sandbox for fixture subprocess/loopback access. The earlier asset run was 23/25; do not confuse it with the combined result. Firefox/Safari and real devices remain unverified.
 3. **Copy:** fictional activity samples and “See and manage your AI agents” have been replaced locally by real sanitized events and “View agent activity.” The greeting subline about a world powered by agents remains trial copy under Simulated data; review remaining agent claims before launch.
-4. **Visual advisories:** prior seam/paper/quill/night-paper observations and current title/navigation fidelity are review items, not new visual-system rules. Full pixel-art office artwork needs its own later planning; the present replay is a text-feed foundation.
+4. **Visual advisories:** prior seam/paper/quill/night-paper observations and current title/navigation fidelity are review items, not new visual-system rules. The local sample artwork is documented below; full-team real-feed mapping remains future work, with the existing replay as its text-feed foundation.
+
+## Office preview — scoped visual extension
+
+This local `/office/preview` surface extends the existing public world with an original overhead woodland studio. Navy, ivory, apricot and Rosarivo remain the surrounding interface; the coarse pixel room is a route-specific medium. The paper-window, painted-raster and soft-corner guidance above continues to describe the incumbent home/demo, rather than imposing that medium on the pixel room.
+
+The native Canvas 2D scene is 320×256, with a 16×16 tile vocabulary and approximately 16×24 robot bodies. Integer rectangle fills, disabled image smoothing and pixelated display preserve actual coarse pixels. The room displays at 2× where available, 1× on phones with room, and fits narrower widths without page overflow. It ships code-drawn scenery, with no raster scene asset. Furniture and robots are distinct layers, with robots ordered by their vertical position. All readable text and controls remain HTML.
+
+The palette in `draw-office.ts` declares 20 colors: honey wood and seams, sage walls and foliage, cream/paper, teal Developer, amber QA, dusk windows, navy and a failure red. The Liaison measured 19 rendered colors in the initial task-assigned frame; failure states use the twentieth color. This is a frame measurement, not a claim that every state uses 19 colors. The `office-*` color tokens above are intentional scoped interface shades and role swatches extracted from `preview.module.css`, not a replacement global palette.
+
+The scoped type steps are office-label, office-state, office-role and office-heading. The heading reaches 44px on desktop and uses 30px on phones. Pill playback/role buttons and the rounded story selector accompany 44px robot/workstation targets with office-target corners and visible apricot focus. Apricot identifies the selected role here. This local selection treatment and the compact target corners are scoped exceptions to the homepage entrance and soft-panel vocabulary.
+
+Controls precede the room. The inspector sits beside it from 1200px and below it on narrower screens. The route's container is capped at 1280px; readable prose retains a 65–70ch measure. The compact phone toolbar keeps the room and role controls in the first viewport. Labels explicitly identify fictional samples; no public-event request is made and `/office` retains its real/replay text feed.
+
+Pause/resume, next and restart control a bounded 10fps simulation. Reduced motion uses manual stepping. Hidden tabs and offscreen rooms freeze without catch-up; failure and owner-wait states remain readable. Robot and desk selection works with keyboard and pointer; the inspector, current event and expandable sequence supply the text equivalent. Only a merged event files the papers.
+
+Design-token detection remains advisory for this scoped extension. No detector pass or complete engine ship receipt is implied. Final local mobile review and implementation checks are recorded in the handoff; owner preview acceptance, real-feed integration, merge and deployment remain separate milestones.

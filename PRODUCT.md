@@ -28,7 +28,7 @@ Visitors arrive on phones and desktop browsers. Their primary action is to under
 - This frontend pass covers the public home/demo and shared navigation, followed later by the owner console.
 - Public pages use only `@kcw/demo-data` and the existing permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication/infrastructure.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behavior are required.
-- The private hub feature set, full pixel-art office scene and X-ray system are later product work. The text-office playback foundation is implemented locally with an accessible list, pause/resume/next, reduced-motion manual stepping and hidden/offscreen pause; it does not establish the later artwork. Current changes are prepared for draft review, with no merge or deployment.
+- The private hub feature set, real-feed pixel office for the full team and X-ray system are later product work. The text-office playback foundation has an accessible list, pause/resume/next, reduced-motion manual stepping and hidden/offscreen pause. A separate local sample scene at /office/preview explores the approved artwork and interactions; it does not establish real-feed integration or deployment.
 
 ## Brand Commitments
 
@@ -44,3 +44,9 @@ The existing repository, approved product specs, working public pages, and deter
 - Give the homepage personality while keeping working views readable.
 - Keep private data and owner controls separate from public exploration.
 - Make motion optional and navigation obvious.
+
+## Office preview — scoped local extension
+
+The owner approved an original overhead woodland studio with small friendly robots and coarse actual pixels, with a watch-and-inspect interaction. The first sequence follows Developer → QA → filing cabinet, including changes requested, failed tests, waiting on the owner and terminal failure. Only merged work is filed.
+
+The workflow is concept → interactive sample preview → real-feed integration. The local `/office/preview` route is the middle step: explicitly fictional samples, robot/workstation inspection and optional playback. It makes no public-event request. The real `/office` text feed remains separate. Full-team real-feed mapping remains future work; the current public event contract cannot establish concurrent-task identity. Direction approval and local review do not establish merge or deployment. IAM access and the dependent live agent run remain held. See [the scoped brief](docs/office/PREVIEW.md).
