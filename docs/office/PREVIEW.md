@@ -24,7 +24,7 @@ The preview lives at `/office/preview`, links back to the real `/office` and cle
 
 Provide a successful sequence and alternative paths for changes requested, tests failed, waiting on the owner and terminal failure. Only a merged event files the work; approval alone does not. Robot movement, carried papers and work poses make event transitions visible. Manual stepping and reduced motion may show the destination pose directly.
 
-Visitors can select either robot or workstation to inspect its role and sample state using pointer or keyboard. Keep text outside the pixel artwork, use labeled controls and targets of at least 44 CSS pixels, and retain a text equivalent of the current scene. Provide pause/resume, next and restart controls. Respect reduced motion with manual progression, and freeze the simulation while hidden or offscreen without a catch-up jump.
+Visitors can select either robot or workstation to inspect its role and sample state using pointer or keyboard. Keep text outside the pixel artwork, use labeled controls and targets of at least 44 CSS pixels, and retain a text equivalent of the current scene. Provide play/pause/resume, optional next and restart controls. Reduced motion supplies the initial still state, but an explicit Play animation choice enables full autoplay without changing the device preference. Scenario changes preserve playback intent and Restart starts fresh autoplay. Animate on browser frames, with each simulation update bounded so current paths advance at most one native pixel; hidden or offscreen views freeze without a catch-up jump.
 
 ## Verification and delivery
 

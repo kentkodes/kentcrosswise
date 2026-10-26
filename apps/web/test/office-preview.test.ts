@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { SCENARIOS, beatAt, initialClock, next, poseFor, scenePose, tick, walk } from "../src/app/(public)/office/preview/scene";
+import { SCENARIOS, animationTick, beatAt, initialClock, next, poseFor, scenePose, tick, walk } from "../src/app/(public)/office/preview/scene";
 
 describe("sample office choreography", () => {
+  it("autoplay advances every path by at most one native pixel, including slow frames", () => {
+    for (const { beats } of Object.values(SCENARIOS)) {
+      let clock = initialClock();
+      let previous = scenePose(beats, 0, 0);
+      for (let frame = 0; !clock.done && frame < 10000; frame++) {
+        clock = animationTick(clock, frame % 7 === 0 ? 500 : 1000 / 60, beats);
+        const pose = scenePose(beats, clock.index, clock.elapsed / beatAt(beats, clock.index).duration);
+        for (const role of ["developer", "qa"] as const) {
+          const distance = Math.abs(pose[role].x - previous[role].x) + Math.abs(pose[role].y - previous[role].y);
+          expect(distance).toBeLessThanOrEqual(1);
+          expect(Number.isInteger(pose[role].x) && Number.isInteger(pose[role].y)).toBe(true);
+        }
+        previous = pose;
+      }
+      expect(clock.done).toBe(true);
+    }
+  });
   it("files only merged work, never approved or failed work", () => {
     for (const scenario of Object.values(SCENARIOS)) {
       scenario.beats.forEach((beat, index) => {

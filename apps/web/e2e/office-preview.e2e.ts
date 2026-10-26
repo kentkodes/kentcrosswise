@@ -15,7 +15,7 @@ test("sample-only scene supports keyboard inspection and files only at merge", a
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/office/preview");
   await expect(page.getByText("Sample animation preview · fictional events", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Autoplay off" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Play animation", exact: true })).toBeEnabled();
   const qa = page.getByRole("button", { name: "QA", exact: true });
   await qa.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("complementary", { name: "Robot inspection" }).getByRole("heading", { name: "QA", exact: true })).toBeVisible();
@@ -36,6 +36,26 @@ test("alternate stories show rework, waiting and failures without filing", async
     await stepTo(page, kind);
     await expect(page.getByTestId("office-room")).toHaveAttribute("data-filed", "false");
   }
+});
+
+test("explicit Play enables full autoplay despite reduced-motion preference", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/office/preview");
+  const room = page.getByTestId("office-room");
+  await expect(room).toHaveAttribute("data-playing", "false");
+  await page.getByRole("button", { name: "Play animation", exact: true }).click();
+  await expect(room).toHaveAttribute("data-playing", "true");
+  await expect(room).toHaveAttribute("data-event", "coding", { timeout: 10000 });
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  const pausedAt = await room.getAttribute("data-elapsed");
+  await page.waitForTimeout(200);
+  await expect(room).toHaveAttribute("data-elapsed", pausedAt!);
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await page.getByLabel("Sample story").selectOption("rework");
+  await expect(room).toHaveAttribute("data-playing", "true");
+  await expect(room).toHaveAttribute("data-event", "task_assigned");
+  await page.getByRole("button", { name: "Restart", exact: true }).click();
+  await expect(room).toHaveAttribute("data-playing", "true");
 });
 
 test("playback pauses offscreen and resumes without catch-up", async ({ page }) => {

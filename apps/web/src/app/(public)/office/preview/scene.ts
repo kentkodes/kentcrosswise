@@ -83,6 +83,10 @@ export function scenePose(beats: readonly Beat[], index: number, progress: numbe
 }
 export interface Clock { index: number; elapsed: number; done: boolean }
 export const initialClock = (): Clock => ({ index: 0, elapsed: 0, done: false });
+// A bounded frame keeps current walking paths to one native pixel per update.
+export function animationTick(clock: Clock, delta: number, beats: readonly Beat[]): Clock {
+  return tick(clock, Math.min(Math.max(delta, 0), 1000 / 60), beats);
+}
 export function tick(clock: Clock, delta: number, beats: readonly Beat[]): Clock {
   if (clock.done || delta <= 0) return clock;
   const elapsed = clock.elapsed + delta;

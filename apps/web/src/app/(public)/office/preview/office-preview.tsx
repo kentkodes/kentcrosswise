@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { drawOffice } from "./draw-office";
-import { HEIGHT, WIDTH, SCENARIOS, beatAt, initialClock, next, scenePose, tick } from "./scene";
+import { HEIGHT, WIDTH, SCENARIOS, animationTick, beatAt, initialClock, next, scenePose } from "./scene";
 import type { Role, Scenario } from "./scene";
 import s from "./preview.module.css";
 
@@ -11,6 +11,7 @@ export function OfficePreview() {
   const [selected, setSelected] = useState<Role>("developer");
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true);
+  const [motionRequested, setMotionRequested] = useState(false);
   const [visible, setVisible] = useState(false);
   const [inView, setInView] = useState(false);
   const [roomWidth, setRoomWidth] = useState(320);
@@ -21,7 +22,8 @@ export function OfficePreview() {
   const beat = beatAt(beats, clock.index);
   const progress = Math.min(1, clock.elapsed / beat.duration);
   const pose = scenePose(beats, clock.index, progress);
-  const playing = !paused && !reduced && visible && inView && !clock.done;
+  const motionAllowed = !reduced || motionRequested;
+  const playing = !paused && motionAllowed && visible && inView && !clock.done;
 
   useEffect(() => {
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -42,9 +44,19 @@ export function OfficePreview() {
   }, []);
   useEffect(() => {
     if (!playing) return;
-    // A bounded 10fps simulation freezes cleanly offscreen; no wall-clock catch-up.
-    const timer = setInterval(() => setClock((current) => tick(current, 100, beats)), 100);
-    return () => clearInterval(timer);
+    // Reset after suspension; slow frames never skip pixel steps.
+    let previous: number | undefined;
+    let frame: number;
+    const advance = (timestamp: number) => {
+      if (previous !== undefined) {
+        const delta = timestamp - previous;
+        setClock((current) => animationTick(current, delta, beats));
+      }
+      previous = timestamp;
+      frame = requestAnimationFrame(advance);
+    };
+    frame = requestAnimationFrame(advance);
+    return () => cancelAnimationFrame(frame);
   }, [playing, beats]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
@@ -53,7 +65,8 @@ export function OfficePreview() {
     drawOffice(ctx, scenePose(beats, clock.index, Math.min(1, clock.elapsed / currentBeat.duration)), currentBeat.kind, Math.floor(clock.elapsed / 180), selected);
   }, [beats, clock, selected]);
 
-  function chooseScenario(value: Scenario) { setScenario(value); setClock(initialClock()); setPaused(true); }
+  function chooseScenario(value: Scenario) { setScenario(value); setClock(initialClock()); }
+  function play() { setMotionRequested(true); setPaused(false); if (clock.done) setClock(initialClock()); }
   const currentStatus = selected === beat.role ? beat.title : pose.walking === selected ? "Returning to the desk" : "At their workstation";
   return <section aria-label="Office sample animation" className={s.preview}>
     <div className={s.toolbar}>
@@ -61,11 +74,11 @@ export function OfficePreview() {
         {Object.entries(SCENARIOS).map(([value, entry]) => <option key={value} value={value}>{entry.label}</option>)}
       </select></label>
       <div className={s.controls}>
-        <button type="button" disabled={reduced || clock.done} onClick={() => setPaused((value) => !value)}>{reduced ? "Autoplay off" : paused ? "Resume" : "Pause"}</button>
+        <button type="button" onClick={() => { if (motionAllowed && !paused && !clock.done) setPaused(true); else play(); }}>{clock.done ? "Play again" : !motionAllowed ? "Play animation" : paused ? "Resume" : "Pause"}</button>
         <button type="button" disabled={clock.done} onClick={() => { setPaused(true); setClock((current) => next(current, beats)); }}>Next event</button>
-        <button type="button" onClick={() => { setClock(initialClock()); setPaused(true); }}>Restart</button>
+        <button type="button" onClick={() => { setClock(initialClock()); setMotionRequested(true); setPaused(false); }}>Restart</button>
       </div>
-      <p>{reduced ? "Reduced motion · manual stepping" : clock.done ? "Sample complete" : paused ? "Playback paused" : !visible || !inView ? "Playback suspended" : "Sample playing"}</p>
+      <p>{clock.done ? "Sample complete" : !motionAllowed ? "Reduced motion by default · Play animation enables full motion" : paused ? "Playback paused" : !visible || !inView ? "Playback suspended" : "Full motion · autoplay"}</p>
     </div>
     <div className={s.studio}>
       <div ref={stage} className={s.stage}>
@@ -91,7 +104,7 @@ export function OfficePreview() {
     </div>
     <section className={s.playback} aria-label="Sample playback">
       <div className={s.now} aria-live="polite" aria-atomic="true"><span>Sample event {clock.index + 1} of {beats.length}</span><h2>{beat.title}</h2><p>{beat.detail}</p></div>
-      <p className={s.help}>Select a robot or desk to inspect it. {reduced ? "Use Next event to move through the story without animation." : "Playback pauses when this room is offscreen or the tab is hidden."}</p>
+      <p className={s.help}>Select a robot or desk to inspect it. {!motionAllowed ? "Choose Play animation for smooth movement, or Next event to step without animation." : "Playback pauses when this room is offscreen or the tab is hidden."}</p>
     </section>
     <details className={s.timeline}><summary>Read the sample sequence</summary><ol>{beats.map((entry, index) => <li key={`${entry.kind}-${index}`} aria-current={index === clock.index ? "step" : undefined}>{entry.title}</li>)}</ol></details>
   </section>;
