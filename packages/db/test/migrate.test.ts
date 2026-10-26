@@ -68,6 +68,24 @@ describe("migrate on PGlite", () => {
     await pg.close();
   });
 
+  it("scopes a migration's SET LOCAL to its own transaction (0007 lock_timeout)", async () => {
+    // 0007 locks the hot tasks/system_flags/agent_events tables: its first statement must bound the wait.
+    const m0007 = (await loadMigrations()).find((m) => m.version === "0007");
+    const firstStatement = m0007!.sql.split("\n").find((line) => line.trim() !== "" && !line.trim().startsWith("--"));
+    expect(firstStatement).toBe("SET LOCAL lock_timeout = '5s';");
+    const pg = new PGlite();
+    const db = fromPglite(pg);
+    const expectSetting = (value: string) =>
+      `DO $$ BEGIN IF current_setting('lock_timeout') <> '${value}' THEN RAISE EXCEPTION 'lock_timeout is %', current_setting('lock_timeout'); END IF; END $$;`;
+    const ms = [
+      { version: "0001", name: "sets", sql: `SET LOCAL lock_timeout = '5s';\n${expectSetting("5s")}`, checksum: "a" },
+      { version: "0002", name: "next", sql: expectSetting("0"), checksum: "b" },
+    ];
+    expect((await migrate(db, { migrations: ms })).applied).toEqual(["0001", "0002"]);
+    expect((await db.query<{ t: string }>("SELECT current_setting('lock_timeout') AS t")).rows[0]).toEqual({ t: "0" });
+    await pg.close();
+  });
+
   it("refuses when an applied migration is missing on disk", async () => {
     const pg = new PGlite();
     const db = fromPglite(pg);

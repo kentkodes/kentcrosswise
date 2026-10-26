@@ -15,6 +15,8 @@ test("sample-only scene supports keyboard inspection and files only at merge", a
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/office/preview");
   await expect(page.getByText("Sample animation preview · fictional events", { exact: true })).toBeVisible();
+  // Fictional sample, like /office/draft and /office/connected: kept out of search indexes.
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
   await expect(page.getByRole("button", { name: "Play animation", exact: true })).toBeEnabled();
   const qa = page.getByRole("button", { name: "QA", exact: true });
   await qa.focus(); await page.keyboard.press("Enter");

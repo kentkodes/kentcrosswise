@@ -1,14 +1,12 @@
 # Woodland office preview
 
-## Confirmed direction
+## Confirmed direction and current scope
 
-The owner accepted the smooth one-native-pixel movement and explicit full-motion autoplay on 2026-10-26 after reviewing the temporary public preview (source commit `5f689e8163f12c992036da962e91a3caf01b3bfc`). Retain that behavior as the accepted movement baseline. Room/inspection review and real-feed integration remain separate from this movement acceptance.
+The accepted direction is an original overhead woodland studio with small friendly robots, coarse actual pixels and watch-and-inspect interaction. Developer → QA → filing cabinet is the first polished sequence, with changes requested, failed tests, owner waiting and terminal failure. The owner accepted smooth one-native-pixel movement and explicit full-motion autoplay (accepted source `5f689e8163f12c992036da962e91a3caf01b3bfc`) and requested feed integration.
 
-The owner approved a watch-and-inspect woodland studio with small friendly robots, beginning with one polished Developer → QA → filing-cabinet sequence. The first illustration was rejected for its room composition. The revised direction is an overhead, coarse-pixel room inspired by the spatial clarity of Pokémon interiors and the warmth of Stardew Valley. The owner approved that revised direction on 2026-10-25.
+Both steps are implemented locally: `/office/preview` provides fictional scenarios; `/office` illustrates independent real/replay events using the same artwork and movement. The owner accepts the current room composition, layout and explanations; wording refinement can follow later. Publication and production rollout remain separate. IAM access and the dependent live agent run remain held. The current public contract has no task correlation key; implemented vignettes do not imply a shared task or concurrent-task identity.
 
-The agreed workflow is concept → interactive sample preview → public-feed integration. This document covers the middle step. IAM access and the dependent live agent run remain on hold. Preview acceptance and public-feed integration are subsequent steps.
-
-**Integration update — 2026-10-26:** after accepting movement, the owner explicitly requested the next step. `/office` now uses the same drawing and smooth motion for independent real/replay event vignettes, retaining original timestamps, latest-20 replay, fresh-event priority and the recorded list. The separate sample route described here remains fictional. Unknown agents/types and empty feeds remain neutral; no task relationship is inferred from titles. Only an actual merge event files papers. Temporary public review is available; production rollout and the held IAM/live run remain separate.
+The next [connected-office design draft](CONNECTED-DRAFT.md) proposes the full core team, an Orchestrator boss, four Developer seats plus an expandable overflow annex, distinct illustrations bundled by actual task, and sanitized logs/agent inspection. Logs and the clicked agent inspector show sanitized task descriptions; task identifiers stay internal and task hyperlinks are omitted. That proposal requires a reviewed correlation/snapshot contract and is not implemented or a final production spec.
 
 ## Direction contract
 
@@ -20,9 +18,9 @@ The agreed workflow is concept → interactive sample preview → public-feed in
 
 ## Implementation boundary
 
-Use a 320×256 logical canvas, a 16×16 tile vocabulary and approximately 16×24 robot sprites. These are production proposals, not claims about either reference game's asset dimensions. Render with a restrained palette, integer drawing coordinates and nearest-neighbor scaling; prefer integer display scales where the viewport permits. Use a fitting layout at narrower widths without horizontal page overflow. Furniture and moving robots must remain distinct rendering layers so they can occlude and animate correctly.
+Use a 320×256 logical canvas, a 16×16 tile vocabulary and approximately 16×24 robot sprites. These are implemented project dimensions, not claims about either reference game's assets. Render with a restrained palette, integer drawing coordinates and nearest-neighbor scaling; prefer integer display scales where the viewport permits. Use a fitting layout at narrower widths without horizontal page overflow. Furniture and moving robots must remain distinct rendering layers so they can occlude and animate correctly.
 
-The preview lives at `/office/preview`, links back to the real `/office` and clearly labels its events as fictional samples. It makes no public-event request and changes neither the existing feed contract nor the real/replay page. No additional game engine or dependency is needed. Public-feed integration follows preview review; the existing public feed has no task correlation key, so it must not be used to invent concurrent-task identity.
+The preview lives at `/office/preview`, links back to the real `/office` and clearly labels its events as fictional samples. It makes no public-event request. The connected `/office` retains the existing public feed contract, latest-20 replay, original timestamps, live priority and accessible list. Unknown agents/types and empty feeds show a neutral room; only a real merged event files papers. No game engine or additional dependency is used.
 
 ## Behavior and states
 

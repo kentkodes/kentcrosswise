@@ -82,7 +82,7 @@ export async function handleDelivery(req: RelayRequest, deps: RelayDeps): Promis
   if (!n.ok) return done(respond(202, "ignored", n.reason));
   const { hint } = n.value;
 
-  let taskId = taskIdFromBranch(hint.branch);
+  let taskId = hint.agent_task_id ?? taskIdFromBranch(hint.branch);
   try {
     if (taskId === null && hint.pr_number !== undefined) taskId = await deps.store.findTaskByPr(hint.pr_number);
     if (taskId === null && hint.issue_number !== undefined) taskId = await deps.store.findTaskByIssue(hint.issue_number);

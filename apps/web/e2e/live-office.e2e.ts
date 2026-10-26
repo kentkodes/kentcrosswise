@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { installPausedClock } from "./support/clock";
 const event = (id: number, type: string, agent = "developer") => ({ id, ts: "2026-10-26T00:00:00.000Z", agent, type, title: "Private task" });
 
 test("the canvas leaving the viewport suspends playback while its legend remains visible", async ({ page }) => {
@@ -24,7 +25,7 @@ test("full autoplay can be chosen on a reduced-motion phone and retains sanitize
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/api/public/agent-events*", route => route.fulfill({ json: { available: true, events: [event(1, "coding"), event(2, "approved", "qa")] } }));
-  const now = new Date(); await page.clock.install({ time: now }); await page.clock.pauseAt(now);
+  await installPausedClock(page);
   await page.goto("/office");
   const room = page.getByTestId("live-office-room");
   await expect(room).toHaveAttribute("data-playing", "false");
@@ -44,7 +45,7 @@ test("full autoplay can be chosen on a reduced-motion phone and retains sanitize
 test("one recorded merge completes filing and restarts its replay without inheriting filed work", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.route("**/api/public/agent-events*", route => route.fulfill({ json: { available: true, events: [event(1, "merged", "orchestrator")] } }));
-  const now = new Date(); await page.clock.install({ time: now }); await page.clock.pauseAt(now);
+  await installPausedClock(page);
   await page.goto("/office");
   const room = page.getByTestId("live-office-room");
   await room.scrollIntoViewIfNeeded();
@@ -60,7 +61,7 @@ test("one recorded merge completes filing and restarts its replay without inheri
 test("a newly received event preempts quiet replay without assigning unknown agents a robot", async ({ page }) => {
   let fresh = false;
   await page.route("**/api/public/agent-events*", route => route.fulfill({ json: { available: true, events: fresh ? [event(2, "coding", "docs")] : [event(1, "pr_opened")] } }));
-  const now = new Date(); await page.clock.install({ time: now }); await page.clock.pauseAt(now);
+  await installPausedClock(page);
   await page.goto("/office");
   const room = page.getByTestId("live-office-room");
   await room.scrollIntoViewIfNeeded();

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createTask, isFlagKey, parseTaskId, queuedTaskExists, setFlag } from "@/server/console";
 import { withDb } from "@/server/db";
 import { orchestratorQueue, taskCreatedMessage, trySend } from "@/server/orchestrator-queue";
+import { tryDrainOffice } from "@/server/office-drain";
 import { requireOwner } from "@/server/owner";
 import { failureNotice, type NoticeCode } from "../notices";
 
@@ -21,6 +22,9 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   } catch (err) {
     notice = failureNotice(err, "console");
   }
+  // Office projection maintenance runs only after the start message was sent (or failed), so a slow
+  // backlog drain cannot delay or time out the orchestrator start. Best effort: it never changes the notice.
+  if (id !== undefined) await tryDrainOffice();
   redirect(`/console?n=${notice}${id === undefined ? "" : `&task=${id}`}`);
 }
 
@@ -44,13 +48,17 @@ export async function setFlagAction(formData: FormData): Promise<void> {
   const key = formData.get("key");
   const value = formData.get("value");
   let notice: NoticeCode = "invalid";
+  let drain = false;
   if (isFlagKey(key) && (value === "true" || value === "false")) {
     try {
       await withDb("web_rw", (db) => setFlag(db, key, value === "true"));
       notice = "flag-updated";
+      drain = key === "agents_paused";
     } catch (err) {
       notice = failureNotice(err, "console");
     }
   }
+  // Same ordering as createTaskAction: the committed result decides the notice first.
+  if (drain) await tryDrainOffice();
   redirect(`/console?n=${notice}`);
 }

@@ -43,7 +43,7 @@ Why this is enough, and why both are needed:
 - It owns every table, the view and schema `lg`, so it can grant on them. `v_public_agent_events` runs with its owner's rights, which is what lets `web_public` read it without table grants.
 - Do not grant it anything else, and do not use the project's default `neondb_owner` / `neondb` for the app.
 
-This model was rehearsed on PGlite (Postgres 18) with a non-superuser that has only `CREATEROLE` and owns the database: migrations 0001-0003 applied, and the SQL of step 3 and the checks of step 3.4 gave the expected results. It has not been run on Neon yet.
+This model was rehearsed on PGlite (Postgres 18) with a non-superuser that has only `CREATEROLE` and owns the database: migrations 0001-0003 applied, and the SQL of step 3 and the checks of step 3.4 gave the expected results. Production on Neon has since been wired this way (§7).
 
 ## 2. Fill `kcw/prod/migrator` and run the migrations
 
@@ -212,9 +212,9 @@ All URLs end in `/kentcrosswise?sslmode=verify-full`.
 
 ## 5. Verification (the Liaison runs these)
 
-Prod URL: `terraform -chdir=infra/prod output -raw url` (currently `https://d36w61sfnlrpvc.cloudfront.net`). In Git Bash set `MSYS_NO_PATHCONV=1` first.
+Prod URL: `terraform -chdir=infra/prod output -raw url`; the configured public domain is `https://kentcrosswise.com`. In Git Bash set `MSYS_NO_PATHCONV=1` first.
 
-1. **Migrations:** the `deploy.yml` run after the strict-migrate merge is green and its **Migrate prod** log lists 0001-0003 as applied (later runs: nothing pending). Step 2.4 and 3.4 queries match.
+1. **Migrations:** the `deploy.yml` run after the strict-migrate merge is green and its **Migrate prod** log lists the pending migrations as applied (later runs: nothing pending). After a deploy of the current source, `schema_migrations` lists 0001-0007. Step 2.4 and 3.4 queries match.
 2. **Public feed:** `curl -s <url>/api/public/agent-events` returns `"available":true` (events may be empty).
    - `"available":false` with "The agent feed is not connected yet." → the web Lambda does not see the key. A warm instance keeps the `kcw/prod/web` value it read before the keys were added; re-run `deploy.yml` (a new build replaces the code, so new instances read the secret) and retry.
    - "The agent feed is unavailable right now." → a database error: the web Lambda log has one line with the error class and SQLSTATE (`28P01` wrong password, `42501` missing grant, `3D000` wrong database name).
@@ -223,13 +223,20 @@ Prod URL: `terraform -chdir=infra/prod output -raw url` (currently `https://d36w
 5. **Relay** (log group `/aws/lambda/kcw-prod-relay`, one `relay: <result> … delivery=<id>` line per delivery):
    - Database reachable: a `pull_request` event from an allowed sender on a PR that has no task logs `ignored (no_task)`, not `error (db)` (the lookup by PR number ran).
    - Dedupe: on a delivery that logged `forwarded`, GitHub → orchestrator App settings → **Advanced** → Recent Deliveries → **Redeliver**. The redelivery keeps the same delivery id and must log `duplicate`; `SELECT count(*) FROM inbound_events WHERE delivery_id = '<id>';` returns 1.
+6. **Office projection (0006/0007), read-only, as `migrator_app` in the SQL Editor:**
+   - Before the merge (0007 briefly takes ACCESS EXCLUSIVE locks on `tasks`/`system_flags` and SHARE ROW EXCLUSIVE on `agent_events`): keep `agents_paused=true` and workflows disabled, and check that nothing holds a transaction open: `SELECT pid, state, xact_start FROM pg_stat_activity WHERE datname = 'kentcrosswise' AND state LIKE 'idle in transaction%';` returns no rows. 0007 sets `lock_timeout = '5s'`: if a lock is still blocked, **Migrate prod** fails with SQLSTATE `55P03`, 0007 rolls back on its own (0006, a separate transaction, stays applied) and the deploy stops before the Lambdas update; rerun the deploy in a quieter window and only 0007 is applied.
+   - `SELECT version FROM schema_migrations ORDER BY version;` lists 0001-0007.
+   - `SELECT status, count(*) FROM office_outbox GROUP BY 1;` shows only `pending`, `projected`, `superseded` or `skipped`; any `dead` row needs investigation (`SELECT id, source_table, attempts, last_error FROM office_outbox WHERE status = 'dead';` holds ids and SQLSTATEs only).
+   - `SELECT revision, paused, execution_observations, deployment_events, routing_events FROM v_office_state;` returns one row: `paused` matches `agents_paused`, all three capabilities `false`, `revision >= 1` after the first drain (next orchestrator message, sweep within 15 min, or console pause toggle). Nothing is backfilled, so the office starts empty apart from the pause state.
+   - Function privileges: `SELECT r.rolname, has_function_privilege(r.rolname, 'office_drain(integer)', 'EXECUTE') AS drain, has_function_privilege(r.rolname, 'office_project(text,jsonb)', 'EXECUTE') AS project FROM pg_roles r WHERE r.rolname IN ('web_public', 'web_rw', 'orch_rw', 'relay_rw', 'pipeline_rw') ORDER BY 1;` shows `drain` true only for `orch_rw` and `web_rw`, and `project` false for every role.
+   - `curl -s <url>/api/public/office` returns `"available":true` with an empty journal.
 
 ## 6. Rollback
 
-- **Before the strict-migrate PR is merged:** delete the `db_url` key from `kcw/prod/migrator`. `deploy.yml` logs "Migrations skipped" again and continues.
-- **After it is merged:** revert that PR first (it touches `.github/**`, a critical path), or every deploy fails at **Migrate prod** while the secret is missing or broken.
+- **Strict migrations are active:** missing or broken kcw/prod/migrator configuration fails deployment. Restore valid configuration or use an explicitly reviewed critical workflow change; deleting the key is not a current skip mechanism.
 - **Cut one runtime off (reversible):** SQL Editor, `ALTER ROLE web_app NOLOGIN;` (back with `LOGIN`). Or delete its secret key: the web app then shows "not connected yet" (after a cold start), the orchestrator returns its messages to the queue (DLQ after the retry limit), the relay answers 500 for deliveries that need the database.
 - **Rotate a password:** generate one as in 3.1, then `ALTER ROLE <user> PASSWORD '<new>';` in the SQL Editor and update its secret key. Old connections keep working until they reconnect.
+- **Stop the office projector (kill switch, reversible):** as `migrator_app`, `REVOKE EXECUTE ON FUNCTION office_drain(integer) FROM orch_rw, web_rw;`. Callers already catch the resulting `42501` and log it, so agents, console and the relay keep working; the triggers keep filling `office_outbox` and the public office stops advancing. Resume with `GRANT EXECUTE ON FUNCTION office_drain(integer) TO orch_rw, web_rw;` (the next drains catch up). The source triggers can only be removed by a reviewed fix-forward migration.
 - **Schema mistakes:** fix forward with a new migration. Applied migrations are never edited (the runner refuses changed checksums).
 - **Full reset (only while prod holds no real data; not rehearsed):**
   1. Neon → Databases → delete `kentcrosswise` (drops all tables, schema `lg` with its checkpoints, and `schema_migrations`).
@@ -237,8 +244,10 @@ Prod URL: `terraform -chdir=infra/prod output -raw url` (currently `https://d36w
      `DROP ROLE IF EXISTS web_app, web_public_app, orch_app, relay_app, web_rw, web_public, orch_rw, pipeline_rw, migrator, relay_rw;`
   3. Re-run `deploy.yml` (migrations recreate everything), then step 3 again with new passwords (the old URLs no longer work).
 
-## 7. Live results (2026-10-23)
+## 7. Current verification state
 
-- §2: owner filled `kcw/prod/migrator`; the `deploy.yml` run for #21 applied 0001-0004 (`4 applied`); after #23 (strict migrate) the next run reported `0 applied, 4 already applied`.
-- §3: login users created. The first URLs had a malformed host (pasted at the `Pooled host` prompt: whitespace, then a stray `user@…` part), so web reported "database not connected" and the sweeper failed to connect while the relay looked fine (its events didn't need the DB). The owner fixed the host in all four values; the script now validates the host.
-- §5 after a `deploy.yml` re-run: `/api/public/agent-events` → `{"available":true,"events":[]}`; owner signed in with Google at `https://kentcrosswise.com`, `/console` and `/inbox` load with the pause switches; relay records Actions minutes (`minutes=1.52`); sweeper reads the DB (`swept=0`). Orchestrator `lg` tables: pending its first SQS message (graph not wired into `lambda.ts` yet).
+Production migrations/runtime logins are wired. Google owner sign-in, console/inbox, available public feed, relay Actions minutes and sweeper DB access have been observed. Live graph wiring is merged; metadata checks established lg checkpoint-table ownership by orch_app and six checkpoint migrations. In the final acceptance run, real-task checkpoints persisted (62 at the final stop), and actual paused CI deferral and natural scheduler resume passed; active-agent cancellation, adversarial retry and late-report cases remain untested.
+
+On 2026-10-25 the owner confirmed expected SQL results, including relay_app membership moved from orch_rw to relay_rw and the approved Haiku model-price row. Relay membership (`relay_rw=true`, `orch_rw=false`) and the accepted price row were then independently verified during acceptance ([HANDOFF.md](../HANDOFF.md)). Do not repeat the membership mutation.
+
+The public feed was most recently observed available with no events. Full issue-to-Docs/usage execution remains P2-18; current holds and evidence are in [HANDOFF.md](../HANDOFF.md).

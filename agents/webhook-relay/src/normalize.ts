@@ -45,6 +45,7 @@ export type GitHubEventPayload =
       type: "workflow_run";
       action: string;
       run_id: number;
+      agent_task_id?: number;
       run_attempt: number | null;
       workflow_path: string | null;
       workflow_name: string | null;
@@ -62,6 +63,7 @@ export type GitHubEventPayload =
 
 /** Where the task can be found: a branch name (needs no lookup), else a PR or issue number. */
 export interface TaskHint {
+  agent_task_id?: number;
   branch?: string;
   pr_number?: number;
   issue_number?: number;
@@ -192,6 +194,16 @@ export function normalize(eventName: string, body: unknown): NormalizeResult {
       const hint: TaskHint = {};
       if (headBranch !== null && sameRepo(run?.head_repository, repo)) hint.branch = headBranch;
       if (prNumbers.length > 0) hint.pr_number = prNumbers[0]!;
+      const role = /^\.github\/workflows\/agent-(developer|qa|docs|scraper)\.yml$/.exec(str(run?.path) ?? "")?.[1];
+      const title = /^(developer|qa|docs|scraper) task ([1-9]\d{0,15})$/.exec(str(run?.display_title, 100) ?? "");
+      // Only the two actions the orchestrator records (UNIT3-PLAN §6) become agent-run observations.
+      // FORWARDED_ACTIONS already drops every other action above; this keeps the hint scoped even if
+      // another workflow_run action is ever forwarded for CI runs (it would then be dropped as no_task).
+      if ((action === "requested" || action === "completed") &&
+          role && title?.[1] === role && posInt(Number(title[2])) !== undefined &&
+          run?.event === "workflow_dispatch" && headBranch === "main" && sameRepo(run?.head_repository, repo)) {
+        hint.agent_task_id = Number(title[2]);
+      }
       return ok(
         event,
         headSha,
@@ -199,6 +211,7 @@ export function normalize(eventName: string, body: unknown): NormalizeResult {
           type: "workflow_run",
           action,
           run_id: id,
+          ...(hint.agent_task_id === undefined ? {} : { agent_task_id: hint.agent_task_id }),
           run_attempt: posInt(run?.run_attempt) ?? null,
           workflow_path: str(run?.path),
           workflow_name: str(run?.name, 100),

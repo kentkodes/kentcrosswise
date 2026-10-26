@@ -123,11 +123,17 @@ describe("0002 agent system", () => {
         if (r[0]!.ok) readable.push(`${p} ${rel}`);
       }
     }
-    expect(readable).toEqual(["SELECT public.v_public_agent_events"]);
+    // 0006 adds the sanitized connected-office views (office-projection.test.ts checks them).
+    expect(readable.sort()).toEqual(
+      ["v_office_events", "v_office_executions", "v_office_invalidations", "v_office_state", "v_office_tasks", "v_public_agent_events"].map(
+        (v) => `SELECT public.${v}`,
+      ),
+    );
     // Column-level grants would not show up above (the view's own grant is listed per column too).
     const { rows: cols } = await db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM information_schema.column_privileges
-       WHERE grantee = 'web_public' AND table_name <> 'v_public_agent_events'`,
+       WHERE grantee = 'web_public' AND table_name NOT IN (
+         'v_public_agent_events', 'v_office_events', 'v_office_executions', 'v_office_invalidations', 'v_office_state', 'v_office_tasks')`,
     );
     expect(cols[0]!.n).toBe(0);
   });

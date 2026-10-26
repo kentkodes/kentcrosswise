@@ -72,6 +72,15 @@ const isCiRun = (i: Extract<GitHubInput, { event: "workflow_run" }>) =>
   i.workflow_path !== null &&
   (i.workflow_path === CI_WORKFLOW || i.workflow_path.endsWith(`/${CI_WORKFLOW}`));
 
+/** The relay sets agent_task_id only after validating signed, same-repo dispatch/run-name identity. */
+export function agentRunRole(input: TaskInput, taskId: number): "developer" | "qa" | "docs" | "scraper" | null {
+  if (input.kind !== "github" || input.event !== "workflow_run" || input.agent_task_id !== taskId ||
+      input.head_branch !== "main" || input.trigger !== "workflow_dispatch" ||
+      !["requested", "completed"].includes(input.action) || !Number.isSafeInteger(input.run_attempt) ||
+      (input.run_attempt ?? 0) < 1 || (input.run_attempt ?? 0) > 2147483647) return null;
+  return /^\.github\/workflows\/agent-(developer|qa|docs|scraper)\.yml$/.exec(input.workflow_path ?? "")?.[1] as "developer" | "qa" | "docs" | "scraper" | undefined ?? null;
+}
+
 /** Applies one input to the task's data. Returns the new data (the input is not mutated). */
 export async function runStep(taskId: number, data: TaskData, input: TaskInput, deps: TaskGraphDeps): Promise<TaskData> {
   const m = new Machine(taskId, structuredClone(data), deps);
@@ -126,6 +135,16 @@ class Machine {
     // Reports only add office events and usage; they never drive the PR loop (GitHub does).
     if (input.kind === "report") {
       d.last_outcome = await this.report(input.report);
+      return;
+    }
+
+    const role = agentRunRole(input, this.id);
+    if (role && input.kind === "github" && input.event === "workflow_run") {
+      await this.store.recordRun({ runId: input.run_id, attempt: input.run_attempt!, taskId: this.id,
+        role, action: input.action as "requested" | "completed",
+        timestamp: input.action === "completed" ? input.updated_at ?? null : input.run_started_at ?? null,
+        conclusion: input.conclusion });
+      d.last_outcome = "unchanged";
       return;
     }
 

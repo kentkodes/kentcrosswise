@@ -1,4 +1,5 @@
 name: agent-scraper
+run-name: scraper task ${{ inputs.task_id }}
 
 on:
   workflow_dispatch:

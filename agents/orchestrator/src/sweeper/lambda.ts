@@ -8,6 +8,7 @@
 //                               orchestrator's secret rather than a copy of the App key.
 //   KCW_ORCHESTRATOR_QUEUE_URL  orchestrator-in.fifo
 import pg from "pg";
+import { drainOfficeConnection } from "../office";
 import { createAppOctokit, readAppCredentials, type SecretGetter } from "../github/octokit";
 import { DEFAULT_REPO } from "../github/types";
 import { describeError } from "./errors";
@@ -121,6 +122,7 @@ export function createSweeperHandler(deps: SweeperLambdaDeps): (event: unknown) 
         now,
         log,
       });
+      await drainOfficeConnection(db, log);
       const failed = Object.keys(report.failed);
       if (failed.length > 0) throw new SweepFailedError(`failed parts: ${failed.join(",")}`);
       return report;

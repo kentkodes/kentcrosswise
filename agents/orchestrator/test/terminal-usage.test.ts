@@ -13,7 +13,8 @@ describe("terminal task usage", () => {
     let status = "queued";
     const addUsage = vi.fn<TaskStore["addUsage"]>().mockResolvedValue(undefined);
     const store: TaskStore = {
-      getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
+      recordRun: async () => undefined,
+    getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
       isPaused: async () => false,
       claimSlot: async () => true,
       updateTask: async (id: number, fields: TaskUpdate) => { if (id === taskId && fields.status) status = fields.status; },
@@ -60,6 +61,7 @@ const finalReport = (messageId = "late-report"): Extract<TaskInput, { kind: "rep
 function fixture(initialStatus: TaskStatus = "queued") {
   let status = initialStatus;
   const store: TaskStore = {
+    recordRun: async () => undefined,
     getTask: async () => ({ id: 1, status, owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
     isPaused: async () => false,
     claimSlot: async () => true,

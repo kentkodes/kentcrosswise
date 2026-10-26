@@ -102,7 +102,7 @@ agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in sc
                      TOKEN_PERMISSIONS), FakeGitHubClient for graph tests. src/graph
                      (`@kcw/orchestrator/graph`) = the task graph (PR loop of DESIGN §4.2-§4.3:
                      machine.ts state machine, store.ts DB as orch_rw, messages.ts queue parsing).
-                     lambda.ts still runs the P2-08 skeleton (src/skeleton.ts); live graph wiring awaits held PR #26
+                     lambda.ts runs the task graph (merged PR #26); live P2-18 verification remains held as recorded in HANDOFF
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
 infra/prod/          prod composition (web + orchestrator); infra/preview/ = one per-PR web stack (D21)

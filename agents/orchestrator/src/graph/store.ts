@@ -43,7 +43,12 @@ export interface ApprovalRecord {
   status: "pending" | Decision;
 }
 
+export interface RunObservation {
+  runId: number; attempt: number; taskId: number; role: "developer" | "qa" | "docs" | "scraper";
+  action: "requested" | "completed"; timestamp: string | null; conclusion: string | null;
+}
 export interface TaskStore {
+  recordRun(run: RunObservation): Promise<void>;
   getTask(id: number): Promise<TaskRecord | null>;
   /** system_flags.agents_paused (Q2). */
   isPaused(): Promise<boolean>;
@@ -101,6 +106,22 @@ const num = (v: string | number | null): number | null => (v === null ? null : N
 
 export class PgTaskStore implements TaskStore {
   constructor(private readonly pool: pg.Pool) {}
+
+  async recordRun(run: RunObservation): Promise<void> {
+    const stamp = run.timestamp === null ? NaN : Date.parse(run.timestamp);
+    // Invalid/old/future GitHub clocks cannot poison the projection timestamp check.
+    const timestamp = Number.isFinite(stamp) && stamp >= Date.UTC(2000, 0, 1) ? new Date(stamp).toISOString() : null;
+    await this.pool.query(
+      `INSERT INTO agent_runs(run_id,run_attempt,task_id,role,requested_at,completed_at,conclusion)
+       VALUES($1,$2,$3,$4,CASE WHEN $5='requested' THEN least(COALESCE($6::timestamptz,now()),now()) END,
+         CASE WHEN $5='completed' THEN least(COALESCE($6::timestamptz,now()),now()) END,
+         CASE WHEN $5='completed' THEN COALESCE($7,'unknown') END)
+       ON CONFLICT(run_id,run_attempt) DO UPDATE SET completed_at=EXCLUDED.completed_at,conclusion=EXCLUDED.conclusion
+       WHERE agent_runs.completed_at IS NULL AND EXCLUDED.completed_at IS NOT NULL
+         AND agent_runs.task_id=EXCLUDED.task_id AND agent_runs.role=EXCLUDED.role`,
+      [run.runId, run.attempt, run.taskId, run.role, run.action, timestamp, run.conclusion],
+    );
+  }
 
   async getTask(id: number): Promise<TaskRecord | null> {
     const { rows } = await this.pool.query<{

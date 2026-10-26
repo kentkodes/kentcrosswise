@@ -1,4 +1,5 @@
 name: agent-qa
+run-name: qa task ${{ inputs.task_id }}
 
 on:
   workflow_dispatch:
