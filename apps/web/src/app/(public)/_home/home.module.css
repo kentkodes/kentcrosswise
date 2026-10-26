@@ -954,6 +954,23 @@ a.panelAside:hover {
   .explorePanel { grid-area: explore; }
 }
 
+/* The flowing layout keeps its compact painted switch. Its button centres are 46px apart,
+   leaving 2px between these transparent 44px hit areas; neither steals the other's taps. */
+@media (max-width: 1099px) {
+  .toggle button {
+    position: relative;
+  }
+
+  .toggle button::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    translate: -50% -50%;
+  }
+}
 /* ---------- Wide: the measured comp stage ---------- */
 
 @media (min-width: 1100px) {

@@ -154,6 +154,30 @@
   }
 }
 
+/* Keep the existing 44px account row and text positions while making the other navigation
+   links equally easy to tap. The minimum-width hit area does not reflow the compact phone row. */
+@media (max-width: 1099px) {
+  .navLink {
+    display: inline-flex;
+    align-items: center;
+    height: 44px;
+    padding-block: 0;
+  }
+
+  .navLink::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    translate: -50% -50%;
+  }
+
+  .navLink[aria-current="page"]::after {
+    bottom: calc((100% - 1em) / 2 - 10px);
+  }
+}
 /* ---------- Wide ---------- */
 
 @media (min-width: 1100px) {
