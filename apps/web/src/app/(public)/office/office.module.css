@@ -1,4 +1,7 @@
 .feed { margin-top: 32px; }
+.heading { max-width: 70ch; margin-bottom: 16px; }
+.heading h1 { margin: 0 0 8px; font-size: clamp(30px, 4vw, 44px); }
+.heading p { margin: 8px 0; }
 .playback { padding-block: 24px; border-block: 1px solid rgb(246 241 228 / 0.3); }
 .playback h2 { margin: 0 0 20px; font-size: 24px; }
 .current { min-height: 144px; }
@@ -11,6 +14,18 @@
 .controls button:hover:enabled { background: rgb(246 241 228 / 0.12); }
 .controls button:disabled { opacity: 0.65; cursor: default; }
 .controls span { font-size: 14px; color: #dfd7c6; }
+.controls { margin-bottom: 16px; }
 .events { padding-left: 24px; }
 .events li { padding: 16px 0 16px 8px; border-bottom: 1px solid rgb(246 241 228 / 0.2); }
 .events time { display: block; font-size: 14px; color: #dfd7c6; margin-bottom: 6px; }
+@media (max-width: 639px) {
+  .heading { margin-bottom: 12px; }
+  .heading p { font-size: 14px; line-height: 1.5; }
+  .feed { margin-top: 16px; }
+  .playback { padding-block: 16px; }
+  .playback h2 { font-size: 22px; margin-bottom: 8px; }
+  .playback > p[role="status"] { font-size: 14px; margin: 8px 0 12px; }
+  .controls { gap: 8px; margin-bottom: 12px; }
+  .controls button { font-size: 14px; padding: 8px 12px; }
+  .controls span { flex-basis: 100%; font-size: 13px; }
+}

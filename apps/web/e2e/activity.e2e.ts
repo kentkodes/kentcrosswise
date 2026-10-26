@@ -32,7 +32,7 @@ test("quiet replay, pause, manual next and newly received event priority", async
   await page.clock.pauseAt(now);
   await page.goto("/office");
   const playback = page.getByTestId("activity-playback");
-  await expect(playback.getByRole("heading")).toHaveText("Activity replay");
+  await expect(playback.locator("#playback-title")).toHaveText("Activity replay");
   await expect(playback.locator("[data-event-id]")).toHaveAttribute("data-event-id", "6");
   await expect(playback).toContainText("Replaying 20 recorded events");
   await page.getByRole("button", { name: "Pause", exact: true }).click();
@@ -43,10 +43,10 @@ test("quiet replay, pause, manual next and newly received event priority", async
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   releaseNew = true;
   await page.clock.runFor(1_100);
-  await expect(playback.getByRole("heading")).toHaveText("Live feed · new event");
+  await expect(playback.locator("#playback-title")).toHaveText("Live feed · new event");
   await expect(playback).toContainText("Newly recorded test task");
-  await page.clock.runFor(4_100);
-  await expect(playback.getByRole("heading")).toHaveText("Activity replay");
+  await page.clock.runFor(5_200);
+  await expect(playback.locator("#playback-title")).toHaveText("Activity replay");
   await expect(page.getByTestId("agent-events").locator("li")).toHaveCount(26);
   await page.addStyleTag({ content: "nextjs-portal { display: none }" });
   await page.screenshot({ path: info.outputPath("office-desktop.png") });
@@ -61,7 +61,7 @@ test("reduced motion stays manual and mobile playback retains original timestamp
   await page.clock.pauseAt(now);
   await page.goto("/office");
   const playback = page.getByTestId("activity-playback");
-  await expect(page.getByRole("button", { name: "Autoplay off" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Play animation", exact: true })).toBeEnabled();
   await expect(playback.locator("[data-event-id]")).toHaveAttribute("data-event-id", "1");
   await page.clock.runFor(12_000);
   await expect(playback.locator("[data-event-id]")).toHaveAttribute("data-event-id", "1");
@@ -73,9 +73,13 @@ test("reduced motion stays manual and mobile playback retains original timestamp
 });
 
 test("an empty or unavailable feed never supplies invented events", async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.route("**/api/public/agent-events*", (route) => route.fulfill({ json: { available: true, events: [] } }));
   await page.goto("/office");
   await expect(page.getByText("No public agent events yet.")).toBeVisible();
+  await expect(page.getByText(/^Real public activity/)).toBeVisible();
+  const emptyStatus = await page.getByText("No public agent events yet.").boundingBox();
+  expect(emptyStatus!.y + emptyStatus!.height).toBeLessThan(844);
   await expect(page.getByRole("button", { name: "Next event" })).toBeDisabled();
   await page.addStyleTag({ content: "nextjs-portal { display: none }" });
   await page.screenshot({ path: info.outputPath("office-empty.png") });
@@ -108,9 +112,9 @@ test("autoplay pauses while hidden or offscreen and resumes when visible", async
   await expect(page.getByTestId("activity-playback")).not.toBeInViewport();
   await page.clock.runFor(8_100);
   await expect(current).toHaveAttribute("data-event-id", "6");
-  await page.getByTestId("activity-playback").scrollIntoViewIfNeeded();
+  await page.getByTestId("live-office-room").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("activity-playback")).toHaveAttribute("data-playing", "true");
-  await page.clock.runFor(4_100);
+  await page.clock.runFor(5_200);
   await expect(current).toHaveAttribute("data-event-id", "7");
 });
 

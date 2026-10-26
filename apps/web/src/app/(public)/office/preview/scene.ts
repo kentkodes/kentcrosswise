@@ -54,7 +54,7 @@ export function walk(path: readonly Point[], progress: number): Point {
   }
   return from;
 }
-export interface Pose { developer: Point; qa: Point; carrying?: Role; paper: Role | "cabinet" | "inbox"; walking?: Role; filed: boolean }
+export interface Pose { developer: Point; qa: Point; carrying?: Role; paper: Role | "cabinet" | "inbox" | "none"; walking?: Role; filed: boolean }
 export function poseFor(kind: EventKind, progress: number, previous?: Pose): Pose {
   const p = Math.max(0, Math.min(1, progress));
   const source = previous ?? { developer: DEV, qa: QA, paper: "developer" as const, filed: false };

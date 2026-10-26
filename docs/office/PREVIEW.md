@@ -2,9 +2,13 @@
 
 ## Confirmed direction
 
+The owner accepted the smooth one-native-pixel movement and explicit full-motion autoplay on 2026-10-26 after reviewing the temporary public preview (source commit `5f689e8163f12c992036da962e91a3caf01b3bfc`). Retain that behavior as the accepted movement baseline. Room/inspection review and real-feed integration remain separate from this movement acceptance.
+
 The owner approved a watch-and-inspect woodland studio with small friendly robots, beginning with one polished Developer → QA → filing-cabinet sequence. The first illustration was rejected for its room composition. The revised direction is an overhead, coarse-pixel room inspired by the spatial clarity of Pokémon interiors and the warmth of Stardew Valley. The owner approved that revised direction on 2026-10-25.
 
 The agreed workflow is concept → interactive sample preview → public-feed integration. This document covers the middle step. IAM access and the dependent live agent run remain on hold. Preview acceptance and public-feed integration are subsequent steps.
+
+**Integration update — 2026-10-26:** after accepting movement, the owner explicitly requested the next step. `/office` now uses the same drawing and smooth motion for independent real/replay event vignettes, retaining original timestamps, latest-20 replay, fresh-event priority and the recorded list. The separate sample route described here remains fictional. Unknown agents/types and empty feeds remain neutral; no task relationship is inferred from titles. Only an actual merge event files papers. Temporary public review is available; production rollout and the held IAM/live run remain separate.
 
 ## Direction contract
 

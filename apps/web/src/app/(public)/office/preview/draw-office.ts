@@ -2,7 +2,7 @@ import { HEIGHT, WIDTH } from "./scene";
 import type { EventKind, Point, Pose, Role } from "./scene";
 // Authored on the native pixel grid. These are scene layers, not a resized concept image.
 const C = { navy: "#1b2340", edge: "#49372e", wood: "#a56b3c", honey: "#ce995a", light: "#e3b875", seam: "#b7824d", sage: "#8b9674", wall: "#afb18a", green: "#536f57", leaf: "#739866", darkLeaf: "#38574a", cream: "#eee4c7", shade: "#c5bea4", ink: "#293d47", teal: "#67baa6", amber: "#e4ad55", paper: "#f8edcf", sky: "#706d91", dusk: "#bc8c91", red: "#df8b79" };
-export function drawOffice(ctx: CanvasRenderingContext2D, pose: Pose, kind: EventKind, frame: number, selected: Role) {
+export function drawOffice(ctx: CanvasRenderingContext2D, pose: Pose, kind: EventKind | "idle", frame: number, selected: Role) {
   ctx.imageSmoothingEnabled = false;
   const r = (x: number, y: number, w: number, h: number, color: string) => { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
   r(0, 0, WIDTH, HEIGHT, C.navy);
@@ -45,7 +45,7 @@ export function drawOffice(ctx: CanvasRenderingContext2D, pose: Pose, kind: Even
   r(137, 225, 46, 10, C.edge); r(140, 225, 40, 8, C.green);
   r(143, 225, 8, 8, C.sage); r(159, 225, 8, 8, C.sage); r(175, 225, 5, 8, C.sage);
   const papers = (x: number, y: number) => { r(x, y + 2, 10, 7, C.edge); r(x, y, 10, 7, C.paper); r(x + 2, y + 2, 6, 1, C.shade); r(x + 2, y + 4, 4, 1, C.shade); };
-  if (!pose.carrying && !pose.filed) {
+  if (!pose.carrying && !pose.filed && pose.paper !== "none") {
     const p = pose.paper === "developer" ? { x: 46, y: 70 } : pose.paper === "qa" ? { x: 204, y: 70 } : pose.paper === "inbox" ? { x: 107, y: 108 } : { x: 155, y: 71 };
     papers(p.x, p.y);
   }
