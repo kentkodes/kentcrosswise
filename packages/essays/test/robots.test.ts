@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { createHttpClient, fetchRobotsTxt } from "../src/crawl/http";
 import {
-  RobotsCache, interpretRobots, parseRobots, productToken, robotsAllows, robotsCrawlDelayMs, type RobotsFetch,
+  MAX_ROBOTS_BYTES, RobotsCache, interpretRobots, parseRobots, productToken, robotsAllows, robotsCrawlDelayMs,
+  robotsPatternMatches, type RobotsFetch,
 } from "../src/crawl/robots";
 
 const UA = "KentcrosswiseBot/1.0 (+https://example.com/bot)";
@@ -105,6 +107,91 @@ describe("robots fetch interpretation (fail closed)", () => {
       expect(robotsAllows(p.parsed, UA, "/ebooks/1")).toBe(false);
       expect(p).toMatchObject({ status: "unreachable", cacheable: false });
     }
+  });
+});
+
+describe("robots wildcard matching (linear, no regex)", () => {
+  /** The former regex compilation, kept here only as a reference oracle for short inputs. */
+  function regexOracle(pattern: string, path: string): boolean {
+    const anchored = pattern.endsWith("$");
+    const core = anchored ? pattern.slice(0, -1) : pattern;
+    const body = core.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+    return new RegExp(`^${body}${anchored ? "$" : ""}`).test(path);
+  }
+
+  it("keeps * / $ semantics: literal $ mid-pattern, bare $, trailing *$ and leading *", () => {
+    expect(robotsPatternMatches("/a*b*c", "/aXbYc/z")).toBe(true);
+    expect(robotsPatternMatches("/a*b*c", "/aXcYb")).toBe(false);
+    expect(robotsPatternMatches("/a$b", "/a$b/x")).toBe(true);
+    expect(robotsPatternMatches("/a$b", "/ab")).toBe(false);
+    expect(robotsPatternMatches("/$", "/")).toBe(true);
+    expect(robotsPatternMatches("/$", "/x")).toBe(false);
+    expect(robotsPatternMatches("/x*$", "/x/anything")).toBe(true);
+    expect(robotsPatternMatches("*.pdf$", "/a.pdf")).toBe(true);
+    expect(robotsPatternMatches("/*ab*ab$", "/abab")).toBe(true);
+    expect(robotsPatternMatches("/*ab*ab$", "/ab")).toBe(false);
+    expect(robotsPatternMatches("/*aa$", "/aaa")).toBe(true);
+  });
+
+  it("agrees with the former regex semantics on an exhaustive small table", () => {
+    // Deterministic PRNG over a tiny alphabet so every edge (overlaps, empty pieces) shows up.
+    let seed = 7;
+    const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2147483648) % n);
+    const word = (alphabet: string, max: number) => Array.from({ length: rnd(max) }, () => alphabet[rnd(alphabet.length)]).join("");
+    for (let i = 0; i < 5000; i++) {
+      const pattern = `/${word("ab*$", 7)}`;
+      const path = `/${word("ab$", 8)}`;
+      expect(robotsPatternMatches(pattern, path), `${pattern} vs ${path}`).toBe(regexOracle(pattern, path));
+    }
+  });
+
+  it("keeps longest-match precedence with wildcard rules", () => {
+    const txt = "User-agent: *\nAllow: /*.html$\nDisallow: /private/\n";
+    expect(allows(txt, "/private/a.html")).toBe(false); // "/private/" (9) beats "/*.html$" (8)
+    expect(allows(txt, "/public/a.html")).toBe(true);
+    expect(allows(`${txt}Allow: /private/*.html$\n`, "/private/a.html")).toBe(true);
+  });
+
+  it("a rule with many wildcards against a long path completes quickly", () => {
+    const txt = `User-agent: *\nDisallow: /${"*a".repeat(16)}*b$\n`;
+    const path = `/${"a".repeat(20_000)}c`;
+    const started = performance.now();
+    expect(allows(txt, path)).toBe(true);
+    expect(allows(txt, `${path}b`)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+});
+
+describe("oversized robots.txt fails closed", () => {
+  const SIX_MB = 6 * 1024 * 1024;
+  const huge = () => `User-agent: *\nDisallow: /\n${"# padding\n".repeat(SIX_MB / 10)}`;
+
+  it("a 6 MB `Disallow: /` body disallows everything for the run only", () => {
+    const p = interpretRobots({ kind: "response", status: 200, body: huge() }, NOW);
+    expect(robotsAllows(p.parsed, UA, "/ebooks/1")).toBe(false);
+    expect(p).toMatchObject({ status: "unreachable", cacheable: false });
+  });
+
+  it("never truncates: a disallow after 500 KiB still wins over an earlier allow", () => {
+    const body = `User-agent: *\nAllow: /\n${"#".repeat(MAX_ROBOTS_BYTES)}\nDisallow: /private\n`;
+    expect(robotsAllows(interpretRobots({ kind: "response", status: 200, body }, NOW).parsed, UA, "/private/1")).toBe(false);
+  });
+
+  it.each([["default cap", undefined], ["catalog-sized cap", 64 * 1024 * 1024]])(
+    "fetchRobotsTxt maps an oversized 200 to an error (%s)",
+    async (_label, maxBodyBytes) => {
+      const client = createHttpClient({ fetch: async () => new Response(huge()), maxRetries: 0,
+        ...(maxBodyBytes !== undefined && { maxBodyBytes }) });
+      const fetched = await fetchRobotsTxt(client, "https://example.com");
+      expect(fetched).toEqual({ kind: "error", reason: "too_large" });
+      expect(robotsAllows(interpretRobots(fetched, NOW).parsed, UA, "/ebooks/1")).toBe(false);
+    },
+  );
+
+  it("fetchRobotsTxt keeps status-carrying failures as responses (404 allows, 403 disallows)", async () => {
+    const at = (status: number) => createHttpClient({ fetch: async () => new Response("", { status }), maxRetries: 0 });
+    expect(await fetchRobotsTxt(at(404), "https://example.com")).toEqual({ kind: "response", status: 404, body: "" });
+    expect(await fetchRobotsTxt(at(403), "https://example.com")).toEqual({ kind: "response", status: 403, body: "" });
   });
 });
 

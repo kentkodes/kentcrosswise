@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 
-/** RFC 9309 asks crawlers to parse at least 500 KiB; anything after that is ignored. */
-const MAX_ROBOTS_BYTES = 500 * 1024;
+/**
+ * RFC 9309 asks crawlers to parse at least 500 KiB. A larger file is not truncated (a cut line or a
+ * dropped later rule could allow what the full file disallows): it fails closed for the run instead.
+ */
+export const MAX_ROBOTS_BYTES = 500 * 1024;
 
 export interface RobotsRule {
   allow: boolean;
@@ -26,11 +29,13 @@ export function productToken(userAgent: string): string {
   return (/^[A-Za-z0-9_-]+/.exec(userAgent.trim())?.[0] ?? "").toLowerCase();
 }
 
-/** Parses robots.txt per RFC 9309: consecutive User-agent lines open one group; unknown lines are ignored. */
+/**
+ * Parses robots.txt per RFC 9309: consecutive User-agent lines open one group; unknown lines are ignored.
+ * The whole text is parsed; `interpretRobots` refuses a body over MAX_ROBOTS_BYTES before it gets here.
+ */
 export function parseRobots(text: string): ParsedRobots {
   const bom = String.fromCharCode(0xfeff);
-  let body = text.startsWith(bom) ? text.slice(1) : text;
-  if (Buffer.byteLength(body) > MAX_ROBOTS_BYTES) body = Buffer.from(body).subarray(0, MAX_ROBOTS_BYTES).toString("utf8");
+  const body = text.startsWith(bom) ? text.slice(1) : text;
   const groups: RobotsGroup[] = [];
   let current: RobotsGroup | null = null;
   let inAgents = false; // the last significant line was a User-agent line
@@ -71,14 +76,27 @@ function normalizePath(s: string): string {
   });
 }
 
-function patternToRegExp(pattern: string): RegExp {
+/**
+ * Whether `path` matches a robots pattern from its start: `*` is any run of characters and a trailing
+ * `$` anchors the end; every other character (a `$` elsewhere included) is literal. No regex and no
+ * backtracking: each literal piece between wildcards takes its leftmost position after the previous
+ * one, which never loses a match because an earlier placement only leaves later pieces more room.
+ * With the anchor, the last piece must end the path after everything before it.
+ */
+export function robotsPatternMatches(pattern: string, path: string): boolean {
   const anchored = pattern.endsWith("$");
-  const core = anchored ? pattern.slice(0, -1) : pattern;
-  const body = normalizePath(core)
-    .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${body}${anchored ? "$" : ""}`);
+  const pieces = normalizePath(anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const first = pieces[0]!;
+  if (!path.startsWith(first)) return false;
+  if (pieces.length === 1) return !anchored || path.length === first.length;
+  let pos = first.length;
+  for (let i = 1; i < pieces.length - 1; i++) {
+    const at = path.indexOf(pieces[i]!, pos);
+    if (at < 0) return false;
+    pos = at + pieces[i]!.length;
+  }
+  const last = pieces[pieces.length - 1]!;
+  return anchored ? path.length - last.length >= pos && path.endsWith(last) : path.includes(last, pos);
 }
 
 /** The group(s) for our product token, merged; else the `*` groups merged; else none. */
@@ -94,7 +112,7 @@ export function robotsAllows(parsed: ParsedRobots, userAgent: string, pathAndQue
   let best: { len: number; allow: boolean } | null = null;
   for (const g of groupsFor(parsed, productToken(userAgent))) {
     for (const r of g.rules) {
-      if (!patternToRegExp(r.pattern).test(path)) continue;
+      if (!robotsPatternMatches(r.pattern, path)) continue;
       const len = r.pattern.length;
       if (!best || len > best.len || (len === best.len && r.allow)) best = { len, allow: r.allow };
     }
@@ -130,8 +148,8 @@ const DISALLOW_ALL: ParsedRobots = {
 
 /**
  * Design section 4: 200 parses; 404 (and other unavailable 4xx) allows all; 401/403 disallows all;
- * 429, 5xx, redirects we could not follow, timeouts and network errors disallow all for this run
- * (fail closed, fetched again next run).
+ * 429, 5xx, redirects we could not follow, timeouts, network errors and a body over MAX_ROBOTS_BYTES
+ * disallow all for this run (fail closed, fetched again next run). Design decision 8.
  */
 export function interpretRobots(result: RobotsFetch, now: Date): RobotsPolicy {
   const closed = (status: RobotsStatus, cacheable: boolean): RobotsPolicy => ({
@@ -140,6 +158,7 @@ export function interpretRobots(result: RobotsFetch, now: Date): RobotsPolicy {
   if (result.kind === "error") return closed("unreachable", false);
   const { status, body } = result;
   if (status >= 200 && status < 300) {
+    if (Buffer.byteLength(body, "utf8") > MAX_ROBOTS_BYTES) return closed("unreachable", false);
     return {
       status: "ok", parsed: parseRobots(body), sha256: createHash("sha256").update(body).digest("hex"),
       fetchedAt: now, cacheable: true,

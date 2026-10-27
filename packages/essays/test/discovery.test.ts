@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { urlHash } from "../src/crawl/canonical";
-import { createDiscoveryPublisher, parseDiscoveryEvent, type DiscoveryEvent } from "../src/discovery/event";
+import { canonicalizeUrl, urlHash } from "../src/crawl/canonical";
+import {
+  EVENT_MAX_BYTES, HINT_AUTHOR_MAX, cleanHint, createDiscoveryPublisher, fitEventHints, parseDiscoveryEvent, type DiscoveryEvent,
+} from "../src/discovery/event";
 import { parseGutenbergCatalog } from "../src/discovery/gutenberg";
 import { readWikiMetadata } from "../src/discovery/wikisource";
 import { discoverApprovedUrls, reemitStalledUrls, type WatcherOptions } from "../src/discovery/watcher";
@@ -33,6 +35,33 @@ describe("bounded discovery contracts", () => {
     const large = sample(); large.hints.title = "界".repeat(160); large.hints.author = "界".repeat(120);
     expect(() => parseDiscoveryEvent(large)).toThrow("event_too_large");
     expect(() => parseDiscoveryEvent({ ...sample(), hints: { ...sample().hints, content: "bad" } })).toThrow();
+  });
+  it("normalizes a newline/control title into one line that the parser accepts", () => {
+    const e = sample(); e.hints.title = "  Of\nStudies\r\n\tand\u0000 Other\u0085Essays  ";
+    const fitted = parseDiscoveryEvent(fitEventHints(e));
+    expect(fitted.hints.title).toBe("Of Studies and Other Essays");
+    expect(fitted.hints.author).toBe("Bacon, Francis");
+  });
+  it("truncates an over-length author by code point within the field limit", () => {
+    const e = sample(); e.hints.author = `${"x".repeat(119)}😀tail`;
+    const fitted = parseDiscoveryEvent(fitEventHints(e));
+    expect(fitted.hints.author).toBe("x".repeat(119)); // the emoji (2 units) would exceed 120 and is not split
+    expect(fitted.hints.author.length).toBeLessThanOrEqual(HINT_AUTHOR_MAX);
+  });
+  it("fits a multibyte title near the byte cap without splitting a code point", () => {
+    const e = sample();
+    const url = canonicalizeUrl(`https://www.gutenberg.org/ebooks/1?q=${"q".repeat(300)}`)!;
+    Object.assign(e, { url, url_hash: urlHash(url) });
+    e.hints.title = "😀界".repeat(60); e.hints.author = "界".repeat(120);
+    expect(() => parseDiscoveryEvent(e)).toThrow();
+    const fitted = parseDiscoveryEvent(fitEventHints(e));
+    const bytes = Buffer.byteLength(JSON.stringify(fitted), "utf8");
+    expect(bytes).toBeLessThan(EVENT_MAX_BYTES);
+    expect(bytes).toBeGreaterThan(EVENT_MAX_BYTES - 8); // used nearly all of the room
+    expect(/[\uD800-\uDFFF]/u.test(fitted.hints.title + fitted.hints.author)).toBe(false); // no lone surrogate
+    expect(fitted.hints.title.length).toBeGreaterThan(0);
+    expect(fitted.hints.author.length).toBeGreaterThan(0);
+    expect(cleanHint("a\uD800b", 10)).toBe("ab");
   });
   it("publisher serializes only valid metadata to the injected queue adapter", async () => {
     const sent: unknown[] = [];
@@ -138,6 +167,53 @@ describe("approved-only watcher and recovery", () => {
     expect((await discoverApprovedUrls(s.opts)).emitted).toBe(1);
     expect((await discoverApprovedUrls(s.opts)).emitted).toBe(0);
     expect(tags).toEqual([null, '"catalog-v1"']);
+  });
+  it("skips and counts a bad approved link; later links still emit and source health stays ok", async () => {
+    const s = await setup();
+    const addLink = async (id: string, url: string, title: string, author: string) => {
+      const seed = (await db.query<{ id: string }>("INSERT INTO seed_items (title,author,status) VALUES ('x','y','approved') RETURNING id")).rows[0]!.id;
+      await db.query(`INSERT INTO seed_source_links (id,seed_item_id,source_id,candidate_url,candidate_title,candidate_author,tier,score,status)
+        VALUES ($1,$2,$3,$4,$5,$6,'A',1,'approved')`, [id, seed, s.id, url, title, author]);
+    };
+    // ORDER BY l.id: the bad link (empty after normalization) is processed first, a newline title last.
+    await addLink("00000000-0000-4000-8000-000000000000", "https://www.gutenberg.org/ebooks/2", "\n\t\u0001 ", "Bacon, Francis");
+    await addLink("ffffffff-ffff-4fff-bfff-ffffffffffff", "https://www.gutenberg.org/ebooks/2", "Different,\ntitle", `${"A".repeat(200)}`);
+    const codes: string[] = [];
+    const result = await discoverApprovedUrls({ ...s.opts, onLinkRejected: (code) => { codes.push(code); } });
+    expect(result).toMatchObject({ discovered: 2, emitted: 2, rejected: 1, skipped: false });
+    expect(codes).toEqual(["invalid_event_hints"]);
+    expect(s.events.map((e) => e.hints.title).sort()).toEqual(["Different, title", "Of Studies"]);
+    expect(s.events.find((e) => e.hints.title === "Different, title")!.hints.author).toHaveLength(HINT_AUTHOR_MAX);
+    const health = (await db.query<{ health: string; health_reason: string | null; consecutive_failures: number }>(
+      "SELECT health, health_reason, consecutive_failures FROM sources WHERE id=$1", [s.id])).rows[0]!;
+    expect(health).toMatchObject({ health: "ok", health_reason: null, consecutive_failures: 0 });
+  });
+  it("stores only fixed codes in health_reason, never raw error text", async () => {
+    const s = await setup();
+    const reason = async () => (await db.query<{ health_reason: string | null }>("SELECT health_reason FROM sources WHERE id=$1", [s.id])).rows[0]!.health_reason;
+    const raw = "AccessDenied: <html>secret-bucket arn:aws:s3:::private</html>\nline2";
+    s.opts.catalogCache = { get: async () => { throw new Error(raw); }, put: async () => {} };
+    await expect(discoverApprovedUrls(s.opts)).rejects.toThrow("AccessDenied");
+    expect(await reason()).toBe("discovery_failed");
+    s.opts.catalogCache = { get: async () => { throw "not an Error"; }, put: async () => {} };
+    await expect(discoverApprovedUrls(s.opts)).rejects.toBe("not an Error");
+    expect(await reason()).toBe("discovery_failed");
+    // Known codes pass through unchanged.
+    s.opts.catalogCache = undefined;
+    s.opts.http!.fetch = async (input) => new URL(String(input)).pathname === "/robots.txt"
+      ? new Response("User-agent: *\nDisallow:\n") : new Response("busy", { status: 503 });
+    await expect(discoverApprovedUrls(s.opts)).rejects.toThrow("http_5xx");
+    expect(await reason()).toBe("http_5xx");
+  });
+  it("an oversized robots.txt fails closed: no catalog request, robots_unreachable recorded", async () => {
+    const s = await setup();
+    s.opts.http!.fetch = async (input) => {
+      const url = String(input); s.requests.push(url);
+      return new Response(`User-agent: *\nDisallow: /\n${"#".repeat(6 * 1024 * 1024)}`);
+    };
+    await expect(discoverApprovedUrls(s.opts)).rejects.toThrow("robots_unreachable");
+    expect(s.requests.map((u) => new URL(u).pathname)).toEqual(["/robots.txt"]);
+    expect(s.events).toHaveLength(0);
   });
   it("uses the fixed pause accessor as pipeline_rw while direct flags remain private", async () => {
     const s = await setup();

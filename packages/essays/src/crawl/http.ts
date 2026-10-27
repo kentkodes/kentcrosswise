@@ -1,6 +1,6 @@
 import { canonicalizeUrl } from "./canonical";
 import { BOT_USER_AGENT } from "./bot-contact";
-import type { RobotsFetch } from "./robots";
+import { MAX_ROBOTS_BYTES, type RobotsFetch } from "./robots";
 
 /** Default request identity; its public contact page is published and verified. */
 export const DEFAULT_USER_AGENT = BOT_USER_AGENT;
@@ -126,7 +126,9 @@ export function createHttpClient(opts: HttpClientOptions = {}) {
   const maxBodyBytes = opts.maxBodyBytes ?? 5 * 1024 * 1024;
   const maxRedirects = opts.maxRedirects ?? 5;
 
-  async function get(startUrl: string, conditional?: { ifNoneMatch?: string }): Promise<HttpResult> {
+  /** `maxBodyBytes` here can only lower the client's own cap for this request. */
+  async function get(startUrl: string, conditional?: { ifNoneMatch?: string; maxBodyBytes?: number }): Promise<HttpResult> {
+    const bodyCap = Math.min(maxBodyBytes, conditional?.maxBodyBytes ?? maxBodyBytes);
     let url = canonicalizeUrl(startUrl);
     if (!url) return { ok: false, reason: "bad_redirect", attempts: 0 };
     let attempts = 0;
@@ -187,7 +189,7 @@ export function createHttpClient(opts: HttpClientOptions = {}) {
         return { ok: false, reason: "http_4xx", status, attempts };
       }
 
-      const body = await readCapped(res, maxBodyBytes);
+      const body = await readCapped(res, bodyCap);
       if (body === null) return { ok: false, reason: "too_large", status, attempts };
       const headers: Record<string, string> = {};
       res.headers.forEach((v, k) => {
@@ -208,10 +210,20 @@ export function createHttpClient(opts: HttpClientOptions = {}) {
 
 export type HttpClient = ReturnType<typeof createHttpClient>;
 
-/** Fetches `<origin>/robots.txt` through the polite client and maps the outcome for `interpretRobots`. */
+/** Failures that carry the robots.txt HTTP status, which `interpretRobots` maps (404 allows, 401/403 disallow). */
+const ROBOTS_STATUS_REASONS: ReadonlySet<HttpFailure> = new Set(["http_4xx", "http_429", "http_5xx", "blocked_401", "blocked_403"]);
+
+/**
+ * Fetches `<origin>/robots.txt` through the polite client and maps the outcome for `interpretRobots`.
+ * Only a real HTTP status failure becomes an (empty) response; anything else, an oversized body
+ * included, is an error, which disallows everything for the run (design decision 8, fail closed).
+ */
 export async function fetchRobotsTxt(client: HttpClient, origin: string): Promise<RobotsFetch> {
-  const res = await client.get(`${origin}/robots.txt`);
-  if (res.ok) return { kind: "response", status: res.status, body: res.body };
-  if (res.status !== undefined && !res.reason.endsWith("redirect")) return { kind: "response", status: res.status, body: "" };
+  const res = await client.get(`${origin}/robots.txt`, { maxBodyBytes: MAX_ROBOTS_BYTES });
+  if (res.ok) {
+    if (Buffer.byteLength(res.body, "utf8") > MAX_ROBOTS_BYTES) return { kind: "error", reason: "too_large" };
+    return { kind: "response", status: res.status, body: res.body };
+  }
+  if (res.status !== undefined && ROBOTS_STATUS_REASONS.has(res.reason)) return { kind: "response", status: res.status, body: "" };
   return { kind: "error", reason: res.reason };
 }

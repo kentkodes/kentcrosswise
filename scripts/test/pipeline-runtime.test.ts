@@ -28,7 +28,7 @@ describe("pipeline runtime activation and cleanup", () => {
       connect: vi.fn(async () => ({ query: fresh.db.query.bind(fresh.db), close: vi.fn(async () => undefined) })),
       adapters: vi.fn(() => ({ publish: vi.fn(), catalog: { get: vi.fn(), put: vi.fn() }, robots: { get: vi.fn(), put: vi.fn() }, close: vi.fn() }) as ReturnType<typeof createAwsAdapters>),
       log: vi.fn(),
-      discover: vi.fn(async () => ({ discovered: 2, emitted: 2, skipped: false })),
+      discover: vi.fn(async () => ({ discovered: 2, emitted: 2, skipped: false, rejected: 0 })),
       recover: vi.fn(async () => 1),
     };
   }
@@ -62,8 +62,8 @@ describe("pipeline runtime activation and cleanup", () => {
   it("production JSON secret, per-transaction pipeline_rw and existing UUID resolution; closes all resources", async () => {
     const d = deps();
     let roleInDiscovery = "";
-    d.discover = vi.fn(async (opts) => { roleInDiscovery = await currentUser(opts.db); return { discovered: 2, emitted: 2, skipped: false }; });
-    expect(await createPipelineHandler(d)(event)).toEqual({ status: "ok", discovered: 2, emitted: 2, recovered: 1 });
+    d.discover = vi.fn(async (opts) => { roleInDiscovery = await currentUser(opts.db); return { discovered: 2, emitted: 2, skipped: false, rejected: 0 }; });
+    expect(await createPipelineHandler(d)(event)).toEqual({ status: "ok", discovered: 2, emitted: 2, recovered: 1, rejected: 0 });
     expect(d.secret).toHaveBeenCalledWith("kcw/prod/pipeline", "db_url");
     expect(roleInDiscovery).toBe("pipeline_rw");
     // SET LOCAL ends with each transaction: nothing leaks into the session.
@@ -84,9 +84,23 @@ describe("pipeline runtime activation and cleanup", () => {
     expect(d.adapters).not.toHaveBeenCalled();
     expect(d.discover).not.toHaveBeenCalled();
   });
+  it("wikisource-en is refused as not permitted before any secret, DB, S3 or SQS access", async () => {
+    const d = deps();
+    expect(await createPipelineHandler(d)({ source_slug: "wikisource-en", mode: "discover" })).toEqual({ status: "source_not_permitted" });
+    for (const fn of [d.secret, d.connect, d.adapters, d.discover, d.recover]) expect(fn).not.toHaveBeenCalled();
+  });
+  it("counts rejected links from discovery and recovery and logs only the count", async () => {
+    const d = deps();
+    d.discover = vi.fn(async (opts) => { opts.onLinkRejected?.("invalid_event_hints"); opts.onLinkRejected?.("invalid_link"); return { discovered: 1, emitted: 1, skipped: false, rejected: 2 }; });
+    d.recover = vi.fn(async (opts) => { opts.onLinkRejected?.("event_too_large"); return 0; });
+    expect(await createPipelineHandler(d)(event)).toEqual({ status: "ok", discovered: 1, emitted: 1, recovered: 0, rejected: 3 });
+    expect(logged(d)).not.toMatch(/invalid_event_hints|invalid_link|event_too_large/);
+  });
   it("source_missing and source_paused stop before S3 or SQS", async () => {
     const d = deps();
-    expect(await createPipelineHandler(d)({ source_slug: "wikisource-en", mode: "discover" })).toEqual({ status: "source_missing" });
+    await fresh.db.query("UPDATE sources SET slug='gutenberg-moved' WHERE slug='gutenberg'");
+    try { expect(await createPipelineHandler(d)(event)).toEqual({ status: "source_missing" }); }
+    finally { await fresh.db.query("UPDATE sources SET slug='gutenberg' WHERE slug='gutenberg-moved'"); }
     await fresh.db.query("UPDATE sources SET paused_by='owner' WHERE slug='gutenberg'");
     expect(await createPipelineHandler(d)(event)).toEqual({ status: "source_paused" });
     expect(d.adapters).not.toHaveBeenCalled();
@@ -131,7 +145,7 @@ describe("pipeline runtime activation and cleanup", () => {
   it("a close failure keeps an ok result and logs a fixed warning", async () => {
     const d = deps();
     d.connect = vi.fn(async () => ({ query: fresh.db.query.bind(fresh.db), close: vi.fn(async () => { throw new Error("close private-marker"); }) }));
-    expect(await createPipelineHandler(d)(event)).toEqual({ status: "ok", discovered: 2, emitted: 2, recovered: 1 });
+    expect(await createPipelineHandler(d)(event)).toEqual({ status: "ok", discovered: 2, emitted: 2, recovered: 1, rejected: 0 });
     expect(d.log).toHaveBeenCalledWith({ status: "warning", reason: "pipeline_close_failed" });
     expect(logged(d)).not.toContain("private-marker");
   });

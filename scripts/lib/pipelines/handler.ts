@@ -11,12 +11,19 @@ export interface HandlerDeps {
   secret(name: string, key?: string): Promise<string>;
   connect(url: string): Promise<PipelineConnection>;
   adapters(bucket: string, queueUrl: string, region: string): ReturnType<typeof createAwsAdapters>;
-  log(entry: { status: string; discovered?: number; emitted?: number; recovered?: number; reason?: string }): void;
+  log(entry: { status: string; discovered?: number; emitted?: number; recovered?: number; rejected?: number; reason?: string }): void;
   discover?: typeof discoverApprovedUrls;
   recover?: typeof reemitStalledUrls;
 }
 
 export const PIPELINE_ROLE = "pipeline_rw";
+
+/**
+ * Accepted slugs that may not run yet. English Wikisource's robots.txt disallows the API path, so it
+ * stays refused until an access path is approved (E5-DESIGN reconciliation note). Its adapter code is
+ * kept; delete the slug here to lift the refusal.
+ */
+export const NOT_PERMITTED_SOURCES: ReadonlySet<string> = new Set(["wikisource-en"]);
 
 /** Fixed failure codes; the only failure detail that is ever logged. */
 type FailureCode = "database_url_empty" | "pipeline_role_mismatch";
@@ -73,6 +80,7 @@ export function createPipelineHandler(deps: HandlerDeps) {
     if (typeof input !== "object" || input === null || Array.isArray(input)) return { status: "invalid_input" };
     const event = input as Record<string, unknown>;
     if (Object.keys(event).length !== 2 || event.mode !== "discover" || !["gutenberg", "wikisource-en"].includes(String(event.source_slug))) return { status: "invalid_input" };
+    if (NOT_PERMITTED_SOURCES.has(String(event.source_slug))) return { status: "source_not_permitted" };
     const bucket = deps.env.KCW_PIPELINES_METADATA_BUCKET;
     const queue = deps.env.KCW_ESSAY_URLS_QUEUE_URL;
     // No default: the module always sets it, and a guessed name could read the wrong credential.
@@ -90,11 +98,14 @@ export function createPipelineHandler(deps: HandlerDeps) {
       const source = await loadSource(db, String(event.source_slug));
       if (!source || source.paused) return { status: source ? "source_paused" : "source_missing" };
       adapters = deps.adapters(bucket, queue, deps.env.AWS_REGION ?? "us-east-1");
+      // Links that cannot form a valid event are skipped by fixed code; only their count is logged.
+      let rejected = 0;
       const opts: WatcherOptions = { db, sourceId: source.id, runId: randomUUID(), publish: adapters.publish,
-        catalogCache: adapters.catalog, http: { cache: new RobotsCache(undefined, adapters.robots) } };
+        catalogCache: adapters.catalog, http: { cache: new RobotsCache(undefined, adapters.robots) },
+        onLinkRejected: () => { rejected++; } };
       const discovered = await (deps.discover ?? discoverApprovedUrls)(opts);
       const recovered = await (deps.recover ?? reemitStalledUrls)(opts);
-      const result = { status: "ok", discovered: discovered.discovered, emitted: discovered.emitted, recovered };
+      const result = { status: "ok", discovered: discovered.discovered, emitted: discovered.emitted, recovered, rejected };
       deps.log(result);
       return result;
     } catch (error) {
