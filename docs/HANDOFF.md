@@ -14,17 +14,17 @@ The Liaison refreshed origin and confirmed default `main` on 2026-10-26. Current
 |---|---|
 | Repository / remote / default | `kentkodes/kentcrosswise` / `origin` / `main` |
 | Fetched `origin/main` | `da295984a3e3bfa3a9a1a5f64823820c65e27c1e` |
-| PR #44 / `origin/frontend/landscape-api-20261025` | `18819f0c06d42a6aebe0267a8956d1e7ce142c65` |
-| PR #49 / `origin/frontend/office-preview-20261025` | `46cd546b8243d0412858add15e2cd810e154610c` (merge of `origin/main` `da29598`) |
+| PR #44 / `origin/frontend/landscape-api-20261025` | `118643610f728e4d23999cd3def4ee660f59803f` (includes merge of `origin/main` `da29598`) |
+| PR #49 / `origin/frontend/office-preview-20261025` | Last verified `26e55bfdc964731cdbeb0f5f3119a31d1d0f1389` (includes PR #44 `1186436`); later docs-only commits are listed on the PR |
 
-This is an explicit continuation of the owned office task branch based on PR #44. It retains three local unpushed office commits plus all earlier dirty/untracked application, workflow, migration and documentation work. Nothing was staged, committed or pushed in this review; other checkouts and writers' work remain preserved. The local office branch has no same-named remote ref and tracks the PR #44 source.
+The office work is published as draft [PR #49](https://github.com/kentkodes/kentcrosswise/pull/49), stacked on PR #44 and based on `main`. Neither PR is merged or deployed; use the PR/API for current merge status.
 
 ## PRs and checks
 
 | Scope | Evidence | Current limit |
 |---|---|---|
-| [Draft PR #44](https://github.com/kentkodes/kentcrosswise/pull/44) | Exact head `9164c427...`; [CI 40243775629](https://github.com/kentkodes/kentcrosswise/actions/runs/40243775629) checks, preview, prod-plan and ci/required all SUCCESS, completed 2026-10-25 23:33:58Z | OPEN/DRAFT, REVIEW_REQUIRED, no submitted reviews. Formal visual gates remain open; PR description has stale readiness notes and needs factual correction before release |
-| PR #44 integration check | Local `git merge-tree --write-tree` with fetched main and PR head succeeded, tree `3e942d2812e514cf6549d07997180a3ab84c9ebb`; no branch/index/working-tree mutation | API says mergeable/blocked with older base snapshot `6af4828...`. Conflict-free local integration is not CI against current main or merge authorization |
+| [Draft PR #44](https://github.com/kentkodes/kentcrosswise/pull/44) | Head `1186436...`; [CI 40425388263](https://github.com/kentkodes/kentcrosswise/actions/runs/40425388263) checks, preview, prod-plan and ci/required all SUCCESS. Independent local QA 2026-10-26: no P0/P1; its P2 (stale base/docs) and P3 empty activity note are fixed in this head | DRAFT, REVIEW_REQUIRED (one approval required). Remaining QA P3s: titles ellipsized on narrow widths, e2e flakiness at 10 workers, duplicated 7.6 MB landscape PNG, retitles not refetched |
+| [Draft PR #49](https://github.com/kentkodes/kentcrosswise/pull/49) | Head `26e55bf...`; [CI 40425859404](https://github.com/kentkodes/kentcrosswise/actions/runs/40425859404) checks, preview, prod-plan and ci/required all SUCCESS. Independent local QA 2026-10-26: no P0/P1; its P2 (1 s uncached incremental polling) is fixed: both lanes poll every 5 s and stop while hidden | DRAFT, REVIEW_REQUIRED. Opt-in real-PostgreSQL race tests do not run in CI. Merge after #44; one-way migrations 0006/0007 |
 | Root task 1 / issue #46 / [PR #47](https://github.com/kentkodes/kentcrosswise/pull/47) | Head `28eda846a5d0184b40538833ff8a0865e7dd0c0d`, merged `c18915d47ed73dca7d223e8f2a203573ac381e22`; Developer 40275363951, CI 40275760603, QA 40277890813 and [deploy 40278341362](https://github.com/kentkodes/kentcrosswise/actions/runs/40278341362) succeeded | Completed controlled `/healthz` acceptance slice, not office publication |
 | Docs child 2 / [PR #48](https://github.com/kentkodes/kentcrosswise/pull/48) | Dispatched at root merge; head `1a04a7b2088563286457d203fb990dc5475d3b5a`, merged `da295984...` at 06:35:09Z; Docs 40278341136, CI 40278715067, fresh QA 40280225322, [deploy 40280690084](https://github.com/kentkodes/kentcrosswise/actions/runs/40280690084) and cleanup 40280690849 succeeded | One factual handoff line; no new product feature |
 
@@ -49,7 +49,7 @@ PR #44 contains the accepted native 2560×1776 landscape and real recent activit
 
 The three local office commits add independent woodland vignettes to `/office`, with original fictional `/office/preview` preserved. The accepted fictional `/office/draft` is the 384×304 main-room and expandable 384×96 annex baseline: boss at back, shared four-seat Developer bench, perimeter specialists, teal Developer/amber QA and task-filtered logs.
 
-Local units 1–5 and the subsequent database-to-browser check are implemented, unpublished:
+Local units 1–5 and the subsequent database-to-browser check are implemented and published in draft PR #49 (not merged or deployed):
 
 - Contract/parser (`apps/web/src/office-contract.ts`), projection migration 0006 (`packages/db/migrations/0006_office_projection.sql`) and read adapter (`apps/web/src/server/office-projection.ts`): sanitized views, one-statement snapshots/pages, commit-ordered revisions/ordinals, opaque cursors, privacy epochs and explicit invalidations/recovery.
 - Migration 0007 (`packages/db/migrations/0007_office_outbox.sql`): atomic enqueue/version triggers, ordered best-effort drain, handled-row/version guards, poison handling, execution assignments and trusted workflow observations. `office_project` stays internal; only `orch_rw`/`web_rw` execute `office_drain`. Console/Lambda/sweeper drains and local Developer/QA/Scraper run names are wired.
@@ -60,7 +60,7 @@ The implementation contract and accepted unit-3 choices are [LIVE-CONTRACT.md](o
 
 ## Verification
 
-All local implementation evidence below is working-tree evidence atop `e7d175bfd8717177f6fc20dcd0b9871c40933e90`, not a new commit or deployment. Tests were not rerun merely for this factual consolidation. Subsequent scoped PR #44 activity tests (5/5) and four-width Chrome review are recorded above; no new combined-repository suite is claimed.
+The latest combined verification is the CI and independent QA at PR #49 head `26e55bf` recorded above. The earlier local implementation evidence below was working-tree evidence atop `e7d175bfd8717177f6fc20dcd0b9871c40933e90`, not a deployment. Tests were not rerun merely for this factual consolidation. Subsequent scoped PR #44 activity tests (5/5) and four-width Chrome review are recorded above; no new combined-repository suite is claimed.
 
 | Scope/date | Recorded result | Limits |
 |---|---|---|
@@ -84,14 +84,15 @@ Independent source/harness QA found no justified remaining production finding in
 - Named IAM-user owner administration and MFA were verified while Free Tier credits remain; migrate to IAM Identity Center afterward. Billing/domain/provider readiness is owner-reported. Runtime key presence, actual Anthropic path, relay membership (`relay_rw=true`, `orch_rw=false`), accepted price row and absence of the legacy shared agent role were independently verified during acceptance. Obsolete IAM/readiness holds are closed; this does not grant fresh live-operation authority.
 - U13 QA-App approval counting passed on disposable PR #45 at head `4023433cc1a73ece3670a12b571765ead13d4c2e` (review 5647804707). It closed unmerged; temporary rules/refs were removed and cleanup 40275132151 succeeded. Final main ruleset 25683184 was verified: one approval/stale dismissal, Actions source 15368, orchestrator source 5436750, squash/no bypass.
 - Final acceptance stop: `agents_paused=true`, `KCW_AGENT_WORKFLOWS_ENABLED=false`, `pipelines_paused=false`; exactly two merged tasks/attempts zero, 62 checkpoints, no approvals/runs, input/DLQ counts zero. Actual paused CI deferral and natural scheduler resume passed; active-agent cancellation/adversarial retry/late-report cases remain untested.
+- Owner office-rollout sign-off, 2026-10-26: execution observations stay off at rollout and are enabled with migrator SQL only after one controlled run confirms a signed `workflow_run` reaches `agent_runs`, including the sender-allowlist check; migrate with `agents_paused=true`, workflows disabled and no active console session (0007 sets a 5 s `lock_timeout`); the documented projector kill switch is revoking EXECUTE on `office_drain`, with trigger removal only through a fix-forward migration. The 2 s bootstrap/state cache with 3 s statement timeout, relay/console ordering fixes and runbook alignment are implemented. This sign-off covers the rollout approach only, not merge or deployment.
 - Acceptance model usage was $0.2855104 across eight priced events, no unpriced, within the $3 monitored target (possible overrun accepted; no hard-cap prerequisite). Normal root/child QA usage arrived after merge. Actions total 529.57 minutes versus 455.29 baseline; AWS/GitHub costs are separate. Production five-field feed contained 19 sanitized events; that observation does not establish populated deployed UI behavior.
 
 ## Remaining work and next action
 
 The complete backlog is [OPEN-POINTS.md](OPEN-POINTS.md). No new product decision is needed for completed local units or the controlled acceptance run.
 
-1. Complete documentation → PR #44 → office release review. Correct stale PR readiness description, review standards/spec and formal homepage responsive/finish gates; retain accepted layout and defer wording changes.
-2. Prepare final combined-source checks and critical migration/grant/workflow review. Exact-head CI/reviews, scoped publication/merge authority and deployment verification remain separate gates; no PR #44/office release is authorized by this handoff.
+1. Mark PR #44 and PR #49 ready for review, obtain the required approval and merge #44 then #49 when authorized; retain accepted layout and defer wording changes.
+2. Deploy under the owner's office-rollout conditions above, verify deployed homepage/office behaviour, then run the controlled signed-webhook check before enabling execution observations. Merge and deployment authority remain separate gates; no release is authorized by this handoff.
 3. Recheck normal homepage content/cache; scope any targeted repair and durable content-aware invalidation separately. Status-only smoke checks previously missed stale HTML.
 4. Verify production ownership/grants and real signed webhook delivery when scoped; retain open failure/retry/dedupe/cold-container/late-report cases, Safari/Firefox/physical devices and durable browser resume. Preserve unverified assigned-worker event motion and multiple-private-task actual-route scenarios as distinct from earlier intercepted/source tests.
 5. Continue private hub, X-ray and essays after the current delivery priorities. Their approved MVP specs and consolidated backlog remain authoritative.
