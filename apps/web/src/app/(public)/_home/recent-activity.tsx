@@ -8,7 +8,7 @@ export function RecentActivity() {
   const { events, status } = useActivity();
   return <div className={s.activityContent}>
     {status === "error" ? <p className={s.activityNote}>Feed unavailable.{events.length ? " Cached activity shown." : " Retrying shortly."}</p> : null}
-    {!events.length ? <p className={s.activityNote}>{status === "loading" ? "Loading agent activity…" : status === "ready" ? "No public agent activity yet." : ""}</p> : null}
+    {!events.length && status !== "error" ? <p className={s.activityNote}>{status === "loading" ? "Loading agent activity…" : "No public agent activity yet."}</p> : null}
     <ul className={s.activityList}>
       {events.slice(-3).reverse().map((event) => <li key={event.id} className={s.activity}>
         <span className={s.activityTile}><Document className={s.activityIcon} /></span>
