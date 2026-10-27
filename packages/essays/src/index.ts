@@ -34,3 +34,6 @@ export {
   type SourceRecord,
 } from "./registry/source";
 export { nextHealth, recordOutcome, recordSourceEvent, type HealthEvent, type UrlOutcome } from "./registry/health";
+export { matchAll, matchSeed, type CatalogRecord, type Candidate, type SeedInput } from "./match/match";
+export { renderReviewTable } from "./match/review";
+export { loadApprovedSeeds, proposeLinks } from "./match/links";

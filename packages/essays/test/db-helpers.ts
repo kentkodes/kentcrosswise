@@ -1,9 +1,13 @@
 // Test-only: reuse the @kcw/db PGlite helper by path so @kcw/essays needs no new dependency.
-import type { PGlite } from "@electric-sql/pglite";
 import type { Db } from "../src/db";
 import { freshDb } from "../../db/test/helpers";
 
-export async function essaysDb(): Promise<{ pg: PGlite; db: Db }> {
+/** What the tests need from PGlite (its type lives in @kcw/db, which this package does not depend on). */
+export interface TestPg {
+  close(): Promise<unknown>;
+}
+
+export async function essaysDb(): Promise<{ pg: TestPg; db: Db }> {
   return freshDb();
 }
 

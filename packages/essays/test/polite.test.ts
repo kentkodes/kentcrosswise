@@ -1,4 +1,4 @@
-import type { PGlite } from "@electric-sql/pglite";
+import type { TestPg } from "./db-helpers";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createPoliteClient } from "../src/crawl/polite";
 import type { Db } from "../src/db";
@@ -6,7 +6,7 @@ import { loadSource } from "../src/registry/source";
 import { addSource, essaysDb } from "./db-helpers";
 import { FakeServer } from "./fake-server";
 
-let pg: PGlite;
+let pg: TestPg;
 let db: Db;
 const servers: FakeServer[] = [];
 

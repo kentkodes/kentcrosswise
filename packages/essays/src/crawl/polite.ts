@@ -28,11 +28,10 @@ export function createPoliteClient(opts: PoliteOptions) {
   const cache = opts.cache ?? new RobotsCache();
   const now = opts.now ?? (() => new Date());
   const ua = source.crawlRules.userAgent;
-  let client: HttpClient;
 
   const robotsFor = (origin: string) => cache.getOrLoad(origin, now(), () => fetchRobotsTxt(client, origin));
 
-  client = createHttpClient({
+  const client: HttpClient = createHttpClient({
     userAgent: ua,
     ...(opts.fetch && { fetch: opts.fetch }),
     ...(opts.sleep && { sleep: opts.sleep }),

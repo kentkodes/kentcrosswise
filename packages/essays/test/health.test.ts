@@ -1,4 +1,4 @@
-import type { PGlite } from "@electric-sql/pglite";
+import type { TestPg } from "./db-helpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "../src/db";
 import { MAX_URL_ATTEMPTS, nextHealth, recordOutcome, recordSourceEvent, stateOf, type HealthEvent, type HealthState } from "../src/registry/health";
@@ -72,7 +72,7 @@ describe("health state machine", () => {
 });
 
 describe("recordSourceEvent / recordOutcome", () => {
-  let pg: PGlite;
+  let pg: TestPg;
   let db: Db;
   beforeAll(async () => {
     ({ pg, db } = await essaysDb());

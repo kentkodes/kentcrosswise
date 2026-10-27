@@ -1,4 +1,4 @@
-import type { PGlite } from "@electric-sql/pglite";
+import type { TestPg } from "./db-helpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { claimFetchSlot, noteRetryAfter, waitForFetchSlot } from "../src/crawl/lease";
 import type { Db } from "../src/db";
@@ -8,7 +8,7 @@ import { addSource, essaysDb } from "./db-helpers";
 const T0 = new Date("2026-10-27T10:00:00Z");
 const at = (ms: number) => new Date(T0.getTime() + ms);
 
-let pg: PGlite;
+let pg: TestPg;
 let db: Db;
 beforeAll(async () => {
   ({ pg, db } = await essaysDb());
