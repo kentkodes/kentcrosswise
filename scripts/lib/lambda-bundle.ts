@@ -1,7 +1,8 @@
-// Bundles the agent Lambdas (orchestrator, webhook relay, sweeper) into one ESM file each with
-// esbuild. infra/modules/orchestrator and infra/modules/scheduler zip each output directory
-// (archive_file) and run `index.handler` on nodejs24.x / arm64; infra/prod points each target's
-// `prodVar` (orchestrator_package_dir, relay_package_dir, sweeper_package_dir) here.
+// Bundles the four Lambdas (orchestrator, webhook relay, sweeper, essay watcher) into one ESM file
+// each with esbuild. infra/modules/orchestrator, infra/modules/scheduler and infra/modules/pipelines
+// zip each output directory (archive_file) and run `index.handler` on nodejs24.x / arm64; infra/prod
+// points each target's `prodVar` (orchestrator_package_dir, relay_package_dir, sweeper_package_dir,
+// pipeline_package_dir) here.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,11 +12,13 @@ import { build, type BuildOptions } from "esbuild";
 
 export interface LambdaTarget {
   /** Short name, also the Terraform resource name (aws_lambda_function.<name>) in `tfFile`. */
-  name: "orchestrator" | "relay" | "sweeper";
+  name: "orchestrator" | "relay" | "sweeper" | "watcher";
   /** Repo-relative Terraform file declaring the function. */
   tfFile: string;
   /** infra/prod variable whose default is `../../<outDir>`. */
   prodVar: string;
+  /** Separate optional stack file for modules that extend the production stack. */
+  prodTfFile?: string;
   /** Entry module (repo-relative). */
   entry: string;
   /** Output directory (repo-relative); the bundle is `<outDir>/index.mjs`. */
@@ -47,6 +50,15 @@ export const LAMBDA_TARGETS: readonly LambdaTarget[] = [
     prodVar: "sweeper_package_dir",
     entry: "agents/orchestrator/src/sweeper/entry.ts",
     outDir: "agents/orchestrator/dist-sweeper",
+    arch: "arm64",
+  },
+  {
+    name: "watcher",
+    tfFile: "infra/modules/pipelines/main.tf",
+    prodVar: "pipeline_package_dir",
+    prodTfFile: "infra/prod/pipelines.tf",
+    entry: "scripts/lib/pipelines/entry.ts",
+    outDir: "scripts/dist-pipelines",
     arch: "arm64",
   },
 ];

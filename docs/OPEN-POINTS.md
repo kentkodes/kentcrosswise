@@ -76,15 +76,15 @@ The owner hub is a placeholder. Approved functionality below remains product wor
 
 ## Essays MVP still to build (Phase 5)
 
-The Essays package is a stub and the pipeline directory is absent. The approved private library remains to be implemented.
+The private library remains to be implemented. E4's 300-entry list is owner-approved. E5 tasks 1–7 are built locally and independently tested on the source-registry branch, with offline-only Wikisource acceptance. Migration 0008 is owner-approved but has not been applied to production. Infrastructure and schedules remain pending. See the active E5 section in [HANDOFF.md](HANDOFF.md).
 
 | ID | Open work |
 |---|---|
 | E1 | Types/length preferences, editable setup and private library access. |
 | E2 | Infinite-scroll metadata/hook cards, clean reader with saved progress and link-only source opening. |
 | E3 | End-of-essay 1–5 rating, what-worked tags and length feedback; rule-based ranking by type/author/era/tags that changes with ratings. |
-| E4 | Draft approximately 300 anthology/best-list seed entries and obtain owner approval before scraping. |
-| E5 | Source registry and scheduled watcher with feed/sitemap/archive discovery, robots compliance and per-site rate limits. |
+| E4 | Complete: owner approved the 300-entry seed list. Preserve it; import is idempotent. |
+| E5 | Tasks 1–7 built/tested locally: registry/crawl/matcher, discovery, bounded queue publisher and crash recovery. `/bot` published via PR #52 and live-verified; local essay default User-Agent configured to that verified contact, all 120 essays tests pass. Essay code itself remains unpublished. Ordinary Wikisource metadata API is robots-disallowed under the accepted policy; resolve a permitted path before activation. Task 8 infrastructure, narrow pipeline flag-read access, deployed queue/cache wiring, review and schedules remain open; feed/sitemap/archive adapters follow the first open source. |
 | E6 | Per-site plain-code extractors using public-domain test fixtures; preserve paywall/login boundaries and link-only fallback. |
 | E7 | Validator: normalized hash, MinHash near-duplicates, fuzzy metadata duplicates, markup/ending/navigation/ad/encoding/length/language quality. Quarantine failures and open sanitized repair issues. |
 | E8 | Jev categorization/confidence with Haiku fallback and Haiku hook writing. |

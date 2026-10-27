@@ -36,7 +36,8 @@ describe("Lambda targets match the infrastructure", () => {
   });
 
   it.each(LAMBDA_TARGETS.map((t) => [t.name, t] as const))("%s: infra/prod deploys the bundle directory", (_name, t) => {
-    const block = new RegExp(`variable "${t.prodVar}" \\{([\\s\\S]*?)\\n\\}`).exec(prodTf)?.[1];
+    const targetProdTf = t.prodTfFile ? readFileSync(path.join(repoRoot, t.prodTfFile), "utf8") : prodTf;
+    const block = new RegExp(`variable "${t.prodVar}" \\{([\\s\\S]*?)\\n\\}`).exec(targetProdTf)?.[1];
     expect(block).toMatch(new RegExp(`default\\s*=\\s*"\\.\\./\\.\\./${t.outDir.replaceAll("/", "\\/")}"`));
   });
 });

@@ -9,6 +9,7 @@ import {
   ResourceGroupsTaggingAPIClient,
 } from "@aws-sdk/client-resource-groups-tagging-api";
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { ListScheduleGroupsCommand, ListSchedulesCommand, SchedulerClient } from "@aws-sdk/client-scheduler";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { paginateGetParametersByPath, SSMClient } from "@aws-sdk/client-ssm";
 import { checkTaggedResource, type TaggedStatus } from "./tagged-resource";
@@ -29,6 +30,54 @@ export interface PreviewProbe {
   objectExists(bucket: string, key: string): Promise<boolean>;
   /** Names of the Neon branches in the CI project. */
   neonBranchNames(): Promise<string[]>;
+  /**
+   * EventBridge Scheduler leftovers under a name prefix (`listSchedulerNames`). Schedules cannot be
+   * tagged, so the tagging index never lists them. A list error fails the check.
+   */
+  schedulerNames(prefix: string): Promise<string[]>;
+}
+
+/** The two Scheduler list calls (shaped like @aws-sdk/client-scheduler's ListScheduleGroups/ListSchedules). */
+export interface SchedulerListClient {
+  listScheduleGroups(input: { NamePrefix: string; NextToken?: string }): Promise<{ ScheduleGroups?: { Name?: string }[]; NextToken?: string }>;
+  listSchedules(input: { GroupName?: string; NamePrefix?: string; NextToken?: string }): Promise<{ Schedules?: { GroupName?: string; Name?: string }[]; NextToken?: string }>;
+}
+
+/**
+ * Schedule groups named <prefix>* ("schedule group <name>"), every schedule inside them, and
+ * schedules named <prefix>* in the default group ("schedule <group>/<name>"). infra/modules/pipelines
+ * names its group kcw-pr-<n>-pipelines and the schedules after the source, so the group decides.
+ */
+/** The SDK client as a SchedulerListClient (only `send` is used, so tests pass a fake). */
+export function sdkSchedulerLister(client: Pick<SchedulerClient, "send">): SchedulerListClient {
+  return {
+    listScheduleGroups: (input) => client.send(new ListScheduleGroupsCommand(input)),
+    listSchedules: (input) => client.send(new ListSchedulesCommand(input)),
+  };
+}
+
+export async function listSchedulerNames(client: SchedulerListClient, prefix: string): Promise<string[]> {
+  const groups: string[] = [];
+  let token: string | undefined;
+  do {
+    const page = await client.listScheduleGroups({ NamePrefix: prefix, NextToken: token });
+    for (const g of page.ScheduleGroups ?? []) if (g.Name?.startsWith(prefix)) groups.push(g.Name);
+    token = page.NextToken;
+  } while (token);
+  const found = groups.map((g) => `schedule group ${g}`);
+  const listAll = async (input: { GroupName: string; NamePrefix?: string }) => {
+    let next: string | undefined;
+    do {
+      const page = await client.listSchedules({ ...input, NextToken: next });
+      for (const sc of page.Schedules ?? []) {
+        if (sc.Name && (!input.NamePrefix || sc.Name.startsWith(input.NamePrefix))) found.push(`schedule ${sc.GroupName ?? input.GroupName}/${sc.Name}`);
+      }
+      next = page.NextToken;
+    } while (next);
+  };
+  for (const g of groups) await listAll({ GroupName: g });
+  await listAll({ GroupName: "default", NamePrefix: prefix });
+  return found;
 }
 
 export interface CleanCheckOptions {
@@ -54,13 +103,14 @@ export function previewNames(pr: number) {
 export async function findPreviewLeftovers(probe: PreviewProbe, opts: CleanCheckOptions): Promise<string[]> {
   const n = previewNames(opts.pr);
   const leftovers: string[] = [];
-  const [tagged, names, params, state, lock, branches] = await Promise.all([
+  const [tagged, names, params, state, lock, branches, scheduler] = await Promise.all([
     probe.taggedArns(opts.pr),
     probe.untaggedNames(),
     probe.parameterNames(n.parameterPath),
     probe.objectExists(opts.stateBucket, n.stateKey),
     probe.objectExists(opts.stateBucket, n.lockKey),
     opts.skipNeon ? Promise.resolve<string[]>([]) : probe.neonBranchNames(),
+    probe.schedulerNames(n.prefix),
   ]);
   const statuses = await Promise.all(
     tagged.map((arn) =>
@@ -78,6 +128,7 @@ export async function findPreviewLeftovers(probe: PreviewProbe, opts: CleanCheck
   if (state) leftovers.push(`state object s3://${opts.stateBucket}/${n.stateKey}`);
   if (lock) leftovers.push(`lock object s3://${opts.stateBucket}/${n.lockKey}`);
   for (const b of branches) if (b === n.branch) leftovers.push(`Neon branch ${b}`);
+  for (const name of scheduler) leftovers.push(`Scheduler ${name}`);
   return leftovers;
 }
 
@@ -115,6 +166,8 @@ function errorName(err: unknown): string | undefined {
 
 export interface AwsProbeOptions {
   region: string;
+  /** Lists Scheduler groups/schedules; default: the SDK SchedulerClient in `region` (tests inject a fake). */
+  scheduler?: SchedulerListClient;
   neon?: { projectId: string; apiKey: string; apiHost?: string; fetch?: typeof fetch };
 }
 
@@ -124,6 +177,7 @@ export function awsPreviewProbe(opts: AwsProbeOptions): PreviewProbe {
   const cloudfront = new CloudFrontClient({ region: "us-east-1" });
   const ssm = new SSMClient({ region: opts.region });
   const s3 = new S3Client({ region: opts.region });
+  const scheduler = opts.scheduler ?? sdkSchedulerLister(new SchedulerClient({ region: opts.region }));
   const checkClients = {
     region: opts.region,
     lambda: new LambdaClient({ region: opts.region }),
@@ -182,6 +236,8 @@ export function awsPreviewProbe(opts: AwsProbeOptions): PreviewProbe {
         throw new Error(`could not check s3://${bucket}/${key} (${errorName(err) ?? "error"})`);
       }
     },
+
+    schedulerNames: (prefix) => listSchedulerNames(scheduler, prefix),
 
     async neonBranchNames() {
       if (!opts.neon) throw new Error("Neon project id and API key are required (or pass --skip-neon)");
