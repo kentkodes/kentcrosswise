@@ -1,0 +1,63 @@
+.article {
+  max-width: 68ch;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+.article h1 {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2rem, 5vw, 3rem);
+  overflow-wrap: normal;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.article p {
+  margin: 0 0 1rem;
+}
+
+.intro {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+.status,
+.note {
+  color: #d9d6cd;
+}
+
+.article section {
+  margin-top: 2.5rem;
+}
+
+.article h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  text-wrap: balance;
+}
+
+.agent {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.agent code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.report {
+  color: #f8d9a8;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  font-size: 1.25rem;
+}
+
+.report:hover {
+  color: #f6f1e4;
+  text-decoration-thickness: 2px;
+}
+
+.note {
+  font-size: 1rem;
+}

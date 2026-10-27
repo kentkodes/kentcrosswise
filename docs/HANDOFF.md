@@ -1,5 +1,17 @@
 # Kentcrosswise project handoff
 
+## Bot contact release — 2026-10-27
+
+This narrow release note is current; the earlier office-release chronology below is historical. The fetched default branch is `main` at `600bdcaf293da4c5c31dbfdd122cff260c037ba7` (PR #49 is already merged). The bot contact page was prepared on a separate branch from that fetched baseline.
+
+The owner selected `https://kentcrosswise.com/bot` and authorized its publication and live verification. This change adds a static information/contact page using the existing public shell, explains development status, shows the planned User-Agent, and links to the repository's public issue form. It adds no global navigation item. The repository's issue feature is enabled.
+
+Local evidence before publication: the copied page, CSS, header type change and three browser tests are identical to the prior reviewed source. Desktop and phone inspection at 1440/390/320 pixels found no overflow or page errors and confirmed visible keyboard focus. Web/essays typechecks, scoped lint and all three browser cases passed in that source. Independent review and fresh CI on this release branch remain required before merge.
+
+This release contains no essay database migration, discovery implementation, dependency, infrastructure or workflow change. The essay pipeline remains separate local work. The candidate bot identity can be configured there only after the public contact page is reachable. No discovery schedules or agent tasks are enabled by publishing this page; the agent-workflow flag was independently observed `false` and protection profile `final` before publication preparation. Existing held agent work remains held.
+
+Next: independent local review, exact-head CI, the approved owner merge procedure with final protection restored immediately, deployment and live `/bot` verification. Then configure the essay bot identity without starting discovery. Source-access and infrastructure decisions remain separate.
+
 Current record, 2026-10-26 UTC. This replaces superseded session chronology; the prior record is preserved in the local continuity archive. Approved product requirements remain [hub/SPEC.md](hub/SPEC.md) and [essays/SPEC.md](essays/SPEC.md). Architecture is in [DESIGN.md](DESIGN.md); all open work is consolidated in [OPEN-POINTS.md](OPEN-POINTS.md).
 
 ## Observation and provenance
