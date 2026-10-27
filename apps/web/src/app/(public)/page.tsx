@@ -18,7 +18,7 @@ export default function HomePage() {
       <SceneFrame>
         <div className={s.stage}>
           <div className={s.scenery} aria-hidden="true" data-scenery="">
-            <Image className={s.landscape} src={landscape} alt="" preload unoptimized />
+            <Image className={s.landscape} src={landscape} alt="" sizes="100vw" preload />
             <Image className={s.computer} src={retroComputer} alt="" loading="eager" unoptimized />
             <div className={s.nightVeil} />
             <Fireflies />
