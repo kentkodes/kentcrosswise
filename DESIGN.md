@@ -317,7 +317,7 @@ A 32px periwinkle tile with an icon, a 12.8px title and an 11px figure-stack tim
 
 ## Local integration status — 2026-10-25
 
-The owner-accepted landscape is now native 2560×1776 and integrated byte-identically, served with Next Image optimization through the existing image route. The scenery remains an original dusk lake, meadow, mountains and fireflies; the CRT is a separate plate. Locally measured WebP responses are 381,460 bytes for desktop and 54,750 bytes for phone. Other plates retain their existing formats. This integration is prepared for draft review; no merge or deployment has occurred.
+The owner-accepted landscape is now native 2560×1776 and integrated byte-identically, served with Next Image optimization through the existing image route. The scenery remains an original dusk lake, meadow, mountains and fireflies; the CRT is a separate plate. Locally measured WebP responses are 381,460 bytes for desktop and 54,750 bytes for phone. Other plates retain their existing formats. Deployed behaviour of this integration is not yet verified.
 
 Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The text office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion uses manual stepping, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty; the full pixel-art office scene remains future design work.
 

@@ -28,7 +28,7 @@ Visitors arrive on phones and desktop browsers. Their primary action is to under
 - This frontend pass covers the public home/demo and shared navigation, followed later by the owner console.
 - Public pages use only `@kcw/demo-data` and the existing permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication/infrastructure.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behavior are required.
-- The private hub feature set, full pixel-art office scene and X-ray system are later product work. The text-office playback foundation is implemented locally with an accessible list, pause/resume/next, reduced-motion manual stepping and hidden/offscreen pause; it does not establish the later artwork. Current changes are prepared for draft review, with no merge or deployment.
+- The private hub feature set, full pixel-art office scene and X-ray system are later product work. The text-office playback foundation is implemented locally with an accessible list, pause/resume/next, reduced-motion manual stepping and hidden/offscreen pause; it does not establish the later artwork. Its deployed behaviour is not yet verified.
 
 ## Brand Commitments
 
