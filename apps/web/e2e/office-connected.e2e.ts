@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { bootstrapFixture, REFS } from "../test/fixtures/office-contract";
 import type { AvailableOffice } from "../src/office-contract";
+import { installPausedClock } from "./support/clock";
 
 function freshBootstrap(): AvailableOffice {
   const e = bootstrapFixture();
@@ -148,6 +149,7 @@ test("privacy withdrawal purges paused inspector and replay labels and rebinds d
     return route.fulfill({ json: value });
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await installPausedClock(page);
   await page.goto("/office/connected");
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.getByRole("button", { name: "QA", exact: true }).click();
@@ -156,7 +158,11 @@ test("privacy withdrawal purges paused inspector and replay labels and rebinds d
   for (let n = 0; n < 3; n++) await page.getByRole("button", { name: "Next event", exact: true }).click();
   await expect(page.getByRole("region", { name: "Event log" })).toContainText("Add a health endpoint");
   withdrawn = true;
-  await expect.poll(() => rebound, { timeout: 12000 }).toBeGreaterThan(0);
+  // The first five-second poll observes the privacy gap; the next incremental poll rebinds.
+  await page.clock.runFor(5_100);
+  await expect(page.getByText(/Descriptions have been updated/)).toBeVisible();
+  await page.clock.runFor(5_000);
+  await expect.poll(() => rebound).toBeGreaterThan(0);
   await expect(inspector).toContainText("Private task");
   await expect(page.locator("body")).not.toContainText("Add a health endpoint");
   await expect(page.getByRole("region", { name: "Event log" })).toContainText("Private task");
@@ -189,14 +195,19 @@ test("explicit restart retains a pending transition until the recovery choice", 
     return route.fulfill({ json: value });
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await installPausedClock(page);
   await page.goto("/office/connected");
-  await expect(page.getByRole("status")).toContainText("1 transitions waiting", { timeout: 12000 });
+  await expect(page.getByRole("status")).toContainText("Replay");
+  await page.clock.runFor(5_100);
+  await expect(page.getByRole("status")).toContainText("1 transitions waiting");
   const restart = page.getByRole("button", { name: "Restart and reconcile to current", exact: true });
+  await page.clock.runFor(5_000);
   await expect(restart).toBeVisible();
   await expect(page.getByRole("status")).toContainText("1 transitions waiting");
   const beforeRestart = bootstraps;
   recovering = true;
   await restart.click();
+  await page.clock.runFor(5_000);
   await expect.poll(() => bootstraps).toBeGreaterThan(beforeRestart);
   await expect(page.getByRole("status")).toContainText("0 transitions waiting");
   await expect(restart).toHaveCount(0);
@@ -221,6 +232,45 @@ test("offscreen and hidden playback freeze native canvas pixels", async ({ page 
   await page.waitForTimeout(600);
   expect(await canvasBytes(page)).toBe(hidden);
   await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" }); document.dispatchEvent(new Event("visibilitychange")); });
+});
+
+const setVisibility = (page: Page, state: "visible" | "hidden") => page.evaluate(value => {
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => value });
+  document.dispatchEvent(new Event("visibilitychange"));
+}, state);
+
+test("network lanes poll every five seconds while visible and pause while hidden", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/public/office") requests.push(url.searchParams.get("mode")!);
+  });
+  await mocks(page, freshBootstrap);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await installPausedClock(page);
+  await page.goto("/office/connected");
+  await expect(page.getByRole("status")).toContainText("Replay");
+  // Allow a development-mode remount's aborted bootstrap; only one bootstrap is accepted.
+  await expect.poll(() => requests.filter(m => m !== "bootstrap")).toEqual([]);
+  const count = (mode: string) => requests.filter(m => m === mode).length;
+  await page.clock.runFor(4_900);
+  expect([count("incremental"), count("state")]).toEqual([0, 0]);
+  await page.clock.runFor(200);
+  await expect.poll(() => [count("incremental"), count("state")]).toEqual([1, 1]);
+  await page.clock.runFor(5_000);
+  await expect.poll(() => [count("incremental"), count("state")]).toEqual([2, 2]);
+  await setVisibility(page, "hidden");
+  const hiddenAt = requests.length;
+  await page.clock.runFor(30_000);
+  await page.waitForTimeout(250);
+  expect(requests.length).toBe(hiddenAt);
+  await setVisibility(page, "visible");
+  await expect.poll(() => [count("incremental"), count("state")]).toEqual([3, 3]);
+  await page.clock.runFor(4_900);
+  await page.waitForTimeout(250);
+  expect([count("incremental"), count("state")]).toEqual([3, 3]);
+  await page.clock.runFor(200);
+  await expect.poll(() => [count("incremental"), count("state")]).toEqual([4, 4]);
 });
 
 test("keyboard seat and annex selection inspect their actual assignments", async ({ page }) => {

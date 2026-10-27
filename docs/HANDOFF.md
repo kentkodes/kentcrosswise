@@ -14,8 +14,8 @@ The Liaison refreshed origin and confirmed default `main` on 2026-10-26. Current
 |---|---|
 | Repository / remote / default | `kentkodes/kentcrosswise` / `origin` / `main` |
 | Fetched `origin/main` | `da295984a3e3bfa3a9a1a5f64823820c65e27c1e` |
-| PR #44 / `origin/frontend/landscape-api-20261025` | `9164c4276ae02f3d917e943bf6e28c3a8f7c8323` |
-| Continued owned `frontend/office-preview-20261025` | `e7d175bfd8717177f6fc20dcd0b9871c40933e90` |
+| PR #44 / `origin/frontend/landscape-api-20261025` | `18819f0c06d42a6aebe0267a8956d1e7ce142c65` |
+| PR #49 / `origin/frontend/office-preview-20261025` | `46cd546b8243d0412858add15e2cd810e154610c` (merge of `origin/main` `da29598`) |
 
 This is an explicit continuation of the owned office task branch based on PR #44. It retains three local unpushed office commits plus all earlier dirty/untracked application, workflow, migration and documentation work. Nothing was staged, committed or pushed in this review; other checkouts and writers' work remain preserved. The local office branch has no same-named remote ref and tracks the PR #44 source.
 

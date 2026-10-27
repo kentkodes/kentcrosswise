@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { OfficePlayback, type OfficeClock, type PlaybackEvent, type PlaybackView } from "../../../../office-playback";
+import { OFFICE_PLAYBACK, OfficePlayback, type OfficeClock, type PlaybackEvent, type PlaybackView } from "../../../../office-playback";
 import { OfficeRoom, executionActor, executionLabel, eventLabel, ROLE_LABEL } from "../../../../office-room";
 import { drawOffice } from "../draft/draw-office";
 import { PEOPLE, type Actor } from "../draft/scene";
@@ -53,11 +53,26 @@ export function ConnectedOffice() {
       } catch { if (!abort.signal.aborted) c.fail(request); }
       finally { clearTimeout(timeout); abort.signal.removeEventListener("abort", cancel); if (lane === "state") stateBusy = false; else eventBusy = false; if (!abort.signal.aborted) publish(); }
     };
-    void send("bootstrap");
-    const stateTimer = setInterval(() => { void send("state"); }, 5000);
-    const eventTimer = setInterval(() => { void send(c.view(clock()).history === "partial" ? "bootstrap" : "incremental"); }, 1000);
+    // Both network lanes poll every OFFICE_PLAYBACK.pollMs while the document is visible and stop while
+    // it is hidden. Becoming visible fetches state and events once, then resumes the intervals.
+    const pollEvents = () => { void send(c.view(clock()).history === "partial" ? "bootstrap" : "incremental"); };
+    let stateTimer: ReturnType<typeof setInterval> | undefined, eventTimer: ReturnType<typeof setInterval> | undefined;
+    const stopPolling = () => { clearInterval(stateTimer); clearInterval(eventTimer); stateTimer = eventTimer = undefined; };
+    const startPolling = () => {
+      stopPolling();
+      stateTimer = setInterval(() => { void send("state"); }, OFFICE_PLAYBACK.pollMs);
+      eventTimer = setInterval(pollEvents, OFFICE_PLAYBACK.pollMs);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") { stopPolling(); return; }
+      if (stateTimer !== undefined) return;
+      if (c.view(clock()).history === "initialized") void send("state");
+      pollEvents(); startPolling();
+    };
+    if (document.visibilityState === "visible") { pollEvents(); startPolling(); }
+    document.addEventListener("visibilitychange", onVisibility);
     const ageTimer = setInterval(publish, 1000);
-    return () => { abort.abort(); clearInterval(stateTimer); clearInterval(eventTimer); clearInterval(ageTimer); controller.current = null; room.current = null; };
+    return () => { abort.abort(); stopPolling(); clearInterval(ageTimer); document.removeEventListener("visibilitychange", onVisibility); controller.current = null; room.current = null; };
   }, []);
   useEffect(() => {
     const media = matchMedia("(prefers-reduced-motion: reduce)");
