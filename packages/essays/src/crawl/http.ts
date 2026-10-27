@@ -1,8 +1,9 @@
 import { canonicalizeUrl } from "./canonical";
+import { BOT_USER_AGENT } from "./bot-contact";
 import type { RobotsFetch } from "./robots";
 
-/** Sent on every request. The contact URL is a placeholder until the owner sets `crawl_rules.user_agent`. */
-export const DEFAULT_USER_AGENT = "KentcrosswiseBot/1.0 (+https://kentcrosswise.invalid/bot)";
+/** Default request identity; its public contact page is published and verified. */
+export const DEFAULT_USER_AGENT = BOT_USER_AGENT;
 
 /** Reason codes; they double as `sources.health_reason` values and never carry page content. */
 export type HttpFailure =
@@ -125,7 +126,7 @@ export function createHttpClient(opts: HttpClientOptions = {}) {
   const maxBodyBytes = opts.maxBodyBytes ?? 5 * 1024 * 1024;
   const maxRedirects = opts.maxRedirects ?? 5;
 
-  async function get(startUrl: string): Promise<HttpResult> {
+  async function get(startUrl: string, conditional?: { ifNoneMatch?: string }): Promise<HttpResult> {
     let url = canonicalizeUrl(startUrl);
     if (!url) return { ok: false, reason: "bad_redirect", attempts: 0 };
     let attempts = 0;
@@ -140,7 +141,8 @@ export function createHttpClient(opts: HttpClientOptions = {}) {
       try {
         res = await doFetch(url, {
           method: "GET",
-          headers: { "user-agent": userAgent, accept: "text/html,text/plain,application/json,application/xml;q=0.9,*/*;q=0.5" },
+          headers: { "user-agent": userAgent, accept: "text/html,text/plain,application/json,application/xml;q=0.9,*/*;q=0.5",
+            ...(conditional?.ifNoneMatch && { "if-none-match": conditional.ifNoneMatch }) },
           redirect: "manual",
           credentials: "omit",
           signal: AbortSignal.timeout(timeoutMs),

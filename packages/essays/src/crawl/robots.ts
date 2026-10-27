@@ -151,6 +151,11 @@ export function interpretRobots(result: RobotsFetch, now: Date): RobotsPolicy {
 }
 
 export const ROBOTS_TTL_MS = 24 * 60 * 60 * 1000;
+export interface RobotsSnapshot { result: RobotsFetch; fetchedAt: string }
+export interface RobotsStore {
+  get(origin: string): Promise<RobotsSnapshot | null>;
+  put(origin: string, snapshot: RobotsSnapshot): Promise<void>;
+}
 
 /**
  * Per-origin cache of robots policies, 24 h. A fail-closed result from a transient failure is kept
@@ -159,7 +164,7 @@ export const ROBOTS_TTL_MS = 24 * 60 * 60 * 1000;
 export class RobotsCache {
   private readonly entries = new Map<string, RobotsPolicy>();
 
-  constructor(private readonly ttlMs: number = ROBOTS_TTL_MS) {}
+  constructor(private readonly ttlMs: number = ROBOTS_TTL_MS, private readonly store?: RobotsStore) {}
 
   startRun(): void {
     for (const [origin, policy] of this.entries) if (!policy.cacheable) this.entries.delete(origin);
@@ -179,7 +184,19 @@ export class RobotsCache {
   async getOrLoad(origin: string, now: Date, load: () => Promise<RobotsFetch>): Promise<RobotsPolicy> {
     const hit = this.get(origin, now);
     if (hit) return hit;
-    const policy = interpretRobots(await load(), now);
+    const saved = await this.store?.get(origin);
+    if (saved) {
+      const at = new Date(saved.fetchedAt);
+      const age = now.getTime() - at.getTime();
+      const restored = interpretRobots(saved.result, at);
+      if (restored.cacheable && age >= 0 && age < this.ttlMs) {
+        this.entries.set(origin, restored);
+        return restored;
+      }
+    }
+    const result = await load();
+    const policy = interpretRobots(result, now);
+    await this.store?.put(origin, { result, fetchedAt: now.toISOString() });
     this.entries.set(origin, policy);
     return policy;
   }

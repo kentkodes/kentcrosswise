@@ -14,6 +14,8 @@ export interface PoliteOptions {
   now?: () => Date;
   maxRetries?: number;
   baseDelayMs?: number;
+  /** Bounded catalog metadata can exceed the small default page limit. */
+  maxBodyBytes?: number;
   /** How long a request may wait for the rate lease before the guard refuses it. */
   maxLeaseWaitMs?: number;
 }
@@ -38,6 +40,7 @@ export function createPoliteClient(opts: PoliteOptions) {
     ...(opts.random && { random: opts.random }),
     ...(opts.maxRetries !== undefined && { maxRetries: opts.maxRetries }),
     ...(opts.baseDelayMs !== undefined && { baseDelayMs: opts.baseDelayMs }),
+    ...(opts.maxBodyBytes !== undefined && { maxBodyBytes: opts.maxBodyBytes }),
     guard: async (url) => {
       const allowed = sourceAllows(source, url);
       if (!allowed.allowed) return { ok: false, reason: allowed.reason };
@@ -61,8 +64,8 @@ export function createPoliteClient(opts: PoliteOptions) {
     },
   });
 
-  async function get(url: string): Promise<HttpResult> {
-    const res = await client.get(url);
+  async function get(url: string, conditional?: { ifNoneMatch?: string }): Promise<HttpResult> {
+    const res = await client.get(url, conditional);
     if (!res.ok && res.retryAfterMs !== undefined) await noteRetryAfter(db, source.id, res.retryAfterMs, now());
     return res;
   }

@@ -1,5 +1,10 @@
 /** Package name, used by the workspace smoke test. */
 export const PACKAGE_NAME = "@kcw/essays";
+export { BOT_CONTACT_URL, BOT_USER_AGENT } from "./crawl/bot-contact";
+export { parseDiscoveryEvent, createDiscoveryPublisher, type DiscoveryEvent, type QueueTransport } from "./discovery/event";
+export { parseGutenbergCatalog, gutenbergId, type GutenbergEntry } from "./discovery/gutenberg";
+export { readWikiMetadata, wikisourceTitle, type WikiMetadata } from "./discovery/wikisource";
+export { discoverApprovedUrls, reemitStalledUrls, type WatcherOptions, type DiscoveryResult, type CatalogCache, type CatalogSnapshot } from "./discovery/watcher";
 
 // E5 source registry and watcher building blocks (docs/essays/E5-DESIGN.md).
 export { canonicalizeUrl, urlHash } from "./crawl/canonical";
