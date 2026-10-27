@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AccountLink } from "./account-link";
 import h from "./site-header.module.css";
 
-export type PublicPath = "/" | "/demo" | "/office";
+export type PublicPath = "/" | "/demo" | "/office" | "/bot";
 
 const LINKS: { href: PublicPath; label: string }[] = [
   { href: "/", label: "Home" },
