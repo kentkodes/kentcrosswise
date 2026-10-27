@@ -24,7 +24,30 @@ colors:
   periwinkle-ink: "#5166b0"
   presence-green: "#2f9e5e"
   firefly-gold: "#ffd877"
+  office-control: "#252e49"
+  office-control-edge: "#aaa28f"
+  office-muted: "#e5d8bf"
+  office-hover: "#3d465e"
+  office-divider: "#847d78"
+  office-teal: "#67baa6"
+  office-amber: "#e4ad55"
 typography:
+  office-label:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "14px"
+    fontWeight: 400
+  office-state:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "21px"
+    fontWeight: 400
+  office-role:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "28px"
+    fontWeight: 400
+  office-heading:
+    fontFamily: "Rosarivo, Georgia, serif"
+    fontSize: "clamp(30px, 4vw, 44px)"
+    fontWeight: 400
   display:
     fontFamily: "Rosarivo, Georgia, serif"
     fontSize: "clamp(36px, 10vw, 50px)"
@@ -69,6 +92,7 @@ typography:
     lineHeight: "31px"
     fontFeature: "lnum, tnum"
 rounded:
+  office-target: "4px"
   pill: "999px"
   window: "22px"
   surface: "15px"
@@ -84,6 +108,10 @@ spacing:
   gutter: "20px"
   gutter-wide: "40px"
 components:
+  office-target:
+    rounded: "{rounded.office-target}"
+    width: "44px"
+    height: "44px"
   button-entrance:
     backgroundColor: "{colors.apricot}"
     textColor: "{colors.entrance-ink}"
@@ -279,13 +307,13 @@ Soft, nested rounding. Interactive controls on the scene and in the hub header a
 - **Lists inside panels:** rows divided by 1px rule hairlines, no zebra fills.
 
 ### Navigation
-- **Site nav (shared public header):** one header on every public page (home, demo, agent office): the wordmark, then Home, Demo and Agent office as ivory 17px links, then the ghost account pill. The current page carries a 2px current-colour underline at 85% opacity below the text (`aria-current="page"`); hover goes to pure white. On home it sits on the scene (stage-placed from 1100px); on demo and agent office it sits on dusk navy with the same gutters as the home stage (`max(40px, 6.25vw)` from 1100px). Phones get one compact row of links under the wordmark, never a menu, sized to fit 320px. The day/night toggle stays on home only.
+- **Site nav (shared public header):** one header on every public page (home, demo, agent office): the wordmark, then Home, Demo and Agent office as ivory 17px links, then the ghost account pill. The current page carries a 2px current-colour underline at 85% opacity below the text (`aria-current="page"`); hover goes to pure white. On home it sits on the scene (stage-placed from 1100px); on demo and agent office it sits on dusk navy with the same gutters as the home stage (`max(40px, 6.25vw)` from 1100px). Phones get one compact row of links under the wordmark, never a menu, sized to fit 320px. The day/night toggle stays on home only. Below 1100px, header links keep the compact visual row with 44px height and centered minimum-44px effective width; the existing current-page underline remains aligned with the text.
 - **Account pill:** pages render "Sign in" statically; after load the browser asks the Auth.js session endpoint and a signed-in visitor sees "Your hub" (to the owner hub) in the same pill. Both labels share one cell, so the swap changes no width.
 - **Hub sidebar:** 38px items with icon and 13px label, 9px corners; current item honey-select, hover 45% honey. Vertical column with a lower group (Agent office, Settings) under a rule on the stage; a scrolling row with edge fades below 1100px, focus rings drawn inside the mask.
 - **Footer:** dusk navy, ivory text, links underlined in 50% apricot that strengthens to full apricot on hover.
 
 ### Day/Night Toggle (signature)
-A real two-button group ("Scene light") in the hub header: a slate pill track with a recessed inset shadow, two 34px circular buttons with sun and moon glyphs. The pressed option fills `#f6e0bf` with dark ink; the other stays light ink on slate. Transitions 0.4s, removed under reduced motion.
+A real two-button group ("Scene light") in the hub header: a slate pill track with a recessed inset shadow, two 34px circular buttons with sun and moon glyphs. The pressed option fills `#f6e0bf` with dark ink; the other stays light ink on slate. Transitions 0.4s, removed under reduced motion. Below 1100px, transparent 44×44px hit areas surround the unchanged 34px painted circles; their 46px center spacing keeps the targets separate. This is a scoped interaction refinement; the transformed wide composition is unchanged.
 
 ### Mood Chart (signature)
 An SVG plot stretched to its box (non-scaling 2px line, 1px grid at 0, 0.5 and 1) with a monotone cubic line that never overshoots, an area wash fading from 30% ink to 0 at the baseline, 6px points with a cream ring, and HTML axis labels in the figure stack that never scale with the chart. Alternate days are labelled; every day keeps its point. The whole chart is one `role="img"` with its values in the accessible label.
@@ -319,11 +347,38 @@ A 32px periwinkle tile with an icon, a 12.8px title and an 11px figure-stack tim
 
 The owner-accepted landscape is now native 2560×1776 and integrated byte-identically, served with Next Image optimization through the existing image route. The scenery remains an original dusk lake, meadow, mountains and fireflies; the CRT is a separate plate. Locally measured WebP responses are 381,460 bytes for desktop and 54,750 bytes for phone. Other plates retain their existing formats. Deployed behaviour of this integration is not yet verified.
 
-Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The text office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion uses manual stepping, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty; the full pixel-art office scene remains future design work.
+Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion defaults to still/manual behavior with an enabled explicit full-motion Play override, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty. The local office illustrates independent Developer/QA event vignettes; a separate fictional sample remains available. Full-team characters and task correlation remain future work.
 
-## Open items
+## Remaining review
 
-1. **Formal finish remains open:** the native landscape passes its resolution plate check, and 16 local viewport/light/motion checks passed. The owner-accepted layout remains the visual baseline; the historical explore-title fidelity (58%) was not remeasured and is not redesign authority. The scoped phone/tablet navigation and day/night refinement has 44px effective targets below1100px, with unchanged painted switch and fine-pointer wide composition; source-matched Chrome hit/touch/keyboard/account checks pass at320/390/768/1440. Final combined-source CI/packaging review and wide/coarse/browser/device limits remain. No forced pass or fabricated receipt was used; the older receipt file could not be verified. Do not claim current receipt validity or a completed engine ship record.
-2. **Verification:** combined focused web/scripts tests (93), lint/typecheck and the full production OpenNext build passed independently. The full dev-server browser run passed 29/31, including all activity tests; both console controls that timed out there passed targeted production-preview isolation (2/2 in 50.4 seconds, installed Chrome, one worker, `PW_SERVER=start`) without a form source fix. The full 31-test production suite was not rerun; the final full Vitest suite independently passed 66 files/1,105 tests in 123.03 seconds outside the sandbox for fixture subprocess/loopback access. The earlier asset run was 23/25; do not confuse it with the combined result. Firefox/Safari and real devices remain unverified.
-3. **Copy:** fictional activity samples and “See and manage your AI agents” have been replaced locally by real sanitized events and “View agent activity.” The greeting is the accepted “A sample hub, with real public activity from the agents building this site.” Specific wording refinement remains later.
-4. **Visual advisories:** prior seam/paper/quill/night-paper observations and current title/navigation fidelity are review items, not new visual-system rules. Full pixel-art office artwork needs its own later planning; the present replay is a text-feed foundation.
+The active backlog is [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md). The native landscape size gate and the scoped local phone/tablet navigation/toggle interaction review pass. The owner-accepted layout remains the visual baseline; historical title-fidelity 58% is archived evidence, not a redesign instruction. Final combined-source release review and wide/coarse/browser/device verification remain open. The older review receipt could not be verified; current engine ship completion is not established. Prior seam/paper/quill/night-paper observations and three office typography advisories need review. Remaining agent-claim copy needs a pre-launch decision; the local CTA is View agent activity and recent events are real sanitized records. Browser/device and exact-head release verification limitations are in [docs/HANDOFF.md](docs/HANDOFF.md).
+
+## Office preview — scoped visual extension
+
+This local `/office/preview` surface extends the existing public world with an original overhead woodland studio. Navy, ivory, apricot and Rosarivo remain the surrounding interface; the coarse pixel room is a route-specific medium. The paper-window, painted-raster and soft-corner guidance above continues to describe the incumbent home/demo, rather than imposing that medium on the pixel room.
+
+The native Canvas 2D scene is 320×256, with a 16×16 tile vocabulary and approximately 16×24 robot bodies. Integer rectangle fills, disabled image smoothing and pixelated display preserve actual coarse pixels. The room displays at 2× where available, 1× on phones with room, and fits narrower widths without page overflow. It ships code-drawn scenery, with no raster scene asset. Furniture and robots are distinct layers, with robots ordered by their vertical position. All readable text and controls remain HTML.
+
+The palette in `draw-office.ts` declares 20 colors: honey wood and seams, sage walls and foliage, cream/paper, teal Developer, amber QA, dusk windows, navy and a failure red. The Liaison measured 19 rendered colors in the initial task-assigned frame; failure states use the twentieth color. This is a frame measurement, not a claim that every state uses 19 colors. The `office-*` color tokens above are intentional scoped interface shades and role swatches extracted from `preview.module.css`, not a replacement global palette.
+
+The scoped type steps are office-label, office-state, office-role and office-heading. The heading reaches 44px on desktop and uses 30px on phones. Pill playback/role buttons and the rounded story selector accompany 44px robot/workstation targets with office-target corners and visible apricot focus. Apricot identifies the selected role here. This local selection treatment and the compact target corners are scoped exceptions to the homepage entrance and soft-panel vocabulary.
+
+Controls precede the room. The inspector sits beside it from 1200px and below it on narrower screens. The route's container is capped at 1280px; readable prose retains a 65–70ch measure. The compact phone toolbar keeps the room and role controls in the first viewport. The sample labels its events fictional and makes no public-event request. The connected `/office` uses real/replay events with its recorded text list.
+
+Play/pause/resume, optional next and restart control frame-based pixel movement. Simulation updates are bounded to 1/60 second, so the current paths advance at most one native pixel per rendered update. Reduced motion defaults to a still scene, with an enabled Play animation control that explicitly opts into full autoplay. Scenario changes preserve playback intent; Restart starts fresh autoplay. Hidden tabs and offscreen rooms freeze without catch-up; failure and owner-wait states remain readable. Robot and desk selection works with keyboard and pointer; the inspector, current event and expandable sequence supply the text equivalent. Only a merged event files the papers.
+
+Design-token detection remains advisory for this scoped extension. No detector pass or complete engine ship receipt is implied. Final local mobile checks are recorded in the handoff. Movement is accepted and feed integration is implemented; connected-behavior review, merge and deployment remain separate milestones.
+
+## Office feed integration — 2026-10-26 local implementation
+
+The owner accepted the sample's smooth movement and requested connecting it to the real/replay feed. `/office` now reuses the native room, palette and role targets for independent event vignettes. The existing public data source, latest-20 replay label, original timestamps, live-arrival priority, cached/unavailable states and accessible recorded list remain. The sample route stays fictional and separate. Full-team characters and task-correlated animation remain future work.
+
+Each vignette starts with fresh paper state. Robots return through the aisle from their last drawn positions before illustrating the next event, including a newly received event interrupting replay. Frame updates remain capped at 1/60 second and integer positions; slow rendering lengthens playback rather than skipping pixels. Completion advances the feed only after the scene finishes, including repeated-ID replay. An actual merge files papers; approval and a standalone deployment do not. Unknown agents/types and an empty feed show a neutral room rather than invented work. Play explicitly opts into full motion when the device requests reduction. Pause, actual-room offscreen detection and hidden-tab suspension freeze timing without catch-up.
+
+The live office uses its own visible phone introduction and places loading/empty messages above the controls. Controls and room precede the inspector and event details. The inherited text-feed 24px playback heading and 22–30px event-title ramp, plus the compact 22px phone heading, produced three advisory type-ramp findings; these remain documented scoped values, not a claim of formal detector/finish approval. Existing homepage visual gates remain separate. Independent QA resolved the hidden phone introduction and the offscreen-legend boundary; production-size captures were inspected at 320px, 390px and 1440px. Full verification and limitations are in the handoff.
+
+## Connected office adapter — local extension
+
+The local `/office/connected` sibling preserves the accepted 384×304 room, expandable 384×96 annex, woodland materials and role colors. A neutral model supplies actual task packets and execution assignments to the existing renderer; the original fictional draft stays separate. Current snapshot evidence, recorded illustrations and partial replay have distinct text. Execution and task references stay internal; task descriptions appear only in inspection and logs, with generic Private task labels when required.
+
+Local visual review at 1440, 390 and 320 widths found no overflow, JavaScript errors, sub-44px visible controls or rendered reference leaks. Native canvas measurement found a maximum one-pixel actor movement between rendered frames and stable paused pixels. The mechanical detector reported only the two inherited disabled-border/ink palette advisories; the accepted room palette remains the scoped authority. This is local integration review, not production release approval. Current browser/recovery and packaging evidence lives in docs/HANDOFF.md.

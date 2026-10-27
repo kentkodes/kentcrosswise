@@ -2,7 +2,7 @@
 
 For the owner. Covers the live steps of P1-10, P1-11, P1-12 and P1-13 (DESIGN §7). Account setup that comes before this (AWS hardening, Neon projects, Google client, GitHub repo: P1-00) is in [../SETUP.md](../SETUP.md), sourced from [../research/infra.md](../research/infra.md) and [../research/apis.md](../research/apis.md).
 
-Commands are PowerShell, run from the repo root unless a step says `cd`. They use your admin SSO profile `kc-admin`; those credentials are never stored anywhere.
+Commands are PowerShell, run from the repo root unless a step says `cd`. Use the selected owner administration identity: a named IAM user with MFA while Free Tier credits remain, then IAM Identity Center. The named IAM user and MFA are verified ([HANDOFF.md](../HANDOFF.md)); still confirm the current identity (`aws sts get-caller-identity`) before using an owner-approved profile.
 
 **Never paste a secret value into a command line, a file or chat.** Values go into the Secrets Manager console. Where a command needs a value, it is read with `Read-Host -MaskInput` into an environment variable of the current shell only.
 
@@ -13,24 +13,18 @@ Commands are PowerShell, run from the repo root unless a step says `cd`. They us
 - Log in and remember the account id:
 
 ```powershell
-aws sso login --profile kc-admin
 $env:AWS_PROFILE = "kc-admin"
 $acct = aws sts get-caller-identity --query Account --output text
 $bucket = "kentcrosswise-tfstate-$acct"
 ```
 
-**If Terraform says `failed to find SSO session section`:** the AWS provider can't read an SSO session whose name contains a space (the owner's is `kent crosswise`). Either rename the session in `~/.aws/config` (no spaces) and run `aws configure sso` again, or hand Terraform short-lived credentials for this shell only (they expire with the SSO session):
-
-```powershell
-aws configure export-credentials --profile kc-admin --format powershell | Invoke-Expression
-Remove-Item Env:AWS_PROFILE
-```
+**Future SSO migration:** after Free Tier credits are exhausted, configure IAM Identity Center and the owner-approved CLI profile. The previous machine-specific SSO session workaround is historical and does not establish a current configured identity.
 
 **Domain or not (D22).** Everything below works without a domain: prod and previews get `https://<id>.cloudfront.net` URLs. Add `-var "domain_name=kentcrosswise.com"` to the bootstrap, prod and preview commands only once the Route 53 hosted zone for the domain exists (it is looked up, never created by Terraform). You can add it later: re-run step 1 (certificate), then step 6 (aliases and DNS).
 
 ## 1. Apply `infra/bootstrap` (local state)
 
-Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy`, `kcw-gh-agent`, the policy `kcw-preview-boundary`, the 15 empty secrets of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
+Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy` and four `kcw-gh-agent-{developer,qa,scraper,docs}` roles, the policy `kcw-preview-boundary`, the fixed secret containers of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
 
 ```powershell
 cd infra/bootstrap
@@ -67,35 +61,22 @@ gh variable set NEON_CI_PROJECT_ID --body "<kentcrosswise-ci project id>" --repo
 gh api -X PUT repos/kentkodes/kentcrosswise/environments/prod
 ```
 
-This sets `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_ARN`, `TF_STATE_BUCKET` and `NEON_CI_PROJECT_ID` (all non-secret IDs). The Neon project id is on the project's Settings page.
+This sets `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, the four `AWS_ROLE_AGENT_<ROLE>_ARN` variables, `TF_STATE_BUCKET` and `NEON_CI_PROJECT_ID` (all non-secret IDs). The Neon project id is on the project's Settings page.
 
 ## 4. Check the roles live (P1-10)
 
-The trust policies expect these exact subjects (`terraform -chdir=infra/bootstrap output role_subjects`):
+The current expected subjects are:
 
-| Role | Expected `sub` |
+| Role | Expected immutable subject suffix |
 |---|---|
-| `kcw-gh-ci`, `kcw-gh-plan` | `repo:kentkodes@107236483/kentcrosswise@1430035147:pull_request` |
-| `kcw-gh-ci` (also) | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:preview-gc` (preview-gc sweep, added for P1-16) |
-| `kcw-gh-deploy` | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:prod` |
-| `kcw-gh-agent` | `repo:kentkodes@107236483/kentcrosswise@1430035147:ref:refs/heads/main` |
+| kcw-gh-ci / kcw-gh-plan | pull_request |
+| kcw-gh-ci sweep | environment:preview-gc |
+| kcw-gh-deploy | environment:prod |
+| kcw-gh-agent-<role> | environment:agent-publish-<role> |
 
-The `pull_request` and `environment` forms are not confirmed in GitHub's docs yet (DESIGN U5), so test them:
+Prefix: `repo:kentkodes@107236483/kentcrosswise@1430035147:`. All AWS roles require the sts.amazonaws.com audience. Publisher environments restrict deployments to exactly main; unprotected main work jobs have no repository AWS trust. The legacy shared main-ref agent role is retired. The four role/environment/variable mappings and required negative probes are in [the security cutover runbook](agent-security-cutover.md).
 
-1. Copy [oidc-debug.yml](oidc-debug.yml) to `.github/workflows/oidc-debug.yml`, commit it **on main** and push (before the `main` ruleset exists), then run it: `gh workflow run oidc-debug.yml --ref main`. Jobs `main` and `prod` must be green.
-2. Open a throwaway PR from a branch of this repo (any one-line change). Job `pr` must be green.
-3. In each job log, copy the `sub=...` line into the table below. If one differs from the expected value, stop and tell the Liaison (the trust policy must change, not the workflow).
-4. Delete `.github/workflows/oidc-debug.yml` from main and close the PR.
-
-Recorded subjects (fill in):
-
-| Context | Actual `sub` | Right role assumed | Wrong role refused |
-|---|---|---|---|
-| push/dispatch on main | `repo:kentkodes@107236483/kentcrosswise@1430035147:ref:refs/heads/main` | yes (`kcw-gh-agent`) | yes (`kcw-gh-ci`) |
-| pull_request | `repo:kentkodes@107236483/kentcrosswise@1430035147:pull_request` | yes (`kcw-gh-ci`, `kcw-gh-plan`) | yes (`kcw-gh-deploy`) |
-| environment prod | `repo:kentkodes@107236483/kentcrosswise@1430035147:environment:prod` | yes (`kcw-gh-deploy`) | yes (`kcw-gh-agent`) |
-
-Recorded 2026-10-22 from runs 39837647404 (dispatch on main) and 39837666181 (PR #1).
+P1 PR/prod subjects and wrong-role denial were verified on 2026-10-22; the isolated publisher roles and environment denials were verified on 2026-10-23. Refresh evidence if relevant policy changes. The retained oidc-debug.yml reflects the retired shared-role design and needs source repair before reuse; do not install it as a current diagnostic.
 
 ## 5. Fill the secrets needed now
 
@@ -105,12 +86,12 @@ Secrets Manager console → the secret → *Retrieve secret value* → *Edit* �
 | ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `kcw/prod/web`           | `auth_secret`                              | a random string of at least 32 characters (below)                                                                                                             |
 |                          | `owner_email`                              | the Google account allowed to sign in                                                                                                                         |
-|                          | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients (SETUP.md A5)                                                                                                                  |
+|                          | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients; see the current account state in [SETUP.md](../SETUP.md)                                                                      |
 | `kcw/prod/origin-verify` | `origin_verify`                            | a long random value (below). CloudFront sends it to the server Lambda, which refuses requests without it (D25). Fill it before step 6, or the prod plan fails |
 | `kcw/ci`                 | `neon_api_key`                             | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered                                                                                   |
 |                          | `e2e_login`                                | a random string of at least 16 characters (below); the preview login token                                                                                    |
 
-The other keys and secrets (`vapid_*`, `db_url*`, models, GitHub Apps, social) are filled in later phases; leave them empty.
+This is the foundation provisioning procedure, not a current empty-secret checklist. Production DB, model and App configuration has since been supplied; preserve existing values. VAPID/social/pipeline readiness remains feature-specific.
 
 A random value (48 characters), generated locally and copied straight to the clipboard (not printed). Use a fresh one each for `auth_secret`, `origin_verify` and `e2e_login`:
 
@@ -204,7 +185,7 @@ Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`),
    ```powershell
    cd infra/bootstrap
    terraform init -backend-config="bucket=$bucket"
-   terraform plan -var "aws_account_id=$acct" -out bootstrap.tfplan   # expect 2 in-place updates (kcw-gh-ci trust, kcw-gh-plan policy)
+   terraform plan -var "aws_account_id=$acct" -out bootstrap.tfplan   # inspect the current expected plan; historical change counts are not a present allowlist
    terraform apply bootstrap.tfplan
    Remove-Item bootstrap.tfplan
    cd ../..
@@ -219,23 +200,16 @@ Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`),
    }
    ```
 
-3. Push `main`. `deploy.yml` runs: the migrate step logs the notice "Migrations skipped" (no prod DB URL yet, DESIGN §11), then build, apply and the smoke check (`/`, `/demo` 200, `/hub` redirects).
+3. Merge a reviewed PR through the current ruleset. `deploy.yml` runs strict production migration using kcw/prod/migrator, builds, applies and smoke-checks public/owner routes. A missing or invalid migrator configuration fails deployment.
 4. Open a throwaway PR from a branch of this repo. `ci.yml` must be green, including `ci/required`; the `preview` job's last step prints `pr-<n> is clean`, and `prod-plan` uploads the `prod-plan-summary` artifact (a trivial PR shows no infrastructure changes).
 5. Close the PR. `preview-gc (closed PR)` runs and reports no leftovers.
 6. `gh workflow run preview-gc.yml --ref main` (dry run by default) reports leftovers without changing anything.
 
-**Before Phase 2:** the `main` ruleset is applied from [github-apps.md](github-apps.md) §1 (interim profile). From then on every change to `main` goes through a pull request: direct pushes, including this runbook's `git commit` on main, are refused.
+**Before Phase 2:** the `main` ruleset is applied from [github-apps.md](github-apps.md) §1 (interim profile at the time; the final profile is now verified there). From then on every change to `main` goes through a pull request: direct pushes, including this runbook's `git commit` on main, are refused.
 
-## Live results (2026-10-22)
+## Established foundation evidence
 
-- Step 6 (P1-11): prod applied (49 resources) at `https://d36w61sfnlrpvc.cloudfront.net`. `/` and `/demo` 200, `/hub` 307 to sign-in, sign-in POST through CloudFront 302 to Google, direct server Function URL 403 with no or wrong header.
-- Step 7 (P1-13): `pr-0` preview applied (52 resources), Playwright 5/5 passed, destroyed (52), state object and Neon branch deleted. `check-preview-clean` first reported one Lambda event-source mapping that AWS already returned as not found (tagging-index lag); it printed `pr-0 is clean` on re-run a minute later.
-- Step 8 (P1-15, P1-16): throwaway PR #2 (`ci-smoke`).
-  - First two runs failed. Run 39852675207: fixed in 702055b. Run 39853350799: `kcw-gh-ci` lacked `cloudfront:TagResource` on the CloudFront function (apply stopped). Destroy then stopped at the event-source mapping: once a mapping is deleted, Lambda checks `GetEventSourceMapping` against `*` and answers AccessDenied instead of NotFound. That left the revalidation queue, function, role and log group behind. The same run's prod plan showed 2 spurious infrastructure changes: the plan role couldn't decrypt Lambda environments, so refresh read them as empty. All three fixed in 866ccb5 (bootstrap re-applied, 2 in-place policy updates).
-  - Run 39865701644 green, including `ci/required`. The stale-preview step destroyed the previous run's 5 leftovers. Apply 52, Playwright 5/5, destroy 52, state object deleted, `pr-2 is clean` (after 3 retries for tagging-index lag). Prod plan summary: 0 infrastructure changes, 18 build artifact changes.
-  - Closed with `--delete-branch`: `preview-gc (closed PR)` run 39867313628 reported no leftovers. Manual dry run 39867396972 on main: no leftovers. `deploy.yml` on 866ccb5: success.
-  - CloudFront honored the `kcw:env=preview` request-tag condition on CreateFunction and CreateDistribution.
-- Open: Google may not accept the `*.cloudfront.net` redirect URI; sign-in on prod is untested until it does or the domain exists.
+The original foundation runs verified public home/demo responses, owner Google sign-in through CloudFront, direct server URL rejection, synthetic previews with Playwright, teardown/clean checks, prod-plan summaries and preview garbage collection. Subsequent source and deployment records are in [HANDOFF.md](../HANDOFF.md). The historical homepage cache gap remains open until normal-URL content is rechecked; HTTP status alone is insufficient.
 
 ## Known risks to watch on first apply
 

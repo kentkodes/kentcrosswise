@@ -94,6 +94,11 @@ export type GitHubInput =
       event: "workflow_run";
       action: string;
       run_id: number;
+      agent_task_id?: number;
+      run_attempt?: number | null;
+      head_branch?: string | null;
+      run_started_at?: string | null;
+      updated_at?: string | null;
       workflow_path: string | null;
       conclusion: string | null;
       trigger: string | null;

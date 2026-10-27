@@ -9,7 +9,7 @@
 // src/lambda.ts runs it: `handleTaskSqsEvent` with `ModelPlanner` from `@kcw/orchestrator/nodes`.
 import { Annotation, Command, END, START, StateGraph, interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { handleRecords, threadConfig, type SqsBatchResponse, type SqsEvent } from "../handler";
-import { runStep, type TaskGraphDeps } from "./machine";
+import { agentRunRole, runStep, type TaskGraphDeps } from "./machine";
 import { parseTaskMessage } from "./messages";
 import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskData, type TaskInput, type WaitingOn } from "./types";
 
@@ -122,7 +122,7 @@ async function applyTaskInput(graph: TaskGraph, taskId: number, input: TaskInput
   // A final workflow report can arrive after the approving webhook ended the thread. Run it
   // through the same checkpointed step with the completed state: Machine.report records usage
   // without changing the lifecycle, and the step returns to END. Other late inputs stay ignored.
-  const terminalReport = !interrupted() && input.kind === "report" && snapshot.values.task?.phase === "done";
+  const terminalReport = !interrupted() && (input.kind === "report" || agentRunRole(input, taskId) !== null) && snapshot.values.task?.phase === "done";
   if (!interrupted() && !terminalReport) return "finished";
   if (snapshot.values.task?.last_message_id === input.message_id) return "duplicate";
 

@@ -11,6 +11,7 @@
 import { AnthropicProvider, type ModelProvider, type UsageCallback } from "@kcw/core/models";
 import { SecretKeyMissingError, SecretNotFoundError, SecretStore } from "@kcw/secrets";
 import type pg from "pg";
+import { drainOfficePool } from "./office";
 import { checkpointerFromPool, createPool, setupCheckpointer } from "./checkpointer";
 import { githubClientFromSecret, type GitHubClient } from "./github";
 import { PgTaskStore, buildTaskGraph, handleTaskSqsEvent, type TaskGraph } from "./graph";
@@ -84,7 +85,7 @@ async function configureTracing(deps: LambdaDeps, log: (line: string) => void): 
 const defaultGitHub: NonNullable<LambdaDeps["makeGitHub"]> = (name, secrets) => githubClientFromSecret(name, { secrets });
 const defaultProvider: NonNullable<LambdaDeps["makeProvider"]> = (opts) => new AnthropicProvider(opts);
 
-async function init(deps: LambdaDeps, log: (line: string) => void): Promise<TaskGraph> {
+async function init(deps: LambdaDeps, log: (line: string) => void): Promise<{graph: TaskGraph; pool: pg.Pool}> {
   await configureTracing(deps, log);
   const orchestratorSecret = required(deps.env, ORCHESTRATOR_SECRET_ENV);
   const modelsSecret = required(deps.env, MODELS_SECRET_ENV);
@@ -118,7 +119,7 @@ async function init(deps: LambdaDeps, log: (line: string) => void): Promise<Task
   const provider = (deps.makeProvider ?? defaultProvider)({ apiKey, onUsage: usage.onUsage });
   const planner = usage.planner(new ModelPlanner({ provider }));
 
-  return buildTaskGraph(checkpointerFromPool(pool), { github, store, planner, log });
+  return { graph: buildTaskGraph(checkpointerFromPool(pool), { github, store, planner, log }), pool };
 }
 
 /**
@@ -136,12 +137,13 @@ async function init(deps: LambdaDeps, log: (line: string) => void): Promise<Task
  */
 export function createHandler(deps: LambdaDeps): (event: SqsEvent) => Promise<SqsBatchResponse> {
   const log = deps.log ?? ((line: string) => console.log(line));
-  let ready: Promise<TaskGraph> | undefined;
+  let ready: Promise<{graph: TaskGraph; pool: pg.Pool}> | undefined;
   return async (event) => {
     ready ??= init(deps, log);
     let graph: TaskGraph;
+    let pool: pg.Pool;
     try {
-      graph = await ready;
+      ({graph, pool} = await ready);
     } catch (err) {
       ready = undefined; // retry the cold start on the next invocation
       deps.secrets.clearCache?.();
@@ -149,7 +151,9 @@ export function createHandler(deps: LambdaDeps): (event: SqsEvent) => Promise<Sq
       log(`init failed (${err instanceof Error ? err.name : "error"}): ${records.length} message(s) returned to the queue`);
       return { batchItemFailures: records.map((r) => ({ itemIdentifier: r.messageId })) };
     }
-    return handleTaskSqsEvent(event, { graph, log });
+    const result = await handleTaskSqsEvent(event, { graph, log });
+    await drainOfficePool(pool, log);
+    return result;
   };
 }
 

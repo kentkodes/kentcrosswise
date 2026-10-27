@@ -1,8 +1,10 @@
 # Runbook: GitHub repo settings and Apps (owner)
 
-For the owner (or the Liaison with the owner's `gh` login). Covers the `main` ruleset (P1-17, DESIGN §4.1). The GitHub Apps and the Claude Console federation (P2-07) are added here in Phase 2.
+For the owner (or the Liaison with the owner's `gh` login). Covers the `main` ruleset (P1-17, DESIGN §4.1). The five Apps and Claude Console federation are established; the accepted isolated publisher contract is in [agent-security-cutover.md](agent-security-cutover.md). Required-review counting (U13) passed and the final profile is in place; see below.
 
 Commands are PowerShell from the repo root. They need `gh` logged in as a repo admin; the token is handed to the script through an environment variable of this shell only and never printed.
+
+Final main ruleset 25683184 was verified (recorded in [HANDOFF.md](../HANDOFF.md)): one approval with stale approvals dismissed, required checks from GitHub Actions (source 15368) and the orchestrator App (source 5436750), squash only, no bypass. U13 QA-App approval counting passed on disposable PR #45 at head `4023433cc1a73ece3670a12b571765ead13d4c2e` (review 5647804707); it closed unmerged, and its temporary rules/refs were removed (cleanup run 40275132151). The interim profile below is history; scope any further protection change separately.
 
 ## 1. The `main` ruleset
 
@@ -50,9 +52,9 @@ The App id (a number) is on the App's settings page ("App ID"); it is not secret
 
 ### Drift check
 
-`ci.yml` runs `pnpm check-repo-settings --profile <KCW_RULESET_PROFILE, default interim>` on every PR as a non-blocking step. It reads the ruleset with the workflow token; GitHub may hide the bypass list from tokens without admin rights, in which case the check prints a warning instead of comparing it. Make the step blocking (drop `continue-on-error`) once the final profile is applied.
+`ci.yml` runs `pnpm check-repo-settings --profile <KCW_RULESET_PROFILE, default interim>` on every PR as a non-blocking step. It reads the ruleset with the workflow token; GitHub may hide the bypass list from tokens without admin rights, in which case the check prints a warning instead of comparing it. Making the drift check blocking after final-profile adoption remains a workflow follow-up.
 
-Unverified until the first live run: that `15368` is the GitHub Actions App id GitHub expects as the source of `ci/required` (a wrong id would leave `ci/required` pending forever: re-apply without it to recover).
+The final ruleset (above) and repeated successful CI have been observed, and U13 App approval counting passed. Recheck expected check-source IDs when changing protection.
 
 ### Live results
 
