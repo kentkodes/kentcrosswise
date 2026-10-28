@@ -18,6 +18,7 @@ import {
   type ChangedFile,
   type CreateIssueInput,
   type CreatedIssue,
+  type DispatchResult,
   type DispatchWorkflowInput,
   type FindWorkflowRunInput,
   type GetArtifactInput,
@@ -47,6 +48,75 @@ export interface OctokitClientOptions {
   repo?: string;
   /** Injected in tests (never the network there). Also used for the artifact download. */
   fetch?: typeof fetch;
+  /** Fixed-code lines only (`dispatch_run_id_missing`), never response content. Defaults to console.log. */
+  log?: (line: string) => void;
+}
+
+/**
+ * The REST API version sent with a dispatch (RUN-ID-MAPPING-SPEC §1). 2022-11-28 accepts
+ * `return_run_details`; 2026-03-10 removes the parameter and always answers 200 with run details.
+ * Moving to 2026-03-10 means dropping `return_run_details` here; parsing accepts both answers.
+ */
+export const DISPATCH_API_VERSION = "2022-11-28";
+
+/** The fixed log code of a dispatch without a usable run id (204, missing or invalid). */
+export const DISPATCH_RUN_ID_MISSING = "dispatch_run_id_missing";
+
+/** Run details are ~200 bytes; anything far larger is not a dispatch answer. */
+const MAX_DISPATCH_BODY_CHARS = 64 * 1024;
+
+/** The exact JSON text of a positive integer below 2^53 (at most 16 digits; the BigInt check bounds the rest). */
+const RUN_ID_TEXT = /^[1-9][0-9]{0,15}$/;
+
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+
+/** JSON.parse's reviver with the source text access argument (Node 21+; absent on older runtimes). */
+type SourceReviver = (this: unknown, key: string, value: unknown, context?: { source?: string }) => unknown;
+
+/**
+ * The top-level `workflow_run_id` of a dispatch answer's raw body, or null. Valid only as a positive
+ * safe integer: GitHub ids are int64 and must never be rounded, so anything at or above 2^53 is
+ * refused. The value is checked twice: the parsed number must be a safe integer (a decimal at or
+ * above 2^53 always parses to a number at or above 2^53), and, where the runtime exposes the raw
+ * JSON text of the value (JSON.parse source text access), those exact characters must be plain
+ * digits below 2^53, so forms such as `12.0`, `1e3` or a rounded neighbour of 2^53 are refused too.
+ */
+export function parseDispatchRunId(text: string): number | null {
+  if (text.length === 0 || text.length > MAX_DISPATCH_BODY_CHARS) return null;
+  const sources = new Map<object, string | undefined>();
+  const reviver: SourceReviver = function (key, value, context) {
+    if (key === "workflow_run_id" && typeof this === "object" && this !== null) sources.set(this, context?.source);
+    return value;
+  };
+  let root: unknown;
+  try {
+    root = JSON.parse(text, reviver as (this: unknown, key: string, value: unknown) => unknown);
+  } catch {
+    return null;
+  }
+  if (typeof root !== "object" || root === null || Array.isArray(root)) return null;
+  const value = (root as Record<string, unknown>).workflow_run_id;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) return null;
+  const source = sources.get(root);
+  if (source !== undefined && (!RUN_ID_TEXT.test(source) || BigInt(source) > MAX_SAFE)) return null;
+  return value;
+}
+
+/**
+ * The run id of a 200 dispatch answer. The request asks Octokit for the unparsed body (a stream),
+ * so the id is validated from its raw text. A body Octokit parsed anyway (a string, or an object
+ * from its bigint-aware JSON parser, where an unsafe integer is a bigint) is checked by type.
+ */
+async function runIdFromBody(data: unknown): Promise<number | null> {
+  if (typeof data === "string") return parseDispatchRunId(data);
+  if (data === null || data === undefined || data instanceof ReadableStream) {
+    return parseDispatchRunId(await new Response(data ?? null).text());
+  }
+  if (typeof data === "object" && !Array.isArray(data)) {
+    const value = (data as Record<string, unknown>).workflow_run_id;
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  return null;
 }
 
 export function parseRepo(full: string): { owner: string; repo: string } {
@@ -69,12 +139,14 @@ export class OctokitGitHubClient implements GitHubClient {
   readonly repo: string;
   readonly #octokit: Octokit;
   readonly #fetch: typeof fetch;
+  readonly #log: (line: string) => void;
 
   /** `octokit` must already be authenticated (see createOctokitGitHubClient). */
   constructor(octokit: Octokit, opts: OctokitClientOptions = {}) {
     ({ owner: this.owner, repo: this.repo } = parseRepo(opts.repo ?? DEFAULT_REPO));
     this.#octokit = octokit;
     this.#fetch = opts.fetch ?? fetch;
+    this.#log = opts.log ?? ((line: string) => console.log(line));
   }
 
   get #r() {
@@ -98,15 +170,40 @@ export class OctokitGitHubClient implements GitHubClient {
     return { number: data.number, url: data.html_url };
   }
 
-  async dispatchWorkflow(input: DispatchWorkflowInput): Promise<void> {
-    await this.#call("dispatchWorkflow", () =>
-      this.#octokit.rest.actions.createWorkflowDispatch({
+  /**
+   * Creates a workflow_dispatch run and returns its id (RUN-ID-MAPPING-SPEC §1). Uses
+   * `octokit.request` because @octokit/rest 22's types (openapi-types 27) do not know
+   * `return_run_details`. Once GitHub accepted the dispatch the run exists, so a 204, a missing or
+   * an invalid id never fails or retries it: the result is `runId: null` plus one fixed-code log line.
+   */
+  async dispatchWorkflow(input: DispatchWorkflowInput): Promise<DispatchResult> {
+    const res = await this.#call("dispatchWorkflow", () =>
+      this.#octokit.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
         ...this.#r,
         workflow_id: input.workflow,
         ref: input.ref ?? "main",
         inputs: input.inputs,
+        return_run_details: true,
+        headers: { "x-github-api-version": DISPATCH_API_VERSION },
+        request: { parseSuccessResponseBody: false },
       }),
     );
+    const status = res.status as number;
+    let runId: number | null = null;
+    if (status === 200) {
+      try {
+        runId = await runIdFromBody(res.data as unknown);
+      } catch {
+        runId = null; // an unreadable body: the run was still created
+      }
+    } else if (res.data instanceof ReadableStream) {
+      await res.data.cancel().catch(() => undefined);
+    }
+    if (runId === null) {
+      const reason = status === 204 || status === 205 ? "no_content" : "invalid";
+      this.#log(`github: ${DISPATCH_RUN_ID_MISSING} workflow=${input.workflow} reason=${reason}`);
+    }
+    return { runId };
   }
 
   async merge(input: MergePrInput): Promise<MergeResult> {

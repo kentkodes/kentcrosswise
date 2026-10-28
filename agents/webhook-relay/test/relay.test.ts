@@ -40,6 +40,7 @@ const EVENT_OF: Record<Fixture, string> = {
   "pull_request_review.submitted": "pull_request_review",
   push: "push",
   "workflow_run.completed": "workflow_run",
+  "workflow_run.requested.task3": "workflow_run",
 };
 
 describe("@kcw/webhook-relay", () => {

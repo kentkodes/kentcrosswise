@@ -14,7 +14,7 @@ import { parseTaskMessage } from "./messages";
 import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskData, type TaskInput, type WaitingOn } from "./types";
 
 export * from "./types";
-export { PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
+export { DispatchLinkConflictError, PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
 export { runStep, type TaskGraphDeps } from "./machine";
 export { parseTaskMessage } from "./messages";
 

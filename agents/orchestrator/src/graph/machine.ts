@@ -11,7 +11,7 @@ import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
 import { ArtifactFormatError, CI_WORKFLOW, type GitHubClient } from "../github";
 import { publicText } from "../nodes/public-title";
-import type { TaskRecord, TaskStatus, TaskStore } from "./store";
+import { DispatchLinkConflictError, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
 import {
   DEV_WORKFLOW,
   DOCS_NO_RUN_MINUTES,
@@ -23,6 +23,7 @@ import {
   QA_WORKFLOW,
   PlannerOutputError,
   WAIT_LIMIT_MINUTES,
+  agentRoleOfWorkflow,
   branchOf,
   docsRunName,
   waitingOnOf,
@@ -371,16 +372,34 @@ class Machine {
 
   // ------------------------------------------------------------------ dispatches
 
+  /**
+   * Dispatches an agent workflow and links the returned run id to this task (agent_dispatches,
+   * RUN-ID-MAPPING-SPEC §2) before the caller writes its event or phase. A null run id (204 or
+   * invalid run details, logged by the client) stores nothing: the relay then maps by run title.
+   * The link is advisory: if storing it fails (a conflicting link or a database error), the run
+   * already exists, so the step logs the fixed code `dispatch_link_failed` and continues rather
+   * than failing and re-dispatching on the message retry.
+   */
+  async dispatchAgent(workflow: string, inputs: Record<string, string>): Promise<void> {
+    const role = agentRoleOfWorkflow(workflow);
+    if (role === null) throw new Error("dispatchAgent: not an agent workflow");
+    const { runId } = await this.github.dispatchWorkflow({ workflow, inputs });
+    if (runId === null) return;
+    try {
+      await this.store.recordDispatch(runId, this.id, role);
+    } catch (err) {
+      const reason = err instanceof DispatchLinkConflictError ? "conflict" : "db";
+      this.log(`dispatch_link_failed role=${role} reason=${reason}`);
+    }
+  }
+
   async dispatchDev(mode: DevMode, reason?: string): Promise<void> {
     const d = this.d;
-    await this.github.dispatchWorkflow({
-      workflow: DEV_WORKFLOW,
-      inputs: {
-        task_id: String(this.id),
-        issue: d.issue_number === null ? "" : String(d.issue_number),
-        mode,
-        pr: d.pr_number === null ? "" : String(d.pr_number),
-      },
+    await this.dispatchAgent(DEV_WORKFLOW, {
+      task_id: String(this.id),
+      issue: d.issue_number === null ? "" : String(d.issue_number),
+      mode,
+      pr: d.pr_number === null ? "" : String(d.pr_number),
     });
     d.dev_mode = mode;
     await this.event("task_assigned", "developer", { mode, attempts: d.attempts, ...(reason && { reason }) });
@@ -389,20 +408,14 @@ class Machine {
 
   async dispatchDocs(reason?: string): Promise<void> {
     const d = this.d;
-    await this.github.dispatchWorkflow({
-      workflow: DOCS_WORKFLOW,
-      inputs: { task_id: String(this.id), pr: String(d.docs_pr) },
-    });
+    await this.dispatchAgent(DOCS_WORKFLOW, { task_id: String(this.id), pr: String(d.docs_pr) });
     d.docs_started = false; // this run's start report sets it
     await this.event("task_assigned", "docs", { pr: d.docs_pr, attempts: d.attempts, ...(reason && { reason }) });
     await this.enter("dev");
   }
 
   async dispatchQa(reason?: string): Promise<void> {
-    await this.github.dispatchWorkflow({
-      workflow: QA_WORKFLOW,
-      inputs: { task_id: String(this.id), pr: String(this.d.pr_number) },
-    });
+    await this.dispatchAgent(QA_WORKFLOW, { task_id: String(this.id), pr: String(this.d.pr_number) });
     await this.event("qa_reviewing", "qa", { pr: this.d.pr_number, ...(reason && { reason }) });
     await this.enter("qa");
   }
@@ -725,7 +738,7 @@ class Machine {
 
   /**
    * A docs task waiting on Docs-keeper (phase `dev`). A run that changes nothing opens no PR, so
-   * the sweep reads the run's state, found by its run-name (the dispatch API returns no run id).
+   * the sweep reads the run's state, found by its run-name (the run id may be unknown: a dispatch can return none).
    */
   async docsSweep(): Promise<StepOutcome> {
     const d = this.d;
