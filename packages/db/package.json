@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./seeds": "./seeds/seed.ts"
+    "./seeds": "./seeds/seed.ts",
+    "./seed-list": "./seeds/seed-list.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

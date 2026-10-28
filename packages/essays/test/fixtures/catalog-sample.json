@@ -1,0 +1,18 @@
+{
+  "provenance": "Hand-written metadata (titles, authors, translators, years) of well-known public-domain English essays, modeled on a Gutenberg-style catalog. URLs use the reserved example.com domain. No essay text. Written for E5 task 4 on 2026-10-27.",
+  "records": [
+    { "url": "https://catalog.example.com/works/101", "title": "Self-Reliance", "author": "Emerson, Ralph Waldo, 1803-1882", "standalone": true },
+    { "url": "https://catalog.example.com/works/102", "title": "Of Friendship", "author": "Montaigne, Michel de, 1533-1592", "translator": "Charles Cotton", "translationYear": 1685, "translationPublicDomain": true, "standalone": true },
+    { "url": "https://catalog.example.com/works/103", "title": "Of Friendship", "author": "Montaigne, Michel de, 1533-1592", "translator": "Modern Translator", "translationYear": 1957, "translationPublicDomain": false, "standalone": true },
+    { "url": "https://catalog.example.com/works/104", "title": "A Dissertation upon Roast Pig", "author": "Elia", "standalone": true },
+    { "url": "https://catalog.example.com/works/105", "title": "On Civil Disobedience", "author": "Thoreau, Henry David, 1817-1862", "standalone": true },
+    { "url": "https://catalog.example.com/works/106", "title": "Civil Disobedience and Other Essays", "author": "Thoreau, Henry David, 1817-1862", "standalone": false },
+    { "url": "https://catalog.example.com/works/107", "title": "Resistance to Civil Government", "author": "Thoreau, Henry David, 1817-1862", "standalone": true },
+    { "url": "https://catalog.example.com/works/108", "title": "Of Studies: Essays Civil and Moral", "author": "Bacon, Francis, 1561-1626", "standalone": true },
+    { "url": "https://catalog.example.com/works/109", "title": "An Apology for Idlers", "author": "Stevenson, Robert Louis, 1850-1894", "standalone": true },
+    { "url": "https://catalog.example.com/works/110", "title": "Shooting an Elephant", "author": "Orwell, George, 1903-1950", "standalone": true },
+    { "url": "https://catalog.example.com/works/111", "title": "Self Reliance", "author": "Emerson, Ralph Waldo", "standalone": true },
+    { "url": "https://catalog.example.com/works/112", "title": "Of Truth", "author": "Bacon, Francis, 1561-1626", "standalone": true },
+    { "url": "https://catalog.example.com/works/113", "title": "Of Solitude", "author": "Bacon, Francis, 1561-1626", "standalone": true }
+  ]
+}

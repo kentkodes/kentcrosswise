@@ -29,6 +29,7 @@ locals {
   logs_arn      = "${local.arn_prefix}:logs:${local.region}:${local.account_id}"
   sqs_arn       = "${local.arn_prefix}:sqs:${local.region}:${local.account_id}"
   ssm_arn       = "${local.arn_prefix}:ssm:${local.region}:${local.account_id}"
+  scheduler_arn = "${local.arn_prefix}:scheduler:${local.region}:${local.account_id}"
   iam_arn       = "${local.arn_prefix}:iam::${local.account_id}"
   cf_arn        = "${local.arn_prefix}:cloudfront::${local.account_id}"
   github_apps   = ["developer", "qa", "scraper", "docs"]
@@ -93,6 +94,13 @@ data "aws_iam_policy_document" "preview_boundary" {
     sid       = "CiSecret"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = ["${local.secret_arn}:kcw/ci-??????"]
+  }
+  # A preview pipeline's Scheduler role (infra/modules/pipelines) carries this boundary and invokes
+  # the preview watcher.
+  statement {
+    sid       = "InvokePreviewFunctions"
+    actions   = ["lambda:InvokeFunction"]
+    resources = ["${local.lambda_arn}:function:${local.preview_names}"]
   }
 }
 
@@ -194,6 +202,32 @@ data "aws_iam_policy_document" "ci" {
       values   = ["lambda.amazonaws.com"]
     }
   }
+  # EventBridge Scheduler for preview pipelines (infra/modules/pipelines, only with pipelines_preview).
+  # Groups are named kcw-pr-<n>-pipelines; schedules inside them cannot be tagged, so
+  # check-preview-clean finds them by group name prefix (ListScheduleGroups/ListSchedules below).
+  statement {
+    sid = "PreviewScheduleGroups"
+    actions = [
+      "scheduler:CreateScheduleGroup", "scheduler:DeleteScheduleGroup", "scheduler:GetScheduleGroup",
+      "scheduler:TagResource", "scheduler:UntagResource", "scheduler:ListTagsForResource",
+    ]
+    resources = ["${local.scheduler_arn}:schedule-group/${local.preview_names}"]
+  }
+  statement {
+    sid       = "PreviewSchedules"
+    actions   = ["scheduler:CreateSchedule", "scheduler:UpdateSchedule", "scheduler:DeleteSchedule", "scheduler:GetSchedule"]
+    resources = ["${local.scheduler_arn}:schedule/${local.preview_names}/*"]
+  }
+  statement {
+    sid       = "PassPreviewSchedulerRoles"
+    actions   = ["iam:PassRole"]
+    resources = ["${local.iam_arn}:role/${local.preview_names}-essay-scheduler"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["scheduler.amazonaws.com"]
+    }
+  }
   statement {
     sid       = "PreviewBuckets"
     actions   = ["s3:*"]
@@ -270,7 +304,7 @@ data "aws_iam_policy_document" "ci" {
       "lambda:ListEventSourceMappings", "logs:DescribeLogGroups", "ssm:DescribeParameters",
       "acm:ListCertificates", "acm:DescribeCertificate", "acm:GetCertificate", "acm:ListTagsForCertificate", "route53:ListHostedZones", "route53:ListHostedZonesByName",
       "route53:GetHostedZone", "route53:ListResourceRecordSets", "route53:GetChange", "route53:ListTagsForResource",
-      "tag:GetResources", "iam:ListRoles",
+      "tag:GetResources", "iam:ListRoles", "scheduler:ListScheduleGroups", "scheduler:ListSchedules",
     ]
     resources = ["*"]
   }

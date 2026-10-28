@@ -1,11 +1,13 @@
 // Fails if anything of preview pr-<n> survived the teardown: kcw:pr-tagged resources, kcw-pr-<n>-*
-// roles/CloudFront functions/policies/OACs, /kcw/preview/pr-<n>/ parameters, the state and lock
-// objects, or the Neon branch preview/pr-<n>.
+// roles/CloudFront functions/policies/OACs/Scheduler groups and schedules, /kcw/preview/pr-<n>/
+// parameters, the state and lock objects, or the Neon branch preview/pr-<n>.
 // Usage: pnpm check-preview-clean --pr <n> [--bucket <state bucket>] [--neon-project <id>] [--skip-neon]
 //                                  [--retries <n>] [--retry-delay <seconds>]
 // Tagged ARNs are confirmed with the owning service (get/describe): a confirmed not-found is ignored
 // (the tagging index lags deletes); access denied or an unchecked type still counts, with the reason.
 // --retries: re-check up to n more times while leftovers remain (e.g. resources still deleting).
+// EventBridge Scheduler schedules cannot be tagged: kcw-pr-<n>-* schedule groups, every schedule in
+// them and kcw-pr-<n>-* schedules in the default group are listed by name prefix.
 // Env: AWS credentials (kcw-gh-ci or the owner's profile); TF_STATE_BUCKET; NEON_CI_PROJECT_ID;
 //      NEON_API_KEY or KCW_CI_NEON_API_KEY (as exported by aws-secretsmanager-get-secrets).
 import { parseArgs } from "./lib/args";
