@@ -171,9 +171,9 @@ A docs task (§4.2 step 8) is a `tasks` row whose `parent_id` is the merged task
 ### 3.4 DB roles
 - `web_rw`: web Lambda, all app tables.
 - `web_public`: SELECT on `v_public_agent_events` only; used by public API routes.
-- `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003).
+- `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003); SELECT and INSERT (no UPDATE or DELETE) on `agent_dispatches` (0010).
 - `pipeline_rw`: essays tables, plus insert on `tasks` and `agent_events`.
-- `relay_rw` (0005): webhook relay only. `INSERT (delivery_id, source)`, `SELECT (delivery_id)`, `DELETE` on `inbound_events`; `SELECT (id, pr_number, github_issue)` on `tasks`; `INSERT (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)`, `SELECT (id, dedupe_key)` on `usage_events` (§11 "Relay DB role").
+- `relay_rw` (0005): webhook relay only. `INSERT (delivery_id, source)`, `SELECT (delivery_id)`, `DELETE` on `inbound_events`; `SELECT (id, pr_number, github_issue)` on `tasks`; `INSERT (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)`, `SELECT (id, dedupe_key)` on `usage_events` (§11 "Relay DB role"); `SELECT (run_id, task_id, role)` on `agent_dispatches` (0010).
 - `migrator`: DDL; deploy only.
 
 Login users are made outside migrations, one per runtime (`migrator_app` owns the prod database; `web_app`, `web_public_app`, `orch_app`, `relay_app` are members of one group role each): [runbooks/prod-db.md](runbooks/prod-db.md).

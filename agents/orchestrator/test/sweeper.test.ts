@@ -280,6 +280,7 @@ class FakeSweeperGitHub implements SweeperGitHub {
   }
   async dispatchWorkflow(input: DispatchWorkflowInput) {
     this.dispatched.push(input);
+    return { runId: null };
   }
   async countDispatchedRuns(workflow: string, since: Date) {
     this.dispatchedSince.push({ workflow, since });

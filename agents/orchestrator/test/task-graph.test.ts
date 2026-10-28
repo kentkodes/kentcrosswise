@@ -251,7 +251,7 @@ describe("task graph (P2-10)", () => {
     expect(gh.issues[0]!.body).toContain(`kcw/task-${id}`);
     expect(gh.issues[0]!.body).not.toContain("please"); // owner text never reaches GitHub
     expect(devDispatches()).toEqual([
-      { workflow: "agent-developer.yml", ref: "main", inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "" } },
+      { workflow: "agent-developer.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "" } },
     ]);
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "dev", github_issue: gh.issues[0]!.number, public_title: "Add a healthz page", branch: `kcw/task-${id}` });
     expect(await waits(id)).toEqual([{ phase: "dev", waiting_on: "dev" }]);
@@ -260,7 +260,12 @@ describe("task graph (P2-10)", () => {
     expect(await task(id)).toMatchObject({ waiting_on: "ci", pr_number: 41, head_sha: head });
 
     expect(await send(id, ciEvent(id, 41, head, "success"))).toBe("applied");
-    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", inputs: { task_id: String(id), pr: "41" } }]);
+    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), pr: "41" } }]);
+    // RUN-ID-MAPPING-SPEC §2: both dispatches are linked to the task by run id, as orch_rw.
+    expect(await sql<{ run_id: string; role: string }>("SELECT run_id::text, role FROM agent_dispatches WHERE task_id = $1 ORDER BY run_id", [id])).toEqual([
+      { run_id: String(devDispatches()[0]!.runId), role: "developer" },
+      { run_id: String(qaDispatches()[0]!.runId), role: "qa" },
+    ]);
     expect((await task(id)).waiting_on).toBe("qa");
 
     expect(await send(id, reviewEvent(id, 41, head, "approved"))).toBe("applied");
@@ -764,7 +769,7 @@ describe("task graph (P2-10)", () => {
         branch: `kcw/task-${docs}`,
         github_issue: null,
       });
-      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", inputs: { task_id: String(docs), pr: "60" } }]);
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "60" } }]);
       expect(gh.issues).toHaveLength(1); // the work task's: no planner, title node or issue for docs
       expect(devDispatches()).toHaveLength(1);
       expect(await sql("SELECT agent, event_type FROM agent_events WHERE task_id = $1", [docs])).toEqual([
@@ -815,7 +820,7 @@ describe("task graph (P2-10)", () => {
 
       await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
       expect(await send(docs, sweep(docs))).toBe("unchanged"); // the deferred start ran first
-      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", inputs: { task_id: String(docs), pr: "62" } }]);
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "62" } }]);
       expect(gh.issues).toHaveLength(1);
       expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
     });

@@ -1,0 +1,13 @@
+{
+  "provenance": "Hand-written seed metadata mirroring the SEED-LIST.json shape for well-known public-domain essays. No essay text. Written for E5 task 4 on 2026-10-27.",
+  "seeds": [
+    { "id": "seed-emerson", "title": "Self-Reliance", "author": "Ralph Waldo Emerson", "year": 1841, "publicDomainLikely": true },
+    { "id": "seed-friendship", "title": "Of Friendship", "author": "Michel de Montaigne", "year": 1580, "publicDomainLikely": true },
+    { "id": "seed-roastpig", "title": "A Dissertation Upon Roast Pig", "author": "Charles Lamb", "year": 1822, "publicDomainLikely": true },
+    { "id": "seed-civil", "title": "Civil Disobedience", "author": "Henry David Thoreau", "year": 1849, "publicDomainLikely": true },
+    { "id": "seed-studies", "title": "Of Studies", "author": "Francis Bacon", "year": 1625, "publicDomainLikely": true },
+    { "id": "seed-idlers", "title": "An Apology for Idlers", "author": "Robert Louis Stevenson", "year": 1877, "publicDomainLikely": null },
+    { "id": "seed-elephant", "title": "Shooting an Elephant", "author": "George Orwell", "year": 1936, "publicDomainLikely": false },
+    { "id": "seed-modern", "title": "A Modern Essay Without A Source", "author": "Some Author", "year": 1999, "publicDomainLikely": null }
+  ]
+}

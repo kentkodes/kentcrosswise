@@ -120,6 +120,8 @@ Lag bound: seconds in normal operation, since every relay event, report and swee
 
 Never forward `display_title` itself (for PR-triggered workflows it is human text). The sender allowlist and signature check are unchanged. Docs already has `run-name: docs task <id>`; developer, QA and scraper need the same one-line `run-name` (Q2).
 
+*Amended by [RUN-ID-MAPPING-SPEC](RUN-ID-MAPPING-SPEC.md):* GitHub sends `requested` before it evaluates `run-name`, so the title alone misses it. The same guards now also yield `agent_run {run_id, role}`; the relay maps by the orchestrator's `agent_dispatches` row first, keeps the title as cross-check and fallback, and answers `503 dispatch_pending` while the row is missing.
+
 **Orchestrator:**
 - [messages.ts](../../agents/orchestrator/src/graph/messages.ts) additionally parses `run_attempt`, `head_branch`, `run_started_at` and `updated_at`.
 - In `Machine.run` ([machine.ts](../../agents/orchestrator/src/graph/machine.ts)), right after the report branch and **before the pause check**, an agent-workflow `workflow_run` goes to `observeRun()` and returns. Observations are recorded while paused, never drive the PR loop and never count as stale. CI runs are unaffected.

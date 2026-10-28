@@ -3,7 +3,7 @@
 import type { AgentName, EventType, Usage } from "@kcw/core/events";
 import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
 import type pg from "pg";
-import type { Decision, WaitingOn } from "./types";
+import type { AgentRunRole, Decision, WaitingOn } from "./types";
 
 export type TaskStatus = "queued" | "planning" | "in_progress" | "waiting" | "merged" | "done" | "failed" | "cancelled";
 
@@ -47,8 +47,26 @@ export interface RunObservation {
   runId: number; attempt: number; taskId: number; role: "developer" | "qa" | "docs" | "scraper";
   action: "requested" | "completed"; timestamp: string | null; conclusion: string | null;
 }
+/**
+ * agent_dispatches already links this run id to another task or role (RUN-ID-MAPPING-SPEC §2).
+ * The message is the fixed code only.
+ */
+export class DispatchLinkConflictError extends Error {
+  override name = "DispatchLinkConflictError";
+  readonly code = "dispatch_link_conflict";
+  constructor() {
+    super("dispatch_link_conflict");
+  }
+}
+
 export interface TaskStore {
   recordRun(run: RunObservation): Promise<void>;
+  /**
+   * Links a dispatched agent run to its task (agent_dispatches, migration 0010) so the relay can map
+   * the run's `requested` delivery before GitHub evaluates its run-name. Idempotent for the same
+   * link; throws DispatchLinkConflictError if the run id is already linked to another task or role.
+   */
+  recordDispatch(runId: number, taskId: number, role: AgentRunRole): Promise<void>;
   getTask(id: number): Promise<TaskRecord | null>;
   /** system_flags.agents_paused (Q2). */
   isPaused(): Promise<boolean>;
@@ -121,6 +139,20 @@ export class PgTaskStore implements TaskStore {
          AND agent_runs.task_id=EXCLUDED.task_id AND agent_runs.role=EXCLUDED.role`,
       [run.runId, run.attempt, run.taskId, run.role, run.action, timestamp, run.conclusion],
     );
+  }
+
+  async recordDispatch(runId: number, taskId: number, role: AgentRunRole): Promise<void> {
+    await this.pool.query(
+      "INSERT INTO agent_dispatches (run_id, task_id, role) VALUES ($1, $2, $3) ON CONFLICT (run_id) DO NOTHING",
+      [runId, taskId, role],
+    );
+    // Read back: a row that was already there must be this same link.
+    const { rows } = await this.pool.query<{ task_id: string | number; role: string }>(
+      "SELECT task_id, role FROM agent_dispatches WHERE run_id = $1",
+      [runId],
+    );
+    const row = rows[0];
+    if (!row || Number(row.task_id) !== taskId || row.role !== role) throw new DispatchLinkConflictError();
   }
 
   async getTask(id: number): Promise<TaskRecord | null> {

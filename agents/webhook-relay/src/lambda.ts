@@ -84,8 +84,23 @@ export interface HandlerOptions {
   log?: (line: string) => void;
 }
 
-async function openPg(url: string): Promise<OpenedDb> {
-  const client = new pg.Client({ connectionString: url });
+/**
+ * Connect timeout of the relay's database client. GitHub gives a delivery 10 s and the dispatch
+ * link lookups can wait ~2 s, so a stuck connect must fail (500, redelivered) well before that.
+ * node-postgres has no connect timeout by default. No query_timeout: a client-side timeout on the
+ * delivery claim could leave a committed claim behind a 500, so the redelivery would be dropped
+ * as a duplicate. No statement_timeout startup parameter: the pooled (PgBouncer) endpoint may refuse it.
+ */
+export const RELAY_PG_CONNECTION_TIMEOUT_MS = 3000;
+
+/** The node-postgres client configuration the relay connects with. */
+export function relayPgConfig(url: string): pg.ClientConfig {
+  return { connectionString: url, connectionTimeoutMillis: RELAY_PG_CONNECTION_TIMEOUT_MS };
+}
+
+/** Opens the relay's per-delivery connection (exported for the connect timeout test). */
+export async function openPg(url: string): Promise<OpenedDb> {
+  const client = new pg.Client(relayPgConfig(url));
   await client.connect();
   return { db: fromPg(client), close: () => client.end() };
 }
@@ -100,6 +115,7 @@ function lazyStore(open: () => Promise<OpenedDb>): { store: RelayStore; close: (
       releaseDelivery: async (id) => (await get()).releaseDelivery(id),
       findTaskByPr: async (n) => (await get()).findTaskByPr(n),
       findTaskByIssue: async (n) => (await get()).findTaskByIssue(n),
+      findDispatch: async (runId) => (await get()).findDispatch(runId),
       recordActionsMinutes: async (u, taskId) => (await get()).recordActionsMinutes(u, taskId),
     },
     close: async () => {

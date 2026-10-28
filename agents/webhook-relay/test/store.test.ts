@@ -84,6 +84,17 @@ describe("sqlRelayStore on PGlite (migrations applied, as a relay_rw member)", (
     expect(new Date(rows[0]!.ts).toISOString()).toBe("2026-10-22T10:07:30.000Z");
   });
 
+  it("finds a dispatch link by run id with the three granted columns only (0010)", async () => {
+    await asSuperuser(
+      "INSERT INTO agent_dispatches (run_id, task_id, role) VALUES (40526955264, 3, 'developer'), (9007199254740991, 2, 'qa')",
+    );
+    const s = sqlRelayStore(db);
+    expect(await s.findDispatch(40526955264)).toEqual({ task_id: 3, role: "developer" });
+    expect(await s.findDispatch(Number.MAX_SAFE_INTEGER)).toEqual({ task_id: 2, role: "qa" });
+    expect(await s.findDispatch(1)).toBeNull();
+    await expect(db.query("SELECT dispatched_at FROM agent_dispatches")).rejects.toThrow(/permission denied/);
+  });
+
   it("runs with the relay_rw grants only", async () => {
     const { rows } = await db.query<{ u: string; member: boolean; orch: boolean }>(
       "SELECT current_user AS u, pg_has_role(current_user, 'relay_rw', 'MEMBER') AS member, pg_has_role(current_user, 'orch_rw', 'MEMBER') AS orch",

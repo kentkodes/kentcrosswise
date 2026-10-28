@@ -61,9 +61,24 @@ export type GitHubEventPayload =
     }
   | { type: "push"; ref: string; before: string | null; after: string | null; forced: boolean; sender: Sender };
 
+/** The role of an agent workflow run, from its exact workflow path. */
+export type AgentRunRole = "developer" | "qa" | "docs" | "scraper";
+
+/**
+ * An agent workflow run that passed every identity guard (exact agent path, workflow_dispatch,
+ * main, same repository; RUN-ID-MAPPING-SPEC §3). The relay maps it by run id (agent_dispatches).
+ */
+export interface AgentRunRef {
+  run_id: number;
+  role: AgentRunRole;
+}
+
 /** Where the task can be found: a branch name (needs no lookup), else a PR or issue number. */
 export interface TaskHint {
+  /** From the run title (`<role> task <id>`), set only when the agent run guards pass. */
   agent_task_id?: number;
+  /** Set when the agent run guards pass, with or without a matching title. */
+  agent_run?: AgentRunRef;
   branch?: string;
   pr_number?: number;
   issue_number?: number;
@@ -199,10 +214,13 @@ export function normalize(eventName: string, body: unknown): NormalizeResult {
       // Only the two actions the orchestrator records (UNIT3-PLAN §6) become agent-run observations.
       // FORWARDED_ACTIONS already drops every other action above; this keeps the hint scoped even if
       // another workflow_run action is ever forwarded for CI runs (it would then be dropped as no_task).
-      if ((action === "requested" || action === "completed") &&
-          role && title?.[1] === role && posInt(Number(title[2])) !== undefined &&
-          run?.event === "workflow_dispatch" && headBranch === "main" && sameRepo(run?.head_repository, repo)) {
-        hint.agent_task_id = Number(title[2]);
+      const agentRun = (action === "requested" || action === "completed") &&
+          role && run?.event === "workflow_dispatch" && headBranch === "main" && sameRepo(run?.head_repository, repo);
+      if (agentRun) {
+        // The guards pass: the relay maps the run by id (RUN-ID-MAPPING-SPEC §3). `requested`
+        // usually arrives before run-name is evaluated, so the title may still be the workflow name.
+        hint.agent_run = { run_id: id, role: role as AgentRunRole };
+        if (title?.[1] === role && posInt(Number(title[2])) !== undefined) hint.agent_task_id = Number(title[2]);
       }
       return ok(
         event,

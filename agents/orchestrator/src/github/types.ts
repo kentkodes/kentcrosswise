@@ -34,6 +34,15 @@ export interface DispatchWorkflowInput {
   inputs: Record<string, string>;
 }
 
+/**
+ * What a dispatch returns (RUN-ID-MAPPING-SPEC §1). `runId` is the created run's id when GitHub
+ * returned valid run details (a positive safe integer), else null: a 204 answer or a missing or
+ * invalid id. The run was created either way; null only means the title fallback maps it.
+ */
+export interface DispatchResult {
+  runId: number | null;
+}
+
 export interface MergePrInput {
   pr: number;
   /** The head SHA merge-rules evaluated. GitHub refuses the merge (409) if the head moved since. */
@@ -121,7 +130,8 @@ export interface WorkflowRunInfo {
 
 export interface GitHubClient {
   createIssue(input: CreateIssueInput): Promise<CreatedIssue>;
-  dispatchWorkflow(input: DispatchWorkflowInput): Promise<void>;
+  /** Never fails because run details are missing (`runId` null); fails only when GitHub refuses the dispatch. */
+  dispatchWorkflow(input: DispatchWorkflowInput): Promise<DispatchResult>;
   /** Squash merge (the ruleset allows squash only). */
   merge(input: MergePrInput): Promise<MergeResult>;
   postCheck(input: PostCheckInput): Promise<PostedCheck>;

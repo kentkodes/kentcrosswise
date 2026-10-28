@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "migrate": "pnpm --filter @kcw/scripts migrate",
     "seed": "pnpm --filter @kcw/scripts seed",
+    "import-seed-list": "pnpm --filter @kcw/scripts import-seed-list",
     "check-prod-bundle": "pnpm --filter @kcw/scripts check-prod-bundle",
     "build-web": "pnpm --filter @kcw/scripts build-web",
     "build-lambdas": "pnpm --filter @kcw/scripts build-lambdas",
