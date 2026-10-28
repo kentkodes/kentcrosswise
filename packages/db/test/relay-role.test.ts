@@ -56,6 +56,10 @@ describe("0005 relay_rw", () => {
         WHERE a.grantee = 'relay_rw'::regrole`,
     );
     expect(columns.rows.map((r) => `${r.priv} ${r.obj}`).sort()).toEqual([
+      // 0010: the relay maps agent runs by run id (agents/webhook-relay/src/store.ts findDispatch).
+      "SELECT agent_dispatches.role",
+      "SELECT agent_dispatches.run_id",
+      "SELECT agent_dispatches.task_id",
       "INSERT inbound_events.delivery_id",
       "SELECT inbound_events.delivery_id",
       "INSERT inbound_events.source",
@@ -106,6 +110,10 @@ describe("0005 relay_rw", () => {
          FROM usage_events WHERE id IS NOT NULL`,
     );
     expect(rows).toEqual([{ n: 1, task_id: 1, claims: 0 }]);
+    // 0010: the dispatch link lookup.
+    await db.exec("INSERT INTO agent_dispatches (run_id, task_id, role) VALUES (40526955264, 1, 'developer')");
+    const link = await asRelay<{ task_id: number; role: string }>("SELECT task_id, role FROM agent_dispatches WHERE run_id = $1", [40526955264]);
+    expect(link.map((r) => [Number(r.task_id), r.role])).toEqual([[1, "developer"]]);
   });
 
   it("is refused on other columns of its tables", async () => {

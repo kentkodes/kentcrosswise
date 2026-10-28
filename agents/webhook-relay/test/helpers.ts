@@ -1,6 +1,6 @@
 import type { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { readFileSync } from "node:fs";
-import type { ActionsMinutes, GitHubEventMessage, OrchestratorQueue, RelayStore, SqsLike } from "../src/index";
+import type { ActionsMinutes, DispatchLink, GitHubEventMessage, OrchestratorQueue, RelayStore, SqsLike } from "../src/index";
 
 const FIXTURES = new URL("./fixtures/", import.meta.url);
 
@@ -9,7 +9,8 @@ export type Fixture =
   | "pull_request.opened"
   | "pull_request_review.submitted"
   | "push"
-  | "workflow_run.completed";
+  | "workflow_run.completed"
+  | "workflow_run.requested.task3";
 
 // Fixtures are edited freely in tests (deep property writes), so they are typed loosely.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,6 +65,17 @@ export class FakeStore implements RelayStore {
   async findTaskByIssue(n: number) {
     this.#call("byIssue");
     return this.byIssue.get(n) ?? null;
+  }
+  /** agent_dispatches rows by run id (migration 0010). */
+  readonly byRun = new Map<number, DispatchLink>();
+  /** Called before each dispatch lookup (tests add a row "later" here). */
+  onDispatchLookup: ((lookup: number) => void) | undefined;
+  dispatchLookups = 0;
+  async findDispatch(runId: number) {
+    this.#call("dispatch");
+    this.dispatchLookups += 1;
+    this.onDispatchLookup?.(this.dispatchLookups);
+    return this.byRun.get(runId) ?? null;
   }
   /** Recorded Actions minutes by dedupe key. */
   readonly minutes = new Map<string, { usage: ActionsMinutes; taskId: number | null }>();

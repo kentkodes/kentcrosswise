@@ -1,10 +1,19 @@
 // The relay's database access, behind a small interface so tests can use a fake or PGlite.
+import type { AgentRunRole } from "./normalize";
 import type { ActionsMinutes } from "./usage";
 
 /** Minimal SQL surface (fits `@kcw/db` SqlClient, node-postgres via fromPg, PGlite via fromPglite). */
 export interface SqlQuery {
   query<R = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<{ rows: R[] }>;
 }
+
+/** An agent_dispatches row (migration 0010): the task and role the orchestrator dispatched a run for. */
+export interface DispatchLink {
+  task_id: number;
+  role: AgentRunRole;
+}
+
+const ROLES: readonly string[] = ["developer", "qa", "docs", "scraper"];
 
 export interface RelayStore {
   /** Records a delivery in `inbound_events`. Returns false if it was already recorded (a duplicate). */
@@ -15,6 +24,8 @@ export interface RelayStore {
   findTaskByPr(prNumber: number): Promise<number | null>;
   /** `tasks.id` of the task with this GitHub issue, or null. */
   findTaskByIssue(issueNumber: number): Promise<number | null>;
+  /** The agent_dispatches link of this run id, or null (reads only run_id, task_id and role: relay_rw's grant). */
+  findDispatch(runId: number): Promise<DispatchLink | null>;
   /**
    * Records a completed run's Actions minutes (cost 0) unless its dedupe key is already there.
    * `taskId` is linked only if that task exists. Returns false for a duplicate.
@@ -49,6 +60,18 @@ export function sqlRelayStore(db: SqlQuery): RelayStore {
     },
     findTaskByPr: (n) => newestTask(db, "pr_number", n),
     findTaskByIssue: (n) => newestTask(db, "github_issue", n),
+    async findDispatch(runId) {
+      const { rows } = await db.query<{ task_id: string | number; role: string }>(
+        "SELECT task_id, role FROM agent_dispatches WHERE run_id = $1",
+        [runId],
+      );
+      const r = rows[0];
+      if (!r) return null;
+      const taskId = Number(r.task_id); // bigint arrives as a string from node-postgres
+      // The table's constraints guarantee both; anything else is not a usable link.
+      if (!Number.isSafeInteger(taskId) || taskId < 1 || !ROLES.includes(r.role)) return null;
+      return { task_id: taskId, role: r.role as AgentRunRole };
+    },
     async recordActionsMinutes(u, taskId) {
       // A task-like branch name does not prove the task row exists: link it only if it does.
       const { rows } = await db.query(

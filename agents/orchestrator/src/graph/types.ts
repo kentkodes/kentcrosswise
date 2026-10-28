@@ -6,9 +6,24 @@ export const DEV_WORKFLOW = "agent-developer.yml";
 export const QA_WORKFLOW = "agent-qa.yml";
 export const DOCS_WORKFLOW = "agent-docs.yml";
 
+/** The role of an agent workflow run (agent_runs.role, agent_dispatches.role). */
+export type AgentRunRole = "developer" | "qa" | "docs" | "scraper";
+
+const AGENT_WORKFLOW_ROLES: Readonly<Record<string, AgentRunRole>> = {
+  "agent-developer.yml": "developer",
+  "agent-qa.yml": "qa",
+  "agent-docs.yml": "docs",
+  "agent-scraper.yml": "scraper",
+};
+
+/** The role of a dispatched workflow file (RUN-ID-MAPPING-SPEC §2), or null for any non-agent workflow. */
+export function agentRoleOfWorkflow(workflow: string): AgentRunRole | null {
+  return Object.hasOwn(AGENT_WORKFLOW_ROLES, workflow) ? AGENT_WORKFLOW_ROLES[workflow]! : null;
+}
+
 /**
  * The `run-name` of an agent-docs.yml run (the workflow sets `run-name: docs task <task_id>`).
- * The dispatch API returns no run id, so the docs sweep finds the run by this title.
+ * The docs sweep finds the run by this title (a dispatch may return no run id).
  */
 export const docsRunName = (taskId: number): string => `docs task ${taskId}`;
 

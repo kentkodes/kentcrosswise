@@ -10,6 +10,7 @@ import {
   type CheckState,
   type CreateIssueInput,
   type CreatedIssue,
+  type DispatchResult,
   type DispatchWorkflowInput,
   type FindWorkflowRunInput,
   type GetArtifactInput,
@@ -45,10 +46,33 @@ export interface FakeCheck {
   summary: string;
 }
 
+/** The first fake's first workflow run id (realistic size, well below 2^53). */
+export const FAKE_FIRST_RUN_ID = 40_000_000_001;
+
+/** Run ids each fake may hand out before the next fake's block starts. */
+const FAKE_RUN_ID_BLOCK = 1_000_000;
+
+/** Fakes created so far in this module instance (one per test file under Vitest). */
+let fakeInstances = 0;
+
+export interface FakeGitHubOptions {
+  /**
+   * The first run id this fake's dispatches return (then +1 each). Defaults to a block of its own,
+   * FAKE_FIRST_RUN_ID + n * 1,000,000 for the n-th fake created (from 0), so fakes that share one
+   * database never hand out the same run id for different tasks.
+   */
+  firstRunId?: number;
+}
+
 export class FakeGitHubClient implements GitHubClient {
   readonly calls: { method: FakeMethod; args: unknown }[] = [];
   readonly issues: (CreateIssueInput & CreatedIssue)[] = [];
-  readonly dispatches: (DispatchWorkflowInput & { ref: string })[] = [];
+  readonly dispatches: (DispatchWorkflowInput & { ref: string; runId: number | null })[] = [];
+  /**
+   * `sequential`: every dispatch returns this fake's next run id (deterministic, see
+   * FakeGitHubOptions.firstRunId); `null`: dispatches return no run id (a 204 answer).
+   */
+  runIdMode: "sequential" | "null" = "sequential";
   readonly checks: FakeCheck[] = [];
   readonly merges: { pr: number; sha: string }[] = [];
   readonly cancelled: number[] = [];
@@ -64,6 +88,12 @@ export class FakeGitHubClient implements GitHubClient {
   readonly workflowRuns: (WorkflowRunInfo & { workflow: string; displayTitle: string; createdAt: string })[] = [];
   #failures = new Map<FakeMethod, GitHubApiError>();
   #nextId = 1;
+  #nextRunId: number;
+
+  constructor(opts: FakeGitHubOptions = {}) {
+    this.#nextRunId = opts.firstRunId ?? FAKE_FIRST_RUN_ID + fakeInstances * FAKE_RUN_ID_BLOCK;
+    fakeInstances += 1;
+  }
 
   /** The next call of `method` throws a GitHubApiError with this status. */
   failNext(method: FakeMethod, status = 500): void {
@@ -92,9 +122,11 @@ export class FakeGitHubClient implements GitHubClient {
     return issue;
   }
 
-  async dispatchWorkflow(input: DispatchWorkflowInput): Promise<void> {
+  async dispatchWorkflow(input: DispatchWorkflowInput): Promise<DispatchResult> {
     this.#record("dispatchWorkflow", input);
-    this.dispatches.push({ ...input, inputs: { ...input.inputs }, ref: input.ref ?? "main" });
+    const runId = this.runIdMode === "null" ? null : this.#nextRunId++;
+    this.dispatches.push({ ...input, inputs: { ...input.inputs }, ref: input.ref ?? "main", runId });
+    return { runId };
   }
 
   async merge(input: MergePrInput): Promise<MergeResult> {

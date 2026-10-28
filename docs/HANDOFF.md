@@ -1,5 +1,17 @@
 # Kentcrosswise project handoff
 
+## Run-ID mapping continuation — 2026-10-28 UTC
+
+This section supersedes the historical release status below for the run-ID mapping work. PRs #44, #49 and #53 are already merged; the local handoff records their deployment verification. PR #51 and the real-agent publication hold remain separate.
+
+- Current owner instruction: commit the reviewed fix and open a PR. This does not authorize merge, production migration, workflow enablement or a controlled live agent run.
+- Continued the existing owned branch `docs/run-id-mapping-spec-20261028`, with working-tree changes atop `9ec7ed96e54c1fadb54f5500cfcb7673de81dadb`. Fresh `origin/main` fetch succeeded at approximately 02:00Z on 2026-10-28 and resolves to that same SHA. No unrelated worktree changes are included.
+- GitHub sends the initial requested delivery before evaluating the task run title. The orchestrator now captures the dispatch run ID and records an advisory task/role link; the relay resolves that link under the existing signature, sender, repository, path and branch guards. Missing links get bounded retries and `dispatch_pending`; evaluated titles remain a fallback. A failed link write logs `dispatch_link_failed` and continues, avoiding a duplicate dispatch caused by retrying an already successful request. Relay connection timeout is 3 seconds.
+- Includes additive, one-way migration `0010_agent_dispatches.sql`, with a 5-second lock timeout, orchestrator SELECT/INSERT and relay SELECT on only run/task/role columns. Dispatch links are not signed execution observations; there is no backfill.
+- Prior independent implementation review and re-review recorded in the local handoff found no P0–P2 after the requested follow-ups. Fresh local validation is recorded in the PR evidence; full typecheck, lint and whitespace checks pass on this working tree.
+- Fresh validation at approximately 02:02Z on 2026-10-28, working tree atop the base above: `pnpm vitest run --project @kcw/webhook-relay --project @kcw/orchestrator --project @kcw/db --maxWorkers=2 --testTimeout=60000` passed 558 tests with 4 skipped (35 files passed, one skipped; 56.36 seconds). The initial sandbox run hit localhost `EACCES`; the identical outside-sandbox command passed. `pnpm typecheck`, `pnpm lint`, `node scripts/check-agent-docs.mjs` and `git diff --check` pass. Full repository tests/build and live migration/acceptance were not run. Remote default `main` independently verified; agent workflow flag remains `false`.
+- Next: exact-head CI and owner review of migration/grants, then a separately authorized merge/deploy under the paused-agent/no-console rollout conditions. Acceptance still requires one owner-authorized controlled run proving signed requested delivery, non-null `agent_runs.requested_at` and trusted office `starting` before completion. Existing task 3 remains unbackfilled and PR #51 stays held. Optional later query timeouts remain a P3 follow-up. See [RUN-ID-MAPPING-SPEC.md](office/RUN-ID-MAPPING-SPEC.md).
+
 ## Active E5 continuation — 2026-10-27
 
 This section supersedes the older release chronology below for essay work only. The release/real-agent publication hold remains; this essay branch does not change it.

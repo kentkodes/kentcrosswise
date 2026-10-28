@@ -6,7 +6,7 @@
 //   POST /app/hook/deliveries/{delivery_id}/attempts): "You must use a JWT", no installation
 //   permission. createAppOctokit sends /app/... paths with the App JWT.
 import type { Octokit } from "@octokit/rest";
-import { GitHubApiError, type CancelResult, type DispatchWorkflowInput } from "../github/types";
+import { GitHubApiError, type CancelResult, type DispatchResult, type DispatchWorkflowInput } from "../github/types";
 import { OctokitGitHubClient, parseRepo } from "../github/octokit";
 import type { WebhookDelivery } from "./deliveries";
 
@@ -39,7 +39,11 @@ export interface SweeperGitHub {
   /** Runs of agent workflows that have not completed. */
   listActiveAgentRuns(): Promise<ActiveRun[]>;
   cancelRun(runId: number): Promise<CancelResult>;
-  dispatchWorkflow(input: DispatchWorkflowInput): Promise<void>;
+  /**
+   * Only preview-gc.yml (PREVIEW_GC_WORKFLOW), never an agent workflow, so no agent_dispatches link
+   * is recorded for it (RUN-ID-MAPPING-SPEC §2); agent re-dispatches go through the task graph.
+   */
+  dispatchWorkflow(input: DispatchWorkflowInput): Promise<DispatchResult>;
   /** workflow_dispatch runs of `workflow` created at or after `since`. */
   countDispatchedRuns(workflow: string, since: Date): Promise<number>;
   /** App webhook delivery attempts delivered at or after `since`, newest first, at most `maxPages` pages of 100. */
@@ -89,7 +93,7 @@ export class OctokitSweeperGitHub implements SweeperGitHub {
     return this.#client.cancelRun(runId);
   }
 
-  dispatchWorkflow(input: DispatchWorkflowInput): Promise<void> {
+  dispatchWorkflow(input: DispatchWorkflowInput): Promise<DispatchResult> {
     return this.#client.dispatchWorkflow(input);
   }
 

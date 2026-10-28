@@ -152,6 +152,7 @@ describe("orchestrator Lambda on Postgres", () => {
       {
         workflow: "agent-developer.yml",
         ref: "main",
+        runId: expect.any(Number),
         inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "" },
       },
     ]);

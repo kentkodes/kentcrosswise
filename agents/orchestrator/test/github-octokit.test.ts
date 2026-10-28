@@ -154,7 +154,7 @@ describe("REST calls", () => {
   it("dispatchWorkflow defaults ref to main", async () => {
     mock.on("POST", "/repos/o/r/actions/workflows/agent-developer.yml/dispatches", () => json(204, null));
     await client.dispatchWorkflow({ workflow: "agent-developer.yml", inputs: { task_id: "7", mode: "implement" } });
-    expect(mock.api[0]!.body).toEqual({ ref: "main", inputs: { task_id: "7", mode: "implement" } });
+    expect(mock.api[0]!.body).toMatchObject({ ref: "main", inputs: { task_id: "7", mode: "implement" } });
   });
 
   it("merge squashes at the evaluated head SHA", async () => {
@@ -260,6 +260,83 @@ describe("REST calls", () => {
       name: "GitHubApiError",
       status: 403,
     });
+  });
+});
+
+describe("dispatchWorkflow run details (RUN-ID-MAPPING-SPEC §1)", () => {
+  const DISPATCH = "/repos/o/r/actions/workflows/agent-developer.yml/dispatches";
+  const input = { workflow: "agent-developer.yml", inputs: { task_id: "3", mode: "implement" } };
+  /** A response with this exact body text (JSON.stringify could not produce the unsafe integers). */
+  const raw = (status: number, text: string | null) =>
+    new Response(text, { status, headers: { "content-type": "application/json; charset=utf-8" } });
+
+  function withLog() {
+    const lines: string[] = [];
+    const c = createOctokitGitHubClient(
+      { appId: CLIENT_ID, privateKey: pkcs8, installationId: 42 },
+      { repo: "o/r", fetch: mock.fetch, log: (l) => lines.push(l) },
+    );
+    return { c, lines };
+  }
+
+  it("asks for run details with an explicit API version 2022-11-28", async () => {
+    mock.on("POST", DISPATCH, () => raw(200, '{"workflow_run_id":40526955264,"run_url":"u","html_url":"h"}'));
+    await client.dispatchWorkflow(input);
+    expect(mock.api).toHaveLength(1);
+    expect(mock.api[0]!.body).toEqual({ ref: "main", inputs: { task_id: "3", mode: "implement" }, return_run_details: true });
+    expect(mock.api[0]!.headers["x-github-api-version"]).toBe("2022-11-28");
+    expect(mock.api[0]!.headers.authorization).toBe(`token ${TOKEN}`);
+  });
+
+  it("a 200 response returns the run id", async () => {
+    const { c, lines } = withLog();
+    mock.on("POST", DISPATCH, () => raw(200, '{"workflow_run_id":40526955264,"run_url":"https://api.github.com/x","html_url":"https://github.com/x"}'));
+    await expect(c.dispatchWorkflow(input)).resolves.toEqual({ runId: 40526955264 });
+    expect(lines).toEqual([]);
+  });
+
+  it("accepts the largest safe integer exactly", async () => {
+    mock.on("POST", DISPATCH, () => raw(200, '{"workflow_run_id":9007199254740991}'));
+    await expect(client.dispatchWorkflow(input)).resolves.toEqual({ runId: Number.MAX_SAFE_INTEGER });
+  });
+
+  it("a 204 response returns null without throwing and logs the fixed code", async () => {
+    const { c, lines } = withLog();
+    mock.on("POST", DISPATCH, () => raw(204, null));
+    await expect(c.dispatchWorkflow(input)).resolves.toEqual({ runId: null });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^github: dispatch_run_id_missing workflow=agent-developer\.yml reason=no_content$/);
+  });
+
+  it.each([
+    ["2^53 (rounds to itself)", '{"workflow_run_id":9007199254740992}'],
+    ["2^53 + 1 (would round down to 2^53)", '{"workflow_run_id":9007199254740993}'],
+    ["far above 2^53", '{"workflow_run_id":12345678901234567890123}'],
+    ["zero", '{"workflow_run_id":0}'],
+    ["negative", '{"workflow_run_id":-5}'],
+    ["fraction", '{"workflow_run_id":1.5}'],
+    ["integer written as a fraction", '{"workflow_run_id":12.0}'],
+    ["exponent", '{"workflow_run_id":1e3}'],
+    ["string", '{"workflow_run_id":"40526955264"}'],
+    ["null", '{"workflow_run_id":null}'],
+    ["missing", '{"run_url":"u","html_url":"h"}'],
+    ["only nested", '{"run":{"workflow_run_id":5}}'],
+    ["array", "[40526955264]"],
+    ["not JSON", "workflow_run_id=5"],
+    ["empty", ""],
+  ])("refuses a run id that is %s: null, logged, never thrown", async (_label, body) => {
+    const { c, lines } = withLog();
+    mock.on("POST", DISPATCH, () => raw(200, body));
+    await expect(c.dispatchWorkflow(input)).resolves.toEqual({ runId: null });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^github: dispatch_run_id_missing workflow=agent-developer\.yml reason=invalid$/);
+    // The log line is a fixed code: never the response text.
+    expect(lines[0]).not.toContain("9007");
+  });
+
+  it("an error status still fails the dispatch (nothing was created)", async () => {
+    mock.on("POST", DISPATCH, () => json(422, { message: "Unexpected inputs provided" }));
+    await expect(client.dispatchWorkflow(input)).rejects.toMatchObject({ name: "GitHubApiError", operation: "dispatchWorkflow", status: 422 });
   });
 });
 

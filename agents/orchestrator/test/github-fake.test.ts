@@ -1,6 +1,6 @@
 import type { MergeInput } from "@kcw/core/merge-input";
 import { beforeEach, describe, expect, it } from "vitest";
-import { FakeGitHubClient, GitHubApiError, type GitHubClient } from "../src/github";
+import { FAKE_FIRST_RUN_ID, FakeGitHubClient, GitHubApiError, type GitHubClient } from "../src/github";
 
 const input: MergeInput = {
   planSummary: { format: 1, infra: [], artifact: { count: 0, kinds: { create: 0, update: 0, delete: 0, replace: 0 } } },
@@ -23,8 +23,27 @@ describe("FakeGitHubClient", () => {
     await expect(gh.createIssue({ title: "T", body: "B" })).resolves.toEqual({ number: 1, url: "https://github.invalid/issues/1" });
     await gh.dispatchWorkflow({ workflow: "agent-developer.yml", inputs: { task_id: "1" } });
     expect(gh.issues).toMatchObject([{ number: 1, title: "T" }]);
-    expect(gh.dispatches).toEqual([{ workflow: "agent-developer.yml", ref: "main", inputs: { task_id: "1" } }]);
+    expect(gh.dispatches).toMatchObject([{ workflow: "agent-developer.yml", ref: "main", inputs: { task_id: "1" } }]);
     expect(gh.calls.map((c) => c.method)).toEqual(["createIssue", "dispatchWorkflow"]);
+  });
+
+  it("returns deterministic run ids per dispatch, or null in the null mode", async () => {
+    const a = new FakeGitHubClient({ firstRunId: 40526955264 });
+    await expect(a.dispatchWorkflow({ workflow: "agent-developer.yml", inputs: {} })).resolves.toEqual({ runId: 40526955264 });
+    await expect(a.dispatchWorkflow({ workflow: "agent-qa.yml", inputs: {} })).resolves.toEqual({ runId: 40526955265 });
+    expect(a.dispatches.map((d) => d.runId)).toEqual([40526955264, 40526955265]);
+    a.runIdMode = "null";
+    await expect(a.dispatchWorkflow({ workflow: "agent-docs.yml", inputs: {} })).resolves.toEqual({ runId: null });
+    expect(a.dispatches.at(-1)!.runId).toBeNull();
+  });
+
+  it("gives every fake its own block of run ids by default (fakes can share one database)", async () => {
+    const b = new FakeGitHubClient();
+    const c = new FakeGitHubClient();
+    const fromB = (await b.dispatchWorkflow({ workflow: "agent-developer.yml", inputs: {} })).runId!;
+    const fromC = (await c.dispatchWorkflow({ workflow: "agent-developer.yml", inputs: {} })).runId!;
+    expect(Number.isSafeInteger(fromB) && fromB >= FAKE_FIRST_RUN_ID).toBe(true);
+    expect(fromC - fromB).toBe(1_000_000);
   });
 
   it("merges once at the current head; a moved head or second merge is refused", async () => {
