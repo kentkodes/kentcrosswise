@@ -16,6 +16,7 @@
     "import-seed-list": "pnpm --filter @kcw/scripts import-seed-list",
     "register-source": "pnpm --filter @kcw/scripts register-source",
     "match-seeds": "pnpm --filter @kcw/scripts match-seeds",
+    "essay-ingest": "pnpm --filter @kcw/scripts essay-ingest",
     "check-prod-bundle": "pnpm --filter @kcw/scripts check-prod-bundle",
     "build-web": "pnpm --filter @kcw/scripts build-web",
     "build-lambdas": "pnpm --filter @kcw/scripts build-lambdas",
