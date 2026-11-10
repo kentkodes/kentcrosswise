@@ -62,6 +62,19 @@ describe("essay-ingest workflow", () => {
     expect(yml.split("--phase store")).toHaveLength(2);
   });
 
+  it("categorizes only when asked: opt-in boolean input, after the store step, same role, no inline expressions", () => {
+    expect(yml).toMatch(/ {6}categorize:\n {8}description: [^\n]*\n {8}type: boolean\n {8}default: false\n/);
+    const cat = step("--phase categorize");
+    expect(cat).toContain("if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.categorize");
+    expect(cat).toContain('--ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --secret kcw/prod/pipeline --confirm');
+    expect(cat).not.toMatch(/--bucket|--models-secret|\$\{\{/);
+    expect(yml.split("--phase categorize")).toHaveLength(2);
+    expect(yml.indexOf("--phase categorize")).toBeGreaterThan(yml.indexOf("--phase store"));
+    expect(yml.indexOf("--phase categorize")).toBeGreaterThan(aws());
+    expect(yml.indexOf("--phase fetch")).toBeLessThan(yml.indexOf("--phase categorize"));
+    expect(yml.split("inputs.categorize")).toHaveLength(2);
+  });
+
   it("pins actions and installs without lifecycle scripts like the other workflows", () => {
     expect(yml).toContain("pnpm install --frozen-lockfile --ignore-scripts");
     expect(yml).toContain("persist-credentials: false");
@@ -85,11 +98,16 @@ describe("kcw-gh-essay-ingest role", () => {
     expect(policy).not.toMatch(/principals|identifiers/);
   });
 
-  it("can read only the pipeline secret and put only under essays/text/", () => {
+  it("can read only the pipeline and models secrets and put only under essays/text/", () => {
     const actions = [...policy.matchAll(/actions\s*=\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[1]!.matchAll(/"([^"]+)"/g)].map((a) => a[1]));
-    expect(actions).toEqual(["secretsmanager:GetSecretValue", "s3:PutObject"]);
+    expect(actions).toEqual(["secretsmanager:GetSecretValue", "s3:PutObject", "secretsmanager:GetSecretValue"]);
     const resources = [...policy.matchAll(/resources\s*=\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[1]!.matchAll(/"([^"]+)"/g)].map((a) => a[1]));
-    expect(resources).toEqual(["${local.secret_arn}:kcw/prod/pipeline-??????", "${aws_s3_bucket.pipelines.arn}/essays/text/*"]);
+    expect(resources).toEqual([
+      "${local.secret_arn}:kcw/prod/pipeline-??????",
+      "${aws_s3_bucket.pipelines.arn}/essays/text/*",
+      "${local.secret_arn}:kcw/prod/models-??????",
+    ]);
+    expect([...policy.matchAll(/\bsid\s*=\s*"([^"]+)"/g)].map((m) => m[1])).toEqual(["PipelineSecret", "PutEssayText", "ModelsSecret"]);
     expect(policy).not.toMatch(/sqs|s3:(Get|List|Delete)|effect\s*=\s*"Allow"\s*\n\s*actions\s*=\s*\["\*"\]/);
     expect(policy).toContain('role   = aws_iam_role.github["kcw-gh-essay-ingest"].id');
   });

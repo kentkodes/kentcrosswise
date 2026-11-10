@@ -484,7 +484,7 @@ resource "aws_iam_role_policy" "deploy" {
   policy = data.aws_iam_policy_document.deploy.json
 }
 
-# ---------- essay ingest: reads the pipeline DB secret, writes essay text only ----------
+# ---------- essay ingest: reads the pipeline DB and models secrets, writes essay text only ----------
 
 data "aws_iam_policy_document" "essay_ingest" {
   statement {
@@ -496,6 +496,11 @@ data "aws_iam_policy_document" "essay_ingest" {
     sid       = "PutEssayText"
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.pipelines.arn}/essays/text/*"]
+  }
+  statement {
+    sid       = "ModelsSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local.secret_arn}:kcw/prod/models-??????"]
   }
 }
 

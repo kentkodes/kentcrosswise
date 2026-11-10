@@ -225,7 +225,7 @@ interface ApprovedLink {
   year: number | null;
 }
 
-async function inTransaction(db: Db, body: () => Promise<void>): Promise<void> {
+export async function inTransaction(db: Db, body: () => Promise<void>): Promise<void> {
   await db.query("BEGIN");
   try {
     await body();
@@ -236,11 +236,17 @@ async function inTransaction(db: Db, body: () => Promise<void>): Promise<void> {
   }
 }
 
+/** The canonical Gutenberg URL of a book id (the key of essay_urls and essays.source_url). */
+export function bookUrl(id: number): string {
+  const url = canonicalizeUrl(gutenbergEbookUrl(id));
+  if (!url || gutenbergId(url) !== id) throw new IngestError("invalid_book_id");
+  return url;
+}
+
 /** One book; see section 12.4. Writes nothing for an unapproved id. */
 async function storeBook(id: number, deps: StoreDeps): Promise<StoreCode> {
   const { db } = deps;
-  const url = canonicalizeUrl(gutenbergEbookUrl(id));
-  if (!url || gutenbergId(url) !== id) throw new IngestError("invalid_book_id");
+  const url = bookUrl(id);
 
   const link = (
     await db.query<ApprovedLink>(
@@ -300,10 +306,15 @@ async function storeBook(id: number, deps: StoreDeps): Promise<StoreCode> {
   return inserted ? "stored" : "duplicate";
 }
 
+/** Throws `pipelines_paused` unless the pause flag is readable and false (fail closed). */
+export async function assertNotPaused(db: Db): Promise<void> {
+  const paused = (await db.query<{ paused: boolean }>("SELECT public.pipeline_is_paused() AS paused")).rows[0]?.paused;
+  if (paused !== false) throw new IngestError("pipelines_paused");
+}
+
 /** Per id, sequentially. Stops with `pipelines_paused` (nothing done) when the pause flag is set. */
 export async function storePhase(ids: readonly number[], deps: StoreDeps): Promise<StoreResult[]> {
-  const paused = (await deps.db.query<{ paused: boolean }>("SELECT public.pipeline_is_paused() AS paused")).rows[0]?.paused;
-  if (paused !== false) throw new IngestError("pipelines_paused");
+  await assertNotPaused(deps.db);
   const results: StoreResult[] = [];
   for (const id of ids) {
     const code = await storeBook(id, deps);
