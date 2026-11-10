@@ -199,7 +199,7 @@ Otherwise the execution is recorded unbound. A task snapshot whose new role diff
    - **(c) Writer and projector interleaving:** with A's drain transaction holding the projection state lock, B's source update, event insert and pause write commit under `lock_timeout = 1s`, so writers never wait on projection. The drain does not lock source rows.
    - **(d) Older state after newer:** a v2 row is forced into backoff, v3 projects, then v2 retries and ends `superseded`. Also: a run's `completed` before `requested`, and an older run's late `requested` after a newer binding.
    - **(e) Repeat (a) and (b) for 1000 random interleavings**, asserting gap-free `(revision, ordinal)` and no row left pending after a final drain.
-9. **Enable `execution_observations` locally.** Use a documented local-only migrator statement (`office_project('capability:execution_observations', ...)`) after steps 1–8 pass. Deployed and router capabilities stay off; there is no migration or code path that enables it.
+9. **Enable `execution_observations` locally (local validation only; production enablement follows the owner rollout sign-off in HANDOFF.md: off at rollout, on after one controlled signed-run check).** Use a documented local-only migrator statement (`office_project('capability:execution_observations', ...)`) after steps 1–8 pass. Deployed and router capabilities stay off; there is no migration or code path that enables it.
 10. **Docs:** update LIVE-CONTRACT (the outbox replaces the per-writer revision lock; execution mapping; capability state), HANDOFF and OPEN-POINTS. QA reviews steps 1–9 independently before the Liaison reports.
 
 ## 8. Critical-scope notes
