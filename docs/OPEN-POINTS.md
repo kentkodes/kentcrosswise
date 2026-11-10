@@ -14,7 +14,7 @@ Q12 subtasks, Q13 usage rules, Q14/Q15 isolation/governance and merge-time Docs 
 
 | ID | Kind | Open point and completion evidence |
 |---|---|---|
-| O2 | Delivery | Merge PR #44, then PR #49, when authorized. Both are drafts with all four exact-head CI checks successful (PR #44 `1186436` run 40425388263; PR #49 `26e55bf` run 40425859404), REVIEW_REQUIRED with one approval needed. Independent local QA found no P0/P1 and both P2s are fixed; remaining P3s are recorded in [HANDOFF.md](HANDOFF.md). The owner signed off the office rollout approach on 2026-10-26; merge and deployment are not approved by it. |
+| O2 | Delivery | Done: PRs #44 and #49 are merged. The owner's office-rollout approach (2026-10-26) still governs enabling execution observations; see [HANDOFF.md](HANDOFF.md). |
 | O3 | Visual verification | Scoped local control/readability review passes: main navigation and day/night have nonoverlapping 44px effective targets below 1100px, checked with hit tests, actual emulated edge taps and keyboard/focus at 320/390/768; accepted fine-pointer wide layout preserved. Four-width home/night/demo/account checks pass. Use the owner-accepted layout as baseline; archived title-fidelity 58% was not remeasured and is not redesign authority. Final combined-source release/packaging review and wide/coarse/browser/device limits remain; no full engine ship receipt is claimed. |
 | O4 | Visual review | Resolve or explicitly disposition prior seam/paper/quill/night-paper observations and the three scoped office typography advisories without turning them into invented global design rules. |
 | O5 | Production verification/repair | Recheck normal homepage HTML/navigation against the historical stale CloudFront response. If still stale, scope authenticated targeted cache repair and verify normal URLs visually and by content. |
@@ -76,7 +76,7 @@ The owner hub is a placeholder. Approved functionality below remains product wor
 
 ## Essays MVP still to build (Phase 5)
 
-The private library remains to be implemented. E4's 300-entry list is owner-approved. E5 tasks 1–7 are built locally and independently tested on the source-registry branch, with offline-only Wikisource acceptance. Migration 0008 is owner-approved but has not been applied to production. Infrastructure and schedules remain pending. See the active E5 section in [HANDOFF.md](HANDOFF.md).
+The private library reader remains to be implemented. The 300-entry list is imported, and three Gutenberg works are stored privately (see the 2026-11-10 section of [HANDOFF.md](HANDOFF.md)); categorization, the reader and recommendations are next.
 
 | ID | Open work |
 |---|---|
@@ -84,7 +84,7 @@ The private library remains to be implemented. E4's 300-entry list is owner-appr
 | E2 | Infinite-scroll metadata/hook cards, clean reader with saved progress and link-only source opening. |
 | E3 | End-of-essay 1–5 rating, what-worked tags and length feedback; rule-based ranking by type/author/era/tags that changes with ratings. |
 | E4 | Complete: owner approved the 300-entry seed list. Preserve it; import is idempotent. |
-| E5 | Tasks 1–7 built/tested locally: registry/crawl/matcher, discovery, bounded queue publisher and crash recovery. `/bot` published via PR #52 and live-verified; local essay default User-Agent configured to that verified contact, all 120 essays tests pass. Essay code itself remains unpublished. Ordinary Wikisource metadata API is robots-disallowed under the accepted policy; resolve a permitted path before activation. Task 8 infrastructure, narrow pipeline flag-read access, deployed queue/cache wiring, review and schedules remain open; feed/sitemap/archive adapters follow the first open source. |
+| E5 | Done for one source: Gutenberg works ingest through the manual rsync workflow into private S3 and Neon (3 works stored, rerun-safe). Open: owner console check, rights decisions for the 9 proposed links, Wikisource access path (robots-disallowed API), source health recovery (task 9), schedules. |
 | E6 | Per-site plain-code extractors using public-domain test fixtures; preserve paywall/login boundaries and link-only fallback. |
 | E7 | Validator: normalized hash, MinHash near-duplicates, fuzzy metadata duplicates, markup/ending/navigation/ad/encoding/length/language quality. Quarantine failures and open sanitized repair issues. |
 | E8 | Jev categorization/confidence with Haiku fallback and Haiku hook writing. |
