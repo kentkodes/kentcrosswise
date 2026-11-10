@@ -30,7 +30,7 @@ export interface CatalogCache {
 }
 /** `rejected`: approved links skipped because they could not form a valid event. */
 export interface DiscoveryResult { discovered: number; emitted: number; skipped: boolean; rejected: number }
-const CATALOG_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv";
+export const CATALOG_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv";
 
 /** Fixed per-link rejection codes; raw link text never leaves the watcher. */
 export type LinkRejectCode =

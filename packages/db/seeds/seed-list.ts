@@ -30,7 +30,7 @@ export function seedListKey(e: Pick<SeedListEntry, "title" | "author">): string 
 }
 
 /** "1841" -> 1841; "unknown" or "Original year unresolved" -> null. */
-function parseYear(year: string): number | null {
+export function parseYear(year: string): number | null {
   return /^\d{4}$/.test(year) ? Number(year) : null;
 }
 
@@ -62,4 +62,21 @@ export async function importSeedList(db: SqlClient, entries: readonly SeedListEn
     throw err;
   }
   return inserted;
+}
+
+export interface SeedCounts {
+  total: number;
+  approved: number;
+  /** Rows that came from the seed list (have a `seed_list_key`). */
+  listed: number;
+}
+
+/** Read-only counts, nothing else: safe to print for any target. */
+export async function countSeedItems(db: SqlClient): Promise<SeedCounts> {
+  const { rows } = await db.query<{ total: string; approved: string; listed: string }>(
+    `SELECT count(*) AS total, count(*) FILTER (WHERE status = 'approved') AS approved,
+            count(seed_list_key) AS listed FROM seed_items`,
+  );
+  const r = rows[0] as { total: string; approved: string; listed: string };
+  return { total: Number(r.total), approved: Number(r.approved), listed: Number(r.listed) };
 }

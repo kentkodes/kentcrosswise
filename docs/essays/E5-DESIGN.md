@@ -143,3 +143,15 @@ Tasks 1-4 can start before E6; 5-7 follow; 11 is not needed for the first two so
 12. **Review artifact home.** Default: the match review table is committed under `docs/essays/` (metadata only), the live state in Neon.
 13. **Dependencies.** Default: write minimal robots and catalog parsers in-repo; request approval for any package before use.
 14. **Seed list staleness.** Default: SEED-LIST.json stays frozen; pipeline fills `access`, `length`, translator, dates in Neon, not in the JSON.
+
+## Gutenberg seed matching (commands)
+
+All metadata only; no essay text and no book fetch. Targets other than `--pglite` need `--confirm` for every write.
+
+- `pnpm import-seed-list [--confirm] [db option]`: idempotent import of the 300 seeds in one transaction; prints `seed_items` counts before and after.
+- `pnpm register-source [--confirm] [db option]`: inserts the `gutenberg` source row if absent (never edits an existing row); allow_paths are `/ebooks/` and `/cache/epub/feeds/` only. Prints `sources` counts.
+- `pnpm match-seeds plan [--from-seed-list] [--catalog-file <csv>] [--out <md>] [db option]`: writes `docs/essays/GUTENBERG-MATCH-REVIEW.md` (provenance header: catalog fetch date, matcher version; columns include seed key, Gutenberg id, QA verdict, Owner decision). Catalog from the file, else one polite fetch of the published CSV. No link rows are written; QA and owner cells already in the file are kept on a re-plan.
+- `pnpm match-seeds apply --ref <ref> [--only "<ids>"] [--confirm] [db option]`: reads the committed, owner-confirmed table and stores links by seed key and candidate. `approve`/`reject` in Owner decision sets that status (`owner:<ref>`); a blank tier A auto row is approved as `auto:tier-a` only when the seed is `public_domain_likely`; tier B needs an owner entry. `--only` approves just those Gutenberg ids (others stay proposed). Existing decisions are never changed; an unknown seed key, URL or unapprovable `--only` id aborts with zero writes.
+- Trust boundary: the committed, owner-reviewed table is what `apply` trusts; it does not recompute the tier or action cells (only the seed's `public_domain_likely` is re-read from the DB).
+- For the smoke always pass `--only`: without it, apply approves every blank-owner tier A auto row.
+- With `--only`, owner `reject` rows outside the set are not applied (they stay proposed) and a `reject` inside the set aborts. An approval aimed at an already rejected link aborts (`approve_on_rejected`).

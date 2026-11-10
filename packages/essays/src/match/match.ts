@@ -5,6 +5,8 @@ import { titleSimilarity } from "./similarity";
 /** An approved seed item, metadata only. */
 export interface SeedInput {
   id: string;
+  /** Stable identity from the seed list (`seed_items.seed_list_key`); the review table is keyed on it. */
+  seedKey?: string | null;
   title: string;
   author: string;
   year: number | null;
@@ -47,6 +49,9 @@ export interface Candidate {
   /** Tier A with `public_domain_likely` true, an original text, and no rival tier A candidate. */
   autoApprove: boolean;
 }
+
+/** Bump when the matching rules change; printed in the review table header. */
+export const MATCHER_VERSION = "1";
 
 /** Tier B threshold on title similarity (design section 3). */
 export const TIER_B_MIN_SIMILARITY = 0.85;
