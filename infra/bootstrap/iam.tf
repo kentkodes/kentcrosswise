@@ -21,6 +21,8 @@ locals {
     "kcw-gh-agent-qa"        = ["${local.github_sub}:environment:agent-publish-qa"]
     "kcw-gh-agent-scraper"   = ["${local.github_sub}:environment:agent-publish-scraper"]
     "kcw-gh-agent-docs"      = ["${local.github_sub}:environment:agent-publish-docs"]
+    # Manual Gutenberg ingest (essay-ingest.yml); the environment deploys from main only.
+    "kcw-gh-essay-ingest" = ["${local.github_sub}:environment:essay-ingest"]
   }
 
   state_arn     = aws_s3_bucket.state.arn
@@ -480,6 +482,27 @@ resource "aws_iam_role_policy" "deploy" {
   name   = "kcw-gh-deploy"
   role   = aws_iam_role.github["kcw-gh-deploy"].id
   policy = data.aws_iam_policy_document.deploy.json
+}
+
+# ---------- essay ingest: reads the pipeline DB secret, writes essay text only ----------
+
+data "aws_iam_policy_document" "essay_ingest" {
+  statement {
+    sid       = "PipelineSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local.secret_arn}:kcw/prod/pipeline-??????"]
+  }
+  statement {
+    sid       = "PutEssayText"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.pipelines.arn}/essays/text/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "essay_ingest" {
+  name   = "kcw-gh-essay-ingest"
+  role   = aws_iam_role.github["kcw-gh-essay-ingest"].id
+  policy = data.aws_iam_policy_document.essay_ingest.json
 }
 
 # ---------- isolated agent publishers: one environment and App key each ----------

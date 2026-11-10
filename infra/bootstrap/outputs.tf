@@ -15,6 +15,7 @@ output "repo_variables" {
     AWS_ROLE_AGENT_QA_ARN        = aws_iam_role.github["kcw-gh-agent-qa"].arn
     AWS_ROLE_AGENT_SCRAPER_ARN   = aws_iam_role.github["kcw-gh-agent-scraper"].arn
     AWS_ROLE_AGENT_DOCS_ARN      = aws_iam_role.github["kcw-gh-agent-docs"].arn
+    AWS_ROLE_ESSAY_INGEST_ARN    = aws_iam_role.github["kcw-gh-essay-ingest"].arn
     TF_STATE_BUCKET              = aws_s3_bucket.state.id
   }
 }

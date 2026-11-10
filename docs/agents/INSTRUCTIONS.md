@@ -111,7 +111,7 @@ infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + r
                      webhook relay Lambda + public Function URL; code = a directory with index.mjs
                      exporting handler, passed as orchestrator_package_dir / relay_package_dir;
                      infra/prod passes the pnpm build-lambdas output; null = the stubs in stub/)
-.github/workflows/   ci.yml, deploy.yml, preview-gc.yml
+.github/workflows/   ci.yml, deploy.yml, preview-gc.yml, essay-ingest.yml (manual Gutenberg ingest, role kcw-gh-essay-ingest)
 .github/actions/     setup (Node, pnpm, install, Terraform), neon-preview (Neon branch with the key from
                      Secrets Manager), preview-gc (find and remove preview leftovers)
 docs/                specs, design, research, agent playbooks, runbooks (owner)
