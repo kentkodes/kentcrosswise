@@ -3,7 +3,7 @@
 // are injected. Essay text, prompts, provider responses and keys never reach a log line or an error:
 // output is ids, fixed codes, the type, the confidence and the returned model id.
 import { createHash } from "node:crypto";
-import { AnthropicProvider, JevProvider, withFallback, type ModelProvider } from "@kcw/core/models";
+import { AnthropicProvider, JevProvider, withFallback, type FallbackInfo, type ModelProvider } from "@kcw/core/models";
 import type { Db } from "../../packages/essays/src/db";
 import { analyzeBook, assertNotPaused, bookUrl, inTransaction } from "./essay-ingest";
 
@@ -30,7 +30,7 @@ export const TYPE_INSTRUCTIONS = [
 
 /** Words of the essay sent to the model. */
 export const EXCERPT_WORDS = 2000;
-/** Jev's answer is used at or above this confidence; below it (or on error) Haiku answers. */
+/** Jev's answer is used at or above this confidence; below it (or on error) Haiku answers and its valid label is final. */
 export const CONFIDENCE_THRESHOLD = 0.7;
 /** The models secret (DESIGN section 6) and its key names. */
 export const MODELS_SECRET = "kcw/prod/models";
@@ -38,7 +38,7 @@ const JEV_KEY = "typesafe_api_key";
 const ANTHROPIC_KEY = "anthropic_api_key";
 
 export type CategorizeCode =
-  | "categorized" | "already_processed" | "not_stored" | "not_approved" | "text_mismatch" | "low_confidence"
+  | "categorized" | "already_processed" | "not_stored" | "not_approved" | "text_mismatch"
   | "provider_error" | "models_unavailable" | "no_files" | "no_usable_text";
 
 export const CATEGORIZE_OK: ReadonlySet<string> = new Set(["categorized", "already_processed"]);
@@ -86,7 +86,17 @@ export function excerpt(text: string, max: number = EXCERPT_WORDS): string {
 /** A provider-returned model id is printed only if it is plain; anything else could inject workflow commands. */
 const safeModel = (m: string) => (/^[A-Za-z0-9._:/-]{1,80}$/.test(m) ? m : "unknown");
 
-async function categorizeBook(id: number, deps: CategorizeDeps, models: () => Promise<Models>): Promise<CategorizeResult> {
+/** Fixed-vocabulary log fields for a fallback answer; never provider text. */
+function fallbackNote(f: FallbackInfo | undefined): string {
+  if (!f) return "";
+  if (f.reason === "error") return " fallback=error";
+  const c = f.primaryConfidence;
+  return " fallback=low_confidence" + (typeof c === "number" && Number.isFinite(c) ? ` primary_confidence=${(Math.round(c * 100) / 100).toFixed(2)}` : "");
+}
+
+async function categorizeBook(
+  id: number, deps: CategorizeDeps, models: () => Promise<Models>, note: { text: string },
+): Promise<CategorizeResult> {
   const { db } = deps;
   const url = bookUrl(id);
   const row = (
@@ -125,7 +135,7 @@ async function categorizeBook(id: number, deps: CategorizeDeps, models: () => Pr
   if (!(ESSAY_TYPES as readonly string[]).includes(answer.label)) return { id, code: "provider_error" };
   const model = safeModel(answer.model);
   const confidence = Math.round(answer.confidence * 100) / 100;
-  if (!(answer.confidence >= CONFIDENCE_THRESHOLD)) return { id, code: "low_confidence", type: answer.label, confidence, model };
+  note.text = fallbackNote(answer.fallback);
 
   let activated = false;
   await inTransaction(db, async () => {
@@ -146,11 +156,12 @@ export async function categorizePhase(ids: readonly number[], deps: CategorizeDe
   const models = () => (loaded ??= deps.getModels());
   const results: CategorizeResult[] = [];
   for (const id of ids) {
-    const r = await categorizeBook(id, deps, models);
+    const note = { text: "" };
+    const r = await categorizeBook(id, deps, models, note);
     results.push(r);
     deps.log(
       `essay-ingest: id=${id} code=${r.code}` +
-        (r.type ? ` type=${r.type} confidence=${r.confidence?.toFixed(2)} model=${r.model}` : ""),
+        (r.type ? ` type=${r.type} confidence=${r.confidence?.toFixed(2)} model=${r.model}${note.text}` : ""),
     );
   }
   return results;

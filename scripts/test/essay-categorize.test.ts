@@ -22,7 +22,7 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe("categorize phase on PGlite as a pipeline_rw member", () => {
   const LOGIN = "categorize_test_app";
-  const IDS = { ok: 301, low: 302, mismatch: 303, perr: 304, models: 305, cap: 306, fb: 307, missing: 308, noFile: 309 };
+  const IDS = { ok: 301, low: 302, mismatch: 303, perr: 304, models: 305, cap: 306, fb: 307, missing: 308, noFile: 309, fb2: 310, bad: 311 };
   let fresh: Awaited<ReturnType<typeof freshDb>>;
   let dir: string;
   const logs: string[] = [];
@@ -61,7 +61,7 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     const sourceId = (await registerGutenbergSource(fresh.db)).id;
     await fresh.db.exec(`CREATE ROLE ${LOGIN} LOGIN; GRANT pipeline_rw TO ${LOGIN};`);
     await setPaused(false);
-    const stored = [IDS.ok, IDS.low, IDS.mismatch, IDS.perr, IDS.models, IDS.cap, IDS.fb, IDS.noFile];
+    const stored = [IDS.ok, IDS.low, IDS.mismatch, IDS.perr, IDS.models, IDS.cap, IDS.fb, IDS.noFile, IDS.fb2, IDS.bad];
     for (const id of [...stored, IDS.missing]) {
       const seed = await q<{ id: string }>(
         "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
@@ -111,11 +111,30 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     expect((await categories()).find((c) => c.source_url === urlOf(IDS.fb))?.model).toBe("claude-haiku-5-5-20260101");
   });
 
-  it("both providers below the threshold: low_confidence, still pending, no category row", async () => {
+  it("a low-confidence fallback answer is final: stored, essay active, log says why Jev was not used", async () => {
+    const res = await run([IDS.low], async () => models(jev({ label: "travel", confidence: 0.3456 }), haiku({ label: "cultural", confidence: 0.2 })));
+    expect(res).toEqual([{ id: IDS.low, code: "categorized", type: "cultural", confidence: 0.2, model: "claude-haiku-5-5" }]);
+    expect(await statusOf(IDS.low)).toBe("active");
+    expect((await categories()).find((c) => c.source_url === urlOf(IDS.low))).toEqual(
+      { type: "cultural", confidence: expect.closeTo(0.2, 5), model: "claude-haiku-5-5", source_url: urlOf(IDS.low) });
+    expect(logs).toContain(
+      `essay-ingest: id=${IDS.low} code=categorized type=cultural confidence=0.20 model=claude-haiku-5-5 fallback=low_confidence primary_confidence=0.35`);
+    const again = jev({ label: "travel", confidence: 1 });
+    expect(await run([IDS.low], async () => models(again, haiku({ label: "travel", confidence: 1 })))).toEqual([{ id: IDS.low, code: "already_processed" }]);
+    expect(again.calls).toHaveLength(0);
+  });
+
+  it("logs fallback=error when Jev throws, without the error text", async () => {
+    const res = await run([IDS.fb2], async () => models(jev(new Error("RESPONSEBODY KEYMATERIAL")), haiku({ label: "travel", confidence: 0.5 })));
+    expect(res[0]?.code).toBe("categorized");
+    expect(logs).toContain(`essay-ingest: id=${IDS.fb2} code=categorized type=travel confidence=0.50 model=claude-haiku-5-5 fallback=error`);
+  });
+
+  it("an unknown label is provider_error and writes nothing", async () => {
     const before = await categories();
-    const res = await run([IDS.low], async () => models(jev({ label: "travel", confidence: 0.3 }), haiku({ label: "cultural", confidence: 0.4 })));
-    expect(res.map((r) => r.code)).toEqual(["low_confidence"]);
-    expect(await statusOf(IDS.low)).toBe("pending_category");
+    const res = await run([IDS.bad], async () => models(jev({ label: "diary", confidence: 0.95 }), haiku({ label: "diary", confidence: 0.9 })));
+    expect(res).toEqual([{ id: IDS.bad, code: "provider_error" }]);
+    expect(await statusOf(IDS.bad)).toBe("pending_category");
     expect(await categories()).toEqual(before);
   });
 
@@ -172,12 +191,12 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
 
   it("does nothing while paused", async () => {
     const primary = jev({ label: "travel", confidence: 1 });
-    const before = JSON.stringify([await categories(), await statusOf(IDS.low)]);
+    const before = JSON.stringify([await categories(), await statusOf(IDS.bad)]);
     await setPaused(true);
-    await expect(run([IDS.low], async () => models(primary, haiku({ label: "travel", confidence: 1 })))).rejects.toThrow("pipelines_paused");
+    await expect(run([IDS.bad], async () => models(primary, haiku({ label: "travel", confidence: 1 })))).rejects.toThrow("pipelines_paused");
     await setPaused(false);
     expect(primary.calls).toHaveLength(0);
-    expect(JSON.stringify([await categories(), await statusOf(IDS.low)])).toBe(before);
+    expect(JSON.stringify([await categories(), await statusOf(IDS.bad)])).toBe(before);
   });
 
   it("never prints essay text, prompts, responses or keys", () => {
