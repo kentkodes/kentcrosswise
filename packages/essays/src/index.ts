@@ -40,5 +40,8 @@ export {
 } from "./registry/source";
 export { nextHealth, recordOutcome, recordSourceEvent, type HealthEvent, type UrlOutcome } from "./registry/health";
 export { matchAll, matchSeed, type CatalogRecord, type Candidate, type SeedInput } from "./match/match";
-export { renderReviewTable } from "./match/review";
-export { loadApprovedSeeds, proposeLinks } from "./match/links";
+export { MATCHER_VERSION } from "./match/match";
+export { gutenbergRecords, gutenbergEbookUrl, isCollectionTitle } from "./match/gutenberg-records";
+export { REVIEW_COLUMNS, parseReviewTable, renderReviewTable, reviewCells, reviewKey, type ReviewRow } from "./match/review";
+export { GUTENBERG_SLUG, registerGutenbergSource } from "./registry/bootstrap";
+export { ApplyError, applyReviewedLinks, loadApprovedSeeds, proposeLinks, type ApplyResult } from "./match/links";
