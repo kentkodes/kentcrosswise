@@ -15,9 +15,9 @@ Migration 0001 creates NOLOGIN **group roles** (`web_rw`, `web_public`, `orch_rw
 | `web_public_app` | SQL (step 3) | `web_public` | `kcw/prod/web`, `db_url_public` | pooled |
 | `orch_app` | SQL (step 3) | `orch_rw` | `kcw/prod/orchestrator`, `db_url` | pooled |
 | `relay_app` | SQL (step 3) | `relay_rw` (prod was set up with `orch_rw`: switch it in step 3.3) | `kcw/prod/relay`, `db_url` | pooled |
-| `pipeline_app` | later | `pipeline_rw` | `kcw/prod/pipeline`, `db_url` | pooled |
+| `pipeline_app` | SQL (step 3.5) | `pipeline_rw` | `kcw/prod/pipeline`, `db_url` | pooled |
 
-`kcw/prod/pipeline` waits for Phase 3 (no pipeline Lambda reads it yet); create `pipeline_app` the same way as the others then.
+`pipeline_app` is created separately in step 3.5; only the `essay-ingest` workflow reads `kcw/prod/pipeline`.
 
 Database: `kentcrosswise` on the project's default branch.
 
@@ -197,6 +197,18 @@ SELECT
 
 Then tell the Liaison "prod DB secrets filled".
 
+### 3.5 The pipeline role (`pipeline_app`, essay ingest)
+
+One more login, for the `essay-ingest` workflow only. In the Neon SQL Editor (database `kentcrosswise`, as `migrator_app`), with a generated password you do not paste into chat:
+
+```sql
+CREATE ROLE pipeline_app LOGIN PASSWORD '<generated>';
+GRANT pipeline_rw TO pipeline_app;
+GRANT CONNECT ON DATABASE kentcrosswise TO pipeline_app;
+```
+
+Put the pooled URL (host with `-pooler`, `sslmode=verify-full`) as key `db_url` in `kcw/prod/pipeline` (Set secret value). Run the 3.4 membership query with `'pipeline_app'` in the list: expect `pipeline_app`→`pipeline_rw`, `inherit_option` and `set_option` both `true`. Then tell the Liaison "pipeline secret filled".
+
 ## 4. What you end up with
 
 | Secret | Key | Value |
@@ -206,7 +218,7 @@ Then tell the Liaison "prod DB secrets filled".
 | `kcw/prod/web` | `db_url_public` | `web_public_app`, pooled host |
 | `kcw/prod/orchestrator` | `db_url` | `orch_app`, pooled host |
 | `kcw/prod/relay` | `db_url` | `relay_app`, pooled host |
-| `kcw/prod/pipeline` | `db_url` | Phase 3 |
+| `kcw/prod/pipeline` | `db_url` | `pipeline_app`, pooled host (step 3.5) |
 
 All URLs end in `/kentcrosswise?sslmode=verify-full`.
 

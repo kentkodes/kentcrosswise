@@ -170,8 +170,11 @@ export interface FetchResult {
   verdict: "ok" | "invalid" | null;
 }
 
-/** Never prints mirror listing names (a hostile name could inject a workflow command); `picked` is exactly `<id>-0.txt` or `<id>.txt`. */
-/** rsync, then extract and validate in memory, one book at a time with a pause between books. Prints codes and counts only. */
+/**
+ * rsync, then extract and validate in memory, one book at a time with a pause between books. Prints codes
+ * and counts only. Never prints mirror listing names (a hostile name could inject a workflow command);
+ * `picked` is exactly `<id>-0.txt` or `<id>.txt`.
+ */
 export async function fetchPhase(ids: readonly number[], deps: FetchDeps): Promise<FetchResult[]> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const results: FetchResult[] = [];

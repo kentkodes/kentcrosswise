@@ -32,6 +32,7 @@ describe("isolated publisher IAM source contracts", () => {
       "kcw-gh-plan": ["${local.github_sub}:pull_request"],
       "kcw-gh-deploy": ["${local.github_sub}:environment:prod"],
       ...Object.fromEntries(agents.map((agent) => [`kcw-gh-agent-${agent}`, [`\${local.github_sub}:environment:agent-publish-${agent}`]])),
+      "kcw-gh-essay-ingest": ["${local.github_sub}:environment:essay-ingest"],
     });
     expect(iam).not.toContain(":ref:refs/heads/main");
     expect(iam).not.toMatch(/"kcw-gh-agent"/);
