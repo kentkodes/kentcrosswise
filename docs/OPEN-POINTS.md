@@ -76,7 +76,7 @@ The owner hub is a placeholder. Approved functionality below remains product wor
 
 ## Essays MVP still to build (Phase 5)
 
-The private library reader remains to be implemented. The 300-entry list is imported, and three Gutenberg works are stored privately (see the 2026-11-10 section of [HANDOFF.md](HANDOFF.md)); categorization, the reader and recommendations are next.
+The private library reader remains to be implemented. The 300-entry list is imported, and eight Gutenberg works are stored privately (see the 2026-11-10 section of [HANDOFF.md](HANDOFF.md)); categorization, the reader and recommendations are next.
 
 | ID | Open work |
 |---|---|
@@ -84,7 +84,7 @@ The private library reader remains to be implemented. The 300-entry list is impo
 | E2 | Infinite-scroll metadata/hook cards, clean reader with saved progress and link-only source opening. |
 | E3 | End-of-essay 1–5 rating, what-worked tags and length feedback; rule-based ranking by type/author/era/tags that changes with ratings. |
 | E4 | Complete: owner approved the 300-entry seed list. Preserve it; import is idempotent. |
-| E5 | Done for one source: Gutenberg works ingest through the manual rsync workflow into private S3 and Neon (3 works stored, rerun-safe). Open: owner console check, rights decisions for the 9 proposed links, Wikisource access path (robots-disallowed API), source health recovery (task 9), schedules. |
+| E5 | Done for one source: Gutenberg works ingest through the manual rsync workflow into private S3 and Neon (8 works stored, rerun-safe). Open: owner console check, Wikisource access path (robots-disallowed API), source health recovery (task 9), schedules. |
 | E6 | Per-site plain-code extractors using public-domain test fixtures; preserve paywall/login boundaries and link-only fallback. |
 | E7 | Validator: normalized hash, MinHash near-duplicates, fuzzy metadata duplicates, markup/ending/navigation/ad/encoding/length/language quality. Quarantine failures and open sanitized repair issues. |
 | E8 | Jev categorization/confidence with Haiku fallback and Haiku hook writing. |
