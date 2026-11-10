@@ -17,6 +17,26 @@ export async function readMetadataBody(body: AsyncIterable<Uint8Array> & { destr
   } finally { body.destroy?.(); }
 }
 
+/**
+ * Writes essay text objects for the ingest job (its role has PutObject on `essays/text/*` only).
+ * The key is a content hash, so a conditional put (`If-None-Match: *`) that finds the key already
+ * there (412) is success: the identical bytes are stored. Nothing is read back or listed.
+ */
+export function createTextObjectWriter(bucket: string, region: string, client?: Pick<S3Client, "send" | "destroy">) {
+  const s3 = client ?? new S3Client({ region });
+  return {
+    async putObject(key: string, body: Uint8Array): Promise<void> {
+      try {
+        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: "text/plain; charset=utf-8", IfNoneMatch: "*" }));
+      } catch (error) {
+        const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+        if (status !== 412) throw error;
+      }
+    },
+    close() { s3.destroy(); },
+  };
+}
+
 /** The SDK clients the adapters use (only `send`/`destroy`, so tests pass fakes). */
 export interface AwsAdapterClients {
   s3: Pick<S3Client, "send" | "destroy">;

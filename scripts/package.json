@@ -10,6 +10,7 @@
     "import-seed-list": "tsx import-seed-list.ts",
     "register-source": "tsx register-source.ts",
     "match-seeds": "tsx match-seeds.ts",
+    "essay-ingest": "tsx essay-ingest.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check-prod-bundle": "tsx check-prod-bundle.ts",
     "build-web": "tsx build-web.ts",

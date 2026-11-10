@@ -155,3 +155,12 @@ All metadata only; no essay text and no book fetch. Targets other than `--pglite
 - Trust boundary: the committed, owner-reviewed table is what `apply` trusts; it does not recompute the tier or action cells (only the seed's `public_domain_likely` is re-read from the DB).
 - For the smoke always pass `--only`: without it, apply approves every blank-owner tier A auto row.
 - With `--only`, owner `reject` rows outside the set are not applied (they stay proposed) and a `reject` inside the set aborts. An approval aimed at an already rejected link aborts (`approve_on_rejected`).
+
+## Gutenberg ingest from the rsync mirror (command)
+
+Plan section 12; the book text never appears in output (ids, counts and fixed codes only).
+
+- `pnpm essay-ingest --phase fetch --ids "<book ids>" [--dir <path>]`: rsync (through `timeout 300`, no shell, one book at a time, 10 s apart, `rsync.ibiblio.org` then `gutenberg.pglaf.org` on a connection-class failure) of the book's main-collection directory, top-level `*.txt` only, then in-memory extract and validate; prints file names, sizes, verdict and codes. No database, no AWS. Codes: `mirror_unreachable`, `mirror_refused`, `timeout`, `no_files`, `rsync_failed`, `no_usable_text` (only a latin-1 `-8.txt`).
+- `pnpm essay-ingest --phase store --ids "<book ids>" --bucket <bucket> [--dir <path>] [--confirm] [db option]`: needs an `approved` Gutenberg link per id (else `not_approved`, nothing written) and `pipelines_paused` false. Valid text: S3 put of `essays/text/<sha256>.txt` first, then one transaction (`essays` row `kind='full'`, `pending_category`; `essay_urls` row set `fetched`). Invalid text: `quarantine` row with reason codes (`missing_start_marker`, `missing_end_marker`, `license_residue`, `bad_characters`, `html_tags`, `too_short`) and `essay_urls` `quarantined`. The same text under another book is `duplicate` (URL fetched, no second row). No file or no UTF-8 file: attempt counted, `failed` after 5. A rerun skips books already `fetched`, `quarantined` or `link_only`.
+- Other store-side codes: `no_files`, `no_usable_text`, `not_approved`, `invalid_book_id`, `bucket_required`. A set `pipelines_paused` makes the run throw and exit 1 with nothing written.
+- Exit status 1 if any id ends outside `stored`, `duplicate`, `already_processed` (store) or with a fetch code (fetch).

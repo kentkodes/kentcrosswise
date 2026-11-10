@@ -4,13 +4,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getFlags, listEvents, listTasks, MAX_TASK_TEXT, type EventRow, type Flags, type TaskRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { essayStatus, type EssayStatus } from "@/server/essay-status";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
 import { noticeText } from "../notices";
+import { EssayStatusSection } from "./essay-status";
 import { createTaskAction, resendTaskAction, setFlagAction } from "./actions";
 
 export const metadata: Metadata = { title: "Boss console | Kentcrosswise" };
 
-type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags };
+type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags; essays: EssayStatus };
 
 async function load(): Promise<{ data?: Data; problem?: string }> {
   try {
@@ -18,7 +20,7 @@ async function load(): Promise<{ data?: Data; problem?: string }> {
       "web_rw",
       async (db) => {
         const [tasks, flags] = [await listTasks(db), await getFlags(db)];
-        return { tasks, flags, events: await listEvents(db, tasks.map((t) => t.id)) };
+        return { tasks, flags, events: await listEvents(db, tasks.map((t) => t.id)), essays: await essayStatus(db) };
       },
       { readOnly: true },
     );
@@ -99,6 +101,8 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
             <FlagSwitch name="agents_paused" label="Agents" on={data.flags.agents_paused} />
             <FlagSwitch name="pipelines_paused" label="Pipelines" on={data.flags.pipelines_paused} />
           </section>
+
+          <EssayStatusSection status={data.essays} />
 
           <section aria-labelledby="new-task">
             <h2 id="new-task">New task</h2>
