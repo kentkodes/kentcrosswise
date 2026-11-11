@@ -172,6 +172,27 @@ export async function usageSummary(db: Queryable, range: DayRange): Promise<Usag
   return summary;
 }
 
+/**
+ * Monthly model-spend cap, USD. The sweep (agents/orchestrator/src/sweeper/spend.ts, which applies
+ * it) is the enforcer; this copy is for the usage panel and is pinned to it by
+ * apps/web/test/spend-cap.test.ts.
+ */
+export const SPEND_CAP_USD = 50;
+
+/** Micro-dollar rounding, as the sweep applies to the month total (spend.ts roundMicroUsd). */
+export const roundMicroUsd = (usd: number) => Math.round(usd * 1_000_000) / 1_000_000;
+
+/** Same verdict as the sweep's capReached (spend.ts): round to micro-dollars, then at or above the cap. */
+export function capReachedUsd(spentUsd: number | null, capUsd: number = SPEND_CAP_USD): boolean {
+  return roundMicroUsd(spentUsd ?? 0) >= capUsd;
+}
+
+/** The UTC calendar month to date: the 1st of the month containing `now`, through today (inclusive). */
+export function monthToDateRange(now: Date = new Date()): DayRange {
+  const today = dayOf(now.getTime());
+  return { from: `${today.slice(0, 8)}01`, to: today };
+}
+
 /** `$1.23`, or 4 decimals under a dollar; null is "no price". */
 export function formatUsd(v: number | null): string {
   if (v === null) return "no price";

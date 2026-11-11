@@ -250,6 +250,13 @@ class FakeStore implements SweeperStore {
   async isAgentsPaused() {
     return this.paused;
   }
+  async setAgentsPaused() {
+    this.paused = true;
+  }
+  // No model usage by default: month-to-date spend is $0 and the cap is not reached.
+  async monthUsage(_start: Date, _end: Date) {
+    return { events: [], prices: [] };
+  }
   async knownDeliveries(ids: readonly string[]) {
     return new Set(ids.filter((i) => this.known.has(i)));
   }

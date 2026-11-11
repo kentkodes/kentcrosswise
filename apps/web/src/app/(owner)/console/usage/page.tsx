@@ -3,13 +3,34 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
-import { formatUsd, parseRange, usageSummary, type UsageGroup, type UsageSummary } from "@/server/usage";
+import {
+  SPEND_CAP_USD,
+  capReachedUsd,
+  formatUsd,
+  monthToDateRange,
+  parseRange,
+  roundMicroUsd,
+  usageSummary,
+  type UsageGroup,
+  type UsageSummary,
+} from "@/server/usage";
 
 export const metadata: Metadata = { title: "Usage | Kentcrosswise" };
 
-async function load(range: { from: string; to: string }): Promise<{ data?: UsageSummary; problem?: string }> {
+interface Loaded {
+  data: UsageSummary;
+  /** Month to date (UTC), for the spend cap. */
+  month: UsageSummary;
+}
+
+async function load(range: { from: string; to: string }): Promise<{ loaded?: Loaded; problem?: string }> {
   try {
-    return { data: await withDb("web_rw", (db) => usageSummary(db, range), { readOnly: true }) };
+    const loaded = await withDb(
+      "web_rw",
+      async (db) => ({ data: await usageSummary(db, range), month: await usageSummary(db, monthToDateRange()) }),
+      { readOnly: true },
+    );
+    return { loaded };
   } catch (err) {
     if (err instanceof DbNotConfiguredError) return { problem: "The database is not connected yet." };
     console.error(`[usage] ${dbErrorLabel(err)}`);
@@ -25,6 +46,32 @@ function Cost({ group }: { group: UsageGroup }) {
       {formatUsd(group.costUsd)}
       {group.costUsd !== null && group.unpricedEvents > 0 ? <> (+{int(group.unpricedEvents)} with no price)</> : null}
     </>
+  );
+}
+
+/** Month-to-date model cost against the monthly cap (orchestrator sweep enforces it). */
+function SpendCap({ month }: { month: UsageSummary }) {
+  const spent = roundMicroUsd(month.total.costUsd ?? 0);
+  const reached = capReachedUsd(month.total.costUsd);
+  return (
+    <section aria-labelledby="spend-cap">
+      <h2 id="spend-cap">Monthly spend cap</h2>
+      {reached ? (
+        <p role="alert" data-testid="cap-banner">
+          Monthly model-spend cap reached. The sweep pauses agents and dispatches no new agent work. The sweep re-pauses agents
+          while month-to-date spend stays at or above the cap, so turning Agents on has no lasting effect until the next UTC
+          month.
+        </p>
+      ) : null}
+      <p data-testid="cap-status">
+        Month to date ({month.range.from} to {month.range.to}, UTC): ${spent.toFixed(2)} of ${SPEND_CAP_USD} cap
+      </p>
+      {month.total.unpricedEvents > 0 ? (
+        <p data-testid="cap-unpriced">
+          {int(month.total.unpricedEvents)} model events have no price and are not counted in this total.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -67,7 +114,9 @@ function GroupTable({ id, title, label, groups }: { id: string; title: string; l
 export default async function UsagePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const range = parseRange(params.from, params.to);
-  const { data, problem } = await load(range);
+  const { loaded, problem } = await load(range);
+  const data = loaded?.data;
+  const month = loaded?.month;
 
   return (
     <main>
@@ -91,8 +140,9 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
       </p>
       {problem ? (
         <p role="alert">{problem}</p>
-      ) : data ? (
+      ) : data && month ? (
         <>
+          <SpendCap month={month} />
           <section aria-labelledby="totals">
             <h2 id="totals">
               Totals {data.range.from} to {data.range.to}
