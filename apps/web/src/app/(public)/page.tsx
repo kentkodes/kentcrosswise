@@ -9,7 +9,7 @@ import { PaperFrame } from "./_site/paper-frame";
 export const HERO = {
   headline: "Watch AI agents build my personal hub.",
   subline:
-    "Every change to Kentcrosswise is planned, coded, reviewed and shipped by a small team of agents. The office shows the work as it happens.",
+    "Every change to the hub is planned, coded, reviewed and shipped by a custom team of agents. The office shows the work as it happens.",
 } as const;
 
 const FEATURES = [
