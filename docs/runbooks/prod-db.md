@@ -263,3 +263,17 @@ Production migrations/runtime logins are wired. Google owner sign-in, console/in
 On 2026-10-25 the owner confirmed expected SQL results, including relay_app membership moved from orch_rw to relay_rw and the approved Haiku model-price row. Relay membership (`relay_rw=true`, `orch_rw=false`) and the accepted price row were then independently verified during acceptance ([HANDOFF.md](../HANDOFF.md)). Do not repeat the membership mutation.
 
 The public feed was most recently observed available with no events. Full issue-to-Docs/usage execution remains P2-18; current holds and evidence are in [HANDOFF.md](../HANDOFF.md).
+
+## 8. Model price rows (owner SQL)
+
+Price rows are entered by the owner in the SQL Editor as `migrator_app`; no migration inserts vendor prices (migrations are append-only and seeds are synthetic). Usage with no matching row shows "no price" and adds nothing to the $50 monthly spend cap, so enter a row before a model starts running in production.
+
+Row for DeepSeek V4.1 Flash, provider `deepseek` and model `deepseek-flash` (the strings `DeepseekProvider` writes; if the `deepseek_model` secret key is set to another id, the row must use that id). Verified 2026-11-10 at https://api-docs.deepseek.com/quick_start/pricing. The vendor prices change by time of day (peak 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday), and a row has one input and one output price. The row therefore uses the peak cache-miss input ($0.30) and peak output ($1.20) per million tokens, so the cap errs high. Cache-hit input is not priced. `effective_from` is the verification date; add an earlier row only if the vendor's start date for the price is known.
+
+```sql
+INSERT INTO model_prices (provider, model, usd_per_mtok_in, usd_per_mtok_out, effective_from)
+VALUES ('deepseek', 'deepseek-flash', 0.300000, 1.200000, DATE '2026-11-10')
+ON CONFLICT DO NOTHING;
+```
+
+Check: `SELECT provider, model, usd_per_mtok_in, usd_per_mtok_out, effective_from FROM model_prices WHERE provider = 'deepseek';` returns one row.
