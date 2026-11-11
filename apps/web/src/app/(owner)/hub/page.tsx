@@ -11,6 +11,9 @@ export default function HubPage() {
         <li>
           <Link href="/inbox">Inbox</Link>
         </li>
+        <li>
+          <Link href="/essays">Essays</Link>
+        </li>
       </ul>
     </main>
   );
