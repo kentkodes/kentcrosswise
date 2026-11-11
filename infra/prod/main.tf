@@ -112,6 +112,14 @@ module "web_secrets" {
   names  = ["kcw/prod/web"]
 }
 
+# Essay text (E5 ingest) lives in the owner-created pipelines bucket (infra/bootstrap/pipelines.tf).
+# The web server reads only essays/text/* from it; the bucket name is not a secret.
+data "aws_caller_identity" "current" {}
+
+locals {
+  essay_text_bucket = "kentcrosswise-pipelines-${data.aws_caller_identity.current.account_id}"
+}
+
 module "web" {
   source = "../modules/web"
 
@@ -131,9 +139,12 @@ module "web" {
   # (sqs_managed_sse_enabled), so no KMS permission is needed.
   server_send_queue_arns = [module.orchestrator.queue_arn]
 
+  essay_text_bucket_arn = "arn:aws:s3:::${local.essay_text_bucket}"
+
   server_environment = {
     KCW_WEB_SECRET             = "kcw/prod/web"
     KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
+    ESSAY_TEXT_BUCKET          = local.essay_text_bucket
   }
 }
 

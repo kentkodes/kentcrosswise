@@ -1,6 +1,6 @@
 // Essay reader (essays SPEC "Reader" and "Rating"). Owner only (the (owner) layout).
-// Link-only essays open their source instead of a reader. Full text comes from loadEssayText, which
-// is a placeholder until the S3 slice lands.
+// Link-only essays open their source instead of a reader. Full text comes from loadEssayText (S3);
+// when it is null (no bucket, missing object, read error) the reader says "Text unavailable".
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -15,7 +15,7 @@ import {
   readingMinutesOf,
   type ReaderEssay,
 } from "@/server/essay-library";
-import { loadEssayText } from "@/server/essay-text";
+import { loadEssayText, textParagraphs } from "@/server/essay-text";
 import { noticeText } from "../../notices";
 import styles from "../essays.module.css";
 import { RatingForm } from "./rating-form";
@@ -72,6 +72,7 @@ export default async function EssayReaderPage({
   }
 
   const text = await loadEssayText(essay.textS3Key);
+  const paragraphs = text === null ? [] : textParagraphs(text);
   const minutes = readingMinutesOf(essay);
 
   return (
@@ -93,17 +94,13 @@ export default async function EssayReaderPage({
       </header>
       <ReadingProgress />
       {notice ? <p role="status">{notice}</p> : null}
-      {text === null ? (
-        <p role="status">Text storage connection pending</p>
+      {paragraphs.length === 0 ? (
+        <p role="status">Text unavailable</p>
       ) : (
         <article className={styles.body}>
-          {text
-            .split(/\n\s*\n/)
-            .map((p) => p.trim())
-            .filter((p) => p.length > 0)
-            .map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
+          {paragraphs.map((p, i) => (
+            <p key={i}>{p}</p>
+          ))}
         </article>
       )}
       <RatingForm essayId={essay.id} rating={essay.rating} />
