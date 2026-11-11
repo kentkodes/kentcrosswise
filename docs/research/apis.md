@@ -7,7 +7,6 @@ Secrets to store in Secrets Manager, by integration:
 - Instagram: Instagram App ID, Instagram App Secret, plus the long-lived token, which must be rewritten after every refresh.
 - TikTok: `client_key`, `client_secret`, plus the refresh token. TikTok may rotate the refresh token, so it must be rewritten too.
 - `ANTHROPIC_API_KEY`
-- `TYPESAFE_API_KEY`
 - `LANGSMITH_API_KEY`
 - VAPID public/private keys
 
@@ -227,40 +226,7 @@ Test this first, before building any TikTok UI. The Display API get-started page
 
 ---
 
-## 5. Jev (TypeSafe AI)
-
-- **Status:**
-  - typesafe.ai describes Jev as "in early access" with a link to the console: https://typesafe.ai/
-  - No waitlist is mentioned. Whether self-serve signup is open is **UNVERIFIED**; the docs only say to log in to the console.
-  - The release date (15 September 2026) comes from third-party sources: https://openrouter.ai/blog/insights/what-is-jev/
-- **Signup and key:**
-  - Create an account at https://console.typesafe.ai/ and get the key at `console.typesafe.ai/keys`. Env var: `TYPESAFE_API_KEY`.
-  - Source: https://docs.typesafe.ai/introduction/quickstart
-- **Endpoint:** `POST https://api.typesafe.ai/v1/systemone` with `Authorization: Bearer <key>` and JSON.
-  - Body: `{ "model": "jev-latest", "state": "<text or JSON>", "questions": { "<id>": { "type": "choice"|"score"|"noul", "instructions": "...", "criteria": ... } } }`
-  - Response: `{ "model": "jev-1.13.0", "answers": { "<id>": { "type", "choice"|"score"|"noul", "confidence", "probabilities" } }, "usage": { "input_tokens", "output_tokens" } }`
-  - Choice and Score return `confidence` and `probabilities`. Noul returns 0–1.
-  - Source: https://docs.typesafe.ai/introduction/quickstart and https://docs.typesafe.ai/introduction
-  - The question-map shape is paraphrased. Use the OpenAPI spec for exact field names: https://api.typesafe.ai/openapi.json
-- **Note:** a third-party blog cites a different domain (`thejevai.com`). Ignore it; the official docs say `api.typesafe.ai`.
-- **Models** (https://docs.typesafe.ai/models.md)
-  - `jev-1.13.0`: what `jev-latest` points to.
-  - `jev-1.14.0`: what `jev-preview` points to; released October 14, 2026.
-  - Context: 64k per request and 32k per question. Opt-in long context goes to 262k via the `TypeSafe-Danger-Zone-Long-Context: true` header.
-  - Text input only.
-- **Pricing:** $0.042 per million input tokens; output is free. Sources: https://docs.typesafe.ai/models.md and https://typesafe.ai/
-- **Rate limits:**
-  - Set per organization in tokens and requests per second, and shown in the console. No numbers are published.
-  - 429 means rate limit and 529 means overloaded; retry with backoff. The body limit is 32 MiB.
-  - Sources: https://docs.typesafe.ai/models.md and https://docs.typesafe.ai/api/errors.md
-- **SDKs:**
-  - JS: `@typesafe-ai/sdk` (Node 20+). Python: `typesafe-sdk`. Source: https://docs.typesafe.ai/introduction/quickstart
-  - There is also a Pydantic AI integration, `pydantic-ai-slim[typesafe]`: https://pydantic.dev/docs/ai/models/typesafe/
-  - No LangChain.js integration was found (**UNVERIFIED**). Call it from a LangGraph node with the JS SDK.
-
----
-
-## 6. LangSmith
+## 5. LangSmith
 
 - **Developer plan:** $0, 1 seat maximum, up to 5k base traces/month, then pay-as-you-go. Base traces are retained 14 days. Source: https://www.langchain.com/pricing
   - Overage price: **UNVERIFIED**. The official page doesn't list it, and third parties disagree ($2.50 vs $0.50 per 1k).
@@ -275,7 +241,7 @@ Test this first, before building any TikTok UI. The Display API get-started page
 
 ---
 
-## 7. Web Push on iPhone
+## 6. Web Push on iPhone
 
 Source: https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/
 - Requires **iOS/iPadOS 16.4+**.
@@ -305,6 +271,5 @@ Source: https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/
    - The long-lived token must be refreshed before 60 days, or you must log in again.
 5. **YouTube `subscriberCount` is rounded down to 3 significant figures.** Use YouTube Analytics for exact daily gains.
 6. **Anthropic tiers are renamed** to Evaluation, Start, Build and Scale, with monthly spend caps. Haiku 5.5 has a price cliff above 100K-token prompts. The model ID `claude-haiku-5-5` is confirmed.
-7. **Jev is in "early access".** Open self-serve availability is **UNVERIFIED**. Numeric rate limits are not published; they are per organization and shown in the console. `jev-latest` is 1.13, not 1.14.
-8. **LangSmith on Lambda** needs `LANGCHAIN_CALLBACKS_BACKGROUND=false`, or traces are lost.
-9. **iPhone push only works after "Add to Home Screen"** on iOS 16.4+. The app needs a manifest and a service worker.
+7. **LangSmith on Lambda** needs `LANGCHAIN_CALLBACKS_BACKGROUND=false`, or traces are lost.
+8. **iPhone push only works after "Add to Home Screen"** on iOS 16.4+. The app needs a manifest and a service worker.

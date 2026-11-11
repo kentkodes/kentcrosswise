@@ -51,7 +51,7 @@ The owner hub is a placeholder. Approved functionality below remains product wor
 |---|---|
 | H1 | Public /terms and /privacy pages and required provider/domain configuration. |
 | H2 | Phone-friendly private capture box, raw-entry persistence and routing status. |
-| H3 | Jev routing with Haiku fallback, low-confidence inbox, owner reassignment and stored route corrections. |
+| H3 | Routing on DeepSeek V4.1 Flash, low-confidence inbox, owner reassignment and stored route corrections. |
 | H4 | Contacts CRUD, aliases/tags/birthday/context and CRM-note linking with owner resolution of ambiguous matches. Last-contact reminders remain excluded. |
 | H5 | Incremental Calendar OAuth/offline consent, suggestion extraction and owner one-tap event creation. |
 | H6 | Diary editor and eight 0–1 mood metrics plus overall sentiment scoring; chart history with metric toggles. |
@@ -87,7 +87,7 @@ The private library reader remains to be implemented. The 300-entry list is impo
 | E5 | Done for one source: Gutenberg works ingest through the manual rsync workflow into private S3 and Neon (8 works stored, rerun-safe). Open: owner console check, Wikisource access path (robots-disallowed API), source health recovery (task 9), schedules. |
 | E6 | Per-site plain-code extractors using public-domain test fixtures; preserve paywall/login boundaries and link-only fallback. |
 | E7 | Validator: normalized hash, MinHash near-duplicates, fuzzy metadata duplicates, markup/ending/navigation/ad/encoding/length/language quality. Quarantine failures and open sanitized repair issues. |
-| E8 | Jev categorization/confidence with Haiku fallback and Haiku hook writing. |
+| E8 | DeepSeek V4.1 Flash categorization/confidence and Haiku hook writing. |
 | E9 | Private S3 essay text and Neon metadata/categories/ratings/progress, pipeline SQS/DLQ, runtime-role/secret wiring, pause controls and schedules. Essay text stays outside repo/logs/public endpoints. |
 | E10 | Nightly source health and weekly quality report; Scraper repair/new-source workflow. |
 | E11 | Public demo using a handful of public-domain essays. |
@@ -99,7 +99,6 @@ These preserve unresolved research questions without repeating settled architect
 
 | Design ID | Remaining verification |
 |---|---|
-| U1 | Jev self-serve access, numeric rate limits and exact OpenAPI fields; reconcile the implemented adapter against the current contract. |
 | U2 | Per-agent Anthropic federation service-account availability and real execution-file usage completeness. Extraction/reporting is implemented; “can usage be reported at all” is no longer an open design question. |
 | U4 | Actual checkpoint persistence, owner interruption/resume and paused saved-CI scheduler continuation passed. Cold-container restart, runtime/package limits and LangSmith flush behavior remain unverified. |
 | U5 | Fork-PR id-token behavior remains unverified; retain same-repo CI guards. PR/prod immutable subjects and publisher isolation are already verified. |
@@ -108,12 +107,12 @@ These preserve unresolved research questions without repeating settled architect
 | U10 | Instagram development-mode end-to-end access without App Review; TikTok sandbox real stats and production-review feasibility. |
 | U12 | Current Secrets Manager pricing/proration, standard SSM SecureString/default-key costs, Lambda/CloudFront free-tier eligibility and actual account credit/plan state. Dated estimates are not current billing proof. |
 
-Billing/credits, domain administration and provider readiness are complete by owner report. Runtime key presence and the actual Anthropic model path were independently verified without exposing values; Jev access/contract facts and LangSmith vendor/flush behavior remain unvalidated. Current vendor pricing/free-tier facts in U12 still need primary-source verification. Public CI preview provisioning latency, Neon branch quota/TTL/GC, prompt injection and private-data leakage remain operating risks to monitor rather than unanswered technology choices. U3/U6/U8/U11/U14 are recorded resolved/avoided decisions; revisit only if vendor or architecture changes.
+Billing/credits, domain administration and provider readiness are complete by owner report. Runtime key presence and the actual Anthropic model path were independently verified without exposing values; LangSmith vendor/flush behavior remains unvalidated. Current vendor pricing/free-tier facts in U12 still need primary-source verification. Public CI preview provisioning latency, Neon branch quota/TTL/GC, prompt injection and private-data leakage remain operating risks to monitor rather than unanswered technology choices. U3/U6/U8/U11/U14 are recorded resolved/avoided decisions; revisit only if vendor or architecture changes.
 
 ## Later expansion (Phase 6; deferred, not current blockers)
 
 - Owner-driven continuous console work and capture agent-request approval → task flow.
 - Embedding recommendations; EPUB/PDF import; Apple Shortcut capture; spending caps; Google Voice/Gmail bridge; native mobile app.
-- Periodic owner-reviewed dependency/security updates and deliberate Jev model-pin reevaluation against stored corrections.
+- Periodic owner-reviewed dependency/security updates.
 
 Selected release review sequence remains documentation cleanup → finish PR #44 → office extension. The controlled core /healthz/Docs slice, U13/final protection, readiness and final stop checks passed at their recorded scopes; remaining failure cases and populated UI/browser verification stay open. No owner decision remains for that completed run, and its authorization does not publish PR44/office. Hub MVP, X-ray and Essays remain later delivery streams.

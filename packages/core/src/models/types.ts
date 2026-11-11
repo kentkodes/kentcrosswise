@@ -1,7 +1,5 @@
-/** Default model ids (D13, research/apis.md §4-§5). Override per node/provider via options. */
+/** Default model ids (D13, research/apis.md §4). Override per node/provider via options. */
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
-/** Pinned, not `jev-latest`: upgrades are deliberate, after replaying stored route_corrections. */
-export const DEFAULT_JEV_MODEL = "jev-1.13.0";
 /** Worker model (DeepSeek V4.1 Flash) on the first-party API: an alias, not a dated pin. Override with the optional `deepseek_model` secret key. */
 export const DEFAULT_DEEPSEEK_MODEL = "deepseek-flash";
 /** First-party DeepSeek API (OpenAI-compatible); a gateway is selected with the optional `deepseek_base_url` secret key (plus `deepseek_model`). */

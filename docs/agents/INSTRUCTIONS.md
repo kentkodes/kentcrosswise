@@ -14,7 +14,7 @@ The Q15 source revision closes the earlier `.claude/**`-only detector gap with o
 
 ## Toolchain
 
-- Node 24 (`.nvmrc`; `engines` requires >= 22.12 because Vitest 5, Kysely 0.29 and the Jev SDK need it; `engine-strict` is on, so an older Node fails `pnpm install`).
+- Node 24 (`.nvmrc`; `engines` requires >= 22.12 because Vitest 5 and Kysely 0.29 need it; `engine-strict` is on, so an older Node fails `pnpm install`).
 - pnpm 12 (`packageManager` in `package.json`). Build scripts of dependencies are blocked unless listed under `allowBuilds` in `pnpm-workspace.yaml`.
 - TypeScript 6.0 (strict). typescript-eslint does not support TypeScript 7 yet; do not upgrade past 6.0.x. ESLint 9.
 - Workspace packages are consumed as TypeScript source (`exports` points at `src/*.ts`); there is no build step for them. Next.js transpiles them (`transpilePackages`), Vitest and `tsx` run them directly.
@@ -86,7 +86,7 @@ apps/web/src/auth/   Auth.js v5 (next-auth beta): Google (prod, scopes openid em
                      provider keyed by kcw/ci e2e_login instead (preview-login.ts, never in a prod bundle).
 apps/web/src/server/ server-only code; origin-wrapper.ts = the x-kcw-origin guard (D25)
 apps/web/e2e/        Playwright tests (public pages, owner redirect, preview login)
-packages/core/       shared types; src/models = model providers (Anthropic, Jev, Fake, withFallback);
+packages/core/       shared types; src/models = model providers (Anthropic, DeepSeek, Fake, withFallback);
                      src/merge-input = the merge-rules CI artifact contract (name, shape, parser)
 packages/db/         migrations/*.sql, runner, synthetic seed (seeds/)
 packages/secrets/    getSecret/putSecret (Secrets Manager; names starting with "/" are SSM SecureString)
@@ -139,7 +139,7 @@ docs/                specs, design, research, agent playbooks, runbooks (owner)
 - ESM everywhere (`"type": "module"`); extensionless relative imports (bundler resolution).
 - `import type` for type-only imports (lint rule).
 - One sample test per package at least; tests live in `<package>/test/*.test.ts`; script fixtures in `scripts/test/fixtures/` (synthetic only).
-- Model ids: Anthropic `claude-haiku-5-5`; Jev pinned to `jev-1.13.0`.
+- Model ids: Anthropic `claude-haiku-5-5`; DeepSeek `deepseek-flash` (alias).
 - `next dev` writes `apps/web/AGENTS.md` (Next.js agent rules); it is committed.
 
 ## OpenNext output contract (P1-08 → `infra/modules/web`)
