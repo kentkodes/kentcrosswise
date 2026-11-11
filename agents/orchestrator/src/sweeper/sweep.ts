@@ -1,6 +1,10 @@
-// One sweeper run (DESIGN §4.3, P2-17). Four independent parts; one failing does not stop the
-// others. The report names failed parts by error class; the log line adds the error chain
+// One sweeper run (DESIGN §4.3, P2-17). Independent parts; one failing does not stop the others.
+// A failed spend read or flag write blocks only the sweep-driven dispatch (the tasks part) and is
+// reported as a failed part; it never sets the flag. Webhook-driven inputs are gated solely by
+// agents_paused. The report names failed parts by error class; the log line adds the error chain
 // (errors.ts describeError: classes, statuses, shortened messages with credentials redacted).
+//   spend:      month-to-date model cost (spend.ts). At or above SPEND_CAP_USD: set agents_paused
+//               (never cleared automatically), log spend_cap_reached, and dispatch nothing this run;
 //   tasks:      a sweep message per waiting/queued task (the graph decides timeouts and retries);
 //   pause:      if agents_paused, cancel agent workflow runs that have not completed;
 //   gc:         in the nightly window, dispatch preview-gc.yml unless already dispatched;
@@ -12,6 +16,7 @@ import { REDELIVERY_DEFAULTS, selectRedeliveries, type RedeliveryPlan } from "./
 import { PREVIEW_GC_WORKFLOW, type SweeperGitHub } from "./github";
 import { nightlyGcWindow, sweepDedupeId, windowLabel, windowStart } from "./schedule";
 import { MAX_SWEEP_TASKS, type SweeperStore } from "./store";
+import { SPEND_CAP_USD, capReached, monthToDateSpend, utcMonth } from "./spend";
 
 /** The sweep message (P2-10 contract, parsed by graph/messages.ts). */
 export interface SweepMessage {
@@ -43,10 +48,14 @@ export interface SweepDeps {
   log?: (line: string) => void;
 }
 
-export type PartName = "tasks" | "pause" | "gc" | "redeliver";
+export type PartName = "spend" | "tasks" | "pause" | "gc" | "redeliver";
 
 export interface SweepReport {
   window: string;
+  /** Month-to-date model spend (UTC month); null when the spend check failed. */
+  spend: { month: string; spentUsd: number; unpricedEvents: number } | null;
+  /** True when the cap was reached in this run (agents_paused is set; no sweep messages sent). */
+  capReached: boolean;
   /** Sweep messages sent. */
   swept: number;
   paused: boolean | null;
@@ -65,6 +74,8 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   const window = windowStart(deps.scheduledTime);
   const report: SweepReport = {
     window: windowLabel(window),
+    spend: null,
+    capReached: false,
     swept: 0,
     paused: null,
     cancelled: 0,
@@ -86,7 +97,29 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     }
   };
 
+  // Set only when the spend check succeeded and the cap is not reached. Without it, no agent work is sent.
+  let mayDispatch = false;
+
+  await part("spend", async () => {
+    const { month, start, end } = utcMonth(deps.now);
+    const usage = await deps.store.monthUsage(start, end);
+    const spend = monthToDateSpend(usage.events, usage.prices, deps.now);
+    report.spend = { month: spend.month, spentUsd: spend.spentUsd, unpricedEvents: spend.unpricedEvents };
+    if (!capReached(spend.spentUsd, SPEND_CAP_USD)) {
+      mayDispatch = true;
+      return;
+    }
+    report.capReached = true;
+    // Idempotent: the flag is written only when it is not already set. Never cleared here.
+    if (!(await deps.store.isAgentsPaused())) await deps.store.setAgentsPaused();
+    log(`spend_cap_reached month=${month} spent=${spend.spentUsd.toFixed(2)}`);
+  });
+
   await part("tasks", async () => {
+    if (!mayDispatch) {
+      log("sweeper: tasks skipped (no dispatch while the spend cap is reached or unknown)");
+      return;
+    }
     const tasks = await deps.store.listSweepTasks(MAX_SWEEP_TASKS);
     if (tasks.length === MAX_SWEEP_TASKS) log(`sweeper: ${MAX_SWEEP_TASKS} tasks, the limit; the rest wait for the next run`);
     for (const t of tasks) {
@@ -136,7 +169,9 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   });
 
   log(
-    `sweeper: window=${report.window} swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
+    `sweeper: window=${report.window} spend=${report.spend?.spentUsd.toFixed(2) ?? "unknown"} ` +
+      `unpriced=${report.spend?.unpricedEvents ?? "unknown"} cap=${report.capReached ? "reached" : "ok"} ` +
+      `swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
       `gc=${report.gc} redelivered=${report.redelivered}` +
       (Object.keys(report.failed).length > 0 ? ` failed=${Object.keys(report.failed).join(",")}` : ""),
   );
