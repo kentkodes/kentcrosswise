@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { requireOwner } from "@/server/owner";
 
-export default function HubPage() {
+export default async function HubPage() {
+  await requireOwner();
   return (
     <main>
       <h1>Hub</h1>

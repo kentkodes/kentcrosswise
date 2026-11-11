@@ -6,6 +6,7 @@ import { getFlags, listEvents, listTasks, MAX_TASK_TEXT, type EventRow, type Fla
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { essayStatus, type EssayStatus } from "@/server/essay-status";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
+import { requireOwner } from "@/server/owner";
 import { noticeText } from "../notices";
 import { EssayStatusSection } from "./essay-status";
 import { createTaskAction, resendTaskAction, setFlagAction } from "./actions";
@@ -80,6 +81,7 @@ function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]
 }
 
 export default async function ConsolePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireOwner();
   const notice = noticeText((await searchParams).n);
   const { data, problem } = await load();
   const queue = orchestratorQueue();

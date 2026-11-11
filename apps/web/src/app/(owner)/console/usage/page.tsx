@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { requireOwner } from "@/server/owner";
 import { formatUsd, parseRange, usageSummary, type UsageGroup, type UsageSummary } from "@/server/usage";
 
 export const metadata: Metadata = { title: "Usage | Kentcrosswise" };
@@ -65,6 +66,7 @@ function GroupTable({ id, title, label, groups }: { id: string; title: string; l
 }
 
 export default async function UsagePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireOwner();
   const params = await searchParams;
   const range = parseRange(params.from, params.to);
   const { data, problem } = await load(range);

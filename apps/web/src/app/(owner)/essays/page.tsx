@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { requireOwner } from "@/server/owner";
 import {
   FEED_PAGE_SIZE,
   LENGTH_NAMES,
@@ -57,6 +58,7 @@ function describeSetup(prefs: Prefs): string {
 }
 
 export default async function EssaysPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireOwner();
   const params = await searchParams;
   const show = parseShow(params.show);
   const notice = noticeText(params.n);
