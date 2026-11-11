@@ -12,13 +12,14 @@ const LABELS = ["travel", "cultural", "comedic"] as const;
 const TEXT = "SECRET-ESSAY-TEXT"; // synthetic
 const KEY = "KEYMATERIAL";
 const BODY_MARK = "RESPONSEBODY";
+const RETURNED = "deepseek-flash-returned-id"; // the id the API reports, may differ from the requested one
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 
 function toolReply(args: unknown, extra: Record<string, unknown> = {}) {
   return {
-    model: "deepseek/deepseek-v4.1-flash-1017",
+    model: RETURNED,
     choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "record_label", arguments: JSON.stringify(args) } }] } }],
     usage: { prompt_tokens: 120, completion_tokens: 7 },
     ...extra,
@@ -42,12 +43,13 @@ describe("DeepseekProvider", () => {
   it("classifies through a forced tool call and sends the pinned model, key and base URL", async () => {
     const f = queue(json(200, toolReply({ label: "travel", confidence: 0.83 })));
     const out = await make(f).classify(TEXT, LABELS, { instructions: "Pick one." });
-    expect(out).toEqual({ label: "travel", confidence: 0.83, model: "deepseek/deepseek-v4.1-flash-1017", provider: "deepseek" });
+    expect(out).toEqual({ label: "travel", confidence: 0.83, model: RETURNED, provider: "deepseek" });
     const [url, init] = f.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${DEFAULT_DEEPSEEK_BASE_URL}/chat/completions`);
     expect((init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe(DEFAULT_DEEPSEEK_MODEL);
+    expect(body.model).toBe("deepseek-flash");
+    expect(DEFAULT_DEEPSEEK_BASE_URL).toBe("https://api.deepseek.com");
     expect(body.tool_choice).toEqual({ type: "function", function: { name: "record_label" } });
     expect(body.tools[0].function.parameters.properties.label.enum).toEqual([...LABELS]);
     expect(body.messages[0].content).toContain("Pick one.");
@@ -123,7 +125,7 @@ describe("DeepseekProvider", () => {
     const done = await p.complete({ prompt: "hi", system: "be brief" });
     expect(done).toEqual({ text: "Hello", model: DEFAULT_DEEPSEEK_MODEL, provider: "deepseek" });
     expect(usage).toEqual([
-      { provider: "deepseek", model: "deepseek/deepseek-v4.1-flash-1017", operation: "classify", inputTokens: 120, outputTokens: 7 },
+      { provider: "deepseek", model: RETURNED, operation: "classify", inputTokens: 120, outputTokens: 7 },
       { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, operation: "complete", inputTokens: 0, outputTokens: 0 },
     ]);
   });

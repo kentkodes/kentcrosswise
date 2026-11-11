@@ -2,10 +2,10 @@
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
 /** Pinned, not `jev-latest`: upgrades are deliberate, after replaying stored route_corrections. */
 export const DEFAULT_JEV_MODEL = "jev-1.13.0";
-/** Worker model (owner decision 2026-11-11): pinned dated id, served by an OpenAI-compatible gateway. */
-export const DEFAULT_DEEPSEEK_MODEL = "deepseek/deepseek-v4.1-flash-1017";
-/** Default gateway (Vercel AI Gateway); swap it with the optional `deepseek_base_url` secret key, no code change. */
-export const DEFAULT_DEEPSEEK_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+/** Worker model (DeepSeek V4.1 Flash) on the first-party API: an alias, not a dated pin. Override with the optional `deepseek_model` secret key. */
+export const DEFAULT_DEEPSEEK_MODEL = "deepseek-flash";
+/** First-party DeepSeek API (OpenAI-compatible); a gateway is selected with the optional `deepseek_base_url` secret key (plus `deepseek_model`). */
+export const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 /** Orchestrator planner (owner decision 2026-11-11): Opus 5.5 at high effort. */
 export const DEFAULT_ORCHESTRATOR_MODEL = "claude-opus-5-5";
 export const DEFAULT_ORCHESTRATOR_EFFORT = "high";

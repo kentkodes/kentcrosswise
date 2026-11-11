@@ -161,13 +161,13 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     expect(await statusOf(IDS.models)).toBe("pending_category");
   });
 
-  it("builds the DeepSeek provider from the two secret keys; the base URL key is optional", async () => {
+  it("builds the DeepSeek provider from the secret keys; the base URL and model keys are optional", async () => {
     const read: string[] = [];
     const m = await modelsFromSecret(async (key) => {
       read.push(key);
       return "KEYMATERIAL";
     });
-    expect(read.sort()).toEqual(["deepseek_api_key", "deepseek_base_url"]);
+    expect(read.sort()).toEqual(["deepseek_api_key", "deepseek_base_url", "deepseek_model"]);
     expect(m.name).toBe("deepseek");
     // a secret without the optional key still builds; a missing required key fails
     const noUrl = await modelsFromSecret(async (key) => {
@@ -180,24 +180,28 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     })).rejects.toBeInstanceOf(SecretKeyMissingError);
   });
 
+  const MISSING = Symbol("missing");
   it.each([
-    ["the default gateway", undefined, "https://ai-gateway.vercel.sh/v1/chat/completions"],
-    ["the base URL from the secret", "https://gw.example.com/v1", "https://gw.example.com/v1/chat/completions"],
-    ["the default when the key is blank", "  ", "https://ai-gateway.vercel.sh/v1/chat/completions"],
-  ])("calls %s (fake fetch, no network)", async (_n, configured, expected) => {
-    const calls: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      calls.push(url);
+    ["both optional keys missing", MISSING, MISSING, "https://api.deepseek.com/chat/completions", "deepseek-flash"],
+    ["both optional keys blank", "  ", "", "https://api.deepseek.com/chat/completions", "deepseek-flash"],
+    ["both optional keys set", "https://gw.example.com/v1", " deepseek/dated-id ", "https://gw.example.com/v1/chat/completions", "deepseek/dated-id"],
+    ["only the model set", MISSING, "deepseek-v4-pro", "https://api.deepseek.com/chat/completions", "deepseek-v4-pro"],
+  ])("with %s calls the right URL and model (fake fetch, no network)", async (_n, url, model, expectedUrl, expectedModel) => {
+    const calls: { url: string; model: string }[] = [];
+    vi.stubGlobal("fetch", async (u: string, init: RequestInit) => {
+      calls.push({ url: u, model: (JSON.parse(init.body as string) as { model: string }).model });
       const args = JSON.stringify({ label: "travel", confidence: 0.9 });
-      return Response.json({ model: DEFAULT_DEEPSEEK_MODEL, choices: [{ message: { tool_calls: [{ function: { name: "record_label", arguments: args } }] } }] });
+      return Response.json({ model: "returned-id", choices: [{ message: { tool_calls: [{ function: { name: "record_label", arguments: args } }] } }] });
     });
     try {
       const m = await modelsFromSecret(async (key) => {
-        if (key === "deepseek_base_url" && configured === undefined) throw new SecretKeyMissingError("kcw/prod/models", key);
-        return key === "deepseek_base_url" ? (configured as string) : "KEYMATERIAL";
+        const v = key === "deepseek_base_url" ? url : key === "deepseek_model" ? model : "KEYMATERIAL";
+        if (v === MISSING) throw new SecretKeyMissingError("kcw/prod/models", key);
+        return v as string;
       });
-      expect((await m.classify("text", ESSAY_TYPES)).label).toBe("travel");
-      expect(calls).toEqual([expected]);
+      const out = await m.classify("text", ESSAY_TYPES);
+      expect(out).toMatchObject({ label: "travel", model: "returned-id" });
+      expect(calls).toEqual([{ url: expectedUrl, model: expectedModel }]);
     } finally {
       vi.unstubAllGlobals();
     }

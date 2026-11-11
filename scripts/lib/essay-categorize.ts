@@ -3,7 +3,7 @@
 // are injected. Essay text, prompts, provider responses and keys never reach a log line or an error:
 // output is ids, fixed codes, the type, the confidence and the returned model id.
 import { createHash } from "node:crypto";
-import { DEFAULT_DEEPSEEK_BASE_URL, DeepseekProvider, type ModelProvider } from "@kcw/core/models";
+import { DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL, DeepseekProvider, type ModelProvider } from "@kcw/core/models";
 import { SecretKeyMissingError } from "@kcw/secrets";
 import type { Db } from "../../packages/essays/src/db";
 import { analyzeBook, assertNotPaused, bookUrl, inTransaction } from "./essay-ingest";
@@ -34,8 +34,9 @@ export const EXCERPT_WORDS = 2000;
 /** The models secret (DESIGN section 6) and its key names. */
 export const MODELS_SECRET = "kcw/prod/models";
 const API_KEY = "deepseek_api_key";
-/** Optional: swaps the OpenAI-compatible gateway without a code change. */
+/** Optional: swap the OpenAI-compatible endpoint / the model id without a code change. */
 const BASE_URL_KEY = "deepseek_base_url";
+const MODEL_KEY = "deepseek_model";
 
 export type CategorizeCode =
   | "categorized" | "already_processed" | "not_stored" | "not_approved" | "text_mismatch"
@@ -45,15 +46,17 @@ export const CATEGORIZE_OK: ReadonlySet<string> = new Set(["categorized", "alrea
 
 /**
  * The DeepSeek provider. The key is read up front (a failure is the caller's models_unavailable); the base URL
- * key is optional, and a missing or blank one means the default gateway. No network here.
+ * and model keys are optional, and a missing or blank one means the default. No network here.
  */
 export async function modelsFromSecret(read: (key: string) => Promise<string>): Promise<ModelProvider> {
   const apiKey = await read(API_KEY);
-  const baseUrl = await read(BASE_URL_KEY).then((v) => v.trim(), (err: unknown) => {
-    if (err instanceof SecretKeyMissingError) return "";
-    throw err;
-  });
-  return new DeepseekProvider({ apiKey, baseUrl: baseUrl || DEFAULT_DEEPSEEK_BASE_URL });
+  const optional = (key: string) =>
+    read(key).then((v) => v.trim(), (err: unknown) => {
+      if (err instanceof SecretKeyMissingError) return "";
+      throw err;
+    });
+  const [baseUrl, model] = await Promise.all([optional(BASE_URL_KEY), optional(MODEL_KEY)]);
+  return new DeepseekProvider({ apiKey, baseUrl: baseUrl || DEFAULT_DEEPSEEK_BASE_URL, model: model || DEFAULT_DEEPSEEK_MODEL });
 }
 
 export interface CategorizeDeps {
