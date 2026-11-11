@@ -70,6 +70,16 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
+  # Essay reader (essays SPEC "Reader"): full text under essays/text/ only, prod only.
+  dynamic "statement" {
+    for_each = var.essay_text_bucket_arn != null ? [1] : []
+    content {
+      sid       = "ReadEssayText"
+      actions   = ["s3:GetObject"]
+      resources = ["${var.essay_text_bucket_arn}/essays/text/*"]
+    }
+  }
+
   dynamic "statement" {
     for_each = length(local.secret_arns) > 0 ? [1] : []
     content {

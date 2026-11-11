@@ -10,7 +10,8 @@ const config = {
       wrapper: () => import("./src/server/origin-wrapper").then((m) => m.default as never),
       // Lambda Function URL events use the API Gateway v2 payload format.
       converter: "aws-apigw-v2",
-      // ISR/data cache in the assets bucket under _cache/ (aws4fetch, no AWS SDK in the bundle).
+      // ISR/data cache in the assets bucket under _cache/ (s3-lite uses aws4fetch). The app's own SQS
+      // and S3 clients (@aws-sdk/client-sqs, @aws-sdk/client-s3) are bundled into the server function.
       incrementalCache: "s3-lite",
       // Time-based ISR revalidation goes through an SQS FIFO queue to the revalidation function.
       queue: "sqs-lite",

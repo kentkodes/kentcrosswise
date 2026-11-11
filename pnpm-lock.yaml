@@ -275,6 +275,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1154.0
+        version: 3.1154.0
       '@aws-sdk/client-sqs':
         specifier: ^3.1154.0
         version: 3.1155.0
