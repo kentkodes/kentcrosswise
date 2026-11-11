@@ -7,4 +7,5 @@ export * from "./github";
 export * from "./lambda";
 export * from "./schedule";
 export * from "./store";
+export * from "./spend";
 export * from "./sweep";
