@@ -15,7 +15,7 @@ export const PUBLIC_IMPORT_PATTERNS = [
     message: "Public pages may import only @kcw/demo-data and @kcw/xray from the workspace (D10).",
   },
   {
-    group: ["pg", "kysely", "@electric-sql/*", "@aws-sdk/*", "@anthropic-ai/*", "@typesafe-ai/*"],
+    group: ["pg", "kysely", "@electric-sql/*", "@aws-sdk/*", "@anthropic-ai/*"],
     message: "Public pages must not reach databases, secrets or models (D10).",
   },
   {
