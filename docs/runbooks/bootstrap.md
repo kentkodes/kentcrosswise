@@ -63,7 +63,7 @@ gh api -X PUT repos/kentkodes/kentcrosswise/environments/prod
 
 This sets `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, the four `AWS_ROLE_AGENT_<ROLE>_ARN` variables, `AWS_ROLE_AGENT_MODEL_ARN`, `TF_STATE_BUCKET` and `NEON_CI_PROJECT_ID` (all non-secret IDs). The Neon project id is on the project's Settings page.
 
-**Model key for the work jobs (owner, after step 1).** Terraform creates no value for it.
+**Model key for the work jobs (owner, after step 1).** The `kcw/agent/deepseek` secret is created manually by the account owner in the Secrets Manager console and is not managed by Terraform.
 
 1. Secrets Manager console: create `kcw/agent/deepseek` with one key, `deepseek_api_key`, holding the DeepSeek API key. Paste the value only into the console.
 2. GitHub: create environment `agent-model` and set *Deployment branches* to *Selected branches* with `main` only (no tags, no other branches). The work and QA review jobs' AWS trust is the environment subject, not a branch, so this rule is what stops other branches from reading the key.
