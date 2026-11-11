@@ -51,5 +51,3 @@ Thumbs.db
 .impeccable/mocks/02-*.png
 .impeccable/hook.cache.json
 .impeccable/questions/
-# Plate sources; the shipped byte-identical copies live in apps/web/src/app/(public)/_home/plates/
-assets/plates/

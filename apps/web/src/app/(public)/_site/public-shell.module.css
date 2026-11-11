@@ -11,7 +11,13 @@ body:has(.shell) {
   background: #1b2340;
 }
 
+/* Header and footer colours on this ground (read by site-header and site-footer). */
 .shell {
+  --header-fg: #f6f1e4;
+  --header-muted: rgb(246 241 228 / 0.65);
+  --header-line: rgb(246 241 228 / 0.18);
+  --header-bg: #1b2340;
+
   min-height: 100svh;
   background: #1b2340;
   color: #f6f1e4;

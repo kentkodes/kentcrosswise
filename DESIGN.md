@@ -1,384 +1,389 @@
 ---
 # Visual system only. The repository's architecture and task design live in docs/DESIGN.md.
 name: Kentcrosswise
-description: A paper hub window held up in a painted dusk meadow, set in one editorial serif.
+description: Paper. White and ink neutrals, one blue accent for links and focus, Geist type, hairline borders over shadows, automatic dark mode.
 colors:
-  apricot: "#f8d9a8"
-  apricot-lit: "#fbe3bc"
-  dusk-navy: "#1b2340"
-  entrance-ink: "#232a46"
-  ivory: "#f6f1e4"
-  greige-paper: "#eadbcd"
-  panel-wash: "rgb(249 235 216 / 0.8)"
-  honey-select: "#f4d7b3"
-  label-chip: "#f7e4d1"
-  label-chip-edge: "#e6cfb9"
-  rule: "#e2d1c0"
-  ink: "#120e0b"
-  ink-muted: "#7d7166"
-  bark-focus: "#8a5a2b"
-  toggle-slate: "#4b4541"
-  meadow-green: "#1f8a68"
-  ember-coral: "#e6604f"
-  periwinkle-tile: "#e3e6f4"
-  periwinkle-ink: "#5166b0"
-  presence-green: "#2f9e5e"
-  firefly-gold: "#ffd877"
+  bg: "#ffffff"
+  bg-dark: "#0a0a0b"
+  bg-soft: "#f7f7f6"
+  bg-soft-dark: "#111114"
+  line: "#ececea"
+  line-dark: "#232328"
+  fg: "#0a0a0b"
+  fg-dark: "#f2f2f4"
+  fg-muted: "#67676f"
+  fg-muted-dark: "#8e8e96"
+  accent: "#2f5bea"
+  accent-dark: "#8aa6ff"
+  btn-bg: "#0a0a0b"
+  btn-bg-dark: "#f2f2f4"
+  btn-fg: "#ffffff"
+  btn-fg-dark: "#0a0a0b"
+  legacy-dusk-navy: "#1b2340"
+  legacy-ivory: "#f6f1e4"
+  legacy-apricot: "#f8d9a8"
+  legacy-selection-ink: "#120e0b"
   office-control: "#252e49"
   office-control-edge: "#aaa28f"
   office-muted: "#e5d8bf"
+  office-text: "#dfd7c6"
   office-hover: "#3d465e"
   office-divider: "#847d78"
   office-teal: "#67baa6"
   office-amber: "#e4ad55"
+  office-ink: "#232a46"
 typography:
-  office-label:
-    fontFamily: "Rosarivo, Georgia, serif"
+  display:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "clamp(40px, 6vw, 64px)"
+    fontWeight: 600
+    lineHeight: 1.04
+    letterSpacing: "-0.035em"
+  subline:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.55
+  title:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "17px"
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: "-0.01em"
+  greeting:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "20px"
+    fontWeight: 600
+    letterSpacing: "-0.02em"
+  body:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 400
+    lineHeight: 1.6
+  small:
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
-  office-state:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "21px"
-    fontWeight: 400
-  office-role:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "28px"
-    fontWeight: 400
-  office-heading:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "clamp(30px, 4vw, 44px)"
-    fontWeight: 400
-  display:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "clamp(36px, 10vw, 50px)"
-    fontWeight: 400
-    lineHeight: 1.22
-    letterSpacing: "-0.022em"
-  wordmark:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "30px"
-    fontWeight: 400
-    lineHeight: 1
-    letterSpacing: "-0.032em"
-  headline:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "32px"
-    fontWeight: 400
-    lineHeight: 1.3
-  title:
-    fontFamily: "Rosarivo, Georgia, serif"
+    lineHeight: 1.6
+  button:
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: "15px"
+    fontWeight: 500
+    lineHeight: 1
+  wordmark:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: "-0.02em"
+  mono:
+    fontFamily: "Geist Mono, ui-monospace, monospace"
+    fontSize: "12px"
     fontWeight: 400
-    lineHeight: "22px"
-  body:
+  mono-label:
+    fontFamily: "Geist Mono, ui-monospace, monospace"
+    fontSize: "11px"
+    fontWeight: 400
+    letterSpacing: "0.06em"
+  legacy-body:
     fontFamily: "Rosarivo, Georgia, serif"
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.5
-  label:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "13px"
-    fontWeight: 400
-    lineHeight: 1.2
-  caption:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "11.5px"
-    fontWeight: 400
-    lineHeight: "17px"
-  figure:
-    fontFamily: "PT Serif, Rosarivo, Georgia, serif"
-    fontSize: "25px"
-    fontWeight: 400
-    lineHeight: "31px"
-    fontFeature: "lnum, tnum"
 rounded:
+  control: "8px"
+  card: "10px"
+  frame: "12px"
+  item: "6px"
   office-target: "4px"
   pill: "999px"
-  window: "22px"
-  surface: "15px"
-  panel: "12px"
-  tile: "10px"
-  item: "9px"
-  row: "8px"
 spacing:
-  hair: "4px"
-  tight: "8px"
-  inset: "14px"
-  step: "16px"
-  gutter: "20px"
-  gutter-wide: "40px"
+  grid: "4px"
+  container: "1120px"
+  gutter: "24px"
+  gutter-phone: "16px"
+  header-height: "60px"
+  section: "96px"
+  section-phone: "64px"
 components:
+  button-primary:
+    backgroundColor: "{colors.btn-bg}"
+    textColor: "{colors.btn-fg}"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "0 16px"
+    height: "40px"
+  button-secondary:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg}"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "0 16px"
+    height: "40px"
+  button-account:
+    backgroundColor: "{colors.btn-bg}"
+    textColor: "{colors.btn-fg}"
+    typography: "{typography.small}"
+    rounded: "{rounded.control}"
+    padding: "0 16px"
+    height: "36px"
+  header:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg}"
+    height: "{spacing.header-height}"
+  footer:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg-muted}"
+    typography: "{typography.small}"
+  product-still:
+    backgroundColor: "{colors.bg}"
+    rounded: "{rounded.frame}"
+  card:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg}"
+    rounded: "{rounded.card}"
+    padding: "14px"
+  activity-row:
+    textColor: "{colors.fg-muted}"
+    typography: "{typography.mono}"
+    padding: "8px 12px"
   office-target:
     rounded: "{rounded.office-target}"
     width: "44px"
     height: "44px"
-  button-entrance:
-    backgroundColor: "{colors.apricot}"
-    textColor: "{colors.entrance-ink}"
-    typography: "{typography.body}"
-    rounded: "{rounded.pill}"
-    padding: "0 28px 0 32px"
-    height: "58px"
-  button-entrance-hover:
-    backgroundColor: "{colors.apricot-lit}"
-  button-sign-in:
-    textColor: "{colors.ivory}"
-    rounded: "{rounded.pill}"
-    padding: "0 22px"
-    height: "44px"
-  nav-link:
-    textColor: "{colors.ivory}"
-    padding: "6px 0"
-  hub-window:
-    backgroundColor: "{colors.greige-paper}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.window}"
-  panel:
-    backgroundColor: "{colors.panel-wash}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.panel}"
-    padding: "14px 14px 12px"
-  side-link:
-    textColor: "{colors.ink}"
-    typography: "{typography.label}"
-    rounded: "{rounded.item}"
-    padding: "0 12px"
-    height: "38px"
-  side-link-current:
-    backgroundColor: "{colors.honey-select}"
-  simulated-label:
-    backgroundColor: "{colors.label-chip}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    padding: "0 14px"
-    height: "32px"
-  explore-row:
-    rounded: "{rounded.tile}"
-    padding: "8px 14px 8px 12px"
-  activity-tile:
-    backgroundColor: "{colors.periwinkle-tile}"
-    textColor: "{colors.periwinkle-ink}"
-    rounded: "{rounded.row}"
-    size: "32px"
-  day-night-toggle:
-    backgroundColor: "{colors.toggle-slate}"
-    rounded: "{rounded.pill}"
-    width: "86px"
-    height: "40px"
-  footer:
-    backgroundColor: "{colors.dusk-navy}"
-    textColor: "{colors.ivory}"
+  legacy-shell:
+    backgroundColor: "{colors.legacy-dusk-navy}"
+    textColor: "{colors.legacy-ivory}"
+    typography: "{typography.legacy-body}"
 ---
 
 Visual system for the Kentcrosswise public surfaces; the architectural design doc is `docs/DESIGN.md`, which this file does not replace.
 
 # Design System: Kentcrosswise
 
-Derived from the shipped public home (`apps/web/src/app/(public)/page.tsx`, `_home/*`, tokens in `_home/home.module.css`; the shared header and the demo/office page look in `_site/*`), the approved comp `.impeccable/mocks/03-hub-window.png`, and the review captures in `.impeccable/review/`. The build is the ground truth; where the comp and the build differ, the build is recorded.
-
 ## Overview
 
-**Creative North Star: "The Paper Window in the Meadow"**
+Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. Dark mode follows the operating system setting. The page has no control for it.
 
-A painted dusk landscape (lake, mountains, a meadow with wildflowers, a warm beige retro computer in the grass) holds up a large ivory-and-greige paper window that is the personal hub. The scene is atmosphere; the window is where everything readable lives. Ivory serif type sits on the sky for the few words that address the visitor; every name, number and chart sits on paper.
+Status:
 
-The system is warm, quiet and editorial. One serif at one weight carries every letter, with hierarchy made by size alone. Colour is a dusk palette: apricot for the single way in, navy for the night that closes the page, greige and peach-cream paper for the hub, and two restrained chart inks (meadow green, ember coral). Depth comes from layered translucent paper and soft, long ambient shadows, never from hard edges.
+- The home page, the shared header and the shared footer use Paper.
+- `/demo`, `/office` and `/bot` still use the legacy dusk shell. See [Legacy shell](#legacy-shell).
+- Other pages are not covered yet. See [Page templates](#page-templates).
 
-Motion is bounded and optional: a 2.4s day-to-night veil cross-fade driven by an explicit two-option toggle, and a fixed set of drifting firefly lights that pause offscreen and hold still under reduced motion. Painted things (scene, computer, portraits, paper grain) are authored rasters with embedded provenance; everything interactive or textual is semantic native DOM and inline SVG.
+Principles:
 
-**Key Characteristics:**
-- One serif (Rosarivo 400) for all letters; PT Serif 400 supplies lining, tabular digits only.
-- A paper hub window as the container for all product UI, set into a painted scene.
-- Apricot as the single call-to-action fill; ivory text and outline pills on the scene.
-- Translucent layered paper and soft ambient shadows for depth.
-- Pills and gently rounded panels; no sharp corners on interactive surfaces.
-- Bounded, user-controlled day/night motion with a reduced-motion still state.
+- Smooth and professional beats clever.
+- Shadows only on the home product still.
+- Motion is short and plays once. Nothing loops.
 
 ## Colors
 
-A dusk palette: warm apricot and paper against a deep navy night, with two small chart inks.
+The tokens are CSS custom properties on `:root` in `apps/web/src/app/globals.css`. Dark values sit under `@media (prefers-color-scheme: dark)`. The values match the frontmatter.
 
-### Primary
-- **Apricot Dusk** (`apricot`): the fill of the one primary entrance ("Explore the demo"), the text-selection background, the page focus ring, and the hover underline in the footer. It is the colour of the way in.
-- **Lit Apricot** (`apricot-lit`): the entrance's hover state only.
-- **Entrance Ink** (`entrance-ink`): text and arrow on the apricot entrance; a navy tuned to the dusk sky rather than black.
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--bg` | `#ffffff` | `#0a0a0b` | Page ground. The header uses it at 80% with a blur. |
+| `--bg-soft` | `#f7f7f6` | `#111114` | Product still sidebar. |
+| `--line` | `#ececea` | `#232328` | Hairline borders and dividers. |
+| `--fg` | `#0a0a0b` | `#f2f2f4` | Text and headings. Current nav link. |
+| `--fg-muted` | `#67676f` | `#8e8e96` | Secondary text, nav and footer links, sub-line, card notes. |
+| `--accent` | `#2f5bea` | `#8aa6ff` | Focus outline. Also the activity dot (see Activity row). |
+| `--btn-bg` | `#0a0a0b` | `#f2f2f4` | Primary button fill. |
+| `--btn-fg` | `#ffffff` | `#0a0a0b` | Primary button text. |
 
-### Secondary
-- **Dusk Navy** (`dusk-navy`): the body ground behind the page, the footer, and the end of the meadow-to-night gradient below the scene (`#1f2617` to dusk navy at 70%). The night that closes the page.
-- **Ivory** (`ivory`): all type set directly on the scene or the footer (wordmark, nav, headline, footer text). Translucent ivory forms the sign-in outline (85%), its hover wash (12%), the nav divider (35%), the footer rule (14%) and the footer note (74%).
+Rules:
 
-### Tertiary
-- **Meadow Green** (`meadow-green`): the Happiness chart line, points and area wash.
-- **Ember Coral** (`ember-coral`): the Stress chart line, points and area wash.
-- **Periwinkle Tile / Ink** (`periwinkle-tile`, `periwinkle-ink`): the cool square tiles of Recent activity rows, the only cool note on the paper.
-- **Presence Green** (`presence-green`): the small online dot on avatars, ringed in cream.
-- **Firefly Gold** (`firefly-gold`): the ambient lights, a radial from `#fff6cf` through firefly gold to transparent with a soft warm glow.
+- Accent is for focus. Do not add it to new elements.
+- Header and footer links are `--fg-muted`, not accent.
+- New public CSS reads these tokens. It does not use literal colours.
 
-### Neutral
-- **Greige Paper** (`greige-paper`): the hub window ground under a 256px tiled paper-grain plate.
-- **Panel Wash** (`panel-wash`): translucent cream panel fill so the paper grain reads through. Explore rows use a close sibling (`rgb(249 233 213 / 0.85)`, hover `rgb(255 248 236 / 0.9)`).
-- **Honey Select** (`honey-select`): the current sidebar item; 45% of it is the sidebar hover.
-- **Label Chip** (`label-chip`, edge `label-chip-edge`): the Simulated data label.
-- **Rule** (`rule`): every hairline divider inside the hub (header, sidebar, list separators, mood column divider). Panel borders sit just darker (`#e5d4c3`, `#e3d1bf`).
-- **Ink** (`ink`): primary text on paper; per-element near-blacks (`#14100e` to `#2c2520`) stay within this warm-brown family.
-- **Ink Muted** (`ink-muted`): panel asides ("View all", "Last 7 days", "Total") and explore descriptions. Activity timestamps go lighter still (`#9a8d82`).
-- **Bark Focus** (`bark-focus`): the focus ring colour inside the hub, where apricot would vanish on paper.
-- **Toggle Slate** (`toggle-slate`): the day/night toggle track (gradient to `#3c3a3d`), the only dark object on the paper.
-
-### Named Rules
-**The Single Apricot Rule.** Apricot fills exactly one control per view: the primary entrance. Elsewhere it appears only as selection, focus and underline accents, never as a second filled button.
-
-**The Two Inks Rule.** Meadow green and ember coral are data inks. They mark chart lines, points and area washes and nothing else; chrome, buttons and text never borrow them.
-
-**The Warm Ink Rule.** Text on paper is a warm brown-black, never neutral grey or pure black; muted text stays in the same warm family.
+The legacy shell and its office palette are listed in the frontmatter and in [Legacy shell](#legacy-shell).
 
 ## Typography
 
-**Display Font:** Rosarivo 400 (self-hosted, OFL; fallback Georgia, Times New Roman, serif)
-**Body Font:** Rosarivo 400
-**Figures:** PT Serif 400 (self-hosted, OFL), limited by `unicode-range` to digits, comma and full stop and stacked before Rosarivo, so numbers get lining figures and every letter stays Rosarivo.
+Geist and Geist Mono load through `next/font/google` in `apps/web/src/app/(public)/_site/fonts.ts`. They are exposed as `--font-sans` and `--font-mono`. The fonts are self-hosted at build time, so the page makes no runtime request to Google. The CSS uses weights 400, 500 and 600.
 
-**Character:** A literary, slightly calligraphic old-style serif used at a single weight everywhere, from a 50px headline to 11px timestamps; it makes the hub read like a well-kept notebook rather than a dashboard. PT Serif's sturdier lining figures keep numbers level and tabular.
+| Style | Size | Weight | Line height | Tracking | Used for |
+|---|---|---|---|---|---|
+| Display | `clamp(40px, 6vw, 64px)` | 600 | 1.04 | -0.035em | Home headline |
+| Sub-line | 18px | 400 | 1.55 | | Home sub-line, max 560px |
+| Title | 17px | 600 | 1.4 | -0.01em | Feature row titles |
+| Greeting | 20px | 600 | | -0.02em | Product still greeting |
+| Body | 16px | 400 | 1.6 | | Home page default |
+| Small | 14px | 400 | 1.6 | | Header and footer text, feature text |
+| Button | 15px (header account: 14px) | 500 | 1 | | Buttons |
+| Wordmark | 16px | 600 | 1 | -0.02em | Header and footer |
+| Card value | 14px | 500 | 1.4 | | Product still card values |
+| Mono | 12px | 400 | | | Log times, product still labels |
+| Mono label | 11px, uppercase | 400 | | 0.06em | Product still card labels |
 
-### Hierarchy
-Narrow and tablet values are listed first. From 1100px the page is a 1505x1045 stage scaled to the window width, so stage values are comp pixels multiplied by window width / 1505 (about 0.96 at 1440px), and the hub's content is further foreshortened by its perspective tilt.
-- **Display** (400, `clamp(36px, 10vw, 50px)`, 1.22; stage 50px/61px, -0.022em): the two-line headline on the scene, ivory, balanced wrapping.
-- **Wordmark** (400, 30px, 1; stage 38px, -0.032em): "Kentcrosswise" top left. Footer mark 24px; hub brand 22px (stage 24px).
-- **Headline** (400, 32px, 1.3; stage 35px/47px): the hub greeting.
-- **Title** (400, 15px/22px): panel titles. On the stage a 0.3px text stroke restores ink weight lost to the projection.
-- **Body** (400, 16px, 1.5; stage 16.7px/26px): the hub lede. Footer note 15px/1.6 at a 60ch measure. Entrance label 20px; nav and sign-in 17px (stage 16.5px).
-- **Label** (400, 13px, 1.2): sidebar items, people and platform names, activity titles (12.8px/18px), mood labels (12px/20px), Simulated data (14px).
-- **Caption** (400, 11.5px/17px): panel asides and explore descriptions; activity timestamps 11px/15px.
-- **Figure** (PT Serif digits, 400, 25px/31px, lining and tabular): mood values. Follower counts 18px; chart axis labels 13.5px in the flowing layouts.
+Rules:
 
-### Named Rules
-**The One Weight Rule.** Every letter is Rosarivo 400. Hierarchy comes from size, colour and placement; there is no bold, no italic emphasis and no uppercase tracking.
-
-**The Lining Numbers Rule.** Any numeral that carries data is set in the figure stack with `lining-nums tabular-nums`, so columns of counts and values align.
+- Geist for text. Geist Mono only for timestamps and labels.
+- Hierarchy comes from size and weight. Do not add a third weight.
+- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays in the legacy shell.
 
 ## Layout
 
-Three layouts, switched at 640px and 1100px.
-
-Demo and agent office share the public look without the scene: dusk navy ground, ivory Rosarivo 400 (headings not synthesised bold), apricot focus and selection, content at a 48rem measure on the header gutters.
-
-- **Narrow (under 640px):** one readable column. Header and intro sit over the painted scene with 20px gutters; the headline and apricot entrance lead, the CRT rests in the meadow lower left, and the hub follows as a front-facing paper window (`calc(100% - 24px)`, max 920px) that overlaps the scene's foot by 72px. The hub sidebar becomes a horizontally scrolling row with edge fades (44px masks) that appear only when there is more to scroll. Mood charts stack one per row so labels stay at 11px or above.
-- **Tablet (640-1099px):** 40px gutters; the hub becomes a two-column grid: header, sidebar row, greeting and lede span both columns, then People beside Following, Mood full width, Recent activity beside Explore more (16px column gap).
-- **Wide (1100px and up):** the first viewport is the approved comp, a 1505x1045 stage scaled uniformly by window width (aspect ratio fixed, so hub text never shrinks for a short window). Elements are absolutely placed in comp pixels; the hub is laid out flat at 912x665 and projected onto the comp's tilted window with one `matrix3d`. These stage coordinates are a fitting of one composition, not a spacing system.
-
-Text is never scaled down to fit a small screen: below 1100px everything reflows instead.
-
-**Spacing rhythm** (flowing layouts): 4px between sidebar items, 8px and 14px inside panels and lists (14px is also the standard column gap beside icons and tiles), 16px between panels, 20px and 40px page gutters. Footer padding is 40px top and 48px bottom with `max(20px, 6.25vw)` sides. List rows hold a steady 52px height for people and platforms.
+- Container: 1120px max width, centred. Used by the header, the footer and the home page.
+- Gutters: 24px on each side, 16px under 640px. The header, the home page and the footer use the same gutters at every width.
+- Breakpoint: 640px. Phone rules apply below it.
+- Spacing: 4px grid, with these exceptions in the code: 2px (gap between product still sidebar items), 6px (sidebar item padding, card gap, gap before the agent name in the log), 10px (sidebar side padding), 14px (card padding and sidebar padding).
+- Home page vertical rhythm: hero 96px top and 64px bottom. Feature rows 96px above and below. On phones: hero 56px top and 40px bottom, features 64px above and below.
+- Home page order: header, hero, product still, three feature rows, footer.
+- Hero is left aligned. Feature rows are three columns on desktop and one column on phones.
 
 ## Elevation & Depth
 
-Hybrid: depth comes mainly from layered translucent paper over a grain texture, with a few soft, long, low-opacity ambient shadows. Nothing is hard-edged or offset.
+Hairlines do the work. Borders are 1px `--line` on the header bottom, the footer top, the feature row top, the product still frame, cards and the activity log. The secondary button uses a stronger outline (see Buttons).
 
-### Shadow Vocabulary
-- **Window lift** (`box-shadow: 0 40px 80px -36px rgb(8 10 30 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.7)`): the hub window only; a deep, diffuse night shadow plus a lit top edge.
-- **Entrance glow** (`box-shadow: 0 10px 24px -14px rgb(20 16 40 / 0.6)`): the apricot entrance, lifting it off the scene.
-- **Paper whisper** (`box-shadow: 0 1px 2px rgb(120 90 60 / 0.08)`; 0.12 on the label chip): panels and the Simulated data label.
-- **Toggle well** (`box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3)`): the recessed toggle track; its pressed knob gets `0 0 0 1px rgb(150 120 90 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3)`.
-- **Cream rings** (`box-shadow: 0 0 0 2px #fbf3e8` on avatars; 1.5px `#fbf2e6` on chart points): separation rings, not elevation.
+There is one shadow in the code:
 
-### Named Rules
-**The Layered Paper Rule.** Inside the hub, depth is translucency, not shadow: an inset surface with a warm left-to-cool-right light gradient, then panels at 80-85% cream over the grain. A new panel takes the paper whisper, never the window lift.
+- Product still frame: `0 1px 2px rgb(0 0 0 / 0.04), 0 12px 40px -12px rgb(0 0 0 / 0.12)`. The same value applies in dark mode.
 
-**The Bounded Dusk Rule.** The scene's time of day changes only through the explicit toggle: a night veil cross-fades over 2.4s (`cubic-bezier(0.22, 1, 0.36, 1)`) and the lights brighten. Fireflies animate transform and opacity only, pause when the scene is offscreen, and under `prefers-reduced-motion` hold a still 0.55 glow with no transitions.
+Two other effects are not shadows:
+
+- The selected sidebar item uses a 1px `--line` ring (`box-shadow: 0 0 0 1px`).
+- The header background is 80% `--bg` with a 12px backdrop blur.
+
+Do not add shadows to other components.
 
 ## Shapes
 
-Soft, nested rounding. Interactive controls on the scene and in the hub header are full pills (999px). Containers step down as they nest: window 22px, inner surface 15px, panels 12px, explore rows and their tiles 10px, sidebar items 9px, rows and activity tiles 8px, focus ring corners 6px. Avatars, presence dots, chart points and fireflies are circles. Borders are 1px hairlines in warm rule tones; the sign-in outline is the one heavier stroke (1.5px, 2px on the stage). Icons are inline SVG on a 24-unit grid with round caps and joins (1.6 stroke, 2 to 2.2 in the sidebar); a few take a solid fill (sun disc, moon, People and Mood glyphs) or a light fill (the Following heart).
+Radius tokens:
+
+- `control` 8px: buttons.
+- `card` 10px: cards and the activity log.
+- `frame` 12px: the product still frame.
+- `item` 6px: sidebar items in the product still. This value is in the code but not in the Paper spec.
+
+Legacy radii: `office-target` 4px for room targets, `pill` 999px for office buttons. See [Legacy shell](#legacy-shell).
+
+The home page CSS uses no icons and no avatars.
 
 ## Components
 
 ### Buttons
-- **Shape:** full pill (`rounded.pill`).
-- **Primary (entrance):** apricot fill, entrance-ink text at 20px, 58px tall, a right arrow 16px after the label; entrance glow shadow. One per view.
-- **Hover / Focus:** fill lightens to lit apricot and the arrow slides 3px right (0.2s ease). Focus is a 2px apricot ring at 3px offset.
-- **Ghost (sign in / your hub):** ivory text in a 1.5px ivory-85% outline pill, 44px tall; hover adds a 12% ivory wash. Separated from the nav by a 1px ivory-35% vertical rule.
 
-### Chips
-- **Simulated data label:** label-chip fill, label-chip edge border, pill, 32px tall, 14px text with an info icon; paper whisper shadow. A label, not a control: its full meaning is carried in screen-reader text. Any surface showing demo data carries it visibly.
+- **Primary.** Fill `--btn-bg`, text `--btn-fg`, 40px tall, 0 16px padding, 15px, weight 500, radius 8px. Hover drops opacity to 0.86 over 150ms. Used once per view: "Explore the demo" on the home hero.
+- **Secondary.** Fill `--bg`, text `--fg`, same size. 1px outline `color-mix(in srgb, var(--fg) 22%, transparent)`, 40% on hover, so it reads as a boundary in both themes. Used for "Agent office" on the home hero.
+- **Account button (header).** Primary style at 36px tall, 14px, weight 500. A pseudo-element extends its hit area to 44px.
 
-### Cards / Containers
-- **Hub window:** greige paper with a tiled 256px grain plate, 22px corners, window lift shadow, and an inset 7px surface (15px corners, 1px border `rgb(150 118 92 / 0.26)`) carrying the warm-left light gradient.
-- **Panel:** panel wash fill, 1px `#e5d4c3` border, 12px corners, 14px padding, paper whisper. Title top left; an optional muted aside (link or note) top right, 11.5px.
-- **Lists inside panels:** rows divided by 1px rule hairlines, no zebra fills.
+Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`) so the legacy shell's own focus ring can override it.
 
-### Navigation
-- **Site nav (shared public header):** one header on every public page (home, demo, agent office): the wordmark, then Home, Demo and Agent office as ivory 17px links, then the ghost account pill. The current page carries a 2px current-colour underline at 85% opacity below the text (`aria-current="page"`); hover goes to pure white. On home it sits on the scene (stage-placed from 1100px); on demo and agent office it sits on dusk navy with the same gutters as the home stage (`max(40px, 6.25vw)` from 1100px). Phones get one compact row of links under the wordmark, never a menu, sized to fit 320px. The day/night toggle stays on home only. Below 1100px, header links keep the compact visual row with 44px height and centered minimum-44px effective width; the existing current-page underline remains aligned with the text.
-- **Account pill:** pages render "Sign in" statically; after load the browser asks the Auth.js session endpoint and a signed-in visitor sees "Your hub" (to the owner hub) in the same pill. Both labels share one cell, so the swap changes no width.
-- **Hub sidebar:** 38px items with icon and 13px label, 9px corners; current item honey-select, hover 45% honey. Vertical column with a lower group (Agent office, Settings) under a rule on the stage; a scrolling row with edge fades below 1100px, focus rings drawn inside the mask.
-- **Footer:** dusk navy, ivory text, links underlined in 50% apricot that strengthens to full apricot on hover.
+Hover transitions take 150ms with `--ease-out`. Under `prefers-reduced-motion: reduce` they are off.
 
-### Day/Night Toggle (signature)
-A real two-button group ("Scene light") in the hub header: a slate pill track with a recessed inset shadow, two 34px circular buttons with sun and moon glyphs. The pressed option fills `#f6e0bf` with dark ink; the other stays light ink on slate. Transitions 0.4s, removed under reduced motion. Below 1100px, transparent 44×44px hit areas surround the unchanged 34px painted circles; their 46px center spacing keeps the targets separate. This is a scoped interaction refinement; the transformed wide composition is unchanged.
+### Header
 
-### Mood Chart (signature)
-An SVG plot stretched to its box (non-scaling 2px line, 1px grid at 0, 0.5 and 1) with a monotone cubic line that never overshoots, an area wash fading from 30% ink to 0 at the baseline, 6px points with a cream ring, and HTML axis labels in the figure stack that never scale with the chart. Alternate days are labelled; every day keeps its point. The whole chart is one `role="img"` with its values in the accessible label.
+Shared header in `apps/web/src/app/(public)/_site/site-header.module.css`.
 
-### Explore Row
-A bordered cream row (10px corners) with a 38px gradient tile (`#f9e2bf` to `#f6e7d3`), a name and a muted one-line description, and a trailing arrow (or external mark for another surface). Hover lifts the fill toward `rgb(255 248 236 / 0.9)` and darkens the border to `#d9bfa3`.
+- Sticky at the top, z-index 10. A 60px row, centred in the 1120px container.
+- Wordmark on the left. Links on the right: Home, Demo, Agent office, then the account button.
+- Background `--bg` at 80% with a 12px backdrop blur. A 1px `--line` bottom border always shows.
+- Links are 14px `--fg-muted`. Hover and the current page (`aria-current`) use `--fg`. The current link is weight 500. There is no underline bar.
+- Phone (under 640px): two rows. The wordmark sits on its own row. The four links take the full width below it, space-between with at least 16px between them, 14px text, 44px tap targets. One row does not fit at 320px.
 
-### Activity Row
-A 32px periwinkle tile with an icon, a 12.8px title and an 11px figure-stack timestamp, rows separated by rule hairlines.
+Colours come from local variables: `--header-fg`, `--header-muted`, `--header-line` and `--header-bg`. Each reads its global token as a fallback. The legacy shell sets its own values.
+
+### Footer
+
+Shared footer in `apps/web/src/app/(public)/_site/site-footer.module.css`.
+
+- 1px `--line` top border. Text 14px, `--fg-muted`, line height 1.6.
+- Wordmark (16px, 600), then the note: "A personal hub built with a small team of AI agents. Everything in the demo is simulated. The people, moods and numbers are generated examples."
+- Links: Demo, Agent office, Bot. Each is 44px tall. Hover uses `--fg`.
+- Padding 32px top, 40px bottom, 24px sides (16px under 640px). From 640px the wordmark and note share a row, and the links take the next row.
+
+### Product still
+
+The static picture of the hub on the home page. Styles are in `apps/web/src/app/(public)/_home/home.module.css`.
+
+- Frame: a two-column grid, 170px sidebar and content. Minimum height 300px. 1px `--line` border, 12px radius, hidden overflow, the only shadow in the system.
+- Sidebar: `--bg-soft` background, 13px text, items with 6px 8px padding and 6px radius. The current item has a `--bg` fill and a 1px `--line` ring, and `--fg` text. Other items use `--fg-muted`.
+- Content: 20px padding. A greeting (20px, 600), then a mono label (12px). Three cards in a row with 12px gaps.
+- Cards: see [Cards](#cards).
+- Activity log: see [Activity row](#activity-row).
+- Entrance: the frame rises 6px and fades in over 300ms, once.
+- Only the live activity list changes. Everything else is static.
+- Phone: the sidebar is hidden, the content has 16px padding, and the cards stack in one column.
+
+### Cards
+
+- 1px `--line` border, 10px radius, 14px padding, no fill. Content stacks with a 6px gap.
+- Label: Geist Mono 11px, uppercase, 0.06em tracking, `--fg-muted`.
+- Value: 14px, weight 500, line height 1.4.
+- Note: 12px, `--fg-muted`.
+- Sparkline: 160 by 36px, drawn 1:1. The seven points are scaled to the week's own range with 15% padding. `--fg` stroke and a 2.5px end dot.
+
+### Activity row
+
+Rows in the live activity log, inside a 1px `--line` border with a 10px radius and hidden overflow.
+
+- Row: flex, no wrap, 16px gap, 8px 12px padding. A 1px `--line` top border, none on the first row.
+- Time: Geist Mono 12px, `--fg-muted`.
+- Agent name: 96px wide, weight 500, capitalised. A 6px dot in front, filled with `--accent`. This is the one place accent is used outside focus.
+- Title: `--fg-muted`, single line with an ellipsis.
+- Phone: the title moves to its own line under the time and agent.
+
+### Feature rows
+
+Three short text blocks under the product still. A 1px `--line` top border, 32px padding above. Title in the Title style. Text in `--fg-muted` at the inherited 16px. Three columns with 32px gaps on desktop. One column with 24px gaps on phones.
+
+### Office target
+
+A 44px square hit area with a 4px radius. Used by the legacy office room. See [Legacy shell](#legacy-shell).
+
+## Page templates
+
+Four templates. Only Marketing is built.
+
+- **Marketing (home). Done.** Hero, product still, three feature rows, footer. Wide rhythm, 96px sections.
+- **App frame (`/demo`, `/office`). Planned.** The product still's sidebar and main area, filled with demo data. The log becomes a plain table. Office illustrations sit inside one contained card.
+- **Reading (essays, `/bot`). Planned.** Measure of about 680px. Larger body text. A list instead of cards.
+- **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
+
+Do not build a template before its page is redone.
+
+## Legacy shell
+
+`/demo`, `/office` and `/bot` still render inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`). They keep the old dusk look until they are redone.
+
+The shell is styled in `public-shell.module.css`:
+
+- Ground `#1b2340` and text `#f6f1e4` (legacy-dusk-navy, legacy-ivory). The shell sets `color-scheme: dark`, so it does not follow the system setting.
+- Body text is Rosarivo 400 through `--font-rosarivo`, with Georgia and serif as fallbacks. Headings are not bold.
+- Selection: `#f8d9a8` background with `#120e0b` text.
+- Focus: 2px `#f8d9a8` outline, offset 3px, 6px radius.
+- Content measure: 48rem plus gutters. Gutters are 20px under 640px, 40px from 640px, and `max(40px, 6.25vw)` from 1100px.
+- The shell sets the header variables to ivory on navy: `--header-fg` `#f6f1e4`, `--header-muted` `rgb(246 241 228 / 0.65)`, `--header-line` `rgb(246 241 228 / 0.18)`, `--header-bg` `#1b2340`. The shared header and footer read these, so the account button is an ivory pill with navy text here.
+
+The office pages use these values in addition to the shell:
+
+- `office/office.module.css` (live `/office`): `#dfd7c6` for explanatory text (`office-text`). Ivory alpha lines and button borders: `rgb(246 241 228 / 0.2)`, `0.3`, `0.6`, and button hover `0.12`. Event times use Rosarivo with lining, tabular figures.
+- `office/preview/preview.module.css` (imported by live `/office` and by the sub-routes): the office palette `office-control`, `office-control-edge`, `office-muted`, `office-hover`, `office-divider`, `office-teal`, `office-amber`, `office-ink`, plus apricot for selection and focus. Robot and desk targets are 44px with 4px radius.
+- The sub-routes `/office/preview`, `/office/draft` and `/office/connected` are `noindex`. They use the same shell and palette. Their own CSS is in their folders.
+- The room canvas colours are set in code in `office/preview/draw-office.ts` and `office/draft/draw-office.ts`. They are not listed here.
+- `bot/bot.module.css`: `#d9d6cd` for the status and note text, apricot `#f8d9a8` for the report link, and ivory `#f6f1e4` on hover.
+
+When a page is redone, remove its literal values and its use of the shell. Do not extend the legacy palette to new pages.
 
 ## Do's and Don'ts
 
-### Do:
-- **Do** put all product UI (names, numbers, charts, lists) on the paper hub; keep only the wordmark, nav, headline, entrance and footer on the scene or navy.
-- **Do** set every letter in Rosarivo 400 and every data numeral in the PT Serif figure stack with lining, tabular numbers.
-- **Do** keep apricot to one filled control per view, and use the bark focus ring on paper and the apricot ring on the scene.
-- **Do** reflow below 1100px instead of scaling text down; keep chart labels at 11px or more on phones.
-- **Do** make painted elements authored rasters with embedded provenance, and build every control, label and chart as semantic DOM or inline SVG.
-- **Do** keep scene motion behind an explicit control, bounded in duration, paused offscreen and still under reduced motion.
-- **Do** show the Simulated data label wherever demo data appears.
+### Do
 
-### Don't:
-- **Don't** introduce a second font weight, bold emphasis, or a second letter face.
-- **Don't** use meadow green or ember coral outside data marks.
-- **Don't** put text, UI or numbers inside a raster plate; plates carry only scenery, objects, portraits and grain.
-- **Don't** give panels the window's deep shadow; inside the hub, depth is layered paper.
-- **Don't** copy artwork from the reference video; the scene must stay original.
-- **Don't** treat the 1100px stage's absolute comp coordinates as spacing tokens for new surfaces.
+- **Do** read colours, radii and motion from the tokens in `globals.css`.
+- **Do** keep one primary button in each view.
+- **Do** separate content with 1px `--line` borders.
+- **Do** keep motion to 150ms hover and 300ms enter, and turn it off under reduced motion.
+- **Do** keep the simulated-data note in the footer.
+- **Do** use a 4px grid for new spacing.
 
-## Local integration status — 2026-10-25
+### Don't
 
-The owner-accepted landscape is now native 2560×1776 and integrated byte-identically, served with Next Image optimization through the existing image route. The scenery remains an original dusk lake, meadow, mountains and fireflies; the CRT is a separate plate. Locally measured WebP responses are 381,460 bytes for desktop and 54,750 bytes for phone. Other plates retain their existing formats. Deployed behaviour of this integration is not yet verified.
-
-Recent activity now displays three real sanitized public events instead of fictional samples. The office entrance is “View agent activity.” A shared five-second feed poll retains at most 100 events. The office first shows history, then quietly replays up to the last 20 events with a Replay label, original timestamps and the actual count. New arrivals take priority; pause/resume/next remain explicit, reduced motion defaults to still/manual behavior with an enabled explicit full-motion Play override, and hidden/offscreen views pause. The accessible list remains available. Empty feeds stay empty. The local office illustrates independent Developer/QA event vignettes; a separate fictional sample remains available. Full-team characters and task correlation remain future work.
-
-## Remaining review
-
-The active backlog is [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md). The native landscape size gate and the scoped local phone/tablet navigation/toggle interaction review pass. The owner-accepted layout remains the visual baseline; historical title-fidelity 58% is archived evidence, not a redesign instruction. Final combined-source release review and wide/coarse/browser/device verification remain open. The older review receipt could not be verified; current engine ship completion is not established. Prior seam/paper/quill/night-paper observations and three office typography advisories need review. Remaining agent-claim copy needs a pre-launch decision; the local CTA is View agent activity and recent events are real sanitized records. Browser/device and exact-head release verification limitations are in [docs/HANDOFF.md](docs/HANDOFF.md).
-
-## Office preview — scoped visual extension
-
-This local `/office/preview` surface extends the existing public world with an original overhead woodland studio. Navy, ivory, apricot and Rosarivo remain the surrounding interface; the coarse pixel room is a route-specific medium. The paper-window, painted-raster and soft-corner guidance above continues to describe the incumbent home/demo, rather than imposing that medium on the pixel room.
-
-The native Canvas 2D scene is 320×256, with a 16×16 tile vocabulary and approximately 16×24 robot bodies. Integer rectangle fills, disabled image smoothing and pixelated display preserve actual coarse pixels. The room displays at 2× where available, 1× on phones with room, and fits narrower widths without page overflow. It ships code-drawn scenery, with no raster scene asset. Furniture and robots are distinct layers, with robots ordered by their vertical position. All readable text and controls remain HTML.
-
-The palette in `draw-office.ts` declares 20 colors: honey wood and seams, sage walls and foliage, cream/paper, teal Developer, amber QA, dusk windows, navy and a failure red. The Liaison measured 19 rendered colors in the initial task-assigned frame; failure states use the twentieth color. This is a frame measurement, not a claim that every state uses 19 colors. The `office-*` color tokens above are intentional scoped interface shades and role swatches extracted from `preview.module.css`, not a replacement global palette.
-
-The scoped type steps are office-label, office-state, office-role and office-heading. The heading reaches 44px on desktop and uses 30px on phones. Pill playback/role buttons and the rounded story selector accompany 44px robot/workstation targets with office-target corners and visible apricot focus. Apricot identifies the selected role here. This local selection treatment and the compact target corners are scoped exceptions to the homepage entrance and soft-panel vocabulary.
-
-Controls precede the room. The inspector sits beside it from 1200px and below it on narrower screens. The route's container is capped at 1280px; readable prose retains a 65–70ch measure. The compact phone toolbar keeps the room and role controls in the first viewport. The sample labels its events fictional and makes no public-event request. The connected `/office` uses real/replay events with its recorded text list.
-
-Play/pause/resume, optional next and restart control frame-based pixel movement. Simulation updates are bounded to 1/60 second, so the current paths advance at most one native pixel per rendered update. Reduced motion defaults to a still scene, with an enabled Play animation control that explicitly opts into full autoplay. Scenario changes preserve playback intent; Restart starts fresh autoplay. Hidden tabs and offscreen rooms freeze without catch-up; failure and owner-wait states remain readable. Robot and desk selection works with keyboard and pointer; the inspector, current event and expandable sequence supply the text equivalent. Only a merged event files the papers.
-
-Design-token detection remains advisory for this scoped extension. No detector pass or complete engine ship receipt is implied. Final local mobile checks are recorded in the handoff. Movement is accepted and feed integration is implemented; connected-behavior review, merge and deployment remain separate milestones.
-
-## Office feed integration — 2026-10-26 local implementation
-
-The owner accepted the sample's smooth movement and requested connecting it to the real/replay feed. `/office` now reuses the native room, palette and role targets for independent event vignettes. The existing public data source, latest-20 replay label, original timestamps, live-arrival priority, cached/unavailable states and accessible recorded list remain. The sample route stays fictional and separate. Full-team characters and task-correlated animation remain future work.
-
-Each vignette starts with fresh paper state. Robots return through the aisle from their last drawn positions before illustrating the next event, including a newly received event interrupting replay. Frame updates remain capped at 1/60 second and integer positions; slow rendering lengthens playback rather than skipping pixels. Completion advances the feed only after the scene finishes, including repeated-ID replay. An actual merge files papers; approval and a standalone deployment do not. Unknown agents/types and an empty feed show a neutral room rather than invented work. Play explicitly opts into full motion when the device requests reduction. Pause, actual-room offscreen detection and hidden-tab suspension freeze timing without catch-up.
-
-The live office uses its own visible phone introduction and places loading/empty messages above the controls. Controls and room precede the inspector and event details. The inherited text-feed 24px playback heading and 22–30px event-title ramp, plus the compact 22px phone heading, produced three advisory type-ramp findings; these remain documented scoped values, not a claim of formal detector/finish approval. Existing homepage visual gates remain separate. Independent QA resolved the hidden phone introduction and the offscreen-legend boundary; production-size captures were inspected at 320px, 390px and 1440px. Full verification and limitations are in the handoff.
-
-## Connected office adapter — local extension
-
-The local `/office/connected` sibling preserves the accepted 384×304 room, expandable 384×96 annex, woodland materials and role colors. A neutral model supplies actual task packets and execution assignments to the existing renderer; the original fictional draft stays separate. Current snapshot evidence, recorded illustrations and partial replay have distinct text. Execution and task references stay internal; task descriptions appear only in inspection and logs, with generic Private task labels when required.
-
-Local visual review at 1440, 390 and 320 widths found no overflow, JavaScript errors, sub-44px visible controls or rendered reference leaks. Native canvas measurement found a maximum one-pixel actor movement between rendered frames and stable paused pixels. The mechanical detector reported only the two inherited disabled-border/ink palette advisories; the accepted room palette remains the scoped authority. This is local integration review, not production release approval. Current browser/recovery and packaging evidence lives in docs/HANDOFF.md.
+- **Don't** add shadows except to the product still.
+- **Don't** use accent for anything but focus. The activity dot is the one existing exception.
+- **Don't** add looping or ambient animation, parallax or scroll effects.
+- **Don't** use Rosarivo or PT Serif on new pages.
+- **Don't** put literal colours in new components.
+- **Don't** extend the legacy dusk palette to new pages.

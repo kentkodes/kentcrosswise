@@ -1,6 +1,36 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+
+  /* Design tokens (home redesign, direction A). Dark values follow the OS setting below. */
+  --bg: #ffffff;
+  --bg-soft: #f7f7f6;
+  --line: #ececea;
+  --fg: #0a0a0b;
+  --fg-muted: #67676f;
+  --accent: #2f5bea;
+  --btn-bg: #0a0a0b;
+  --btn-fg: #ffffff;
+
+  --radius-control: 8px;
+  --radius-card: 10px;
+  --radius-frame: 12px;
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-hover: 150ms;
+  --dur-enter: 300ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0b;
+    --bg-soft: #111114;
+    --line: #232328;
+    --fg: #f2f2f4;
+    --fg-muted: #8e8e96;
+    --accent: #8aa6ff;
+    --btn-bg: #f2f2f4;
+    --btn-fg: #0a0a0b;
+  }
 }
 body {
   margin: 0 auto;

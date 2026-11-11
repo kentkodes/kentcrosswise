@@ -1,5 +1,21 @@
-// Rosarivo Regular, self-hosted (OFL, see src/fonts/rosarivo/). Ranked lead face for the home page.
+// Geist and Geist Mono via next/font/google: self-hosted at build time, no runtime request to Google.
+// Both are variable fonts, so no weight list is given; the CSS uses 400, 500 and 600.
+import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
+
+export const geistSans = Geist({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
+export const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
+});
+
+// Rosarivo Regular, self-hosted (OFL, see src/fonts/rosarivo/). Used by the PublicShell pages (/demo, /office, /bot).
 
 export const rosarivo = localFont({
   src: "../../../fonts/rosarivo/Rosarivo-Regular.ttf",
@@ -8,17 +24,4 @@ export const rosarivo = localFont({
   display: "swap",
   variable: "--font-rosarivo",
   fallback: ["Georgia", "Times New Roman", "serif"],
-});
-
-// PT Serif Regular (OFL, see src/fonts/pt-serif/), ranked by Impeccable font-match for the comp's
-// lining figures. Limited to digits, comma and full stop, and stacked before Rosarivo only on
-// numbers, so every letter stays Rosarivo.
-export const figures = localFont({
-  src: "../../../fonts/pt-serif/PT_Serif-Web-Regular.ttf",
-  weight: "400",
-  style: "normal",
-  display: "swap",
-  variable: "--font-figures",
-  adjustFontFallback: false,
-  declarations: [{ prop: "unicode-range", value: "U+0030-0039, U+002C, U+002E" }],
 });

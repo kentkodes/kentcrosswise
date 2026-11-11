@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 test("public home renders and links to the demo", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /A little space\s*for your everyday\./ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Personal software, built by a team of AI agents." })).toBeVisible();
   await expect(page.getByText(/^Simulated data/)).toBeVisible();
   await page.getByRole("main").getByRole("link", { name: "Explore the demo", exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/);
@@ -56,15 +56,6 @@ test.describe("shared navigation", () => {
     await expect(page).toHaveURL(/\/$/);
     await nav.getByRole("link", { name: "Demo" }).click();
     await expect(page).toHaveURL(/\/demo$/);
-  });
-
-  test("the day/night toggle is on the home page only", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("group", { name: "Scene light" })).toBeVisible();
-    for (const path of ["/demo", "/office"]) {
-      await page.goto(path);
-      await expect(page.getByRole("group", { name: "Scene light" })).toHaveCount(0);
-    }
   });
 
   test("the account link swaps to Your hub in place, without moving", async ({ page }) => {

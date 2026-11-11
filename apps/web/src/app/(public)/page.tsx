@@ -1,65 +1,62 @@
 // Public: visitors. May import only @kcw/demo-data and @kcw/xray (ESLint enforces it).
-// Home, first viewport: approved composition 3 "Hub window" (.impeccable/mocks/03-hub-window.png).
-import Image from "next/image";
+// Home: shared header, hero, a static product still of the hub, three feature rows, shared footer.
 import Link from "next/link";
-import { HubWindow } from "./_home/hub-window";
-import { Fireflies } from "./_home/fireflies";
-import { ArrowRight } from "./_home/icons";
-import { SceneFrame } from "./_home/scene";
-import { figures, rosarivo } from "./_site/fonts";
-import { SiteHeader } from "./_site/site-header";
+import { ProductStill } from "./_home/product-still";
 import s from "./_home/home.module.css";
-import landscape from "./_home/plates/landscape.png";
-import retroComputer from "./_home/plates/retro-computer.png";
+import { geistMono, geistSans } from "./_site/fonts";
+import { SiteFooter } from "./_site/site-footer";
+import { SiteHeader } from "./_site/site-header";
+
+// Hero copy, in one place. Default text from the home redesign spec; the owner may change it.
+export const HERO = {
+  headline: "Personal software, built by a team of AI agents.",
+  subline:
+    "Kentcrosswise is my hub for people, reading and notes. Agents plan, write, review and ship every change, and you can watch them work.",
+} as const;
+
+const FEATURES = [
+  {
+    title: "Your people, reading and notes",
+    text: "Contacts, moods, essays and notes in one quiet place.",
+  },
+  {
+    title: "An essay library",
+    text: "Three hundred classic and modern essays, with a reader and recommendations.",
+  },
+  {
+    title: "Built in the open",
+    text: "A small team of AI agents plans, writes, reviews and ships every change. Watch them in the agent office.",
+  },
+];
 
 export default function HomePage() {
   return (
-    <div className={`${s.page} ${rosarivo.variable} ${figures.variable}`}>
-      <SceneFrame>
-        <div className={s.stage}>
-          <div className={s.scenery} aria-hidden="true" data-scenery="">
-            <Image className={s.landscape} src={landscape} alt="" sizes="100vw" preload />
-            <Image className={s.computer} src={retroComputer} alt="" loading="eager" unoptimized />
-            <div className={s.nightVeil} />
-            <Fireflies />
+    <div className={`${s.page} ${geistSans.variable} ${geistMono.variable}`}>
+      <SiteHeader current="/" />
+      <main className={s.main}>
+        <section className={s.hero}>
+          <h1 className={s.headline}>{HERO.headline}</h1>
+          <p className={s.subline}>{HERO.subline}</p>
+          <div className={s.ctas}>
+            <Link className={s.primary} href="/demo">
+              Explore the demo
+            </Link>
+            <Link className={s.secondary} href="/office">
+              Agent office
+            </Link>
           </div>
-
-          <SiteHeader current="/" stage className={s.siteHeader} />
-
-          <main className={s.main}>
-            <div className={s.intro}>
-              <h1 className={s.headline}>
-                A little space
-                <br />
-                for your everyday.
-              </h1>
-              <Link className={s.entrance} href="/demo">
-                Explore the demo
-                <ArrowRight className={s.entranceArrow} />
-              </Link>
+        </section>
+        <ProductStill />
+        <section className={s.features}>
+          {FEATURES.map((f) => (
+            <div key={f.title}>
+              <h2 className={s.featureTitle}>{f.title}</h2>
+              <p className={s.featureText}>{f.text}</p>
             </div>
-            <HubWindow />
-          </main>
-        </div>
-      </SceneFrame>
-
-      <footer className={s.footer}>
-        <div className={s.footerInner}>
-          <p className={s.footerMark}>Kentcrosswise</p>
-          <p className={s.footerNote}>
-            A personal hub built with a small team of AI agents. Everything in the demo is simulated: the
-            people, moods and numbers are generated examples.
-          </p>
-          <ul className={s.footerLinks}>
-            <li>
-              <Link href="/demo">Explore the demo</Link>
-            </li>
-            <li>
-              <Link href="/office">Agent office</Link>
-            </li>
-          </ul>
-        </div>
-      </footer>
+          ))}
+        </section>
+      </main>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,100 +1,117 @@
 /*
- * Shared public header (/, /demo, /office), extracted from the home page's own header.
- * Phones: wordmark above one compact row of links (no menu). From 640px: wordmark and links share
- * a row. `.stage` (home only) places the header in the 1505x1045 comp stage from 1100px.
- * Placement in the page (grid cell, stacking) belongs to the page.
+ * Shared public header (/, /demo, /office, /bot). Sticky, 60px row on desktop, centred to 1120px.
+ * Colours come from the global tokens through local vars: `--header-fg`, `--header-muted`,
+ * `--header-line`, `--header-bg`. They are read with a token fallback rather than declared here,
+ * so a shell that sets them (public-shell.module.css) overrides them by inheritance.
+ * Placement in the page (grid cell, stacking) belongs to the page via className.
  */
 
 .header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding: 20px 20px 0;
-  color: #f6f1e4;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--header-bg, var(--bg)) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--header-line, var(--line));
+  color: var(--header-fg, var(--fg));
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-.header,
 .header * {
   box-sizing: border-box;
 }
 
-.header a {
-  color: inherit;
-  text-decoration: none;
+.inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 24px;
+  max-width: 1120px;
+  height: 60px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Focus: 2px outline, offset 2px. Specificity stays at one class so the shell's own
+   focus ring (public-shell.module.css) still wins on /demo, /office and /bot. */
+:where(.header) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .wordmark {
-  font-size: 30px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1;
+  color: var(--header-fg, var(--fg));
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
 }
 
 .navList {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .navLink {
-  position: relative;
   display: inline-block;
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1;
-  padding: 6px 0;
+  color: var(--header-muted, var(--fg-muted));
+  text-decoration: none;
   white-space: nowrap;
-}
-
-.navLink[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  background: currentColor;
-  opacity: 0.85;
+  transition: color var(--dur-hover, 150ms) var(--ease-out, ease-out);
 }
 
 .navLink:hover {
-  color: #fff;
+  color: var(--header-fg, var(--fg));
 }
 
-.navSignIn {
-  position: relative;
-  padding-left: 20px;
+.navLink[aria-current="page"] {
+  color: var(--header-fg, var(--fg));
+  font-weight: 500;
 }
 
-.navSignIn::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  height: 34px;
-  width: 1px;
-  translate: 0 -50%;
-  background: rgb(246 241 228 / 0.35);
-}
-
+/* Primary solid button. Inverts at the global defaults (--btn-bg / --btn-fg); the shell
+   sets --header-fg / --header-bg so it stays a light pill on the navy ground. */
+/* The pill is 36px tall; ::after widens its hit area to 44px (4px above and below) without changing the visual. */
 .signIn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
-  padding: 0 22px;
-  border: 1.5px solid rgb(246 241 228 / 0.85);
-  border-radius: 999px;
-  font-size: 17px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--header-fg, var(--btn-bg));
+  color: var(--header-bg, var(--btn-fg));
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1;
+  text-decoration: none;
   white-space: nowrap;
-  transition: background-color 0.2s ease;
+  transition: opacity var(--dur-hover, 150ms) var(--ease-out, ease-out);
 }
 
 .signIn:hover {
-  background: rgb(246 241 228 / 0.12);
+  opacity: 0.88;
+}
+
+.signIn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 
 /* "Sign in" and "Your hub" share one cell: the pill is as wide as the longer label in both
@@ -113,140 +130,46 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .navLink,
   .signIn {
     transition: none;
   }
 }
 
-/* Phones: one compact row across the full width; sized so "Your hub" still fits at 320px. */
+/* Phones (under 640px): wordmark on its own row, then the four links spread across the full width.
+   Links are 14px with 44px tap targets; Sign in keeps its 36px pill. Nothing overflows at 320px. */
 @media (max-width: 639px) {
+  .inner {
+    padding: 0 16px;
+    height: auto;
+    gap: 0;
+    padding-top: 12px;
+    padding-bottom: 4px;
+  }
+
+  .wordmark {
+    width: 100%;
+    padding-bottom: 8px;
+  }
+
   .nav {
     flex: 1 1 100%;
   }
 
   .navList {
     justify-content: space-between;
-    gap: 6px;
+    gap: 16px;
   }
 
-  .navLink {
-    font-size: clamp(14px, 4.3vw, 17px);
-  }
-
-  .navSignIn {
-    padding-left: clamp(6px, 2.5vw, 16px);
-  }
-
-  .navSignIn::before {
-    height: 30px;
-  }
-
-  .signIn {
-    height: 44px;
-    padding: 0 clamp(10px, 3.4vw, 18px);
-    font-size: clamp(14px, 4.3vw, 17px);
-  }
-}
-
-@media (min-width: 640px) and (max-width: 1099px) {
-  .header {
-    padding-inline: 40px;
-  }
-}
-
-/* Keep the existing 44px account row and text positions while making the other navigation
-   links equally easy to tap. The minimum-width hit area does not reflow the compact phone row. */
-@media (max-width: 1099px) {
   .navLink {
     display: inline-flex;
     align-items: center;
-    height: 44px;
-    padding-block: 0;
+    min-height: 44px;
+    font-size: 14px;
   }
 
-  .navLink::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: max(100%, 44px);
-    height: 44px;
-    translate: -50% -50%;
-  }
-
-  .navLink[aria-current="page"]::after {
-    bottom: calc((100% - 1em) / 2 - 10px);
-  }
-}
-/* ---------- Wide ---------- */
-
-@media (min-width: 1100px) {
-  /* Flowing pages: wordmark and links on the home stage's gutters (95px of 1505 = 6.3%). */
-  .header {
-    padding: 28px max(40px, 6.25vw) 0;
-  }
-
-  /* Home stage: comp pixels, scaled with the stage. */
-  .stage {
-    display: block;
-    padding: 0;
-  }
-
-  .stage .wordmark {
-    position: absolute;
-    left: 95px;
-    top: 31px;
-    font-size: 38px;
-    letter-spacing: -0.032em;
-  }
-
-  .stage .navList {
-    display: block;
-  }
-
-  .stage .navList > li {
-    position: absolute;
-    top: 37.5px;
-  }
-
-  .stage .navList > li:nth-child(1) {
-    left: 981px;
-  }
-
-  .stage .navList > li:nth-child(2) {
-    left: 1070px;
-  }
-
-  .stage .navList > li:nth-child(3) {
-    left: 1155px;
-  }
-
-  .stage .navLink {
-    padding: 0;
-    font-size: 16.5px;
-    letter-spacing: -0.01em;
-  }
-
-  .stage .navLink[aria-current="page"]::after {
-    bottom: -8px;
-  }
-
-  .stage .navList > li.navSignIn {
-    left: 1283px;
-    top: 24px;
-    padding-left: 26px;
-  }
-
-  .stage .navSignIn::before {
-    height: 38px;
-  }
-
-  .stage .signIn {
-    width: 108px;
-    height: 48px;
-    padding: 0;
-    border-width: 2px;
-    border-color: rgb(240 244 250 / 0.9);
-    font-size: 16.5px;
+  .signIn {
+    padding: 0 10px;
+    font-size: 14px;
   }
 }
