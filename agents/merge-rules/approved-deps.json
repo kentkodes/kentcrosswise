@@ -16,7 +16,6 @@
   "@types/pg",
   "@types/react",
   "@types/react-dom",
-  "@typesafe-ai/sdk",
   "esbuild",
   "eslint",
   "globals",

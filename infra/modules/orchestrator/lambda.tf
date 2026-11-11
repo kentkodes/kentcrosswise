@@ -61,7 +61,7 @@ resource "aws_lambda_function" "orchestrator" {
   timeout          = var.orchestrator_timeout_s
 
   environment {
-    # LangSmith (research/apis.md §6): LANGCHAIN_CALLBACKS_BACKGROUND=false makes traces flush before
+    # LangSmith (research/apis.md §5): LANGCHAIN_CALLBACKS_BACKGROUND=false makes traces flush before
     # the function freezes. LANGSMITH_API_KEY is not set here: the code reads langsmith_api_key from
     # its models secret at cold start (D9).
     variables = merge(var.orchestrator_environment, {
