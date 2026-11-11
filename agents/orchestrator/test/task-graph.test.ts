@@ -114,6 +114,8 @@ describe("task graph (P2-10)", () => {
   });
   const prEvent = (taskId: number, action: string, pr: number, head: string, ref = `kcw/task-${taskId}`) =>
     github(taskId, { type: "pull_request", action, pr_number: pr, merged: false, draft: false, head_ref: ref, head_sha: head, base_ref: "main" }, head);
+  const prClosed = (taskId: number, pr: number, head: string, merged: boolean) =>
+    github(taskId, { type: "pull_request", action: "closed", pr_number: pr, merged, draft: false, head_ref: `kcw/task-${taskId}`, head_sha: head, base_ref: "main" }, head);
   const ciEvent = (taskId: number, pr: number, head: string, conclusion: string, path = ".github/workflows/ci.yml") =>
     github(
       taskId,
@@ -434,6 +436,60 @@ describe("task graph (P2-10)", () => {
       // The superseded approval's decision is now stale.
       expect(await send(id, decision(id, a.id, "rejected"))).toBe("stale");
       expect((await task(id)).waiting_on).toBe("ci");
+    });
+
+    it("the PR merged outside the orchestrator during the owner wait: approval superseded, task merged", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      const a = await toOwner(id, 150, head);
+      expect(await send(id, prClosed(id, 150, head, true))).toBe("applied");
+      expect(await task(id)).toMatchObject({ status: "merged", waiting_on: null });
+      expect((await events(id)).at(-1)).toBe("merged");
+      expect(gh.merges).toEqual([]);
+      expect(await sql("SELECT status, note FROM approvals WHERE id = $1", [a.id])).toEqual([
+        { status: "rejected", note: "Superseded: PR #150 was merged outside the orchestrator." },
+      ]);
+      expect(await send(id, decision(id, a.id, "approved"))).toBe("finished");
+      expect(await waits(id)).toEqual([]);
+    });
+  });
+
+  describe("PR closed outside the orchestrator", () => {
+    it("merged while QA reviews: task merged, no orchestrator merge, docs task started", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 151, head);
+      expect(await send(id, prClosed(id, 151, head, true))).toBe("applied");
+      expect(await task(id)).toMatchObject({ status: "merged", waiting_on: null });
+      expect((await events(id)).at(-1)).toBe("merged");
+      expect(gh.merges).toEqual([]);
+      expect(await waits(id)).toEqual([]);
+      // §4.2 step 8: Docs-keeper follows the externally merged PR as well.
+      const docs = await docsTaskOf(id);
+      expect(docsDispatches()).toEqual([expect.objectContaining({ inputs: { task_id: String(docs), pr: "151" } })]);
+      expect((await task(docs)).waiting_on).toBe("dev");
+    });
+
+    it("closed without merging while CI runs: task cancelled", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      expect(await start(id)).toBe("started");
+      expect(await openPr(id, 152, head)).toBe("applied");
+      expect(await send(id, prClosed(id, 152, head, false))).toBe("applied");
+      expect(await task(id)).toMatchObject({ status: "cancelled", waiting_on: null });
+      expect((await events(id)).at(-1)).toBe("failed");
+      expect(await sql("SELECT id FROM tasks WHERE parent_id = $1", [id])).toEqual([]); // no docs task for an unmerged PR
+      expect(await sql("SELECT detail->>'reason' AS reason FROM agent_events WHERE task_id = $1 AND event_type = 'failed'", [id])).toEqual([
+        { reason: "PR #152 was closed without merging outside the orchestrator" },
+      ]);
+    });
+
+    it("another PR closing is ignored", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 153, head);
+      expect(await send(id, prClosed(id, 999, head, true))).toBe("stale");
+      expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "qa" });
     });
   });
 
