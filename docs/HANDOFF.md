@@ -1,5 +1,15 @@
 # Kentcrosswise project handoff
 
+## Current state — 2026-11-11 UTC (public redesign, PRs #79 and #80 open)
+
+This section supersedes the sections below for the public web pages. Nothing here is merged yet.
+
+- **PR #79** `frontend/home-redesign-20261111` (head `a35e954`, base `main` `f570d73`): minimal "Paper" home page (headline "Watch AI agents build my personal hub."), design tokens with automatic dark mode in `globals.css`, Geist/Geist Mono via `next/font/google` (no new dependency), rebuilt shared header and new shared footer, removal of the dusk scene, plates and PT Serif, and a rewritten root `DESIGN.md`. Owner approved merge on green CI.
+- **PR #80** `frontend/office-board-20261111` (head after this note, stacked on #79, base `frontend/home-redesign-20261111`): `/office` team board (one card per worker type with model tag and Working/Waiting/Idle/Unknown state, Developer seats, activity list with role filters, Room tab with the connected pixel room), shared `PaperFrame`, removal of `/office/preview`, `/office/draft` and `/office/connected`. After #79 squash-merges: rebase onto `main`, retarget the base to `main`, rerun CI, then the owner decides the merge.
+- **CI status:** on both PRs `checks` and `prod-plan` pass. `preview` failed at "Playwright browsers": `playwright install --with-deps chromium` could not resolve `azure.archive.ubuntu.com` on the GitHub runner (apt DNS outage), so no browser tests ran. Teardown succeeded on both runs (nothing left). An earlier `checks` failure on #79 was the known flaky `@kcw/db` migrate "is idempotent" 5000 ms timeout; it passed on rerun.
+- **Local verification:** typecheck, lint, web unit tests (301 on #80), clean production build, and local Playwright (public, activity, bot, office specs) pass; browser checks at desktop, 1440px, 375px and 320px in light and dark, with live production office data for `/office`.
+- **Follow-ups:** consider making the preview job resilient to apt mirror outages (for example retrying the browser install or installing without `--with-deps` on a runner image that already has the libraries; workflow files are owner-critical); raise the timeouts of the flaky `@kcw/db` migrate test and the `public-feed.test.ts` setup hook; regenerate `.impeccable/design.json`; redo `/demo` and `/bot` in the Paper style.
+
 ## Current state — 2026-11-11 UTC (worker agents on DeepSeek, merged)
 
 Superseded 2026-11-11 for office routes: `/office/preview`, `/office/draft` and `/office/connected` were removed. The connected room is now the Room tab on `/office`, and `/office` is the team board (Board tab). Older sections below name the removed routes as they were at their date.
