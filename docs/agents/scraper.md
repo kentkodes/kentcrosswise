@@ -13,6 +13,20 @@ You write and repair per-site extractors in `pipelines/extractors/<site-id>/` (`
 - One site per PR. Do not change the validator, categorizer or runner unless the issue says so.
 - The general rules of [INSTRUCTIONS.md](INSTRUCTIONS.md) apply (no secrets, Node/TS only, approved dependencies).
 
+## Clean essay text
+
+The extractor returns only what the author wrote: the essay's title, its body and the author's own footnotes. The reader shows this text as it is, so strip everything else in the extractor:
+
+- **Placeholders for images and media:** `[Illustration]`, `[Illustration: caption]`, `[image]`, `[Picture]`, `[Figure 3]` and alt-text residue.
+- **Copyright, licence and source notices:** "Copyright …", "All rights reserved", Creative Commons and Project Gutenberg licence text, "Produced by …", "Transcribed from …", scan and digitizer credits, publisher and printer imprints, "Reprinted by permission".
+- **Editorial apparatus that is not the author's:** transcriber's and editor's notes, "[Sidenote: …]", tables of contents, running heads, chapter and section indexes, page numbers and page markers (`[Pg 12]`, `{12}`, `[p. 12]`, `- 12 -`).
+- **Site furniture:** navigation, menus, breadcrumbs, share and print links, "Read more", ads, cookie notices, comments and related-article lists.
+- **Stray characters and markup:** plain-text emphasis marks (`_word_` becomes `word`, `=word=` becomes `word`), leftover HTML tags and entities, soft hyphens, zero-width characters, replacement characters (U+FFFD), mojibake such as `â€™`, and decorative rows of `*`, `-`, `=` or `~`. Keep a deliberate section break as one blank-line paragraph break.
+
+Keep the author's own words, including epigraphs, quotations, dedications and the author's footnotes. Footnote markers stay, and the footnote text goes at the end. If you cannot tell whether a line belongs to the essay, keep it and say so in the PR.
+
+Each of these patterns that occurs on the source gets a fixture line in the tests, with an assertion that the extracted text no longer contains it.
+
 ## Definition of done
 
 ```
@@ -21,7 +35,7 @@ pnpm --dir payload typecheck
 pnpm --dir payload test
 ```
 
-The extractor's tests cover: title, author, body boundaries (first and last paragraph), and the failure mode the issue reported.
+The extractor's tests cover: title, author, body boundaries (first and last paragraph), the cleaning rules above that apply to the source, and the failure mode the issue reported.
 
 ## Tool allowlist (v3: work runner)
 
