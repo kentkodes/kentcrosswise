@@ -480,6 +480,8 @@ class Machine {
     }
     if (!merged) return this.finish("cancelled", `PR #${d.pr_number} was closed without merging outside the orchestrator`);
     await this.event("merged", "orchestrator", { pr: d.pr_number, by: "external" });
+    // §4.2 step 8 as in merge(): Docs-keeper follows every merged work PR, never a docs PR.
+    if (!this.isDocs) await this.createDocsTask(d.pr_number!);
     await this.enter("done", "merged");
     return "applied";
   }

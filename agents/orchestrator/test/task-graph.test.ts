@@ -455,7 +455,7 @@ describe("task graph (P2-10)", () => {
   });
 
   describe("PR closed outside the orchestrator", () => {
-    it("merged while QA reviews: task merged, no orchestrator merge", async () => {
+    it("merged while QA reviews: task merged, no orchestrator merge, docs task started", async () => {
       const id = await newTask();
       const head = sha(`${id}-1`);
       await toQa(id, 151, head);
@@ -464,6 +464,10 @@ describe("task graph (P2-10)", () => {
       expect((await events(id)).at(-1)).toBe("merged");
       expect(gh.merges).toEqual([]);
       expect(await waits(id)).toEqual([]);
+      // §4.2 step 8: Docs-keeper follows the externally merged PR as well.
+      const docs = await docsTaskOf(id);
+      expect(docsDispatches()).toEqual([expect.objectContaining({ inputs: { task_id: String(docs), pr: "151" } })]);
+      expect((await task(docs)).waiting_on).toBe("dev");
     });
 
     it("closed without merging while CI runs: task cancelled", async () => {
@@ -474,6 +478,7 @@ describe("task graph (P2-10)", () => {
       expect(await send(id, prClosed(id, 152, head, false))).toBe("applied");
       expect(await task(id)).toMatchObject({ status: "cancelled", waiting_on: null });
       expect((await events(id)).at(-1)).toBe("failed");
+      expect(await sql("SELECT id FROM tasks WHERE parent_id = $1", [id])).toEqual([]); // no docs task for an unmerged PR
       expect(await sql("SELECT detail->>'reason' AS reason FROM agent_events WHERE task_id = $1 AND event_type = 'failed'", [id])).toEqual([
         { reason: "PR #152 was closed without merging outside the orchestrator" },
       ]);
