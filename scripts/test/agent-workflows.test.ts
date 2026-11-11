@@ -31,7 +31,7 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
       expect(job[name]).not.toMatch(/path: payload|ref: main|--dir payload|--source|execution_file/);
     }
     expect(yml).not.toContain('AWS_ROLE_AGENT_ARN');
-    expect(job.work).not.toMatch(/environment:|aws-actions|create-github-app-token|KCW_APP|AWS_ROLE|AWS_ACCESS_KEY|kcw-report/);
+    expect(job.work).not.toMatch(/environment: agent-publish|create-github-app-token|KCW_APP|AWS_ROLE_AGENT_(DEVELOPER|QA|SCRAPER|DOCS)_ARN|kcw-report/);
     expect(job.prepare).not.toMatch(/id-token: write|aws-actions|create-github-app-token/);
   });
   it("pins all trusted source and avoids caches and lifecycle scripts before privilege",()=>{
@@ -74,8 +74,37 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(workTools).toBeTruthy(); expect(tools(workTools!)).toEqual(tools(roleTools!));
     expect(workTools).not.toMatch(/git push|Bash\((?:aws|gh|curl|wget|node:\*)/);
     expect(job.work).toContain('github_token: ${{ github.token }}');
-    expect(job.work).toContain('anthropic_federation_rule_id:');
-    expect(job.work).toContain('--model claude-haiku-5-5');
+    expect(job.work).not.toContain('anthropic_federation');
+    expect(job.work).toContain('anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}');
+    expect(job.work).toContain('ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic');
+    expect(job.work).toContain('--model deepseek-flash');
+    expect(job.work).not.toContain('claude-haiku-5-5');
+    expect(job.work!.match(/--provider deepseek/g)).toHaveLength(2);
+  });
+  it("binds only the work and review jobs to the model environment", () => {
+    expect(job.work).toContain("environment: agent-model");
+    for (const [name, content] of Object.entries(job)) if (name !== "work" && name !== "review") expect(content).not.toContain("agent-model");
+  });
+  it("uses no Anthropic federation and no Haiku model in any worker workflow", () => {
+    expect(yml).not.toContain("anthropic_federation");
+    expect(yml).not.toContain("claude-haiku-5-5");
+  });
+  it("reads the model key after the payload install and before the model step, with AWS credentials cleared for the model", () => {
+    const w = job.work!;
+    const aws = w.indexOf("uses: aws-actions/configure-aws-credentials");
+    const secrets = w.indexOf("uses: aws-actions/aws-secretsmanager-get-secrets");
+    const model = w.indexOf("uses: anthropics/claude-code-action");
+    expect(w.indexOf("pnpm --dir payload install")).toBeLessThan(aws);
+    expect(aws).toBeLessThan(secrets);
+    expect(secrets).toBeLessThan(model);
+    expect(w).toContain("role-to-assume: ${{ vars.AWS_ROLE_AGENT_MODEL_ARN }}");
+    expect(w).toContain("DEEPSEEK, kcw/agent/deepseek");
+    const modelStep = w.slice(model, w.indexOf("        with:", model));
+    expect(modelStep).toContain('AWS_ACCESS_KEY_ID: ""');
+    expect(modelStep).toContain('AWS_SECRET_ACCESS_KEY: ""');
+    expect(modelStep).toContain('AWS_SESSION_TOKEN: ""');
+    expect(modelStep).toContain("ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic");
+    expect(modelStep).not.toMatch(/AWS_ROLE|role-to-assume/);
   });
   it("retains exact job permissions while explaining the command shapes", () => {
     const common = { actions: "read", contents: "read", "id-token": "write" };
@@ -119,7 +148,20 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
   if(agent==='qa') it("makes the final decision on a fresh runner with no PR execution or write tools",()=>{
     expect(job.review).toContain('--command review-input');
     expect(job.review).toContain('--command review-output');
-    expect(job.review).not.toMatch(/pnpm --dir payload|Bash\(pnpm|Edit,|Write,|aws-actions|create-github-app-token/);
+    expect(job.review).not.toMatch(/pnpm --dir payload|Bash\(pnpm|Edit,|Write,|create-github-app-token|KCW_APP|environment: agent-publish|AWS_ROLE_AGENT_(DEVELOPER|QA|SCRAPER|DOCS)_ARN|kcw-report/);
+    expect(job.review).toContain("environment: agent-model");
+    expect(job.review).toContain("role-to-assume: ${{ vars.AWS_ROLE_AGENT_MODEL_ARN }}");
+    expect(job.review).toContain("DEEPSEEK, kcw/agent/deepseek");
+    const reviewClaude = job.review!.indexOf("uses: anthropics/claude-code-action");
+    expect(job.review!.indexOf("uses: aws-actions/aws-secretsmanager-get-secrets")).toBeLessThan(reviewClaude);
+    const reviewStep = job.review!.slice(reviewClaude, job.review!.indexOf("        with:", reviewClaude));
+    expect(reviewStep).toContain('AWS_ACCESS_KEY_ID: ""');
+    expect(reviewStep).toContain('AWS_SECRET_ACCESS_KEY: ""');
+    expect(reviewStep).toContain('AWS_SESSION_TOKEN: ""');
+    expect(reviewStep).toContain("ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic");
+    expect(job.review).toContain("anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}");
+    expect(job.review).toContain("--model deepseek-flash");
+    expect(job.review).toContain("--provider deepseek");
     expect(job.review).toContain('diff --no-ext-diff --no-textconv');
     expect(job.publish).toContain('needs: [prepare, work, review]');
     expect(prompt(job.review!)).toContain('git -C payload --no-pager diff --no-ext-diff --no-textconv origin/main...HEAD --');

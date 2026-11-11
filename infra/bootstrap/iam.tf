@@ -16,11 +16,14 @@ locals {
     "kcw-gh-ci"     = ["${local.github_sub}:pull_request", "${local.github_sub}:environment:preview-gc"]
     "kcw-gh-plan"   = ["${local.github_sub}:pull_request"]
     "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
-    # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust.
+    # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust, except
+    # kcw-gh-agent-model below, which reads only the model key.
     "kcw-gh-agent-developer" = ["${local.github_sub}:environment:agent-publish-developer"]
     "kcw-gh-agent-qa"        = ["${local.github_sub}:environment:agent-publish-qa"]
     "kcw-gh-agent-scraper"   = ["${local.github_sub}:environment:agent-publish-scraper"]
     "kcw-gh-agent-docs"      = ["${local.github_sub}:environment:agent-publish-docs"]
+    # Work jobs of the four workers read only the DeepSeek key; environment agent-model deploys from main only.
+    "kcw-gh-agent-model" = ["${local.github_sub}:environment:agent-model"]
     # Manual Gutenberg ingest (essay-ingest.yml); the environment deploys from main only.
     "kcw-gh-essay-ingest" = ["${local.github_sub}:environment:essay-ingest"]
   }
@@ -508,6 +511,22 @@ resource "aws_iam_role_policy" "essay_ingest" {
   name   = "kcw-gh-essay-ingest"
   role   = aws_iam_role.github["kcw-gh-essay-ingest"].id
   policy = data.aws_iam_policy_document.essay_ingest.json
+}
+
+# ---------- agent work jobs: the model key only (environment agent-model) ----------
+
+data "aws_iam_policy_document" "agent_model" {
+  statement {
+    sid       = "DeepseekKey"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local.secret_arn}:kcw/agent/deepseek-??????"]
+  }
+}
+
+resource "aws_iam_role_policy" "agent_model" {
+  name   = "kcw-gh-agent-model"
+  role   = aws_iam_role.github["kcw-gh-agent-model"].id
+  policy = data.aws_iam_policy_document.agent_model.json
 }
 
 # ---------- isolated agent publishers: one environment and App key each ----------

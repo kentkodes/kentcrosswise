@@ -103,7 +103,8 @@ export function requireCodeProgress(c: TrustedContext, pushed: boolean): void {
   if (!pushed && (c.agent === "developer" || c.agent === "scraper") && c.pr === null) throw new Error("the agent made no commits and no task PR exists");
 }
 
-export interface AdvisoryUsage { kind: "model"; provider: "anthropic"; model: string; input_tokens: number; output_tokens: number }
+export const MODEL_PROVIDERS: readonly string[] = ["anthropic", "deepseek"];
+export interface AdvisoryUsage { kind: "model"; provider: "anthropic" | "deepseek"; model: string; input_tokens: number; output_tokens: number }
 export function readAdvisoryUsage(dir: string, kind: "candidate" | "decision" = "candidate"): AdvisoryUsage[] {
   try {
     const files = readdirSync(dir).sort().join(",");
@@ -114,7 +115,7 @@ export function readAdvisoryUsage(dir: string, kind: "candidate" | "decision" = 
     const text = readFileSync(path.join(dir, "usage.json"), "utf8");
     const usage = JSON.parse(text) as AdvisoryUsage[];
     if (!Array.isArray(usage) || usage.length > 16 || usage.some((u) => !u || Object.keys(u).sort().join(",") !== "input_tokens,kind,model,output_tokens,provider" ||
-      u.kind !== "model" || u.provider !== "anthropic" || !/^[\w.:/-]{1,100}$/.test(u.model) ||
+      u.kind !== "model" || !MODEL_PROVIDERS.includes(u.provider) || !/^[\w.:/-]{1,100}$/.test(u.model) ||
       [u.input_tokens, u.output_tokens].some((n) => !Number.isSafeInteger(n) || n < 0 || n > 100_000_000))) return [];
     return usage;
   } catch { return []; } // Advisory data cannot suppress a trusted lifecycle failure event.

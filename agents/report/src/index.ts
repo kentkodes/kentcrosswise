@@ -133,8 +133,10 @@ export function reportFromFlags(v: Record<string, string | boolean | undefined>,
  * messages; the last `result` message carries `modelUsage` per model). Input tokens include cache
  * reads and cache writes, because usage_events has one input count (the computed cost is then an
  * upper bound). No result message (the run died early): no usage. Never echoes file content.
+ * The provider labels the usage (the price row is keyed by provider and model): `anthropic` for Claude
+ * runs, `deepseek` for runs through DeepSeek's Anthropic-compatible endpoint.
  */
-export function usageFromExecution(messages: unknown): Usage[] {
+export function usageFromExecution(messages: unknown, provider: "anthropic" | "deepseek" = "anthropic"): Usage[] {
   if (!Array.isArray(messages)) throw new UsageError("the execution file is not a JSON array");
   const result = [...(messages as unknown[])]
     .reverse()
@@ -150,7 +152,7 @@ export function usageFromExecution(messages: unknown): Usage[] {
     const input = count(u.inputTokens) + count(u.cacheReadInputTokens) + count(u.cacheCreationInputTokens);
     const output = count(u.outputTokens);
     if (input === 0 && output === 0) continue;
-    usage.push({ kind: "model", provider: "anthropic", model, input_tokens: input, output_tokens: output });
+    usage.push({ kind: "model", provider, model, input_tokens: input, output_tokens: output });
   }
   return usage;
 }

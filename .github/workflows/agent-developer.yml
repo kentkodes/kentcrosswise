@@ -119,6 +119,7 @@ jobs:
   work:
     needs: [prepare, start]
     if: needs.prepare.outputs.skip != 'true'
+    environment: agent-model
     runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
@@ -163,9 +164,25 @@ jobs:
           git -C payload config user.name "kentcrosswise-developer[bot]"
           git -C payload config user.email "346713162+kentcrosswise-dev[bot]@users.noreply.github.com"
       - run: pnpm --dir payload install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_AGENT_MODEL_ARN }}
+          aws-region: us-east-1
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            DEEPSEEK, kcw/agent/deepseek
+          parse-json-secrets: true
       - name: Claude (developer)
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
+          # Clear the AWS credentials exported by configure-aws-credentials: the model step runs
+          # agent-chosen Bash, so it must not inherit the role that can read the key.
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
         with:
           prompt: |
             Read docs/agents/INSTRUCTIONS.md and docs/agents/developer.md from this trusted root.
@@ -190,27 +207,24 @@ jobs:
           bot_id: "346713162"
           bot_name: kentcrosswise-dev[bot]
           allowed_bots: kentcrosswise-orchestrator[bot]
-          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
-          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
-          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
-          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}
           plugins: ""
           plugin_marketplaces: ""
           show_full_output: false
           display_report: false
           claude_args: >-
-            --model claude-haiku-5-5
+            --model deepseek-flash
             --max-turns 80
             --allowedTools "Read, Glob, Grep, Edit, Write, Bash(pnpm --dir payload install), Bash(pnpm --dir payload lint), Bash(pnpm --dir payload typecheck), Bash(pnpm --dir payload test), Bash(pnpm --dir payload vitest run:*), Bash(pnpm --dir payload --filter web build), Bash(pnpm --dir payload build-web), Bash(pnpm --dir payload check-prod-bundle), Bash(pnpm --dir payload migrate --pglite:*), Bash(pnpm --dir payload seed --pglite:*), Bash(git -C payload status), Bash(git -C payload diff:*), Bash(git -C payload log:*), Bash(git -C payload add:*), Bash(git -C payload commit:*), Bash(git -C payload update-index --no-skip-worktree:*)"
       - name: Export bounded candidate and advisory usage
         env:
           KCW_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command export
+        run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command export --provider deepseek
       - name: Extract bounded advisory candidate usage even after failure
         if: always()
         env:
           KCW_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command usage --kind candidate
+        run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command usage --kind candidate --provider deepseek
       - uses: actions/upload-artifact@v7
         if: always()
         id: candidate

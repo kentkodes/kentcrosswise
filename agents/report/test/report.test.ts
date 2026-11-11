@@ -255,6 +255,12 @@ describe("--claude-execution-file", () => {
     expect(r.sqs.sent).toEqual([]);
   });
 
+  it("labels the usage with the provider it was given (anthropic by default)", () => {
+    const usage = { kind: "model", model: "claude-haiku-5-5", input_tokens: 1110, output_tokens: 50 };
+    expect(usageFromExecution(EXEC)).toEqual([{ provider: "anthropic", ...usage }]);
+    expect(usageFromExecution(EXEC, "deepseek")).toEqual([{ provider: "deepseek", ...usage }]);
+  });
+
   it("finds no usage without a result message", () => {
     expect(usageFromExecution([{ type: "system" }])).toEqual([]);
   });
