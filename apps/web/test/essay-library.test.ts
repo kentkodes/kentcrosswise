@@ -18,7 +18,6 @@ import {
   saveRating,
   savePrefs,
 } from "../src/server/essay-library";
-import { loadEssayText } from "../src/server/essay-text";
 import { freshDb, pglitePool } from "./pglite";
 
 interface Fixture {
@@ -251,11 +250,6 @@ describe("essay library as web_rw", () => {
     expect(link).toMatchObject({ kind: "link", sourceUrl: "https://example.com/essay", rating: null });
     await expect(asRw((db) => getReaderEssay(db, quarantined))).resolves.toBeUndefined();
     await expect(asRw((db) => getReaderEssay(db, "nope"))).resolves.toBeUndefined();
-  });
-
-  it("the text loader is a placeholder that returns null", async () => {
-    await expect(loadEssayText("essays/text/anything.txt")).resolves.toBeNull();
-    await expect(loadEssayText(null)).resolves.toBeNull();
   });
 });
 

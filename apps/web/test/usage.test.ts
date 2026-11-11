@@ -142,6 +142,33 @@ describe("parseRange", () => {
   });
 });
 
+// The provider and model the DeepseekProvider writes into usage_events (packages/core/src/models/deepseek.ts:
+// PROVIDER "deepseek", DEFAULT_DEEPSEEK_MODEL "deepseek-flash"). Prices are synthetic; the real row is
+// entered by the owner (docs/runbooks/prod-db.md section 8).
+describe("usageSummary prices DeepSeek usage by its written provider and model", () => {
+  it("uses the row of the same provider and model, effective from its day", async () => {
+    const pg = await freshDb();
+    try {
+      await pg.exec(`
+        INSERT INTO model_prices (provider, model, usd_per_mtok_in, usd_per_mtok_out, effective_from) VALUES
+          ('deepseek', 'deepseek-flash', 1, 2, '2026-11-10');
+        INSERT INTO usage_events (ts, kind, agent, provider, model, input_tokens, output_tokens) VALUES
+          ('2026-11-10T12:00:00Z', 'model', 'router', 'deepseek', 'deepseek-flash', 1000000, 1000000),
+          ('2026-11-09T12:00:00Z', 'model', 'router', 'deepseek', 'deepseek-flash', 1000000, 0);
+      `);
+      const s = await runAs(pglitePool(pg), "web_rw", (db) => usageSummary(db, { from: "2026-11-09", to: "2026-11-10" }), {
+        readOnly: true,
+      });
+      // 1M in x $1 + 1M out x $2 = $3; the 2026-11-09 event has no row yet, so it is unpriced (never $0).
+      expect(s.byModel).toEqual([
+        { key: "deepseek/deepseek-flash", events: 2, inputTokens: 2_000_000, outputTokens: 1_000_000, costUsd: 3, unpricedEvents: 1 },
+      ]);
+    } finally {
+      await pg.close();
+    }
+  });
+});
+
 describe("formatUsd", () => {
   it("formats cents under a dollar with 4 decimals", () => {
     expect(formatUsd(0)).toBe("$0.0000");

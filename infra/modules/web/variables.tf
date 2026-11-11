@@ -59,6 +59,12 @@ variable "server_send_queue_arns" {
   default     = []
 }
 
+variable "essay_text_bucket_arn" {
+  description = "ARN of the private bucket holding essay text (essays/text/*). The server may GetObject under that prefix only. Null (previews): no read access."
+  type        = string
+  default     = null
+}
+
 variable "server_environment" {
   description = "Extra server env vars. Secret *names* only, never values (D9)."
   type        = map(string)
