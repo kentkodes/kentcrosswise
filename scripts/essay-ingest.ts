@@ -3,7 +3,7 @@
 //   --phase store  for each approved book: extract, validate, put the text in S3, then record it in the
 //                  database (or quarantine it). Needs --bucket and a database; non-PGlite targets need --confirm.
 //   --phase categorize  for each stored pending_category essay: classify the first 2000 words of the fetched
-//                  local copy (Jev, then Haiku), record the top type and make the essay active. Needs a database
+//                  local copy (DeepSeek), record the top type and make the essay active. Needs a database
 //                  and the models secret; non-PGlite targets need --confirm.
 // Output is book ids, counts and fixed codes only; never essay text.
 // Usage: pnpm essay-ingest --phase fetch --ids "1342 84" [--dir <path>]
@@ -36,8 +36,8 @@ fetch  rsync each book from a Gutenberg mirror into --dir (default $RUNNER_TEMP/
        validate in memory. No database and no AWS.
 store  per approved book: extract, validate, S3 put (essays/text/<sha256>.txt), then the database; quarantine
        for invalid text. --confirm for any non-PGlite target. Skipped when pipelines_paused is set.
-categorize  per stored pending_category essay: classify the first 2000 words of the fetched copy in --dir (Jev,
-       Haiku below the confidence threshold or on error; keys from --models-secret, default ${MODELS_SECRET}), store the
+categorize  per stored pending_category essay: classify the first 2000 words of the fetched copy in --dir (DeepSeek;
+       keys from --models-secret, default ${MODELS_SECRET}), store the
        top type and set the essay active. --confirm for any non-PGlite target. Skipped when pipelines_paused is set.
 
 ${DB_HELP}`);

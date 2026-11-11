@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages/messages";
+import type { Message, MessageCreateParamsNonStreaming, OutputConfig } from "@anthropic-ai/sdk/resources/messages/messages";
 import { ProviderError } from "./errors";
 import {
   DEFAULT_ANTHROPIC_MODEL,
@@ -23,6 +23,8 @@ export interface AnthropicProviderOptions {
   apiKey?: string | (() => Promise<string>);
   model?: string;
   maxTokens?: number;
+  /** Sent as output_config.effort (SDK 1.x typed field), e.g. "high" for Opus 5.5. Omitted when unset. */
+  effort?: NonNullable<OutputConfig["effort"]>;
   onUsage?: UsageCallback;
 }
 
@@ -98,7 +100,9 @@ export class AnthropicProvider implements ModelProvider {
     const client = await this.#getClient();
     let msg: Message;
     try {
-      msg = await client.messages.create(params);
+      msg = await client.messages.create(
+        this.#opts.effort ? { ...params, output_config: { effort: this.#opts.effort } } : params,
+      );
     } catch (err) {
       const status = err instanceof Anthropic.APIError ? err.status : undefined;
       throw new ProviderError(`Anthropic request failed${status ? ` (HTTP ${status})` : ""}`, {

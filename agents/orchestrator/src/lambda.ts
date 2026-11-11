@@ -1,14 +1,20 @@
 // Lambda entry point (handler `index.handler` once bundled; infra/modules/orchestrator).
 // Cold start: read the configuration from Secrets Manager (D9), set up the checkpointer tables in
 // schema lg, and build the task graph (P2-10) with its dependencies: the task store (orch_rw), the
-// GitHub client (orchestrator App), the planner and public-title nodes (P2-11, Haiku via
-// AnthropicProvider) and the sanitizer's contact list (read per step by the graph). Warm
+// GitHub client (orchestrator App), the planner and public-title nodes (P2-11, Claude Opus 5.5
+// at high effort via AnthropicProvider) and the sanitizer's contact list (read per step by the graph). Warm
 // invocations reuse all of it.
 //
 //   KCW_ORCHESTRATOR_SECRET  kcw/prod/orchestrator: db_url, github_app_client_id,
 //                            github_app_installation_id, github_app_private_key
 //   KCW_MODELS_SECRET        kcw/prod/models: anthropic_api_key, langsmith_api_key
-import { AnthropicProvider, type ModelProvider, type UsageCallback } from "@kcw/core/models";
+import {
+  AnthropicProvider,
+  DEFAULT_ORCHESTRATOR_EFFORT,
+  DEFAULT_ORCHESTRATOR_MODEL,
+  type ModelProvider,
+  type UsageCallback,
+} from "@kcw/core/models";
 import { SecretKeyMissingError, SecretNotFoundError, SecretStore } from "@kcw/secrets";
 import type pg from "pg";
 import { drainOfficePool } from "./office";
@@ -38,7 +44,7 @@ export interface LambdaDeps {
   /** The GitHub client; defaults to the orchestrator App from the orchestrator secret. Tests inject a fake. */
   makeGitHub?: (orchestratorSecret: string, secrets: SecretReader) => Promise<GitHubClient>;
   /**
-   * The planner's model provider; defaults to AnthropicProvider (Haiku 5.5, Q3). It must report
+   * The planner's model provider; defaults to AnthropicProvider (Opus 5.5 at high effort). It must report
    * every call to `onUsage`, which writes the task's usage row. Tests inject a FakeProvider.
    */
   makeProvider?: (opts: { apiKey: () => Promise<string>; onUsage: UsageCallback }) => ModelProvider;
@@ -83,7 +89,8 @@ async function configureTracing(deps: LambdaDeps, log: (line: string) => void): 
 }
 
 const defaultGitHub: NonNullable<LambdaDeps["makeGitHub"]> = (name, secrets) => githubClientFromSecret(name, { secrets });
-const defaultProvider: NonNullable<LambdaDeps["makeProvider"]> = (opts) => new AnthropicProvider(opts);
+const defaultProvider: NonNullable<LambdaDeps["makeProvider"]> = (opts) =>
+  new AnthropicProvider({ ...opts, model: DEFAULT_ORCHESTRATOR_MODEL, effort: DEFAULT_ORCHESTRATOR_EFFORT });
 
 async function init(deps: LambdaDeps, log: (line: string) => void): Promise<{graph: TaskGraph; pool: pg.Pool}> {
   await configureTracing(deps, log);

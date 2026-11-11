@@ -18,7 +18,7 @@ Current architecture and accepted decisions, consolidated 2026-10-25 (latest off
 | D10 | Public pages import only `@kcw/demo-data` and `@kcw/xray`, enforced by an ESLint `no-restricted-imports` rule on `app/(public)/**`; the public agent feed reads one DB view through a role that can read nothing else | Private data cannot reach a public endpoint by accident. |
 | D11 | Agent office feed = polling a CloudFront-cached JSON endpoint (5 s) | No extra service; good enough for a public animation. |
 | D12 | Neon branches via `neondatabase/create-branch-action@v6` / `delete-branch-action` with the key from Secrets Manager; Neon projects created by hand, outside Terraform | Official actions, no GitHub secret, nothing to maintain. |
-| D13 | Orchestrator planner, public-title writer and essay hooks use Haiku 5.5 (configurable per node) | Owner confirmed (Q3). |
+| D13 | Orchestrator planner and public-title writer run Claude Opus 5.5 (`claude-opus-5-5`) at high effort; runtime worker calls (essay categorizer, later hooks and router) use DeepSeek V4.1 Flash, pinned id `deepseek/deepseek-v4.1-flash-1017`, through an OpenAI-compatible gateway (default the Vercel AI Gateway, swappable by the optional `deepseek_base_url` secret key). Jev is no longer used at runtime. Coding agents (Developer, QA, Scraper-builder, Docs-keeper) are unchanged for now (step 1 only). | Owner decision 2026-11-11 (replaces Q3: Haiku 5.5, and the Jev-first routing). |
 | D14 | Pin `@opennextjs/aws` 4.1.x + Next 16; own thin Terraform module for the OpenNext v4 output | No maintained module supports v4. |
 | D15 | Google refresh token (Calendar, YouTube) stored in Secrets Manager, written by the app at consent | It is a credential. |
 | D16 | Agents call Anthropic through **workload identity federation** (GitHub OIDC to a Claude Console federation rule); no Anthropic API key exists for Actions | No secret at all; IDs are repo variables. One service account per agent if the Console allows it (per-agent usage), **verify**. |
@@ -49,7 +49,7 @@ Current architecture and accepted decisions, consolidated 2026-10-25 (latest off
    hub, essays, agent tables, LangGraph checkpoints      |        |
           ^                ^                             |        |
    +------+------+   +-----+-----------------------------+--+     |
-   | Pipelines   |   | Orchestrator Lambda (LangGraph JS)   |-----+--> Anthropic (Haiku 5.5), Jev
+   | Pipelines   |   | Orchestrator Lambda (LangGraph JS)   |-----+--> Anthropic (Opus 5.5), DeepSeek
    | watcher λ   |   |  consumes SQS FIFO orchestrator-in   |         LangSmith (traces)
    | runner λ    |   +-----^------------------+-------------+
    +--^------+---+         |                  | GitHub API (orchestrator App):
@@ -74,10 +74,11 @@ Components:
 - **Pipelines** (`pipelines/`): watcher Lambda (EventBridge) and a runner Lambda (SQS `essay-urls`) that chains extract, validate and categorize. All plain code except the categorizer call.
 - **Scheduler**: EventBridge schedules for the orchestrator sweeper (15 min), nightly source health + preview GC dispatch, weekly quality report, daily social snapshot, Instagram token refresh (every 30 days), and the watcher.
 - **Model providers** (`packages/core/models`): `classify(input, labels) -> {label, confidence, model}` and `complete/score`. Implementations:
-  - `JevProvider`: `@typesafe-ai/sdk`, `POST https://api.typesafe.ai/v1/systemone`, `choice` questions. The model is pinned in config to `jev-1.13.0` rather than `jev-latest`; it is upgraded deliberately after replaying stored `route_corrections`.
-  - `AnthropicProvider`: `claude-haiku-5-5`. Runtime prompts are kept under 100K tokens (price cliff above that).
+  - `DeepseekProvider`: OpenAI-compatible Chat Completions over `fetch` (no SDK). Model pinned to `deepseek/deepseek-v4.1-flash-1017`; base URL defaults to `https://ai-gateway.vercel.sh/v1` and is overridden by the optional `deepseek_base_url` secret key, so changing gateway needs no code change. `classify` forces a function call returning `{label, confidence}` and falls back to a JSON object in the message; a label outside the labels is a non-retryable `ProviderError`. 429, 5xx and network errors are retried with backoff.
+  - `JevProvider` (no longer used at runtime; kept in the package): `@typesafe-ai/sdk`, `POST https://api.typesafe.ai/v1/systemone`, `choice` questions. The model is pinned in config to `jev-1.13.0` rather than `jev-latest`; it is upgraded deliberately after replaying stored `route_corrections`.
+  - `AnthropicProvider`: the orchestrator planner passes `claude-opus-5-5` with `effort: high` (sent as `output_config.effort`); the default for other callers stays `claude-haiku-5-5` (prompts under 100K tokens, price cliff above that).
   - `FakeProvider`.
-  - `withFallback(threshold)`: Haiku when Jev's confidence is below the threshold or Jev returns an error (429/529 retried with backoff first).
+  - `withFallback(threshold)` (not used at runtime now): Haiku when Jev's confidence is below the threshold or Jev returns an error (429/529 retried with backoff first).
   - Every call writes a `usage_events` row.
 
 ## 2. Repo layout
@@ -185,12 +186,12 @@ The CI project has the same roles with synthetic data.
 ### 4.1 Agents
 | Agent | Runs | Trigger | Input | Output | Model | GitHub App permissions (single repo) |
 |---|---|---|---|---|---|---|
-| Orchestrator | Lambda | SQS `orchestrator-in` | task / event | issues, dispatches, merges, events, inbox items | Haiku 5.5 | Contents RW (merge), Pull requests RW, Issues RW, Actions RW (dispatch/cancel), Checks RW (post `kcw/merge-rules`), Commit statuses R, Metadata R. **Webhook active** → relay; events: issues, pull_request, pull_request_review, workflow_run, push |
+| Orchestrator | Lambda | SQS `orchestrator-in` | task / event | issues, dispatches, merges, events, inbox items | Opus 5.5 (high effort) | Contents RW (merge), Pull requests RW, Issues RW, Actions RW (dispatch/cancel), Checks RW (post `kcw/merge-rules`), Commit statuses R, Metadata R. **Webhook active** → relay; events: issues, pull_request, pull_request_review, workflow_run, push |
 | Developer | Actions `agent-developer.yml` | `workflow_dispatch` {task_id, issue, mode=`implement`/`fix`, pr} | issue body + `docs/agents/developer.md` | branch `kcw/task-<id>`, PR "Closes #n" | `claude-haiku-5-5` | Contents RW, Pull requests RW, Issues RW, Metadata R. **No Workflows.** Webhook inactive |
 | QA | Actions `agent-qa.yml` | dispatch {task_id, pr} after CI is green | PR diff, DESIGN.md, `docs/agents/qa.md` | test commits on the PR branch, then a review (approve / request changes) | Haiku 5.5 | Contents RW, Pull requests RW, Checks R, Metadata R. Webhook inactive |
 | Scraper-builder | Actions `agent-scraper.yml` | dispatch from a quarantine issue or new-source task | source record, failing URL, public-domain fixtures | PR with `pipelines/extractors/<site>/` | Haiku 5.5 | Contents RW, Pull requests RW, Issues RW, Metadata R. Webhook inactive |
 | Docs-keeper | Actions `agent-docs.yml` | dispatch {task_id, pr} by the orchestrator after each task PR it merges (not for docs PRs; §4.2 step 8) | merged diff, canonical instructions, docs | PR updating `docs/agents/*`, DESIGN.md and project handoff | Haiku 5.5 | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
-| Router / Categorizer | web / pipeline Lambdas | new entry / new essay | text | label + confidence | Jev, Haiku 5.5 fallback | none |
+| Router / Categorizer | web / pipeline Lambdas | new entry / new essay | text | label + confidence | DeepSeek V4.1 Flash (`deepseek-v4.1-flash-1017`) | none |
 
 **Target final ruleset `main-protection`** (owner procedure in `docs/runbooks/github-apps.md`; the last observed live profile is interim, with zero approvals and ci/required only):
 - PR required; 1 approval; dismiss stale approvals on.
@@ -329,7 +330,7 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | Name | Keys | Read by |
 |---|---|---|
 | `kcw/prod/web` | auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public | web Lambda |
-| `kcw/prod/models` | anthropic_api_key, typesafe_api_key, langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; agents use federation) |
+| `kcw/prod/models` | anthropic_api_key, deepseek_api_key, optional deepseek_base_url, typesafe_api_key (no longer read), langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; agents use federation) |
 | `kcw/prod/orchestrator` | db_url, github_app_client_id, github_app_installation_id, github_app_private_key | orchestrator Lambda |
 | `kcw/prod/relay` | db_url | webhook relay Lambda (delivery dedupe, task lookup; its own secret so the relay cannot read the orchestrator App key) |
 | `kcw/prod/pipeline` | db_url | pipeline Lambdas |
