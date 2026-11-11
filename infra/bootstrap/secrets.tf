@@ -4,7 +4,7 @@
 locals {
   secrets = {
     "kcw/prod/web"                = "auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public"
-    "kcw/prod/models"             = "anthropic_api_key, typesafe_api_key, langsmith_api_key"
+    "kcw/prod/models"             = "anthropic_api_key, langsmith_api_key"
     "kcw/prod/orchestrator"       = "db_url, github_app_client_id, github_app_installation_id, github_app_private_key"
     "kcw/prod/relay"              = "db_url (webhook relay: delivery dedupe in inbound_events, task lookup)"
     "kcw/prod/pipeline"           = "db_url"
