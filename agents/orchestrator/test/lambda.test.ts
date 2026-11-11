@@ -251,13 +251,13 @@ describe("orchestrator Lambda on Postgres", () => {
     expect(usage.map((u) => Number(u.task_id)).sort()).toEqual([id, ...kids].sort());
   });
 
-  it("runs the real AnthropicProvider (key from the models secret) and records its token counts", async () => {
-    const requests: { path: string | undefined; auth: string | undefined; body: { model: string; system: string } }[] = [];
+  it("runs the real AnthropicProvider (key from the models secret) and records its token counts (Opus 5.5, high effort; the returned model id is the usage row)", async () => {
+    const requests: { path: string | undefined; auth: string | undefined; body: { model: string; system: string; output_config?: unknown } }[] = [];
     const server: Server = createServer((req, res) => {
       let raw = "";
       req.on("data", (c: Buffer) => (raw += c.toString()));
       req.on("end", () => {
-        const body = JSON.parse(raw) as { model: string; system: string };
+        const body = JSON.parse(raw) as { model: string; system: string; output_config?: unknown };
         requests.push({ path: req.url, auth: req.headers.authorization, body });
         const text =
           body.system === PLANNER_SYSTEM ? oneSubtask("Add a robots.txt") : plan("Add a robots.txt", "Serve a robots.txt file.");
@@ -267,7 +267,7 @@ describe("orchestrator Lambda on Postgres", () => {
             id: `msg_${requests.length}`,
             type: "message",
             role: "assistant",
-            model: "claude-haiku-5-5-20261001",
+            model: "claude-opus-5-5-20261101",
             content: [{ type: "text", text }],
             stop_reason: "end_turn",
             stop_sequence: null,
@@ -284,14 +284,14 @@ describe("orchestrator Lambda on Postgres", () => {
       const p = newProcess({ provider: "default" });
       expect(await p.handler({ Records: [created("a1", id)] })).toEqual({ batchItemFailures: [] });
       expect(p.lines.at(-1)).toBe("message a1: started");
-      expect(requests.map((r) => [r.path, r.auth, r.body.model])).toEqual([
-        ["/v1/messages", "Bearer sk-test-key", "claude-haiku-5-5"],
-        ["/v1/messages", "Bearer sk-test-key", "claude-haiku-5-5"],
+      expect(requests.map((r) => [r.path, r.auth, r.body.model, r.body.output_config])).toEqual([
+        ["/v1/messages", "Bearer sk-test-key", "claude-opus-5-5", { effort: "high" }],
+        ["/v1/messages", "Bearer sk-test-key", "claude-opus-5-5", { effort: "high" }],
       ]);
       const usage = await usageRows([id]);
       expect(usage.map((u) => [u.provider, u.model, u.input_tokens, u.output_tokens])).toEqual([
-        ["anthropic", "claude-haiku-5-5-20261001", 101, 20],
-        ["anthropic", "claude-haiku-5-5-20261001", 102, 20],
+        ["anthropic", "claude-opus-5-5-20261101", 101, 20],
+        ["anthropic", "claude-opus-5-5-20261101", 102, 20],
       ]);
     } finally {
       if (saved === undefined) delete process.env.ANTHROPIC_BASE_URL;

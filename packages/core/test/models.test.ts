@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AnthropicProvider,
   DEFAULT_JEV_MODEL,
+  DEFAULT_ORCHESTRATOR_EFFORT,
+  DEFAULT_ORCHESTRATOR_MODEL,
   FakeProvider,
   JEV_ENDPOINT,
   JevProvider,
@@ -207,6 +209,15 @@ describe("AnthropicProvider", () => {
   it("completes text", async () => {
     const { client } = fakeClient({ content: [{ type: "text", text: "Hello" }] as Message["content"] });
     expect((await new AnthropicProvider({ client }).complete({ prompt: "hi" })).text).toBe("Hello");
+  });
+
+  it("sends output_config.effort only when configured", async () => {
+    const { client, create } = fakeClient({ content: [{ type: "text", text: "ok" }] as Message["content"] });
+    await new AnthropicProvider({ client }).complete({ prompt: "hi" });
+    await new AnthropicProvider({ client, model: DEFAULT_ORCHESTRATOR_MODEL, effort: DEFAULT_ORCHESTRATOR_EFFORT }).complete({ prompt: "hi" });
+    const [plain, high] = create.mock.calls as unknown as [[Record<string, unknown>], [Record<string, unknown>]];
+    expect(plain[0]).not.toHaveProperty("output_config");
+    expect(high[0]).toMatchObject({ model: "claude-opus-5-5", output_config: { effort: "high" } });
   });
 
   it("wraps SDK errors in ProviderError", async () => {

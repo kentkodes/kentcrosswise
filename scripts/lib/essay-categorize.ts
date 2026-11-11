@@ -3,7 +3,8 @@
 // are injected. Essay text, prompts, provider responses and keys never reach a log line or an error:
 // output is ids, fixed codes, the type, the confidence and the returned model id.
 import { createHash } from "node:crypto";
-import { AnthropicProvider, JevProvider, withFallback, type FallbackInfo, type ModelProvider } from "@kcw/core/models";
+import { DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL, DeepseekProvider, type ModelProvider } from "@kcw/core/models";
+import { SecretKeyMissingError } from "@kcw/secrets";
 import type { Db } from "../../packages/essays/src/db";
 import { analyzeBook, assertNotPaused, bookUrl, inTransaction } from "./essay-ingest";
 
@@ -30,12 +31,12 @@ export const TYPE_INSTRUCTIONS = [
 
 /** Words of the essay sent to the model. */
 export const EXCERPT_WORDS = 2000;
-/** Jev's answer is used at or above this confidence; below it (or on error) Haiku answers and its valid label is final. */
-export const CONFIDENCE_THRESHOLD = 0.7;
 /** The models secret (DESIGN section 6) and its key names. */
 export const MODELS_SECRET = "kcw/prod/models";
-const JEV_KEY = "typesafe_api_key";
-const ANTHROPIC_KEY = "anthropic_api_key";
+const API_KEY = "deepseek_api_key";
+/** Optional: swap the OpenAI-compatible endpoint / the model id without a code change. */
+const BASE_URL_KEY = "deepseek_base_url";
+const MODEL_KEY = "deepseek_model";
 
 export type CategorizeCode =
   | "categorized" | "already_processed" | "not_stored" | "not_approved" | "text_mismatch"
@@ -43,22 +44,26 @@ export type CategorizeCode =
 
 export const CATEGORIZE_OK: ReadonlySet<string> = new Set(["categorized", "already_processed"]);
 
-export interface Models {
-  primary: ModelProvider;
-  fallback: ModelProvider;
-}
-
-/** Real providers; both keys are read up front (a failure is the caller's models_unavailable). No network here. */
-export async function modelsFromSecret(read: (key: string) => Promise<string>): Promise<Models> {
-  const [jevKey, anthropicKey] = await Promise.all([read(JEV_KEY), read(ANTHROPIC_KEY)]);
-  return { primary: new JevProvider({ apiKey: jevKey }), fallback: new AnthropicProvider({ apiKey: anthropicKey }) };
+/**
+ * The DeepSeek provider. The key is read up front (a failure is the caller's models_unavailable); the base URL
+ * and model keys are optional, and a missing or blank one means the default. No network here.
+ */
+export async function modelsFromSecret(read: (key: string) => Promise<string>): Promise<ModelProvider> {
+  const apiKey = await read(API_KEY);
+  const optional = (key: string) =>
+    read(key).then((v) => v.trim(), (err: unknown) => {
+      if (err instanceof SecretKeyMissingError) return "";
+      throw err;
+    });
+  const [baseUrl, model] = await Promise.all([optional(BASE_URL_KEY), optional(MODEL_KEY)]);
+  return new DeepseekProvider({ apiKey, baseUrl: baseUrl || DEFAULT_DEEPSEEK_BASE_URL, model: model || DEFAULT_DEEPSEEK_MODEL });
 }
 
 export interface CategorizeDeps {
   db: Db;
   dir: string;
   /** Called at most once, when the first book needs a model; a failure is `models_unavailable`. */
-  getModels: () => Promise<Models>;
+  getModels: () => Promise<ModelProvider>;
   log: (line: string) => void;
 }
 
@@ -86,16 +91,8 @@ export function excerpt(text: string, max: number = EXCERPT_WORDS): string {
 /** A provider-returned model id is printed only if it is plain; anything else could inject workflow commands. */
 const safeModel = (m: string) => (/^[A-Za-z0-9._:/-]{1,80}$/.test(m) ? m : "unknown");
 
-/** Fixed-vocabulary log fields for a fallback answer; never provider text. */
-function fallbackNote(f: FallbackInfo | undefined): string {
-  if (!f) return "";
-  if (f.reason === "error") return " fallback=error";
-  const c = f.primaryConfidence;
-  return " fallback=low_confidence" + (typeof c === "number" && Number.isFinite(c) ? ` primary_confidence=${(Math.round(c * 100) / 100).toFixed(2)}` : "");
-}
-
 async function categorizeBook(
-  id: number, deps: CategorizeDeps, models: () => Promise<Models>, note: { text: string },
+  id: number, deps: CategorizeDeps, models: () => Promise<ModelProvider>,
 ): Promise<CategorizeResult> {
   const { db } = deps;
   const url = bookUrl(id);
@@ -118,7 +115,7 @@ async function categorizeBook(
     return { id, code: "text_mismatch" };
   }
 
-  let m: Models;
+  let m: ModelProvider;
   try {
     m = await models();
   } catch {
@@ -126,16 +123,13 @@ async function categorizeBook(
   }
   let answer;
   try {
-    answer = await withFallback(m.primary, m.fallback, { threshold: CONFIDENCE_THRESHOLD }).classify(
-      excerpt(a.extraction.text), ESSAY_TYPES, { instructions: TYPE_INSTRUCTIONS },
-    );
+    answer = await m.classify(excerpt(a.extraction.text), ESSAY_TYPES, { instructions: TYPE_INSTRUCTIONS });
   } catch {
     return { id, code: "provider_error" };
   }
   if (!(ESSAY_TYPES as readonly string[]).includes(answer.label)) return { id, code: "provider_error" };
   const model = safeModel(answer.model);
   const confidence = Math.round(answer.confidence * 100) / 100;
-  note.text = fallbackNote(answer.fallback);
 
   let activated = false;
   await inTransaction(db, async () => {
@@ -152,16 +146,15 @@ async function categorizeBook(
 /** Per id, sequentially. Stops with `pipelines_paused` (nothing done) when the pause flag is set. */
 export async function categorizePhase(ids: readonly number[], deps: CategorizeDeps): Promise<CategorizeResult[]> {
   await assertNotPaused(deps.db);
-  let loaded: Promise<Models> | undefined;
+  let loaded: Promise<ModelProvider> | undefined;
   const models = () => (loaded ??= deps.getModels());
   const results: CategorizeResult[] = [];
   for (const id of ids) {
-    const note = { text: "" };
-    const r = await categorizeBook(id, deps, models, note);
+    const r = await categorizeBook(id, deps, models);
     results.push(r);
     deps.log(
       `essay-ingest: id=${id} code=${r.code}` +
-        (r.type ? ` type=${r.type} confidence=${r.confidence?.toFixed(2)} model=${r.model}${note.text}` : ""),
+        (r.type ? ` type=${r.type} confidence=${r.confidence?.toFixed(2)} model=${r.model}` : ""),
     );
   }
   return results;

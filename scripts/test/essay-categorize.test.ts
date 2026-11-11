@@ -3,12 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FakeProvider, type FakeProviderOptions } from "@kcw/core/models";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { DEFAULT_DEEPSEEK_MODEL, FakeProvider, type FakeProviderOptions } from "@kcw/core/models";
+import { SecretKeyMissingError } from "@kcw/secrets";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { freshDb } from "../../packages/db/test/helpers";
 import { registerGutenbergSource } from "../../packages/essays/src/registry/bootstrap";
 import {
-  CONFIDENCE_THRESHOLD, EXCERPT_WORDS, ESSAY_TYPES, categorizePhase, modelsFromSecret, type CategorizeDeps, type Models,
+  EXCERPT_WORDS, ESSAY_TYPES, categorizePhase, modelsFromSecret, type CategorizeDeps,
 } from "../lib/essay-categorize";
 import { storePhase } from "../lib/essay-ingest";
 
@@ -22,7 +23,7 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe("categorize phase on PGlite as a pipeline_rw member", () => {
   const LOGIN = "categorize_test_app";
-  const IDS = { ok: 301, low: 302, mismatch: 303, perr: 304, models: 305, cap: 306, fb: 307, missing: 308, noFile: 309, fb2: 310, bad: 311 };
+  const IDS = { ok: 301, low: 302, mismatch: 303, perr: 304, models: 305, cap: 306, missing: 308, noFile: 309, bad: 311, unsafe: 312 };
   let fresh: Awaited<ReturnType<typeof freshDb>>;
   let dir: string;
   const logs: string[] = [];
@@ -35,9 +36,7 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
   const setPaused = (v: boolean) =>
     q("INSERT INTO system_flags (key, value) VALUES ('pipelines_paused', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [String(v)]);
 
-  const jev = (classify: FakeProviderOptions["classify"]) => new FakeProvider({ name: "jev", model: "jev-1.13.0", classify });
-  const haiku = (classify: FakeProviderOptions["classify"]) => new FakeProvider({ name: "anthropic", model: "claude-haiku-5-5", classify });
-  const models = (primary: FakeProvider, fallback: FakeProvider): Models => ({ primary, fallback });
+  const deepseek = (classify: FakeProviderOptions["classify"]) => new FakeProvider({ name: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, classify });
 
   const run = async (ids: number[], getModels: CategorizeDeps["getModels"]) => {
     await fresh.db.exec(`SET ROLE ${LOGIN}`);
@@ -61,7 +60,7 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     const sourceId = (await registerGutenbergSource(fresh.db)).id;
     await fresh.db.exec(`CREATE ROLE ${LOGIN} LOGIN; GRANT pipeline_rw TO ${LOGIN};`);
     await setPaused(false);
-    const stored = [IDS.ok, IDS.low, IDS.mismatch, IDS.perr, IDS.models, IDS.cap, IDS.fb, IDS.noFile, IDS.fb2, IDS.bad];
+    const stored = [IDS.ok, IDS.low, IDS.mismatch, IDS.perr, IDS.models, IDS.cap, IDS.noFile, IDS.bad, IDS.unsafe];
     for (const id of [...stored, IDS.missing]) {
       const seed = await q<{ id: string }>(
         "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
@@ -80,59 +79,49 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
   });
 
   it("happy path: one category row, essay active; the labels are exactly the ten type ids", async () => {
-    const primary = jev({ label: "argumentative", confidence: 0.91 });
-    const fallback = haiku({ label: "travel", confidence: 1 });
-    const res = await run([IDS.ok], async () => models(primary, fallback));
-    expect(res).toEqual([{ id: IDS.ok, code: "categorized", type: "argumentative", confidence: 0.91, model: "jev-1.13.0" }]);
+    const primary = deepseek({ label: "argumentative", confidence: 0.91 });
+    const res = await run([IDS.ok], async () => primary);
+    expect(res).toEqual([{ id: IDS.ok, code: "categorized", type: "argumentative", confidence: 0.91, model: DEFAULT_DEEPSEEK_MODEL }]);
     expect(await statusOf(IDS.ok)).toBe("active");
-    expect(await categories()).toEqual([{ type: "argumentative", confidence: expect.closeTo(0.91, 5), model: "jev-1.13.0", source_url: urlOf(IDS.ok) }]);
+    expect(await categories()).toEqual([{ type: "argumentative", confidence: expect.closeTo(0.91, 5), model: DEFAULT_DEEPSEEK_MODEL, source_url: urlOf(IDS.ok) }]);
     expect(primary.calls).toHaveLength(1);
-    expect(fallback.calls).toHaveLength(0);
     expect(primary.calls[0]?.labels).toEqual([
       "argumentative", "critical", "comedic", "creative_lyric", "personal_memoir",
       "philosophical", "political", "science_nature", "cultural", "travel",
     ]);
     expect([...ESSAY_TYPES]).toEqual(primary.calls[0]?.labels);
-    expect(logs).toContain(`essay-ingest: id=${IDS.ok} code=categorized type=argumentative confidence=0.91 model=jev-1.13.0`);
+    expect(logs).toContain(`essay-ingest: id=${IDS.ok} code=categorized type=argumentative confidence=0.91 model=${DEFAULT_DEEPSEEK_MODEL}`);
   });
 
   it("rerun is a no-op and calls no provider", async () => {
-    const primary = jev({ label: "travel", confidence: 1 });
+    const primary = deepseek({ label: "travel", confidence: 1 });
     const before = await categories();
-    expect(await run([IDS.ok], async () => models(primary, haiku({ label: "travel", confidence: 1 })))).toEqual([{ id: IDS.ok, code: "already_processed" }]);
+    expect(await run([IDS.ok], async () => primary)).toEqual([{ id: IDS.ok, code: "already_processed" }]);
     expect(primary.calls).toHaveLength(0);
     expect(await categories()).toEqual(before);
   });
 
-  it("uses the fallback below the threshold and records its model id", async () => {
-    const res = await run([IDS.fb], async () =>
-      models(jev({ label: "travel", confidence: CONFIDENCE_THRESHOLD - 0.1 }), haiku({ label: "critical", confidence: 0.8, model: "claude-haiku-5-5-20260101" })));
-    expect(res).toEqual([{ id: IDS.fb, code: "categorized", type: "critical", confidence: 0.8, model: "claude-haiku-5-5-20260101" }]);
-    expect((await categories()).find((c) => c.source_url === urlOf(IDS.fb))?.model).toBe("claude-haiku-5-5-20260101");
-  });
-
-  it("a low-confidence fallback answer is final: stored, essay active, log says why Jev was not used", async () => {
-    const res = await run([IDS.low], async () => models(jev({ label: "travel", confidence: 0.3456 }), haiku({ label: "cultural", confidence: 0.2 })));
-    expect(res).toEqual([{ id: IDS.low, code: "categorized", type: "cultural", confidence: 0.2, model: "claude-haiku-5-5" }]);
+  it("a low-confidence answer is accepted as is: stored with its confidence, essay active", async () => {
+    const res = await run([IDS.low], async () => deepseek({ label: "cultural", confidence: 0.2 }));
+    expect(res).toEqual([{ id: IDS.low, code: "categorized", type: "cultural", confidence: 0.2, model: DEFAULT_DEEPSEEK_MODEL }]);
     expect(await statusOf(IDS.low)).toBe("active");
     expect((await categories()).find((c) => c.source_url === urlOf(IDS.low))).toEqual(
-      { type: "cultural", confidence: expect.closeTo(0.2, 5), model: "claude-haiku-5-5", source_url: urlOf(IDS.low) });
-    expect(logs).toContain(
-      `essay-ingest: id=${IDS.low} code=categorized type=cultural confidence=0.20 model=claude-haiku-5-5 fallback=low_confidence primary_confidence=0.35`);
-    const again = jev({ label: "travel", confidence: 1 });
-    expect(await run([IDS.low], async () => models(again, haiku({ label: "travel", confidence: 1 })))).toEqual([{ id: IDS.low, code: "already_processed" }]);
+      { type: "cultural", confidence: expect.closeTo(0.2, 5), model: DEFAULT_DEEPSEEK_MODEL, source_url: urlOf(IDS.low) });
+    expect(logs).toContain(`essay-ingest: id=${IDS.low} code=categorized type=cultural confidence=0.20 model=${DEFAULT_DEEPSEEK_MODEL}`);
+    const again = deepseek({ label: "travel", confidence: 1 });
+    expect(await run([IDS.low], async () => again)).toEqual([{ id: IDS.low, code: "already_processed" }]);
     expect(again.calls).toHaveLength(0);
   });
 
-  it("logs fallback=error when Jev throws, without the error text", async () => {
-    const res = await run([IDS.fb2], async () => models(jev(new Error("RESPONSEBODY KEYMATERIAL")), haiku({ label: "travel", confidence: 0.5 })));
-    expect(res[0]?.code).toBe("categorized");
-    expect(logs).toContain(`essay-ingest: id=${IDS.fb2} code=categorized type=travel confidence=0.50 model=claude-haiku-5-5 fallback=error`);
+  it("an unsafe returned model id is printed as unknown but stored as returned", async () => {
+    const res = await run([IDS.unsafe], async () => deepseek({ label: "travel", confidence: 0.5, model: "evil\n::error::x" }));
+    expect(res[0]).toMatchObject({ code: "categorized", model: "unknown" });
+    expect(logs).toContain(`essay-ingest: id=${IDS.unsafe} code=categorized type=travel confidence=0.50 model=unknown`);
   });
 
   it("an unknown label is provider_error and writes nothing", async () => {
     const before = await categories();
-    const res = await run([IDS.bad], async () => models(jev({ label: "diary", confidence: 0.95 }), haiku({ label: "diary", confidence: 0.9 })));
+    const res = await run([IDS.bad], async () => deepseek({ label: "diary", confidence: 0.95 }));
     expect(res).toEqual([{ id: IDS.bad, code: "provider_error" }]);
     expect(await statusOf(IDS.bad)).toBe("pending_category");
     expect(await categories()).toEqual(before);
@@ -140,15 +129,15 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
 
   it("text_mismatch when the local copy differs from the stored text: nothing written, no provider call", async () => {
     writeFileSync(join(dir, String(IDS.mismatch), `${IDS.mismatch}-0.txt`), ESSAY.replace("special receipt", "different receipt"));
-    const primary = jev({ label: "travel", confidence: 1 });
-    expect(await run([IDS.mismatch], async () => models(primary, haiku({ label: "travel", confidence: 1 })))).toEqual([{ id: IDS.mismatch, code: "text_mismatch" }]);
+    const primary = deepseek({ label: "travel", confidence: 1 });
+    expect(await run([IDS.mismatch], async () => primary)).toEqual([{ id: IDS.mismatch, code: "text_mismatch" }]);
     expect(primary.calls).toHaveLength(0);
     expect(await statusOf(IDS.mismatch)).toBe("pending_category");
   });
 
   it("caps the excerpt at 2000 words", async () => {
-    const primary = jev({ label: "cultural", confidence: 0.95 });
-    const res = await run([IDS.cap], async () => models(primary, haiku({ label: "cultural", confidence: 1 })));
+    const primary = deepseek({ label: "cultural", confidence: 0.95 });
+    const res = await run([IDS.cap], async () => primary);
     expect(res[0]?.code).toBe("categorized");
     const sent = primary.calls[0]?.input ?? "";
     expect(sent.split(/\s+/).filter(Boolean)).toHaveLength(EXCERPT_WORDS);
@@ -158,7 +147,7 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
 
   it("provider errors give a fixed code and leak nothing", async () => {
     const boom = new Error("RESPONSEBODY Studies serve for delight KEYMATERIAL");
-    const res = await run([IDS.perr], async () => models(jev(boom), haiku(boom)));
+    const res = await run([IDS.perr], async () => deepseek(boom));
     expect(res).toEqual([{ id: IDS.perr, code: "provider_error" }]);
     expect(await statusOf(IDS.perr)).toBe("pending_category");
   });
@@ -172,28 +161,64 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     expect(await statusOf(IDS.models)).toBe("pending_category");
   });
 
-  it("builds Jev and Haiku providers from the two secret keys without any network call", async () => {
+  it("builds the DeepSeek provider from the secret keys; the base URL and model keys are optional", async () => {
     const read: string[] = [];
     const m = await modelsFromSecret(async (key) => {
       read.push(key);
       return "KEYMATERIAL";
     });
-    expect(read.sort()).toEqual(["anthropic_api_key", "typesafe_api_key"]);
-    expect([m.primary.name, m.fallback.name]).toEqual(["jev", "anthropic"]);
+    expect(read.sort()).toEqual(["deepseek_api_key", "deepseek_base_url", "deepseek_model"]);
+    expect(m.name).toBe("deepseek");
+    // a secret without the optional key still builds; a missing required key fails
+    const noUrl = await modelsFromSecret(async (key) => {
+      if (key === "deepseek_base_url") throw new SecretKeyMissingError("kcw/prod/models", key);
+      return "KEYMATERIAL";
+    });
+    expect(noUrl.name).toBe("deepseek");
+    await expect(modelsFromSecret(async (key) => {
+      throw new SecretKeyMissingError("kcw/prod/models", key);
+    })).rejects.toBeInstanceOf(SecretKeyMissingError);
+  });
+
+  const MISSING = Symbol("missing");
+  it.each([
+    ["both optional keys missing", MISSING, MISSING, "https://api.deepseek.com/chat/completions", "deepseek-flash"],
+    ["both optional keys blank", "  ", "", "https://api.deepseek.com/chat/completions", "deepseek-flash"],
+    ["both optional keys set", "https://gw.example.com/v1", " deepseek/dated-id ", "https://gw.example.com/v1/chat/completions", "deepseek/dated-id"],
+    ["only the model set", MISSING, "deepseek-v4-pro", "https://api.deepseek.com/chat/completions", "deepseek-v4-pro"],
+  ])("with %s calls the right URL and model (fake fetch, no network)", async (_n, url, model, expectedUrl, expectedModel) => {
+    const calls: { url: string; model: string }[] = [];
+    vi.stubGlobal("fetch", async (u: string, init: RequestInit) => {
+      calls.push({ url: u, model: (JSON.parse(init.body as string) as { model: string }).model });
+      const args = JSON.stringify({ label: "travel", confidence: 0.9 });
+      return Response.json({ model: "returned-id", choices: [{ message: { tool_calls: [{ function: { name: "record_label", arguments: args } }] } }] });
+    });
+    try {
+      const m = await modelsFromSecret(async (key) => {
+        const v = key === "deepseek_base_url" ? url : key === "deepseek_model" ? model : "KEYMATERIAL";
+        if (v === MISSING) throw new SecretKeyMissingError("kcw/prod/models", key);
+        return v as string;
+      });
+      const out = await m.classify("text", ESSAY_TYPES);
+      expect(out).toMatchObject({ label: "travel", model: "returned-id" });
+      expect(calls).toEqual([{ url: expectedUrl, model: expectedModel }]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("not stored, missing local file: fixed codes, nothing written", async () => {
-    const primary = jev({ label: "travel", confidence: 1 });
-    const res = await run([IDS.missing, IDS.noFile], async () => models(primary, haiku({ label: "travel", confidence: 1 })));
+    const primary = deepseek({ label: "travel", confidence: 1 });
+    const res = await run([IDS.missing, IDS.noFile], async () => primary);
     expect(res.map((r) => r.code)).toEqual(["not_stored", "no_files"]);
     expect(primary.calls).toHaveLength(0);
   });
 
   it("does nothing while paused", async () => {
-    const primary = jev({ label: "travel", confidence: 1 });
+    const primary = deepseek({ label: "travel", confidence: 1 });
     const before = JSON.stringify([await categories(), await statusOf(IDS.bad)]);
     await setPaused(true);
-    await expect(run([IDS.bad], async () => models(primary, haiku({ label: "travel", confidence: 1 })))).rejects.toThrow("pipelines_paused");
+    await expect(run([IDS.bad], async () => primary)).rejects.toThrow("pipelines_paused");
     await setPaused(false);
     expect(primary.calls).toHaveLength(0);
     expect(JSON.stringify([await categories(), await statusOf(IDS.bad)])).toBe(before);

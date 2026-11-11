@@ -1,4 +1,4 @@
-// Planner and public-title nodes on a model provider (DESIGN §4.2 step 2, §4.5, Q3: Haiku 5.5).
+// Planner and public-title nodes on a model provider (DESIGN §4.2 step 2, §4.5, Opus 5.5 at high effort).
 //
 // Both nodes ask for a JSON object and validate it by hand (the repo has no schema library). An
 // answer that fails validation is retried once, telling the model what was wrong; a second failure
