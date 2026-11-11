@@ -23,7 +23,7 @@ export const UNKNOWN_TEXT = "Status unavailable";
 export const CARD_INFO: Record<BoardRole, { title: string; what: string | null; model: string }> = {
   orchestrator: { title: ROLE_LABEL.orchestrator, what: "Plans tasks, assigns work, merges.", model: "Opus 5.5" },
   developer: { title: ROLE_LABEL.developer, what: null, model: "DeepSeek Flash" },
-  qa: { title: ROLE_LABEL.qa, what: "Reviews pull requests after CI.", model: "DeepSeek Flash" },
+  qa: { title: ROLE_LABEL.qa, what: "Reviews pull requests after CI.", model: "Haiku 5.5" },
   docs: { title: ROLE_LABEL.docs, what: "Updates docs after a merge.", model: "DeepSeek Flash" },
   scraper: { title: ROLE_LABEL.scraper, what: "Builds essay source adapters.", model: "DeepSeek Flash" },
 };

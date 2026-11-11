@@ -11,8 +11,9 @@ import { runMain } from "./lib/main";
 import { runCli, usageFromExecution } from "../agents/report/src/index";
 
 const args = parseArgs(process.argv.slice(2));
-// The work job passes --provider deepseek (DeepSeek's Anthropic-compatible endpoint); review and
-// the default stay anthropic. Any other value is a workflow error, not advisory data.
+// The Developer, Scraper-builder and Docs-keeper work jobs pass --provider deepseek (DeepSeek's
+// Anthropic-compatible endpoint). QA work and review pass anthropic (claude-haiku-5-5 via federation),
+// as does the default. Any other value is a workflow error, not advisory data.
 function modelProvider(): "anthropic" | "deepseek" {
   const value = args.provider ?? "anthropic";
   if (value !== "anthropic" && value !== "deepseek") throw new Error("provider must be anthropic or deepseek");

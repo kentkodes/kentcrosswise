@@ -74,22 +74,45 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(workTools).toBeTruthy(); expect(tools(workTools!)).toEqual(tools(roleTools!));
     expect(workTools).not.toMatch(/git push|Bash\((?:aws|gh|curl|wget|node:\*)/);
     expect(job.work).toContain('github_token: ${{ github.token }}');
-    expect(job.work).not.toContain('anthropic_federation');
-    expect(job.work).toContain('anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}');
-    expect(job.work).toContain('ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic');
-    expect(job.work).toContain('--model deepseek-flash');
-    expect(job.work).not.toContain('claude-haiku-5-5');
-    expect(job.work!.match(/--provider deepseek/g)).toHaveLength(2);
+    if (agent === 'qa') {
+      expect(job.work).toContain('anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}');
+      expect(job.work).toContain('anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}');
+      expect(job.work).toContain('anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}');
+      expect(job.work).toContain('anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}');
+      expect(job.work).not.toContain('anthropic_api_key');
+      expect(job.work).toContain('--model claude-haiku-5-5');
+      expect(job.work).not.toContain('deepseek');
+      expect(job.work!.match(/--provider anthropic/g)).toHaveLength(2);
+    } else {
+      expect(job.work).not.toContain('anthropic_federation');
+      expect(job.work).toContain('anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}');
+      expect(job.work).toContain('ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic');
+      expect(job.work).toContain('--model deepseek-flash');
+      expect(job.work).not.toContain('claude-haiku-5-5');
+      expect(job.work!.match(/--provider deepseek/g)).toHaveLength(2);
+    }
   });
-  it("binds only the work and review jobs to the model environment", () => {
-    expect(job.work).toContain("environment: agent-model");
-    for (const [name, content] of Object.entries(job)) if (name !== "work" && name !== "review") expect(content).not.toContain("agent-model");
+  it("binds only the non-QA work job to the model environment", () => {
+    const bound = agent === 'qa' ? [] : ['work'];
+    for (const [name, content] of Object.entries(job)) expect(content.includes("environment: agent-model")).toBe(bound.includes(name));
   });
-  it("uses no Anthropic federation and no Haiku model in any worker workflow", () => {
-    expect(yml).not.toContain("anthropic_federation");
-    expect(yml).not.toContain("claude-haiku-5-5");
+  it("uses Anthropic federation and Haiku only in the QA workflow", () => {
+    if (agent === 'qa') {
+      expect(yml).toContain("anthropic_federation_rule_id");
+      expect(yml).toContain("claude-haiku-5-5");
+      expect(yml).not.toContain("anthropic_api_key");
+    } else {
+      expect(yml).not.toContain("anthropic_federation");
+      expect(yml).not.toContain("claude-haiku-5-5");
+    }
   });
-  it("reads the model key after the payload install and before the model step, with AWS credentials cleared for the model", () => {
+  if (agent === 'qa') it("reads no model key and assumes no model AWS role in QA", () => {
+    expect(yml).not.toContain("AWS_ROLE_AGENT_MODEL_ARN");
+    expect(yml).not.toContain("kcw/agent/deepseek");
+    expect(job.work).not.toContain("aws-actions");
+    expect(job.work).not.toContain("ANTHROPIC_BASE_URL");
+  });
+  if (agent !== 'qa') it("reads the model key after the payload install and before the model step, with AWS credentials cleared for the model", () => {
     const w = job.work!;
     const aws = w.indexOf("uses: aws-actions/configure-aws-credentials");
     const secrets = w.indexOf("uses: aws-actions/aws-secretsmanager-get-secrets");
@@ -148,20 +171,14 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
   if(agent==='qa') it("makes the final decision on a fresh runner with no PR execution or write tools",()=>{
     expect(job.review).toContain('--command review-input');
     expect(job.review).toContain('--command review-output');
-    expect(job.review).not.toMatch(/pnpm --dir payload|Bash\(pnpm|Edit,|Write,|create-github-app-token|KCW_APP|environment: agent-publish|AWS_ROLE_AGENT_(DEVELOPER|QA|SCRAPER|DOCS)_ARN|kcw-report/);
-    expect(job.review).toContain("environment: agent-model");
-    expect(job.review).toContain("role-to-assume: ${{ vars.AWS_ROLE_AGENT_MODEL_ARN }}");
-    expect(job.review).toContain("DEEPSEEK, kcw/agent/deepseek");
-    const reviewClaude = job.review!.indexOf("uses: anthropics/claude-code-action");
-    expect(job.review!.indexOf("uses: aws-actions/aws-secretsmanager-get-secrets")).toBeLessThan(reviewClaude);
-    const reviewStep = job.review!.slice(reviewClaude, job.review!.indexOf("        with:", reviewClaude));
-    expect(reviewStep).toContain('AWS_ACCESS_KEY_ID: ""');
-    expect(reviewStep).toContain('AWS_SECRET_ACCESS_KEY: ""');
-    expect(reviewStep).toContain('AWS_SESSION_TOKEN: ""');
-    expect(reviewStep).toContain("ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic");
-    expect(job.review).toContain("anthropic_api_key: ${{ env.DEEPSEEK_DEEPSEEK_API_KEY }}");
-    expect(job.review).toContain("--model deepseek-flash");
-    expect(job.review).toContain("--provider deepseek");
+    expect(job.review).not.toMatch(/pnpm --dir payload|Bash\(pnpm|Edit,|Write,|create-github-app-token|KCW_APP|environment: agent-publish|AWS_ROLE_AGENT_(DEVELOPER|QA|SCRAPER|DOCS|MODEL)_ARN|kcw-report|environment: agent-model|aws-actions|kcw\/agent\/deepseek/);
+    expect(job.review).toContain("anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}");
+    expect(job.review).toContain("anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}");
+    expect(job.review).not.toContain("anthropic_api_key");
+    expect(job.review).not.toContain("ANTHROPIC_BASE_URL");
+    expect(job.review).toContain("--model claude-haiku-5-5");
+    expect(job.review).toContain("--provider anthropic");
+    expect(job.review).not.toContain("deepseek");
     expect(job.review).toContain('diff --no-ext-diff --no-textconv');
     expect(job.publish).toContain('needs: [prepare, work, review]');
     expect(prompt(job.review!)).toContain('git -C payload --no-pager diff --no-ext-diff --no-textconv origin/main...HEAD --');

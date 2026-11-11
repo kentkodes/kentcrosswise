@@ -24,7 +24,7 @@ $bucket = "kentcrosswise-tfstate-$acct"
 
 ## 1. Apply `infra/bootstrap` (local state)
 
-Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy` and four `kcw-gh-agent-{developer,qa,scraper,docs}` roles, `kcw-gh-agent-model` (the work jobs' DeepSeek key only), the policy `kcw-preview-boundary`, the fixed secret containers of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
+Creates: state bucket `kentcrosswise-tfstate-<account>` (versioned, encrypted, public access blocked), the GitHub OIDC provider, roles `kcw-gh-ci`, `kcw-gh-plan`, `kcw-gh-deploy` and four `kcw-gh-agent-{developer,qa,scraper,docs}` roles, `kcw-gh-agent-model` (the non-QA work jobs' DeepSeek key only), the policy `kcw-preview-boundary`, the fixed secret containers of DESIGN §6, and (with a domain) the ACM certificate for `domain`, `*.domain`, `*.preview.domain`.
 
 ```powershell
 cd infra/bootstrap
@@ -66,7 +66,7 @@ This sets `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DE
 **Model key for the work jobs (owner, after step 1).** The `kcw/agent/deepseek` secret is created manually by the account owner in the Secrets Manager console and is not managed by Terraform.
 
 1. Secrets Manager console: create `kcw/agent/deepseek` with one key, `deepseek_api_key`, holding the DeepSeek API key. Paste the value only into the console.
-2. GitHub: create environment `agent-model` and set *Deployment branches* to *Selected branches* with `main` only (no tags, no other branches). The work and QA review jobs' AWS trust is the environment subject, not a branch, so this rule is what stops other branches from reading the key.
+2. GitHub: create environment `agent-model` and set *Deployment branches* to *Selected branches* with `main` only (no tags, no other branches). The non-QA work jobs' AWS trust is the environment subject, not a branch, so this rule is what stops other branches from reading the key.
 
 ## 4. Check the roles live (P1-10)
 
@@ -78,9 +78,9 @@ The current expected subjects are:
 | kcw-gh-ci sweep | environment:preview-gc |
 | kcw-gh-deploy | environment:prod |
 | kcw-gh-agent-<role> | environment:agent-publish-<role> |
-| kcw-gh-agent-model | environment:agent-model (work and QA review jobs) |
+| kcw-gh-agent-model | environment:agent-model (Developer, Scraper-builder and Docs-keeper work jobs) |
 
-Prefix: `repo:kentkodes@107236483/kentcrosswise@1430035147:`. All AWS roles require the sts.amazonaws.com audience. Publisher environments restrict deployments to exactly main; the work and QA review jobs trust only environment `agent-model` (role `kcw-gh-agent-model`). The legacy shared main-ref agent role is retired. The four role/environment/variable mappings and required negative probes are in [the security cutover runbook](agent-security-cutover.md).
+Prefix: `repo:kentkodes@107236483/kentcrosswise@1430035147:`. All AWS roles require the sts.amazonaws.com audience. Publisher environments restrict deployments to exactly main; the Developer, Scraper-builder and Docs-keeper work jobs trust only environment `agent-model` (role `kcw-gh-agent-model`); QA work and review use Anthropic federation and no AWS role. The legacy shared main-ref agent role is retired. The four role/environment/variable mappings and required negative probes are in [the security cutover runbook](agent-security-cutover.md).
 
 P1 PR/prod subjects and wrong-role denial were verified on 2026-10-22; the isolated publisher roles and environment denials were verified on 2026-10-23. Refresh evidence if relevant policy changes. The retained oidc-debug.yml reflects the retired shared-role design and needs source repair before reuse; do not install it as a current diagnostic.
 

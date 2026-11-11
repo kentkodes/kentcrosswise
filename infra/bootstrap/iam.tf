@@ -22,7 +22,7 @@ locals {
     "kcw-gh-agent-qa"        = ["${local.github_sub}:environment:agent-publish-qa"]
     "kcw-gh-agent-scraper"   = ["${local.github_sub}:environment:agent-publish-scraper"]
     "kcw-gh-agent-docs"      = ["${local.github_sub}:environment:agent-publish-docs"]
-    # Work jobs of the four workers read only the DeepSeek key; environment agent-model deploys from main only.
+    # Work jobs of the three non-QA workers read only the DeepSeek key; environment agent-model deploys from main only.
     "kcw-gh-agent-model" = ["${local.github_sub}:environment:agent-model"]
     # Manual Gutenberg ingest (essay-ingest.yml); the environment deploys from main only.
     "kcw-gh-essay-ingest" = ["${local.github_sub}:environment:essay-ingest"]
