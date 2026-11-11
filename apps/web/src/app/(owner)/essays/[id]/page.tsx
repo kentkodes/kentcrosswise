@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isUuid } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { requireOwner } from "@/server/owner";
 import {
   LENGTH_NAMES,
   TYPE_LABELS,
@@ -39,6 +40,7 @@ export default async function EssayReaderPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireOwner();
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const notice = noticeText((await searchParams).n);

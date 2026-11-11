@@ -5,6 +5,7 @@ import Link from "next/link";
 import { listApprovals, type ApprovalRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
+import { requireOwner } from "@/server/owner";
 import { noticeText } from "../notices";
 import { decideAction, resendDecisionAction } from "./actions";
 
@@ -41,6 +42,7 @@ function Summary({ a }: { a: ApprovalRow }) {
 }
 
 export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireOwner();
   const notice = noticeText((await searchParams).n);
   const { data, problem } = await load();
   const queue = orchestratorQueue();

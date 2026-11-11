@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { requireOwner } from "@/server/owner";
 import {
   ESSAY_LENGTHS,
   ESSAY_TYPES,
@@ -28,6 +29,7 @@ async function load(): Promise<{ prefs?: Prefs; problem?: string }> {
 }
 
 export default async function EssaySetupPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireOwner();
   const notice = noticeText((await searchParams).n);
   const { prefs, problem } = await load();
 
