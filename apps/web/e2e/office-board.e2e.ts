@@ -21,7 +21,8 @@ test("renders five role cards with their model tags", async ({ page }) => {
   await expect(headings).toHaveCount(5);
   for (const [index, title] of CARD_TITLES.entries()) await expect(headings.nth(index)).toContainText(title);
   await expect(boardPanel(page).getByText("Opus 5.5", { exact: true })).toHaveCount(1);
-  await expect(boardPanel(page).getByText("DeepSeek Flash", { exact: true })).toHaveCount(4);
+  await expect(boardPanel(page).getByText("DeepSeek Flash", { exact: true })).toHaveCount(3);
+  await expect(boardPanel(page).getByText("Haiku 5.5", { exact: true })).toHaveCount(1);
 });
 
 /** Seat 2 runs the docs-keeper's running execution as a Developer, so the fixture has a working seat. */
