@@ -39,7 +39,7 @@ A private library of acclaimed essays, classic and modern, for the owner's own r
    - Duplicates: exact (normalized-text hash), near (shingling/MinHash), metadata (fuzzy title + author).
    - Text quality: leftover markup, cut-off endings, navigation or ad text, encoding errors, word count out of range, wrong language.
    - Any failure sends the essay to quarantine and opens a GitHub issue for the scraper-builder.
-5. **Categorizer.** Jev assigns types with confidence. Below the threshold, or if Jev is down, Haiku 5.5 takes over.
+5. **Categorizer.** DeepSeek V4.1 Flash assigns types with confidence.
 6. **Storage.** Text in a private S3 bucket; metadata, categories and ratings in Neon.
 
 ## Crawl rules
