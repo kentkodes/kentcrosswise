@@ -198,7 +198,8 @@ Status:
 
 - The home page, the shared header and the shared footer use Paper.
 - `/office` uses Paper with the App frame board (Board tab). Its Room tab is the one scoped legacy-navy block. See [Room card](#room-card) and [Legacy shell](#legacy-shell).
-- `/demo` and `/bot` still use the legacy dusk shell. See [Legacy shell](#legacy-shell).
+- `/demo` uses the Paper app frame. See [Demo app frame](#demo-app-frame).
+- `/bot` still uses the legacy dusk shell. See [Legacy shell](#legacy-shell).
 - Other pages are not covered yet. See [Page templates](#page-templates).
 
 Principles:
@@ -338,6 +339,16 @@ The static picture of the hub on the home page. Styles are in `apps/web/src/app/
 - Only the live activity list changes. Everything else is static.
 - Phone: the sidebar is hidden, the content has 16px padding, and the cards stack in one column.
 
+### Demo app frame
+
+The `/demo` page (`apps/web/src/app/(public)/demo/`) is the product still's app frame filled with demo data. Styles are in `demo/demo.module.css`.
+
+- Frame: 1px `--line` border, 12px radius, hidden overflow. A 200px sidebar of tabs on `--bg-soft` beside the section. On phones the tabs become one horizontally scrollable row above it, so the page never scrolls sideways at 320px.
+- Tabs: Today, People, Mood, Following, Notes. Real `<button aria-pressed>` in a `Hub sections` nav. The selected tab has a `--bg` fill and a 1px `--line` ring. Tabs switch in place, with no URL change.
+- Data: `buildDemoView()` in `demo/demo-view.ts` turns `@kcw/demo-data` into a serializable view model. The server page builds it; the client component (`demo/demo-app.tsx`) holds only the selected tab.
+- Sparkline: shared with the home product still through `_site/sparkline.ts`.
+- Footnote: the home page's live activity is real; everything inside the frame is generated.
+
 ### Cards
 
 - 1px `--line` border, 10px radius, 14px padding, no fill. Content stacks with a 6px gap.
@@ -426,7 +437,7 @@ Four templates. Marketing and App frame are partly built.
 
 - **Marketing (home). Done.** Hero, product still, three feature rows, footer. Wide rhythm, 96px sections.
 - **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is the one scoped legacy-navy block (see [Room card](#room-card)).
-- **App frame (`/demo`). Planned.** The product still's sidebar and main area, filled with demo data. The log becomes a plain table. Office illustrations sit inside one contained card.
+- **App frame (`/demo`). Built.** The product still's sidebar and main area, filled with demo data. Tabs, a plain table for people, and bars for mood. See [Demo app frame](#demo-app-frame).
 - **Reading (essays, `/bot`). Planned.** Measure of about 680px. Larger body text. A list instead of cards.
 - **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
 
@@ -434,7 +445,7 @@ Do not build a template before its page is redone.
 
 ## Legacy shell
 
-`/demo` and `/bot` still render inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`). They keep the old dusk look until they are redone. `/office` left the shell: it renders in the Paper frame, and only its Room card keeps the navy look (see below).
+`/bot` still renders inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`) and keeps the old dusk look until it is redone. `/demo` left the shell for the Paper app frame (see [Demo app frame](#demo-app-frame)). `/office` left the shell: it renders in the Paper frame, and only its Room card keeps the navy look (see below).
 
 The shell is styled in `public-shell.module.css`:
 

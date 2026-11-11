@@ -8,12 +8,49 @@ test("public home renders and links to the demo", async ({ page }) => {
   await expect(page).toHaveURL(/\/demo$/);
 });
 
-test("demo page shows simulated data", async ({ page }) => {
+test("demo page is the app frame with simulated data", async ({ page }) => {
   await page.goto("/demo");
-  await expect(page.getByRole("heading", { level: 1, name: "Demo" })).toBeVisible();
-  await expect(page.getByText("Everything on this page is simulated")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Contacts" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "The hub, with made-up data" })).toBeVisible();
+  await expect(page.getByText("Simulated data", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
+  const tabs = page.getByRole("navigation", { name: "Hub sections" });
+  await expect(tabs.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
+
+  await tabs.getByRole("button", { name: "People" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "People" })).toBeVisible();
+  // Header row plus the first 8 contacts.
+  await expect(page.getByRole("row")).toHaveCount(9);
+  await expect(tabs.getByRole("button", { name: "People" })).toHaveAttribute("aria-pressed", "true");
+
+  await tabs.getByRole("button", { name: "Mood" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Mood" })).toBeVisible();
+  await expect(page.getByText("Happiness", { exact: true })).toBeVisible();
+
+  await tabs.getByRole("button", { name: "Following" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Following" })).toBeVisible();
+  await expect(page.getByText(/in 30 days · demo-/)).toHaveCount(3);
+
+  await tabs.getByRole("button", { name: "Notes" }).click();
+  await expect(page.getByRole("heading", { level: 3, name: "To do" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "Ideas" })).toBeVisible();
 });
+
+for (const width of [320, 375]) {
+  test(`demo page (${width}px): no sideways page scroll, the tab row scrolls inside itself`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto("/demo");
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const tabs = page.getByRole("navigation", { name: "Hub sections" });
+    const overflow = await tabs.evaluate((e) => e.scrollWidth > e.clientWidth);
+    expect(overflow, "tabs overflow their own row").toBe(true);
+    await tabs.getByRole("button", { name: "Notes" }).scrollIntoViewIfNeeded();
+    await tabs.getByRole("button", { name: "Notes" }).click();
+    await expect(page.getByRole("heading", { level: 2, name: "Notes" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}
 
 const PAGES = [
   { path: "/", current: "Home" },

@@ -1,43 +1,28 @@
-// Public demo: synthetic data only, from @kcw/demo-data.
+// Public demo: the simulated hub in the Paper app frame. Every number comes from @kcw/demo-data, through
+// the view model; the server builds it and the client component only holds the selected tab.
 import { getDemoData } from "@kcw/demo-data";
-import { PublicShell } from "../_site/public-shell";
+import { PaperFrame } from "../_site/paper-frame";
+import { DemoApp } from "./demo-app";
+import { buildDemoView } from "./demo-view";
+import d from "./demo.module.css";
 
 export default function DemoPage() {
-  const data = getDemoData();
-  const latest = data.moods.at(-1);
-  const followers = data.socialAccounts.map((a) => {
-    const last = data.socialSnapshots.filter((s) => s.accountId === a.id).at(-1);
-    return { platform: a.platform, followers: last?.followers ?? 0 };
-  });
+  const view = buildDemoView(getDemoData());
   return (
-    <PublicShell current="/demo">
-      <main>
-        <h1>Demo</h1>
-        <p>Everything on this page is simulated. The people are not real.</p>
-        <h2>Contacts</h2>
-        <ul>
-          {data.contacts.slice(0, 5).map((c) => (
-            <li key={c.id}>
-              {c.name} ({c.howKnown})
-            </li>
-          ))}
-        </ul>
-        <h2>Mood, latest day</h2>
-        {latest && (
-          <p>
-            Happiness {latest.happiness.toFixed(2)}, stress {latest.stress.toFixed(2)}, sentiment{" "}
-            {latest.sentiment.toFixed(2)}
-          </p>
-        )}
-        <h2>Followers</h2>
-        <ul>
-          {followers.map((f) => (
-            <li key={f.platform}>
-              {f.platform}: {f.followers.toLocaleString("en-US")}
-            </li>
-          ))}
-        </ul>
-      </main>
-    </PublicShell>
+    <PaperFrame current="/demo">
+      <div className={d.page}>
+        <div className={d.head}>
+          <div>
+            <h1 className={d.title}>The hub, with made-up data</h1>
+            <p className={d.sub}>Click around. Every person, note and number here is simulated; the real hub is private.</p>
+          </div>
+          <span className={d.pill}>Simulated data</span>
+        </div>
+        <DemoApp view={view} />
+        <p className={d.note}>
+          The live agent activity on the home page is real; everything inside this frame is generated from a fixed seed.
+        </p>
+      </div>
+    </PaperFrame>
   );
 }
