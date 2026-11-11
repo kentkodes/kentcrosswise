@@ -2,6 +2,8 @@
 
 Status: source-grounded contract for the connected office, which is merged and deployed (PRs #44 and #49). The original office and five-field feed remain separate. The versioned public route and sibling /office/connected page are part of that release. Unit 3 verification includes real PostgreSQL concurrency and non-superuser migration checks.
 
+Superseded 2026-11-11: the sibling `/office/connected` page was removed. The connected room is the Room tab on `/office`.
+
 ## Release status note
 
 - The `execution_observations` capability is enabled for future trusted workflow events.
@@ -145,7 +147,7 @@ Focused implementation and independent QA tests are [office-playback.test.ts](..
 
 ## Local connected-room unit
 
-The sibling [connected page](../../apps/web/src/app/%28public%29/office/connected/page.tsx) connects the controller to the accepted room through [office-room.ts](../../apps/web/src/office-room.ts). The [shared renderer](../../apps/web/src/app/%28public%29/office/draft/draw-office.ts) accepts a neutral render model; its default fictional adapter preserves the original draft. Real task/execution references never map onto fictional task keys. Geometry caches references and positions, while labels come from the current controller view. Tombstones purge saved live geometry and neutralize active withdrawn transitions.
+The Room tab on `/office` (formerly the sibling `/office/connected` page, removed 2026-11-11) mounts [connected-office.tsx](../../apps/web/src/app/%28public%29/office/connected/connected-office.tsx), which connects the controller to the accepted room through [office-room.ts](../../apps/web/src/office-room.ts). The [shared renderer](../../apps/web/src/app/%28public%29/office/draft/draw-office.ts) accepts a neutral render model; its default fictional adapter preserves the original draft. Real task/execution references never map onto fictional task keys. Geometry caches references and positions, while labels come from the current controller view. Tombstones purge saved live geometry and neutralize active withdrawn transitions.
 
 The client has independent state and delivery lanes, each polled every five seconds (`OFFICE_PLAYBACK.pollMs`) only while the document is visible; a hidden tab starts no office requests, and becoming visible again fetches state and events once before the intervals resume. It uses no-store fetches, ten-second request deadlines, unmount cancellation, continued visible state polling during playback pause/backpressure, and explicit history recovery. Actual assignments determine drawn seats; unassigned executions remain inspectable. Every QA/overflow execution has a separate inspection entry. Current execution/task/pause evidence is separate from illustrated events and replay; role-only Developer events make no seat claim. Replay retains its partial baseline and original timestamps, with saved live geometry restored as a whole scene when live work takes priority. Only completed merge transitions file packets; Docs and deployment remain independent.
 

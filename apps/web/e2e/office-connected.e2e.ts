@@ -1,32 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
-import { bootstrapFixture, REFS } from "../test/fixtures/office-contract";
-import type { AvailableOffice } from "../src/office-contract";
+import { REFS } from "../test/fixtures/office-contract";
 import { installPausedClock } from "./support/clock";
+import { emptyPage, freshBootstrap, mockOfficeFeed, stateOf } from "./support/office-mocks";
 
-function freshBootstrap(): AvailableOffice {
-  const e = bootstrapFixture();
-  e.observed_at = new Date().toISOString();
-  e.snapshot.pause.observed_at = e.observed_at;
-  return e;
-}
-function stateOf(e: AvailableOffice): AvailableOffice {
-  return { ...structuredClone(e), events: [], history: { ...structuredClone(e.history), mode: "state", from: null, through: null, cursor: null, replay: null } };
-}
-async function mocks(page: Page, get: () => AvailableOffice) {
-  await page.route("**/api/auth/session", route => route.fulfill({ json: {} }));
-  await page.route("**/api/public/agent-events**", route => route.fulfill({ json: { available: false, events: [] } }));
-  await page.route("**/api/public/office**", route => {
-    const url = new URL(route.request().url());
-    const mode = url.searchParams.get("mode");
-    const e = get();
-    if (mode === "bootstrap") return route.fulfill({ json: e });
-    if (mode === "state") return route.fulfill({ json: stateOf(e) });
-    const value = stateOf(e);
-    value.history.mode = "incremental";
-    value.history.from = value.history.through = value.history.watermark;
-    value.history.cursor = e.history.cursor;
-    return route.fulfill({ json: value });
-  });
+/** The Room tab of /office, the only place the connected room is shown now that its standalone page is gone. */
+async function gotoRoom(page: Page) {
+  await page.goto("/office");
+  await page.getByRole("tab", { name: "Room", exact: true }).click();
 }
 const canvasBytes = (page: Page) => page.locator('canvas[aria-label^="Woodland"]').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
 
@@ -38,9 +18,9 @@ test("malformed office request returns400 and no-store without a database read",
 });
 
 test("replay remains labeled partial, preserves original time and renders no internal refs", async ({ page }) => {
-  await mocks(page, freshBootstrap);
+  await mockOfficeFeed(page, freshBootstrap);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await expect(page.getByText("Still view · Play enables motion", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Next event", exact: true }).click();
@@ -54,9 +34,9 @@ test("replay remains labeled partial, preserves original time and renders no int
 });
 
 test("manual Next settles exactly one transition and pause freezes native pixels", async ({ page }) => {
-  await mocks(page, freshBootstrap);
+  await mockOfficeFeed(page, freshBootstrap);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.getByRole("button", { name: "Next event", exact: true }).click();
   await expect(page.getByRole("region", { name: "Event log" }).locator("li")).toHaveCount(1);
@@ -78,9 +58,9 @@ test("all QA executions remain inspectable and private task filter uses distinct
   other.role = "qa"; other.assignment = { station: "qa", seat: null };
   fixture.snapshot.tasks![1]!.role = "qa";
   fixture.history.replay!.events[0]!.role = "qa";
-  await mocks(page, () => structuredClone(fixture));
+  await mockOfficeFeed(page, () => structuredClone(fixture));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.getByRole("button", { name: "QA", exact: true }).click();
   const inspector = page.getByRole("complementary", { name: "Agent details" });
@@ -96,10 +76,10 @@ test("all QA executions remain inspectable and private task filter uses distinct
 
 for (const width of [320, 390, 1440]) {
   test(`connected room fits ${width}px without horizontal overflow`, async ({ page }) => {
-    await mocks(page, freshBootstrap);
+    await mockOfficeFeed(page, freshBootstrap);
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/office/connected");
+    await gotoRoom(page);
     await expect(page.getByRole("status")).toContainText("Replay");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole("button", { name: "Show annex", exact: true }).click();
@@ -110,13 +90,6 @@ for (const width of [320, 390, 1440]) {
 async function commonMocks(page: Page) {
   await page.route("**/api/auth/session", route => route.fulfill({ json: {} }));
   await page.route("**/api/public/agent-events**", route => route.fulfill({ json: { available: false, events: [] } }));
-}
-function emptyPage(e: AvailableOffice): AvailableOffice {
-  const value = stateOf(e);
-  value.history.mode = "incremental";
-  value.history.from = value.history.through = value.history.watermark;
-  value.history.cursor = e.history.cursor;
-  return value;
 }
 
 test("privacy withdrawal purges paused inspector and replay labels and rebinds delivery", async ({ page }) => {
@@ -150,7 +123,7 @@ test("privacy withdrawal purges paused inspector and replay labels and rebinds d
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installPausedClock(page);
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.getByRole("button", { name: "QA", exact: true }).click();
   const inspector = page.getByRole("complementary", { name: "Agent details" });
@@ -196,7 +169,7 @@ test("explicit restart retains a pending transition until the recovery choice", 
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installPausedClock(page);
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.clock.runFor(5_100);
   await expect(page.getByRole("status")).toContainText("1 transitions waiting");
@@ -214,10 +187,10 @@ test("explicit restart retains a pending transition until the recovery choice", 
 });
 
 test("offscreen and hidden playback freeze native canvas pixels", async ({ page }) => {
-  await mocks(page, freshBootstrap);
+  await mockOfficeFeed(page, freshBootstrap);
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -245,10 +218,10 @@ test("network lanes poll every five seconds while visible and pause while hidden
     const url = new URL(request.url());
     if (url.pathname === "/api/public/office") requests.push(url.searchParams.get("mode")!);
   });
-  await mocks(page, freshBootstrap);
+  await mockOfficeFeed(page, freshBootstrap);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installPausedClock(page);
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   // Allow a development-mode remount's aborted bootstrap; only one bootstrap is accepted.
   await expect.poll(() => requests.filter(m => m !== "bootstrap")).toEqual([]);
@@ -284,9 +257,9 @@ test("keyboard seat and annex selection inspect their actual assignments", async
   const annex = e.snapshot.executions!.find(x => x.ref === REFS.docsRun)!;
   annex.role = "developer"; annex.assignment = { station: "annex", seat: 17 };
   e.snapshot.tasks!.find(t => t.ref === REFS.docs)!.role = "developer";
-  await mocks(page, () => structuredClone(e));
+  await mockOfficeFeed(page, () => structuredClone(e));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/office/connected");
+  await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
   const seat = page.getByRole("button", { name: "Developer · seat 2", exact: true });
   await seat.focus(); await page.keyboard.press("Enter");

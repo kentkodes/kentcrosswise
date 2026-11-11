@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { ProductStill } from "./_home/product-still";
 import s from "./_home/home.module.css";
-import { geistMono, geistSans } from "./_site/fonts";
-import { SiteFooter } from "./_site/site-footer";
-import { SiteHeader } from "./_site/site-header";
+import { PaperFrame } from "./_site/paper-frame";
 
 // Hero copy, in one place. Default text from the home redesign spec; the owner may change it.
 export const HERO = {
@@ -31,32 +29,28 @@ const FEATURES = [
 
 export default function HomePage() {
   return (
-    <div className={`${s.page} ${geistSans.variable} ${geistMono.variable}`}>
-      <SiteHeader current="/" />
-      <main className={s.main}>
-        <section className={s.hero}>
-          <h1 className={s.headline}>{HERO.headline}</h1>
-          <p className={s.subline}>{HERO.subline}</p>
-          <div className={s.ctas}>
-            <Link className={s.primary} href="/demo">
-              Explore the demo
-            </Link>
-            <Link className={s.secondary} href="/office">
-              Agent office
-            </Link>
+    <PaperFrame current="/">
+      <section className={s.hero}>
+        <h1 className={s.headline}>{HERO.headline}</h1>
+        <p className={s.subline}>{HERO.subline}</p>
+        <div className={s.ctas}>
+          <Link className={s.primary} href="/demo">
+            Explore the demo
+          </Link>
+          <Link className={s.secondary} href="/office">
+            Agent office
+          </Link>
+        </div>
+      </section>
+      <ProductStill />
+      <section className={s.features}>
+        {FEATURES.map((f) => (
+          <div key={f.title}>
+            <h2 className={s.featureTitle}>{f.title}</h2>
+            <p className={s.featureText}>{f.text}</p>
           </div>
-        </section>
-        <ProductStill />
-        <section className={s.features}>
-          {FEATURES.map((f) => (
-            <div key={f.title}>
-              <h2 className={s.featureTitle}>{f.title}</h2>
-              <p className={s.featureText}>{f.text}</p>
-            </div>
-          ))}
-        </section>
-      </main>
-      <SiteFooter />
-    </div>
+        ))}
+      </section>
+    </PaperFrame>
   );
 }

@@ -12,6 +12,11 @@
   --btn-bg: #0a0a0b;
   --btn-fg: #ffffff;
 
+  /* Status colours (team board dots): working, waiting, idle. */
+  --ok: #1f9d6a;
+  --warn: #c27c0e;
+  --idle: #a3a3aa;
+
   --radius-control: 8px;
   --radius-card: 10px;
   --radius-frame: 12px;
@@ -30,6 +35,9 @@
     --accent: #8aa6ff;
     --btn-bg: #f2f2f4;
     --btn-fg: #0a0a0b;
+    --ok: #3cc28a;
+    --warn: #e3a53a;
+    --idle: #5d5d66;
   }
 }
 body {
