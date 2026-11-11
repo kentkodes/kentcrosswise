@@ -32,6 +32,7 @@ describe("isolated publisher IAM source contracts", () => {
       "kcw-gh-plan": ["${local.github_sub}:pull_request"],
       "kcw-gh-deploy": ["${local.github_sub}:environment:prod"],
       ...Object.fromEntries(agents.map((agent) => [`kcw-gh-agent-${agent}`, [`\${local.github_sub}:environment:agent-publish-${agent}`]])),
+      "kcw-gh-agent-model": ["${local.github_sub}:environment:agent-model"],
       "kcw-gh-essay-ingest": ["${local.github_sub}:environment:essay-ingest"],
     });
     expect(iam).not.toContain(":ref:refs/heads/main");
@@ -59,6 +60,24 @@ describe("isolated publisher IAM source contracts", () => {
     `));
   });
 
+  it("grants the work-job model role only the DeepSeek secret, with no other AWS access", () => {
+    const block = iam.slice(iam.indexOf('data "aws_iam_policy_document" "agent_model"'), iam.indexOf("# ---------- isolated agent publishers"));
+    expect(compact(block)).toBe(compact(`
+      data "aws_iam_policy_document" "agent_model" {
+        statement {
+          sid = "DeepseekKey"
+          actions = ["secretsmanager:GetSecretValue"]
+          resources = ["\${local.secret_arn}:kcw/agent/deepseek-??????"]
+        }
+      }
+      resource "aws_iam_role_policy" "agent_model" {
+        name = "kcw-gh-agent-model"
+        role = aws_iam_role.github["kcw-gh-agent-model"].id
+        policy = data.aws_iam_policy_document.agent_model.json
+      }
+    `));
+  });
+
   it("grants exactly own App key GetSecretValue and existing queue SendMessage, with no role chaining", () => {
     expect(iam).toMatch(/github_apps\s*=\s*\["developer", "qa", "scraper", "docs"\]/);
     expect(compact(publisherPolicy)).toBe(compact(`
@@ -82,6 +101,10 @@ describe("isolated publisher IAM source contracts", () => {
         policy = data.aws_iam_policy_document.agent[each.key].json
       }
     `));
+  });
+
+  it("exports the model role variable for the work job", () => {
+    expect(outputs).toMatch(/AWS_ROLE_AGENT_MODEL_ARN\s*=\s*aws_iam_role\.github\["kcw-gh-agent-model"\]\.arn/);
   });
 
   it.each(agents)("exports only the dedicated %s role variable without a legacy fallback", (agent) => {

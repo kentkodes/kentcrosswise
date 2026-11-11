@@ -11,13 +11,20 @@ import { runMain } from "./lib/main";
 import { runCli, usageFromExecution } from "../agents/report/src/index";
 
 const args = parseArgs(process.argv.slice(2));
-function executionUsage(): unknown[] {
+// The work job passes --provider deepseek (DeepSeek's Anthropic-compatible endpoint); review and
+// the default stay anthropic. Any other value is a workflow error, not advisory data.
+function modelProvider(): "anthropic" | "deepseek" {
+  const value = args.provider ?? "anthropic";
+  if (value !== "anthropic" && value !== "deepseek") throw new Error("provider must be anthropic or deepseek");
+  return value;
+}
+function executionUsage(provider: "anthropic" | "deepseek"): unknown[] {
   try {
     const execution = process.env.KCW_EXECUTION_FILE;
     if (!execution) return [];
     const stat = lstatSync(execution);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 8 * 1024 * 1024) return [];
-    return usageFromExecution(JSON.parse(readFileSync(execution, "utf8"))).slice(0, 16);
+    return usageFromExecution(JSON.parse(readFileSync(execution, "utf8")), provider).slice(0, 16);
   } catch { return []; }
 }
 function output(values: Record<string, string>) {
@@ -28,7 +35,7 @@ await runMain(async () => {
   if (command === "usage") {
     if (args.kind !== "candidate" && args.kind !== "decision") throw new Error("usage purpose required");
     mkdirSync(args.kind, { recursive: true });
-    writeFileSync(`${args.kind}/usage.json`, JSON.stringify(executionUsage())); return;
+    writeFileSync(`${args.kind}/usage.json`, JSON.stringify(executionUsage(modelProvider()))); return;
   }
   if (command === "sanitize") {
     const files = runGit(["ls-files", "-z"], { cwd: "payload" }).split("\0").filter(Boolean);
@@ -55,7 +62,7 @@ await runMain(async () => {
     mkdirSync("candidate", { recursive: true });
     if (runGit(["rev-parse", "HEAD"], { cwd: "payload" }) === process.env.KCW_BASE_SHA) writeFileSync("candidate/candidate.bundle", "KCW_UNCHANGED_V1\n");
     else runGit(["bundle", "create", path.resolve("candidate/candidate.bundle"), "HEAD", `^${process.env.KCW_BASE_SHA}`], { cwd: "payload" });
-    writeFileSync("candidate/usage.json", JSON.stringify(executionUsage()));
+    writeFileSync("candidate/usage.json", JSON.stringify(executionUsage(modelProvider())));
     return;
   }
   const repo = process.env.GITHUB_REPOSITORY;
@@ -102,7 +109,7 @@ await runMain(async () => {
     const review = parseReviewDecision(process.env.KCW_REVIEW);
     mkdirSync("decision", { recursive: true });
     writeFileSync("decision/decision.json", JSON.stringify({ sha: c.baseSha, review }));
-    writeFileSync("decision/usage.json", JSON.stringify(executionUsage())); return;
+    writeFileSync("decision/usage.json", JSON.stringify(executionUsage(modelProvider()))); return;
   }
   if (command === "report") {
     const phase = args.phase === "start" ? "start" : "end";

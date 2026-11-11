@@ -99,6 +99,11 @@ describe("untrusted files",()=>{
     for(const f of files) expect(existsSync(path.join(root,f))).toBe(false);
     expect(readFileSync(path.join(root,"apps/web/src/page.ts"),"utf8")).toBe("data");
   });
+  it("labels DeepSeek usage as deepseek and drops any other provider",()=>{
+    const root=dir(); const deepseek={kind:"model",provider:"deepseek",model:"deepseek-flash",input_tokens:3,output_tokens:4};
+    writeFileSync(path.join(root,"usage.json"),JSON.stringify([deepseek])); expect(readAdvisoryUsage(root)).toEqual([deepseek]);
+    writeFileSync(path.join(root,"usage.json"),JSON.stringify([{...deepseek,provider:"openai"}])); expect(readAdvisoryUsage(root)).toEqual([]);
+  });
   it("refuses surprise artifact files and drops malformed advisory usage without suppressing lifecycle",()=>{
     const root=dir(); writeFileSync(path.join(root,"candidate.bundle"),"KCW_UNCHANGED_V1\n"); writeFileSync(path.join(root,"usage.json"),"[]");
     expect(candidateBundle(root)).toContain("candidate.bundle");
