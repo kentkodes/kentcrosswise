@@ -9,9 +9,9 @@ import { SiteHeader } from "./_site/site-header";
 
 // Hero copy, in one place. Default text from the home redesign spec; the owner may change it.
 export const HERO = {
-  headline: "Personal software, built by a team of AI agents.",
+  headline: "Watch AI agents build my personal hub.",
   subline:
-    "Kentcrosswise is my hub for people, reading and notes. Agents plan, write, review and ship every change, and you can watch them work.",
+    "Every change to Kentcrosswise is planned, coded, reviewed and shipped by a small team of agents. The office shows the work as it happens.",
 } as const;
 
 const FEATURES = [

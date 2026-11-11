@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 test("public home renders and links to the demo", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Personal software, built by a team of AI agents." })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Watch AI agents build my personal hub." })).toBeVisible();
   await expect(page.getByText(/^Simulated data/)).toBeVisible();
   await page.getByRole("main").getByRole("link", { name: "Explore the demo", exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/);
