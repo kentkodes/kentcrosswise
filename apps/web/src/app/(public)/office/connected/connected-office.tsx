@@ -7,7 +7,6 @@ import { PEOPLE, type Actor } from "../draft/scene";
 import { ACTIVITY_FILTERS, CARD_INFO, STATUS_WORD, deriveBoard, loadingBoard, utcLabel, viewKey, type ActivityFilter, type BoardRole } from "../board/board-state";
 import s from "./connected.module.css";
 const clock = (): OfficeClock => ({ wallMs: Date.now(), monoMs: performance.now() });
-const timestamp = (value: string) => value.replace("T", " ").replace(".000Z", " UTC").replace("Z", " UTC");
 const textEvent = (event: PlaybackEvent) => "deleted" in event ? "Withdrawn event" : eventLabel(event);
 const ROLES: Actor[] = ["boss", "dev1", "dev2", "dev3", "dev4", "qa", "scraper", "docs", "router", "extra"];
 const SEAT_ACTORS = ["dev1", "dev2", "dev3", "dev4"] as const;
@@ -48,6 +47,8 @@ export function ConnectedOffice() {
   const [inView, setInView] = useState(false);
   const [canvasReady, setCanvasReady] = useState(true);
   const [revision, setRevision] = useState(0);
+  // The owner chose live: the idle-live auto switch to replay must not undo it.
+  const liveChosen = useRef(false);
   const canvas = useRef<HTMLCanvasElement>(null), annexCanvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null);
   const publish = () => {
     const c = controller.current, r = room.current; if (!c || !r) return;
@@ -72,7 +73,7 @@ export function ConnectedOffice() {
         if (!response.ok) throw new Error("unavailable");
         c.receive(request, await response.json(), clock());
         const state = c.view(clock());
-        if (state.mode === "live" && !state.active && state.pending.length === 0 && state.replay.events.length > 0 && !state.gap) c.setMode("replay");
+        if (state.mode === "live" && !state.active && state.pending.length === 0 && state.replay.events.length > 0 && !state.gap && !liveChosen.current) c.setMode("replay");
       } catch { if (!abort.signal.aborted) c.fail(request); }
       finally { clearTimeout(timeout); abort.signal.removeEventListener("abort", cancel); if (lane === "state") stateBusy = false; else eventBusy = false; if (!abort.signal.aborted) publish(); }
     };
@@ -185,7 +186,7 @@ export function ConnectedOffice() {
       <div className={s.playback}>
         <div className={s.controls} role="group" aria-label="Playback">
           <button type="button" onClick={play}>Play</button><button type="button" onClick={pause} disabled={paused}>Pause</button><button type="button" onClick={next}>Next event</button>
-          <button type="button" onClick={() => { controller.current?.setMode(view?.mode === "replay" ? "live" : "replay"); publish(); }} disabled={!!active || !!view?.pending.length || !view?.replay.events.length}>{view?.mode === "replay" ? "Return to live" : "Replay latest events"}</button>
+          <button type="button" onClick={() => { const toReplay = view?.mode !== "replay"; liveChosen.current = !toReplay; controller.current?.setMode(toReplay ? "replay" : "live"); publish(); }} disabled={!!active || !!view?.pending.length || !view?.replay.events.length}>{view?.mode === "replay" ? "Return to live" : "Replay latest events"}</button>
         </div>
         <p className={s.stateText}>{replayDone ? "Replay finished · Play to watch again" : reduced && !override ? "Still view · Play enables motion" : paused ? "Playback paused" : playing ? "Playing recorded transitions" : "Playback suspended"}</p>
       </div>
@@ -257,7 +258,7 @@ export function ConnectedOffice() {
       <div className={s.nowRow}>
         <span className={s.label}>Now showing</span>
         <h2 className={s.nowTitle}>{active ? textEvent(active) : "Ready for the next transition"}</h2>
-        <p className={s.nowMeta}>{active && !("deleted" in active) ? `${active.description} · ${timestamp(active.recorded_at)}` : "No event is being illustrated."}</p>
+        <p className={s.nowMeta}>{active && !("deleted" in active) ? `${active.description} · ${utcLabel(active.recorded_at)}` : "No event is being illustrated."}</p>
       </div>
       <p className={s.note}>The room plays received events in order, so the Board can be a step ahead of it.{view?.mode === "replay" && ` ${view.replay.completeness === "complete" ? "Complete retained replay window" : "Partial task history"} · original recorded times.`}</p>
     </section>
