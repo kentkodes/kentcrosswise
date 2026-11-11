@@ -138,6 +138,28 @@ test("the room has no navy ground outside its canvas", async ({ page }) => {
   expect(navy).toBe(0);
 });
 
+test("Return to live is kept across idle polls", async ({ page }) => {
+  await mockOfficeFeed(page, freshBootstrap);
+  const modes: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/public/office") modes.push(url.searchParams.get("mode")!);
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await installPausedClock(page);
+  await gotoRoom(page);
+  await expect(page.getByRole("status")).toContainText("Replay");
+  await page.getByRole("button", { name: "Return to live", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Live");
+  // Two or more poll intervals with no new events: the room must stay live.
+  const incrementals = () => modes.filter(m => m === "incremental").length;
+  const before = incrementals();
+  await page.clock.runFor(12_000);
+  await expect.poll(() => incrementals() - before).toBeGreaterThanOrEqual(2);
+  await expect(page.getByRole("status")).toContainText("Live");
+  await expect(page.getByRole("button", { name: "Replay latest events", exact: true })).toBeVisible();
+});
+
 test("all QA executions remain inspectable and private task filter uses distinct histories", async ({ page }) => {
   const fixture = freshBootstrap();
   const qa = fixture.snapshot.executions![0]!;
