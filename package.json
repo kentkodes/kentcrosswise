@@ -14,6 +14,7 @@
     "migrate": "pnpm --filter @kcw/scripts migrate",
     "seed": "pnpm --filter @kcw/scripts seed",
     "import-seed-list": "pnpm --filter @kcw/scripts import-seed-list",
+    "link-seed-essays": "pnpm --filter @kcw/scripts link-seed-essays",
     "register-source": "pnpm --filter @kcw/scripts register-source",
     "match-seeds": "pnpm --filter @kcw/scripts match-seeds",
     "essay-ingest": "pnpm --filter @kcw/scripts essay-ingest",

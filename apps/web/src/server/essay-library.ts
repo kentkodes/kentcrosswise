@@ -135,6 +135,14 @@ export function externalHref(url: string | null): string | null {
   }
 }
 
+/**
+ * Where a link-only essay without a source URL points the owner: a web search for the title and author.
+ * Built at render time (no URL is stored for seed essays). Fixed https host, so it is always openable.
+ */
+export function linkSearchHref(title: string, author: string): string {
+  return `https://duckduckgo.com/?q=${encodeURIComponent(`${title} ${author} essay`)}`;
+}
+
 /** Reading time: the stored value, else a word-count estimate; null when neither is known. */
 export function readingMinutesOf(card: { readingMinutes: number | null; wordCount: number | null }): number | null {
   if (card.readingMinutes !== null) return card.readingMinutes;
@@ -160,10 +168,13 @@ export async function savePrefs(db: Queryable, prefs: Prefs): Promise<void> {
 
 // ---------------------------------------------------------------- feed and recommendations
 
-/** Empty filter arrays mean "no filter". An essay with no word count fails an active length filter. */
+/**
+ * Empty filter arrays mean "no filter". An essay with no word count fails an active length filter, except
+ * link-only essays: they have no text, so their length is never known and they are not filtered by it.
+ */
 const PREFS_FILTER = `(cardinality($1::text[]) = 0 OR EXISTS (
     SELECT 1 FROM essay_categories c WHERE c.essay_id = e.id AND c.type = ANY($1::text[])))
-  AND (cardinality($2::text[]) = 0 OR e.length_band = ANY($2::text[]))`;
+  AND (cardinality($2::text[]) = 0 OR e.kind = 'link' OR e.length_band = ANY($2::text[]))`;
 
 /** types are ordered by confidence, so types[0] is the primary type. */
 const CARD_COLUMNS = `e.id, e.kind, e.title, e.author, e.year, e.length_band, e.word_count, e.reading_minutes, e.hook, e.created_at,
@@ -211,12 +222,15 @@ function toCard(r: CardRow): EssayCard {
   };
 }
 
-/** Active essays that pass the prefs, newest first. Fetches one extra row to know if there is more. */
+/**
+ * Active essays that pass the prefs: full-text essays newest first, then link-only essays newest first (the seed
+ * links share one created_at, so they would otherwise bury the full essays). Fetches one extra row to know if there is more.
+ */
 export async function listFeed(db: Queryable, prefs: Prefs, limit: number): Promise<{ cards: EssayCard[]; hasMore: boolean }> {
   const { rows } = await db.query<CardRow>(
     `SELECT ${CARD_COLUMNS} FROM essays e
       WHERE e.status = 'active' AND ${PREFS_FILTER}
-      ORDER BY e.created_at DESC, e.id
+      ORDER BY (e.kind = 'full') DESC, e.created_at DESC, e.id
       LIMIT $3`,
     [prefs.types, prefs.lengths, limit + 1],
   );
@@ -280,13 +294,13 @@ export async function getReaderEssay(db: Queryable, id: string): Promise<ReaderE
   };
 }
 
-/** Upserts the owner's one rating for an active essay. */
+/** Upserts the owner's one rating for an active full-text essay. Link-only essays cannot be rated (EssayNotFoundError). */
 export async function saveRating(db: Queryable, essayId: string, input: RatingInput): Promise<void> {
   if (!isUuid(essayId)) throw new InputError("That essay id is not valid.");
   const r = parseRating({ stars: input.stars, worked: input.worked, lengthFelt: input.lengthFelt });
   const { rows } = await db.query<{ essay_id: string }>(
     `INSERT INTO ratings (essay_id, stars, worked, length_felt, rated_at)
-     SELECT e.id, $2, $3::text[], $4, now() FROM essays e WHERE e.id = $1 AND e.status = 'active'
+     SELECT e.id, $2, $3::text[], $4, now() FROM essays e WHERE e.id = $1 AND e.status = 'active' AND e.kind = 'full'
      ON CONFLICT (essay_id) DO UPDATE SET
        stars = EXCLUDED.stars, worked = EXCLUDED.worked, length_felt = EXCLUDED.length_felt, rated_at = EXCLUDED.rated_at
      RETURNING essay_id`,

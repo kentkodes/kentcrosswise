@@ -12,6 +12,7 @@ import {
   TYPE_LABELS,
   externalHref,
   getReaderEssay,
+  linkSearchHref,
   readingMinutesOf,
   type ReaderEssay,
 } from "@/server/essay-library";
@@ -57,19 +58,7 @@ export default async function EssayReaderPage({
   }
   if (!essay) notFound();
 
-  if (essay.kind === "link") {
-    const href = externalHref(essay.sourceUrl);
-    if (href) redirect(href);
-    return (
-      <main className={styles.page}>
-        <h1>{essay.title}</h1>
-        <p role="alert">This entry has no usable source link.</p>
-        <p>
-          <Link href="/essays">Back to essays</Link>
-        </p>
-      </main>
-    );
-  }
+  if (essay.kind === "link") redirect(externalHref(essay.sourceUrl) ?? linkSearchHref(essay.title, essay.author));
 
   const text = await loadEssayText(essay.textS3Key);
   const paragraphs = text === null ? [] : textParagraphs(text);
