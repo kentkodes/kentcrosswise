@@ -9,7 +9,7 @@ related_targets: ["apps/web/src/app/(public)/bot/bot.module.css"]
 
 Mode: Read.
 
-Extend the existing public shell: dusk navy, ivory Rosarivo text, shared header and a narrow article. The visitor should understand what the bot does, identify its planned User-Agent and find the reporting link. Use straightforward sections, no decorative cards, added navigation, imagery or motion.
+Extend the Paper reading layout: the Paper frame with the shared header and footer, Geist text and a 680px article column. The visitor should understand what the bot does, identify its planned User-Agent and find the reporting link. Use straightforward sections, no decorative cards, added navigation, imagery or motion.
 
 Owner selected the dedicated `/bot` contact page. Explain development status honestly; publishing this page is separate from enabling discovery. Contact uses the public repository's enabled GitHub issues; state that sign-in is required and reports are public. Never request credentials or private content.
 
