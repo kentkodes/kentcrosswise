@@ -34,11 +34,11 @@ export default function HomePage() {
         <h1 className={s.headline}>{HERO.headline}</h1>
         <p className={s.subline}>{HERO.subline}</p>
         <div className={s.ctas}>
-          <Link className={s.primary} href="/demo">
-            Explore the demo
-          </Link>
-          <Link className={s.secondary} href="/office">
+          <Link className={s.primary} href="/office">
             Agent office
+          </Link>
+          <Link className={s.secondary} href="/demo">
+            Explore the demo
           </Link>
         </div>
       </section>

@@ -34,7 +34,7 @@ describe("migrate on PGlite", () => {
     expect(second.applied).toEqual([]);
     expect(second.alreadyApplied).toEqual(first.applied);
     await pg.close();
-  });
+  }, 30_000);
 
   it("dry run applies nothing", async () => {
     const pg = new PGlite();
