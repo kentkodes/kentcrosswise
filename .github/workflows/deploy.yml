@@ -1,6 +1,6 @@
 # Deploy main to prod (DESIGN §4.2 step 8; P1-16): migrate, prod build, Lambda bundles, terraform
-# apply infra/prod (which uploads the OpenNext build and the agent Lambda code), then smoke-check
-# the live site.
+# apply infra/prod (which uploads the OpenNext build and the agent Lambda code), clear the CloudFront
+# cache (O6), then smoke-check the live site against this build's id.
 # Runs in GitHub environment `prod`, so the OIDC subject is ...:environment:prod (kcw-gh-deploy).
 name: deploy
 
@@ -82,7 +82,16 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Smoke check (/ and /demo 200, /hub redirects to sign-in)
+      # O6: prerendered pages carry s-maxage of a year, so a deploy must clear the edge cache.
+      # "/*" counts as one invalidation path. Waits until CloudFront reports it completed.
+      - name: Clear the CloudFront cache
+        run: |
+          dist="$(terraform -chdir=infra/prod output -raw distribution_id)"
+          id="$(aws cloudfront create-invalidation --distribution-id "$dist" --paths '/*' --query Invalidation.Id --output text)"
+          echo "Invalidation $id on $dist" >> "$GITHUB_STEP_SUMMARY"
+          aws cloudfront wait invalidation-completed --distribution-id "$dist" --id "$id"
+
+      - name: Smoke check (public pages show this build, /hub redirects to sign-in)
         env:
           BASE_URL: ${{ steps.url.outputs.url }}
-        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15
+        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15 --build-file apps/web/.open-next/kcw-build.json

@@ -164,6 +164,6 @@ The complete backlog is [OPEN-POINTS.md](OPEN-POINTS.md). No new product decisio
 
 1. Mark PR #44 and PR #49 ready for review, obtain the required approval and merge #44 then #49 when authorized; retain accepted layout and defer wording changes.
 2. Deploy under the owner's office-rollout conditions above, verify deployed homepage/office behaviour, then run the controlled signed-webhook check before enabling execution observations. Merge and deployment authority remain separate gates; no release is authorized by this handoff.
-3. Recheck normal homepage content/cache; scope any targeted repair and durable content-aware invalidation separately. Status-only smoke checks previously missed stale HTML.
+3. Done (O5/O6, 2026-11-11): the stale homepage was cleared by manual invalidations, and `deploy.yml` now invalidates CloudFront `/*` after each apply and smoke-checks that public pages carry the new build id.
 4. Verify production ownership/grants and real signed webhook delivery when scoped; retain open failure/retry/dedupe/cold-container/late-report cases, Safari/Firefox/physical devices and durable browser resume. Preserve unverified assigned-worker event motion and multiple-private-task actual-route scenarios as distinct from earlier intercepted/source tests.
 5. Continue private hub, X-ray and essays after the current delivery priorities. Their approved MVP specs and consolidated backlog remain authoritative.

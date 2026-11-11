@@ -166,7 +166,7 @@ jobs:
       - name: Wait for the preview
         env:
           BASE_URL: ${{ steps.url.outputs.url }}
-        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15
+        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15 --build-file apps/web/.open-next/kcw-build.json
 
       - name: Playwright browsers
         run: pnpm --filter web exec playwright install --with-deps chromium
