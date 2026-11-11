@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T00:00:00Z",
+  "generatedAt": "2026-11-11T20:00:00Z",
   "title": "Design System: Kentcrosswise",
   "extensions": {
     "colorMeta": {
@@ -291,7 +291,7 @@
           "oklch(85% 0.055 270.6)",
           "oklch(95% 0.055 270.6)"
         ],
-        "purpose": "Legacy only: PublicShell ground (/demo, /bot) and the Room card scope."
+        "purpose": "Legacy only: PublicShell ground (/bot) and the Room card scope."
       },
       "legacy-ivory": {
         "role": "legacy",
@@ -575,7 +575,7 @@
       },
       "legacy-body": {
         "displayName": "Legacy body",
-        "purpose": "Rosarivo 400 on /demo, /bot and the Room card scope only. Not for new pages."
+        "purpose": "Rosarivo 400 on /bot and the Room card scope only. Not for new pages."
       }
     },
     "shadows": [
@@ -618,7 +618,6 @@
       {
         "name": "public-shell",
         "routes": [
-          "/demo",
           "/bot"
         ],
         "source": "apps/web/src/app/(public)/_site/public-shell.module.css",
@@ -714,11 +713,43 @@
       "description": "Room tab frame on /office: a hairline frame around a scoped legacy navy block, the one navy use on a Paper page. Do not reuse outside the room.",
       "html": "<div class=\"ds-room\"><div class=\"ds-room-scope\">Connected room</div></div>",
       "css": ".ds-room{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius-frame);background:var(--bg)}.ds-room-scope{box-sizing:border-box;min-width:0;padding:16px;background:#1b2340;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;line-height:1.5}"
+    },
+    {
+      "name": "Demo App Frame",
+      "kind": "custom",
+      "refersTo": "demo-app-frame",
+      "description": "/demo app frame on Paper: a 1px hairline frame, 12px radius, hidden overflow. A 200px tab sidebar on --bg-soft beside the section. Under 640px the sidebar becomes a row above it (see Demo Tabs). Demo data only.",
+      "html": "<div class=\"ds-frame\"><nav class=\"ds-tabs\" aria-label=\"Hub sections\"><button class=\"ds-tab\" aria-pressed=\"true\">Today</button><button class=\"ds-tab\" aria-pressed=\"false\">People</button></nav><section class=\"ds-frame-body\"><h2 class=\"ds-frame-h2\">Today</h2></section></div>",
+      "css": ".ds-frame{display:grid;grid-template-columns:200px minmax(0,1fr);min-width:0;border:1px solid var(--line);border-radius:var(--radius-frame);background:var(--bg);overflow:hidden;font-family:var(--font-sans),system-ui,sans-serif;color:var(--fg)}.ds-frame-body{min-width:0;padding:24px}.ds-frame-h2{margin:0 0 20px;font-size:20px;font-weight:600;letter-spacing:-0.02em}@media (max-width:639px){.ds-frame{grid-template-columns:minmax(0,1fr)}.ds-frame-body{padding:16px}}"
+    },
+    {
+      "name": "Demo Tabs",
+      "kind": "nav",
+      "refersTo": "demo-tabs",
+      "description": "Tab sidebar of the /demo app frame: Today, People, Mood, Following, Notes. Real buttons with aria-pressed; the selected tab has a --bg fill and a 1px --line ring. Switches in place, no URL change. Under 640px the tabs become one horizontally scrollable row above the section, with no visible scrollbar.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Hub sections\"><button class=\"ds-tab\" aria-pressed=\"true\">Today</button><button class=\"ds-tab\" aria-pressed=\"false\">People</button><button class=\"ds-tab\" aria-pressed=\"false\">Mood</button></nav>",
+      "css": ".ds-tabs{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0;padding:16px 12px;border-right:1px solid var(--line);background:var(--bg-soft)}.ds-tab{height:40px;padding:0 12px;border:0;border-radius:var(--radius-control);background:transparent;color:var(--fg-muted);font:inherit;font-size:14px;text-align:left;white-space:nowrap;cursor:pointer}.ds-tab[aria-pressed=\"true\"]{background:var(--bg);color:var(--fg);font-weight:500;box-shadow:0 0 0 1px var(--line)}@media (max-width:639px){.ds-tabs{flex-direction:row;overflow-x:auto;scrollbar-width:none;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line)}.ds-tabs::-webkit-scrollbar{display:none}.ds-tab{flex:0 0 auto;height:40px}}"
+    },
+    {
+      "name": "Demo Mood Bars",
+      "kind": "custom",
+      "refersTo": "demo-mood-bars",
+      "description": "/demo Mood tab: one bar per metric on a 0 to 1 scale. 8px track with a 1px --line border and --bg-soft fill, solid --fg bar, mono value at the right. Rows are at most 520px wide.",
+      "html": "<div class=\"ds-bars\"><div class=\"ds-bar-row\"><span>Metric</span><span class=\"ds-track\"><span class=\"ds-fill\" style=\"width:50%\"></span></span><span class=\"ds-bar-value\">0.50</span></div></div>",
+      "css": ".ds-bars{display:grid;gap:10px;max-width:520px}.ds-bar-row{display:grid;grid-template-columns:minmax(96px,120px) minmax(0,1fr) 44px;align-items:center;gap:12px;font-size:14px}.ds-track{height:8px;border:1px solid var(--line);border-radius:999px;background:var(--bg-soft);overflow:hidden}.ds-fill{display:block;height:100%;background:var(--fg)}.ds-bar-value{font-family:var(--font-mono),ui-monospace,monospace;font-size:13px;color:var(--fg-muted);text-align:right}"
+    },
+    {
+      "name": "Demo Table Box",
+      "kind": "custom",
+      "refersTo": "demo-table-box",
+      "description": "/demo People tab: a plain table in its own horizontally scrolling box, so a phone scrolls the table and not the page. Table minimum width 520px; hairline row rules; no fills.",
+      "html": "<div class=\"ds-table-box\"><table class=\"ds-table\"><thead><tr><th scope=\"col\">Name</th><th scope=\"col\">Last note</th></tr></thead><tbody><tr><td>Contact name</td><td>Note</td></tr></tbody></table></div>",
+      "css": ".ds-table-box{overflow-x:auto}.ds-table{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}.ds-table th{padding:8px 0;border-bottom:1px solid var(--line);font-weight:500;text-align:left;color:var(--fg-muted)}.ds-table td{padding:12px 0;border-bottom:1px solid var(--line);vertical-align:top}"
     }
   ],
   "narrative": {
     "northStar": "Paper",
-    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo and /bot still use the legacy dusk shell until they are redone. Other pages are not covered yet.",
+    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo uses the Paper app frame (see the Demo App Frame component). /bot still uses the legacy dusk shell until it is redone. Other pages are not covered yet.",
     "keyCharacteristics": [
       "Plain and calm: a white page, black type, no decoration.",
       "One blue accent, used for focus (and the home activity dot).",
@@ -735,7 +766,7 @@
       },
       {
         "name": "The Legacy Fence Rule",
-        "body": "The dusk navy palette and Rosarivo stay on /demo, /bot and the Room card. Do not extend them to new pages.",
+        "body": "The dusk navy palette and Rosarivo stay on /bot and the Room card. Do not extend them to new pages.",
         "section": "colors"
       },
       {
