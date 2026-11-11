@@ -171,6 +171,12 @@ class Machine {
   async apply(input: TaskInput): Promise<StepOutcome> {
     const d = this.d;
     if (input.kind === "report") return this.report(input.report);
+    // The task's PR merged or closed outside the orchestrator (the owner merge script, by hand):
+    // the task ends in any phase, so it never waits forever.
+    if (input.kind === "github" && input.event === "pull_request" && input.action === "closed" &&
+        d.phase !== "done" && d.pr_number !== null && input.pr_number === d.pr_number) {
+      return this.onPrClosed(input.merged);
+    }
     let out: StepOutcome | undefined;
     switch (d.phase) {
       case "queued":
@@ -463,6 +469,18 @@ class Machine {
     // The publishing QA run defers its review when it adds commits; CI green dispatches a
     // fresh QA run. New code also supersedes an earlier approval (the ruleset dismisses it).
     await this.enter("ci");
+    return "applied";
+  }
+
+  /** The task's PR was merged or closed outside the orchestrator: a pending approval no longer applies. */
+  async onPrClosed(merged: boolean): Promise<StepOutcome> {
+    const d = this.d;
+    if (d.approval_id !== null) {
+      await this.store.supersedeApproval(d.approval_id, `Superseded: PR #${d.pr_number} was ${merged ? "merged" : "closed"} outside the orchestrator.`);
+    }
+    if (!merged) return this.finish("cancelled", `PR #${d.pr_number} was closed without merging outside the orchestrator`);
+    await this.event("merged", "orchestrator", { pr: d.pr_number, by: "external" });
+    await this.enter("done", "merged");
     return "applied";
   }
 
