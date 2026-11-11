@@ -1,84 +1,283 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T00:00:00Z",
+  "generatedAt": "2026-11-11T00:00:00Z",
   "title": "Design System: Kentcrosswise",
   "extensions": {
-    "officePreview": {
-      "route": "/office/preview",
-      "scope": "Local fictional sample; no public-event fetch; real-feed integration remains future work",
-      "sources": ["apps/web/src/app/(public)/office/preview/draw-office.ts", "apps/web/src/app/(public)/office/preview/preview.module.css"],
-      "canvas": {
-        "width": 320, "height": 256, "tile": 16, "robotApprox": [16, 24],
-        "declaredColors": 20, "initialFrameRenderedColors": 19,
-        "colorEvidence": "Initial task_assigned frame measured by Liaison with Canvas getImageData; failure red adds the twentieth color",
-        "display": "2x where available; 1x phone; fit narrower",
-        "rendering": "Integer Canvas fills; smoothing disabled; pixelated display; no raster scene asset"
-      },
-      "tokens": {
-        "colors": {"office-control":"#252e49", "office-control-edge":"#aaa28f", "office-muted":"#e5d8bf", "office-hover":"#3d465e", "office-divider":"#847d78", "office-teal":"#67baa6", "office-amber":"#e4ad55"},
-        "typography": {"office-label":{"fontFamily":"Rosarivo, Georgia, serif","fontSize":"14px","fontWeight":400}, "office-state":{"fontFamily":"Rosarivo, Georgia, serif","fontSize":"21px","fontWeight":400}, "office-role":{"fontFamily":"Rosarivo, Georgia, serif","fontSize":"28px","fontWeight":400}, "office-heading":{"fontFamily":"Rosarivo, Georgia, serif","fontSize":"clamp(30px, 4vw, 44px)","fontWeight":400}},
-        "rounded": {"office-target":"4px"},
-        "breakpoints": {"office-inspector-beside":"1200px"},
-        "motion": {"office-tick":"100ms"}
-      },
-      "targets": {"token":"office-target","minWidth":44,"minHeight":44},
-      "behavior": ["Pause/resume, next, restart", "Reduced motion uses manual progression", "Hidden/offscreen freeze without catch-up", "Merged event alone files papers", "HTML inspector/current event/sequence text equivalents"],
-      "detector": "Advisory only; no detector pass or complete engine ship receipt claimed"
-    },
     "colorMeta": {
-      "apricot": {
-        "role": "primary",
-        "displayName": "Apricot Dusk",
-        "canonical": "#f8d9a8",
-        "oklch": "oklch(89.9% 0.072 79.0)",
+      "bg": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 0.0)",
         "tonalRamp": [
-          "oklch(15% 0.072 79.0)",
-          "oklch(26% 0.072 79.0)",
-          "oklch(38% 0.072 79.0)",
-          "oklch(50% 0.072 79.0)",
-          "oklch(62% 0.072 79.0)",
-          "oklch(74% 0.072 79.0)",
-          "oklch(85% 0.072 79.0)",
-          "oklch(95% 0.072 79.0)"
+          "oklch(15% 0.000 0.0)",
+          "oklch(26% 0.000 0.0)",
+          "oklch(38% 0.000 0.0)",
+          "oklch(50% 0.000 0.0)",
+          "oklch(62% 0.000 0.0)",
+          "oklch(74% 0.000 0.0)",
+          "oklch(85% 0.000 0.0)",
+          "oklch(95% 0.000 0.0)"
         ],
-        "purpose": "The one filled entrance; selection, focus ring on the scene, footer underline hover."
+        "purpose": "Page ground (light). The header uses it at 80% with a 12px blur."
       },
-      "apricot-lit": {
-        "role": "primary",
-        "displayName": "Lit Apricot",
-        "canonical": "#fbe3bc",
-        "oklch": "oklch(92.6% 0.057 79.9)",
+      "bg-dark": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#0a0a0b",
+        "oklch": "oklch(14.5% 0.002 286.1)",
         "tonalRamp": [
-          "oklch(15% 0.057 79.9)",
-          "oklch(26% 0.057 79.9)",
-          "oklch(38% 0.057 79.9)",
-          "oklch(50% 0.057 79.9)",
-          "oklch(62% 0.057 79.9)",
-          "oklch(74% 0.057 79.9)",
-          "oklch(85% 0.057 79.9)",
-          "oklch(95% 0.057 79.9)"
+          "oklch(15% 0.002 286.1)",
+          "oklch(26% 0.002 286.1)",
+          "oklch(38% 0.002 286.1)",
+          "oklch(50% 0.002 286.1)",
+          "oklch(62% 0.002 286.1)",
+          "oklch(74% 0.002 286.1)",
+          "oklch(85% 0.002 286.1)",
+          "oklch(95% 0.002 286.1)"
         ],
-        "purpose": "Entrance hover."
+        "purpose": "Page ground (dark, prefers-color-scheme: dark)."
       },
-      "entrance-ink": {
-        "role": "primary",
-        "displayName": "Entrance Ink",
-        "canonical": "#232a46",
-        "oklch": "oklch(29.3% 0.052 272.2)",
+      "bg-soft": {
+        "role": "neutral",
+        "displayName": "Soft Paper",
+        "canonical": "#f7f7f6",
+        "oklch": "oklch(97.6% 0.001 106.4)",
         "tonalRamp": [
-          "oklch(15% 0.052 272.2)",
-          "oklch(26% 0.052 272.2)",
-          "oklch(38% 0.052 272.2)",
-          "oklch(50% 0.052 272.2)",
-          "oklch(62% 0.052 272.2)",
-          "oklch(74% 0.052 272.2)",
-          "oklch(85% 0.052 272.2)",
-          "oklch(95% 0.052 272.2)"
+          "oklch(15% 0.001 106.4)",
+          "oklch(26% 0.001 106.4)",
+          "oklch(38% 0.001 106.4)",
+          "oklch(50% 0.001 106.4)",
+          "oklch(62% 0.001 106.4)",
+          "oklch(74% 0.001 106.4)",
+          "oklch(85% 0.001 106.4)",
+          "oklch(95% 0.001 106.4)"
         ],
-        "purpose": "Text and arrow on the apricot entrance."
+        "purpose": "Product still sidebar; selected segmented tab and filter chip fill."
       },
-      "dusk-navy": {
-        "role": "secondary",
+      "bg-soft-dark": {
+        "role": "neutral",
+        "displayName": "Soft Night",
+        "canonical": "#111114",
+        "oklch": "oklch(17.9% 0.006 285.8)",
+        "tonalRamp": [
+          "oklch(15% 0.006 285.8)",
+          "oklch(26% 0.006 285.8)",
+          "oklch(38% 0.006 285.8)",
+          "oklch(50% 0.006 285.8)",
+          "oklch(62% 0.006 285.8)",
+          "oklch(74% 0.006 285.8)",
+          "oklch(85% 0.006 285.8)",
+          "oklch(95% 0.006 285.8)"
+        ],
+        "purpose": "Dark-mode counterpart of bg-soft."
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline Grey",
+        "canonical": "#ececea",
+        "oklch": "oklch(94.3% 0.003 106.5)",
+        "tonalRamp": [
+          "oklch(15% 0.003 106.5)",
+          "oklch(26% 0.003 106.5)",
+          "oklch(38% 0.003 106.5)",
+          "oklch(50% 0.003 106.5)",
+          "oklch(62% 0.003 106.5)",
+          "oklch(74% 0.003 106.5)",
+          "oklch(85% 0.003 106.5)",
+          "oklch(95% 0.003 106.5)"
+        ],
+        "purpose": "Hairline borders and dividers: cards, log, tabs, pills, header and footer rules."
+      },
+      "line-dark": {
+        "role": "neutral",
+        "displayName": "Night Hairline",
+        "canonical": "#232328",
+        "oklch": "oklch(25.8% 0.009 285.7)",
+        "tonalRamp": [
+          "oklch(15% 0.009 285.7)",
+          "oklch(26% 0.009 285.7)",
+          "oklch(38% 0.009 285.7)",
+          "oklch(50% 0.009 285.7)",
+          "oklch(62% 0.009 285.7)",
+          "oklch(74% 0.009 285.7)",
+          "oklch(85% 0.009 285.7)",
+          "oklch(95% 0.009 285.7)"
+        ],
+        "purpose": "Dark-mode counterpart of line."
+      },
+      "fg": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0a0a0b",
+        "oklch": "oklch(14.5% 0.002 286.1)",
+        "tonalRamp": [
+          "oklch(15% 0.002 286.1)",
+          "oklch(26% 0.002 286.1)",
+          "oklch(38% 0.002 286.1)",
+          "oklch(50% 0.002 286.1)",
+          "oklch(62% 0.002 286.1)",
+          "oklch(74% 0.002 286.1)",
+          "oklch(85% 0.002 286.1)",
+          "oklch(95% 0.002 286.1)"
+        ],
+        "purpose": "Text and headings; current nav link; hover state for links."
+      },
+      "fg-dark": {
+        "role": "neutral",
+        "displayName": "Night Text",
+        "canonical": "#f2f2f4",
+        "oklch": "oklch(96.2% 0.003 286.3)",
+        "tonalRamp": [
+          "oklch(15% 0.003 286.3)",
+          "oklch(26% 0.003 286.3)",
+          "oklch(38% 0.003 286.3)",
+          "oklch(50% 0.003 286.3)",
+          "oklch(62% 0.003 286.3)",
+          "oklch(74% 0.003 286.3)",
+          "oklch(85% 0.003 286.3)",
+          "oklch(95% 0.003 286.3)"
+        ],
+        "purpose": "Dark-mode counterpart of fg."
+      },
+      "fg-muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey",
+        "canonical": "#67676f",
+        "oklch": "oklch(51.7% 0.012 286.0)",
+        "tonalRamp": [
+          "oklch(15% 0.012 286.0)",
+          "oklch(26% 0.012 286.0)",
+          "oklch(38% 0.012 286.0)",
+          "oklch(50% 0.012 286.0)",
+          "oklch(62% 0.012 286.0)",
+          "oklch(74% 0.012 286.0)",
+          "oklch(85% 0.012 286.0)",
+          "oklch(95% 0.012 286.0)"
+        ],
+        "purpose": "Secondary text, nav and footer links, card notes, log times and titles."
+      },
+      "fg-muted-dark": {
+        "role": "neutral",
+        "displayName": "Night Muted",
+        "canonical": "#8e8e96",
+        "oklch": "oklch(64.9% 0.012 286.1)",
+        "tonalRamp": [
+          "oklch(15% 0.012 286.1)",
+          "oklch(26% 0.012 286.1)",
+          "oklch(38% 0.012 286.1)",
+          "oklch(50% 0.012 286.1)",
+          "oklch(62% 0.012 286.1)",
+          "oklch(74% 0.012 286.1)",
+          "oklch(85% 0.012 286.1)",
+          "oklch(95% 0.012 286.1)"
+        ],
+        "purpose": "Dark-mode counterpart of fg-muted."
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "#2f5bea",
+        "oklch": "oklch(53.3% 0.221 265.8)",
+        "tonalRamp": [
+          "oklch(15% 0.221 265.8)",
+          "oklch(26% 0.221 265.8)",
+          "oklch(38% 0.221 265.8)",
+          "oklch(50% 0.221 265.8)",
+          "oklch(62% 0.221 265.8)",
+          "oklch(74% 0.221 265.8)",
+          "oklch(85% 0.221 265.8)",
+          "oklch(95% 0.221 265.8)"
+        ],
+        "purpose": "Focus outline on every interactive element. Also the home activity dot (the one other use)."
+      },
+      "accent-dark": {
+        "role": "primary",
+        "displayName": "Night Focus Blue",
+        "canonical": "#8aa6ff",
+        "oklch": "oklch(74.1% 0.133 269.7)",
+        "tonalRamp": [
+          "oklch(15% 0.133 269.7)",
+          "oklch(26% 0.133 269.7)",
+          "oklch(38% 0.133 269.7)",
+          "oklch(50% 0.133 269.7)",
+          "oklch(62% 0.133 269.7)",
+          "oklch(74% 0.133 269.7)",
+          "oklch(85% 0.133 269.7)",
+          "oklch(95% 0.133 269.7)"
+        ],
+        "purpose": "Dark-mode counterpart of accent."
+      },
+      "btn-bg": {
+        "role": "primary",
+        "displayName": "Button Ink",
+        "canonical": "#0a0a0b",
+        "oklch": "oklch(14.5% 0.002 286.1)",
+        "tonalRamp": [
+          "oklch(15% 0.002 286.1)",
+          "oklch(26% 0.002 286.1)",
+          "oklch(38% 0.002 286.1)",
+          "oklch(50% 0.002 286.1)",
+          "oklch(62% 0.002 286.1)",
+          "oklch(74% 0.002 286.1)",
+          "oklch(85% 0.002 286.1)",
+          "oklch(95% 0.002 286.1)"
+        ],
+        "purpose": "Primary button fill."
+      },
+      "btn-bg-dark": {
+        "role": "primary",
+        "displayName": "Night Button",
+        "canonical": "#f2f2f4",
+        "oklch": "oklch(96.2% 0.003 286.3)",
+        "tonalRamp": [
+          "oklch(15% 0.003 286.3)",
+          "oklch(26% 0.003 286.3)",
+          "oklch(38% 0.003 286.3)",
+          "oklch(50% 0.003 286.3)",
+          "oklch(62% 0.003 286.3)",
+          "oklch(74% 0.003 286.3)",
+          "oklch(85% 0.003 286.3)",
+          "oklch(95% 0.003 286.3)"
+        ],
+        "purpose": "Dark-mode primary button fill."
+      },
+      "btn-fg": {
+        "role": "primary",
+        "displayName": "Button Paper",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 0.0)",
+        "tonalRamp": [
+          "oklch(15% 0.000 0.0)",
+          "oklch(26% 0.000 0.0)",
+          "oklch(38% 0.000 0.0)",
+          "oklch(50% 0.000 0.0)",
+          "oklch(62% 0.000 0.0)",
+          "oklch(74% 0.000 0.0)",
+          "oklch(85% 0.000 0.0)",
+          "oklch(95% 0.000 0.0)"
+        ],
+        "purpose": "Primary button text."
+      },
+      "btn-fg-dark": {
+        "role": "primary",
+        "displayName": "Night Button Ink",
+        "canonical": "#0a0a0b",
+        "oklch": "oklch(14.5% 0.002 286.1)",
+        "tonalRamp": [
+          "oklch(15% 0.002 286.1)",
+          "oklch(26% 0.002 286.1)",
+          "oklch(38% 0.002 286.1)",
+          "oklch(50% 0.002 286.1)",
+          "oklch(62% 0.002 286.1)",
+          "oklch(74% 0.002 286.1)",
+          "oklch(85% 0.002 286.1)",
+          "oklch(95% 0.002 286.1)"
+        ],
+        "purpose": "Dark-mode primary button text."
+      },
+      "legacy-dusk-navy": {
+        "role": "legacy",
         "displayName": "Dusk Navy",
         "canonical": "#1b2340",
         "oklch": "oklch(26.5% 0.055 270.6)",
@@ -92,10 +291,10 @@
           "oklch(85% 0.055 270.6)",
           "oklch(95% 0.055 270.6)"
         ],
-        "purpose": "Body ground, footer, the night below the scene."
+        "purpose": "Legacy only: PublicShell ground (/demo, /bot) and the Room card scope."
       },
-      "ivory": {
-        "role": "secondary",
+      "legacy-ivory": {
+        "role": "legacy",
         "displayName": "Ivory",
         "canonical": "#f6f1e4",
         "oklch": "oklch(95.8% 0.018 89.4)",
@@ -109,112 +308,27 @@
           "oklch(85% 0.018 89.4)",
           "oklch(95% 0.018 89.4)"
         ],
-        "purpose": "All type on the scene and footer; translucent for outlines and rules there."
+        "purpose": "Legacy only: text on the navy shell and the Room card scope."
       },
-      "greige-paper": {
-        "role": "neutral",
-        "displayName": "Greige Paper",
-        "canonical": "#eadbcd",
-        "oklch": "oklch(90.0% 0.025 65.6)",
+      "legacy-apricot": {
+        "role": "legacy",
+        "displayName": "Apricot",
+        "canonical": "#f8d9a8",
+        "oklch": "oklch(89.9% 0.072 79.0)",
         "tonalRamp": [
-          "oklch(15% 0.025 65.6)",
-          "oklch(26% 0.025 65.6)",
-          "oklch(38% 0.025 65.6)",
-          "oklch(50% 0.025 65.6)",
-          "oklch(62% 0.025 65.6)",
-          "oklch(74% 0.025 65.6)",
-          "oklch(85% 0.025 65.6)",
-          "oklch(95% 0.025 65.6)"
+          "oklch(15% 0.072 79.0)",
+          "oklch(26% 0.072 79.0)",
+          "oklch(38% 0.072 79.0)",
+          "oklch(50% 0.072 79.0)",
+          "oklch(62% 0.072 79.0)",
+          "oklch(74% 0.072 79.0)",
+          "oklch(85% 0.072 79.0)",
+          "oklch(95% 0.072 79.0)"
         ],
-        "purpose": "Hub window ground under the grain plate."
+        "purpose": "Legacy only: selection, focus ring and report link on the navy shell and in the room."
       },
-      "panel-wash": {
-        "role": "neutral",
-        "displayName": "Panel Wash",
-        "canonical": "rgb(249 235 216 / 0.8)",
-        "oklch": "oklch(94.6% 0.029 75.7)",
-        "tonalRamp": [
-          "oklch(15% 0.029 75.7)",
-          "oklch(26% 0.029 75.7)",
-          "oklch(38% 0.029 75.7)",
-          "oklch(50% 0.029 75.7)",
-          "oklch(62% 0.029 75.7)",
-          "oklch(74% 0.029 75.7)",
-          "oklch(85% 0.029 75.7)",
-          "oklch(95% 0.029 75.7)"
-        ],
-        "purpose": "Translucent panel fill at 80% alpha."
-      },
-      "honey-select": {
-        "role": "neutral",
-        "displayName": "Honey Select",
-        "canonical": "#f4d7b3",
-        "oklch": "oklch(89.4% 0.057 73.0)",
-        "tonalRamp": [
-          "oklch(15% 0.057 73.0)",
-          "oklch(26% 0.057 73.0)",
-          "oklch(38% 0.057 73.0)",
-          "oklch(50% 0.057 73.0)",
-          "oklch(62% 0.057 73.0)",
-          "oklch(74% 0.057 73.0)",
-          "oklch(85% 0.057 73.0)",
-          "oklch(95% 0.057 73.0)"
-        ],
-        "purpose": "Current sidebar item; 45% for hover."
-      },
-      "label-chip": {
-        "role": "neutral",
-        "displayName": "Label Chip",
-        "canonical": "#f7e4d1",
-        "oklch": "oklch(92.9% 0.033 67.4)",
-        "tonalRamp": [
-          "oklch(15% 0.033 67.4)",
-          "oklch(26% 0.033 67.4)",
-          "oklch(38% 0.033 67.4)",
-          "oklch(50% 0.033 67.4)",
-          "oklch(62% 0.033 67.4)",
-          "oklch(74% 0.033 67.4)",
-          "oklch(85% 0.033 67.4)",
-          "oklch(95% 0.033 67.4)"
-        ],
-        "purpose": "Simulated data label fill."
-      },
-      "label-chip-edge": {
-        "role": "neutral",
-        "displayName": "Label Chip Edge",
-        "canonical": "#e6cfb9",
-        "oklch": "oklch(86.8% 0.039 66.0)",
-        "tonalRamp": [
-          "oklch(15% 0.039 66.0)",
-          "oklch(26% 0.039 66.0)",
-          "oklch(38% 0.039 66.0)",
-          "oklch(50% 0.039 66.0)",
-          "oklch(62% 0.039 66.0)",
-          "oklch(74% 0.039 66.0)",
-          "oklch(85% 0.039 66.0)",
-          "oklch(95% 0.039 66.0)"
-        ],
-        "purpose": "Simulated data label border."
-      },
-      "rule": {
-        "role": "neutral",
-        "displayName": "Paper Rule",
-        "canonical": "#e2d1c0",
-        "oklch": "oklch(87.0% 0.030 67.4)",
-        "tonalRamp": [
-          "oklch(15% 0.030 67.4)",
-          "oklch(26% 0.030 67.4)",
-          "oklch(38% 0.030 67.4)",
-          "oklch(50% 0.030 67.4)",
-          "oklch(62% 0.030 67.4)",
-          "oklch(74% 0.030 67.4)",
-          "oklch(85% 0.030 67.4)",
-          "oklch(95% 0.030 67.4)"
-        ],
-        "purpose": "Hairline dividers inside the hub."
-      },
-      "ink": {
-        "role": "neutral",
+      "legacy-selection-ink": {
+        "role": "legacy",
         "displayName": "Warm Ink",
         "canonical": "#120e0b",
         "oklch": "oklch(16.8% 0.009 59.0)",
@@ -228,408 +342,438 @@
           "oklch(85% 0.009 59.0)",
           "oklch(95% 0.009 59.0)"
         ],
-        "purpose": "Primary text on paper."
+        "purpose": "Legacy only: text on the apricot selection."
       },
-      "ink-muted": {
-        "role": "neutral",
-        "displayName": "Muted Ink",
-        "canonical": "#7d7166",
-        "oklch": "oklch(55.6% 0.022 64.9)",
+      "office-control": {
+        "role": "legacy",
+        "displayName": "Office Control Navy",
+        "canonical": "#252e49",
+        "oklch": "oklch(30.6% 0.051 269.2)",
         "tonalRamp": [
-          "oklch(15% 0.022 64.9)",
-          "oklch(26% 0.022 64.9)",
-          "oklch(38% 0.022 64.9)",
-          "oklch(50% 0.022 64.9)",
-          "oklch(62% 0.022 64.9)",
-          "oklch(74% 0.022 64.9)",
-          "oklch(85% 0.022 64.9)",
-          "oklch(95% 0.022 64.9)"
+          "oklch(15% 0.051 269.2)",
+          "oklch(26% 0.051 269.2)",
+          "oklch(38% 0.051 269.2)",
+          "oklch(50% 0.051 269.2)",
+          "oklch(62% 0.051 269.2)",
+          "oklch(74% 0.051 269.2)",
+          "oklch(85% 0.051 269.2)",
+          "oklch(95% 0.051 269.2)"
         ],
-        "purpose": "Panel asides and descriptions."
+        "purpose": "Legacy room surfaces (connected.module.css)."
       },
-      "bark-focus": {
-        "role": "neutral",
-        "displayName": "Bark Focus",
-        "canonical": "#8a5a2b",
-        "oklch": "oklch(51.1% 0.089 62.8)",
+      "office-control-edge": {
+        "role": "legacy",
+        "displayName": "Office Edge Stone",
+        "canonical": "#aaa28f",
+        "oklch": "oklch(71.4% 0.028 87.9)",
         "tonalRamp": [
-          "oklch(15% 0.089 62.8)",
-          "oklch(26% 0.089 62.8)",
-          "oklch(38% 0.089 62.8)",
-          "oklch(50% 0.089 62.8)",
-          "oklch(62% 0.089 62.8)",
-          "oklch(74% 0.089 62.8)",
-          "oklch(85% 0.089 62.8)",
-          "oklch(95% 0.089 62.8)"
+          "oklch(15% 0.028 87.9)",
+          "oklch(26% 0.028 87.9)",
+          "oklch(38% 0.028 87.9)",
+          "oklch(50% 0.028 87.9)",
+          "oklch(62% 0.028 87.9)",
+          "oklch(74% 0.028 87.9)",
+          "oklch(85% 0.028 87.9)",
+          "oklch(95% 0.028 87.9)"
         ],
-        "purpose": "Focus ring on paper."
+        "purpose": "Legacy room button border and scrollbar thumb."
       },
-      "toggle-slate": {
-        "role": "neutral",
-        "displayName": "Toggle Slate",
-        "canonical": "#4b4541",
-        "oklch": "oklch(39.5% 0.011 56.1)",
+      "office-muted": {
+        "role": "legacy",
+        "displayName": "Office Muted Cream",
+        "canonical": "#e5d8bf",
+        "oklch": "oklch(88.6% 0.036 83.8)",
         "tonalRamp": [
-          "oklch(15% 0.011 56.1)",
-          "oklch(26% 0.011 56.1)",
-          "oklch(38% 0.011 56.1)",
-          "oklch(50% 0.011 56.1)",
-          "oklch(62% 0.011 56.1)",
-          "oklch(74% 0.011 56.1)",
-          "oklch(85% 0.011 56.1)",
-          "oklch(95% 0.011 56.1)"
+          "oklch(15% 0.036 83.8)",
+          "oklch(26% 0.036 83.8)",
+          "oklch(38% 0.036 83.8)",
+          "oklch(50% 0.036 83.8)",
+          "oklch(62% 0.036 83.8)",
+          "oklch(74% 0.036 83.8)",
+          "oklch(85% 0.036 83.8)",
+          "oklch(95% 0.036 83.8)"
         ],
-        "purpose": "Day/night toggle track."
+        "purpose": "Legacy room secondary text."
       },
-      "meadow-green": {
-        "role": "tertiary",
-        "displayName": "Meadow Green",
-        "canonical": "#1f8a68",
-        "oklch": "oklch(56.6% 0.108 166.4)",
+      "office-hover": {
+        "role": "legacy",
+        "displayName": "Office Hover Slate",
+        "canonical": "#3d465e",
+        "oklch": "oklch(39.6% 0.042 268.5)",
         "tonalRamp": [
-          "oklch(15% 0.108 166.4)",
-          "oklch(26% 0.108 166.4)",
-          "oklch(38% 0.108 166.4)",
-          "oklch(50% 0.108 166.4)",
-          "oklch(62% 0.108 166.4)",
-          "oklch(74% 0.108 166.4)",
-          "oklch(85% 0.108 166.4)",
-          "oklch(95% 0.108 166.4)"
+          "oklch(15% 0.042 268.5)",
+          "oklch(26% 0.042 268.5)",
+          "oklch(38% 0.042 268.5)",
+          "oklch(50% 0.042 268.5)",
+          "oklch(62% 0.042 268.5)",
+          "oklch(74% 0.042 268.5)",
+          "oklch(85% 0.042 268.5)",
+          "oklch(95% 0.042 268.5)"
         ],
-        "purpose": "Happiness chart ink only."
+        "purpose": "Legacy room button hover fill."
       },
-      "ember-coral": {
-        "role": "tertiary",
-        "displayName": "Ember Coral",
-        "canonical": "#e6604f",
-        "oklch": "oklch(65.6% 0.170 29.6)",
+      "office-divider": {
+        "role": "legacy",
+        "displayName": "Office Divider Taupe",
+        "canonical": "#847d78",
+        "oklch": "oklch(59.4% 0.011 58.1)",
         "tonalRamp": [
-          "oklch(15% 0.170 29.6)",
-          "oklch(26% 0.170 29.6)",
-          "oklch(38% 0.170 29.6)",
-          "oklch(50% 0.170 29.6)",
-          "oklch(62% 0.170 29.6)",
-          "oklch(74% 0.170 29.6)",
-          "oklch(85% 0.170 29.6)",
-          "oklch(95% 0.170 29.6)"
+          "oklch(15% 0.011 58.1)",
+          "oklch(26% 0.011 58.1)",
+          "oklch(38% 0.011 58.1)",
+          "oklch(50% 0.011 58.1)",
+          "oklch(62% 0.011 58.1)",
+          "oklch(74% 0.011 58.1)",
+          "oklch(85% 0.011 58.1)",
+          "oklch(95% 0.011 58.1)"
         ],
-        "purpose": "Stress chart ink only."
+        "purpose": "Legacy room inspector and event rules."
       },
-      "periwinkle-tile": {
-        "role": "tertiary",
-        "displayName": "Periwinkle Tile",
-        "canonical": "#e3e6f4",
-        "oklch": "oklch(92.7% 0.019 276.3)",
+      "office-teal": {
+        "role": "legacy",
+        "displayName": "Office Teal",
+        "canonical": "#67baa6",
+        "oklch": "oklch(73.0% 0.087 176.3)",
         "tonalRamp": [
-          "oklch(15% 0.019 276.3)",
-          "oklch(26% 0.019 276.3)",
-          "oklch(38% 0.019 276.3)",
-          "oklch(50% 0.019 276.3)",
-          "oklch(62% 0.019 276.3)",
-          "oklch(74% 0.019 276.3)",
-          "oklch(85% 0.019 276.3)",
-          "oklch(95% 0.019 276.3)"
+          "oklch(15% 0.087 176.3)",
+          "oklch(26% 0.087 176.3)",
+          "oklch(38% 0.087 176.3)",
+          "oklch(50% 0.087 176.3)",
+          "oklch(62% 0.087 176.3)",
+          "oklch(74% 0.087 176.3)",
+          "oklch(85% 0.087 176.3)",
+          "oklch(95% 0.087 176.3)"
         ],
-        "purpose": "Recent activity tile ground."
+        "purpose": "Legacy room canvas colour (draw-office.ts)."
       },
-      "periwinkle-ink": {
-        "role": "tertiary",
-        "displayName": "Periwinkle Ink",
-        "canonical": "#5166b0",
-        "oklch": "oklch(52.9% 0.119 270.0)",
+      "office-amber": {
+        "role": "legacy",
+        "displayName": "Office Amber",
+        "canonical": "#e4ad55",
+        "oklch": "oklch(78.2% 0.123 77.0)",
         "tonalRamp": [
-          "oklch(15% 0.119 270.0)",
-          "oklch(26% 0.119 270.0)",
-          "oklch(38% 0.119 270.0)",
-          "oklch(50% 0.119 270.0)",
-          "oklch(62% 0.119 270.0)",
-          "oklch(74% 0.119 270.0)",
-          "oklch(85% 0.119 270.0)",
-          "oklch(95% 0.119 270.0)"
+          "oklch(15% 0.123 77.0)",
+          "oklch(26% 0.123 77.0)",
+          "oklch(38% 0.123 77.0)",
+          "oklch(50% 0.123 77.0)",
+          "oklch(62% 0.123 77.0)",
+          "oklch(74% 0.123 77.0)",
+          "oklch(85% 0.123 77.0)",
+          "oklch(95% 0.123 77.0)"
         ],
-        "purpose": "Recent activity tile icon."
+        "purpose": "Legacy room canvas colour (draw-office.ts)."
       },
-      "presence-green": {
-        "role": "tertiary",
-        "displayName": "Presence Green",
-        "canonical": "#2f9e5e",
-        "oklch": "oklch(62.1% 0.138 153.6)",
+      "office-ink": {
+        "role": "legacy",
+        "displayName": "Office Ink",
+        "canonical": "#232a46",
+        "oklch": "oklch(29.3% 0.052 272.2)",
         "tonalRamp": [
-          "oklch(15% 0.138 153.6)",
-          "oklch(26% 0.138 153.6)",
-          "oklch(38% 0.138 153.6)",
-          "oklch(50% 0.138 153.6)",
-          "oklch(62% 0.138 153.6)",
-          "oklch(74% 0.138 153.6)",
-          "oklch(85% 0.138 153.6)",
-          "oklch(95% 0.138 153.6)"
+          "oklch(15% 0.052 272.2)",
+          "oklch(26% 0.052 272.2)",
+          "oklch(38% 0.052 272.2)",
+          "oklch(50% 0.052 272.2)",
+          "oklch(62% 0.052 272.2)",
+          "oklch(74% 0.052 272.2)",
+          "oklch(85% 0.052 272.2)",
+          "oklch(95% 0.052 272.2)"
         ],
-        "purpose": "Online dot on avatars."
+        "purpose": "Legacy room text on the apricot selection."
       },
-      "firefly-gold": {
-        "role": "tertiary",
-        "displayName": "Firefly Gold",
-        "canonical": "#ffd877",
-        "oklch": "oklch(89.6% 0.124 87.9)",
+      "ok": {
+        "role": "status",
+        "displayName": "Status Green",
+        "canonical": "#1f9d6a",
+        "oklch": "oklch(61.8% 0.131 160.2)",
         "tonalRamp": [
-          "oklch(15% 0.124 87.9)",
-          "oklch(26% 0.124 87.9)",
-          "oklch(38% 0.124 87.9)",
-          "oklch(50% 0.124 87.9)",
-          "oklch(62% 0.124 87.9)",
-          "oklch(74% 0.124 87.9)",
-          "oklch(85% 0.124 87.9)",
-          "oklch(95% 0.124 87.9)"
+          "oklch(15% 0.131 160.2)",
+          "oklch(26% 0.131 160.2)",
+          "oklch(38% 0.131 160.2)",
+          "oklch(50% 0.131 160.2)",
+          "oklch(62% 0.131 160.2)",
+          "oklch(74% 0.131 160.2)",
+          "oklch(85% 0.131 160.2)",
+          "oklch(95% 0.131 160.2)"
         ],
-        "purpose": "Ambient scene lights."
+        "purpose": "Board status dot and Working pill (globals.css --ok). Dark mode: #3cc28a."
+      },
+      "warn": {
+        "role": "status",
+        "displayName": "Status Amber",
+        "canonical": "#c27c0e",
+        "oklch": "oklch(64.5% 0.137 69.5)",
+        "tonalRamp": [
+          "oklch(15% 0.137 69.5)",
+          "oklch(26% 0.137 69.5)",
+          "oklch(38% 0.137 69.5)",
+          "oklch(50% 0.137 69.5)",
+          "oklch(62% 0.137 69.5)",
+          "oklch(74% 0.137 69.5)",
+          "oklch(85% 0.137 69.5)",
+          "oklch(95% 0.137 69.5)"
+        ],
+        "purpose": "Board status dot for Paused and feed warnings (globals.css --warn). Dark mode: #e3a53a."
+      },
+      "idle": {
+        "role": "status",
+        "displayName": "Status Grey",
+        "canonical": "#a3a3aa",
+        "oklch": "oklch(71.8% 0.010 286.1)",
+        "tonalRamp": [
+          "oklch(15% 0.010 286.1)",
+          "oklch(26% 0.010 286.1)",
+          "oklch(38% 0.010 286.1)",
+          "oklch(50% 0.010 286.1)",
+          "oklch(62% 0.010 286.1)",
+          "oklch(74% 0.010 286.1)",
+          "oklch(85% 0.010 286.1)",
+          "oklch(95% 0.010 286.1)"
+        ],
+        "purpose": "Board status dot for Idle (globals.css --idle). Dark mode: #5d5d66."
       }
     },
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Two-line headline on the scene, ivory. Stage (>=1100px, comp pixels): 50px/61px, -0.022em."
+        "purpose": "Home headline only. clamp(40px, 6vw, 64px), weight 600, line-height 1.04, -0.035em."
       },
-      "wordmark": {
-        "displayName": "Wordmark",
-        "purpose": "Kentcrosswise wordmark; stage 38px. Footer mark 24px; hub brand 22px (stage 24px)."
-      },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Hub greeting; stage 35px/47px."
+      "subline": {
+        "displayName": "Sub-line",
+        "purpose": "Home sub-line, 18px, max 560px, muted."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Panel titles; a 0.3px text stroke on the projected stage only."
+        "purpose": "Feature row titles (17px, weight 600)."
+      },
+      "greeting": {
+        "displayName": "Greeting",
+        "purpose": "Product still greeting (20px, weight 600, -0.02em)."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Hub lede (stage 16.7px/26px); footer note 15px/1.6 at 60ch."
+        "purpose": "Default text, 16px, line-height 1.6."
       },
-      "label": {
-        "displayName": "Label",
-        "purpose": "Sidebar items, names, activity titles, mood labels."
+      "small": {
+        "displayName": "Small",
+        "purpose": "Header and footer text, feature text (14px)."
       },
-      "caption": {
-        "displayName": "Caption",
-        "purpose": "Panel asides and explore descriptions; timestamps 11px/15px."
+      "button": {
+        "displayName": "Button",
+        "purpose": "Button labels (15px; header account button 14px), weight 500."
       },
-      "figure": {
-        "displayName": "Figure",
-        "purpose": "PT Serif digits, comma and full stop only (unicode-range), lining tabular; mood values 25px, counts 18px, axis labels 13.5px."
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Kentcrosswise wordmark in the header and footer (16px, 600, -0.02em)."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Geist Mono for timestamps and product still labels (12px). The build uppercases some card labels; that treatment is not canonized."
+      },
+      "mono-label": {
+        "displayName": "Mono label",
+        "purpose": "Card labels at 11px, 0.06em (product still). Uppercase is not canonized; not for use as a kicker or eyebrow."
+      },
+      "legacy-body": {
+        "displayName": "Legacy body",
+        "purpose": "Rosarivo 400 on /demo, /bot and the Room card scope only. Not for new pages."
       }
     },
     "shadows": [
       {
-        "name": "window-lift",
-        "value": "0 40px 80px -36px rgb(8 10 30 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.7)",
-        "purpose": "Hub window only."
-      },
-      {
-        "name": "entrance-glow",
-        "value": "0 10px 24px -14px rgb(20 16 40 / 0.6)",
-        "purpose": "Apricot entrance on the scene."
-      },
-      {
-        "name": "paper-whisper",
-        "value": "0 1px 2px rgb(120 90 60 / 0.08)",
-        "purpose": "Panels; 0.12 alpha on the Simulated data label."
-      },
-      {
-        "name": "toggle-well",
-        "value": "inset 0 1px 2px rgb(0 0 0 / 0.3)",
-        "purpose": "Recessed day/night track."
-      },
-      {
-        "name": "toggle-knob",
-        "value": "0 0 0 1px rgb(150 120 90 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3)",
-        "purpose": "Pressed toggle option."
-      },
-      {
-        "name": "cream-ring",
-        "value": "0 0 0 2px #fbf3e8",
-        "purpose": "Avatar separation ring (chart points use 1.5px #fbf2e6)."
-      },
-      {
-        "name": "firefly-glow",
-        "value": "0 0 calc(var(--size) * 3) calc(var(--size) * 0.8) rgb(255 205 110 / 0.45)",
-        "purpose": "Ambient light halo."
+        "name": "product-still-frame",
+        "value": "0 1px 2px rgb(0 0 0 / 0.04), 0 12px 40px -12px rgb(0 0 0 / 0.12)",
+        "purpose": "Home product still frame only. The same value applies in dark mode. The only shadow in the system."
       }
     ],
     "motion": [
       {
-        "name": "dusk-veil",
-        "value": "opacity 2.4s cubic-bezier(0.22, 1, 0.36, 1)",
-        "purpose": "Day-to-night veil cross-fade, toggle-driven; removed under reduced motion."
+        "name": "hover",
+        "value": "opacity, color, background-color, border-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1)",
+        "purpose": "Hover and selected-state changes on buttons, links, tabs and chips. Off under prefers-reduced-motion."
       },
       {
-        "name": "control-state",
-        "value": "0.2s ease",
-        "purpose": "Hover fills, borders, underline colour; entrance arrow 3px slide."
-      },
-      {
-        "name": "toggle-state",
-        "value": "background-color 0.4s ease, color 0.4s ease",
-        "purpose": "Day/night toggle buttons."
-      },
-      {
-        "name": "firefly-drift",
-        "value": "drift var(--dur) ease-in-out infinite alternate, glow calc(var(--dur) * 0.45) ease-in-out infinite alternate",
-        "purpose": "Fixed 14-light set, 9-15s cycles; transform and opacity only; paused offscreen; still 0.55 glow under reduced motion."
+        "name": "enter",
+        "value": "rise: opacity 0 to 1, translateY(6px) to 0, 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
+        "purpose": "Hero and product still, once on load. Off under prefers-reduced-motion. Nothing loops."
       }
     ],
     "breakpoints": [
       {
         "name": "phone",
         "value": "639px",
-        "purpose": "Max width of the single-column layout; mood charts stack."
-      },
-      {
-        "name": "footer-stack",
-        "value": "899px",
-        "purpose": "Footer collapses to one column at and below."
+        "purpose": "Max-width rules: phone gutters, sidebar hidden, cards and log stacked, header on two rows."
       },
       {
         "name": "tablet",
         "value": "640px",
-        "purpose": "40px gutters, two-column hub grid."
+        "purpose": "Min-width rules: footer note and links share rows; product still and feature grid at desktop layout."
       },
       {
-        "name": "stage",
-        "value": "1100px",
-        "purpose": "1505x1045 comp stage scaled to width; hub projected by matrix3d."
+        "name": "board-container",
+        "value": "720px (container query)",
+        "purpose": "Board container width: one column for agent cards below 720px, four seat tiles at or above."
+      }
+    ],
+    "legacyScopes": [
+      {
+        "name": "public-shell",
+        "routes": [
+          "/demo",
+          "/bot"
+        ],
+        "source": "apps/web/src/app/(public)/_site/public-shell.module.css",
+        "purpose": "Dusk navy ground, ivory text, Rosarivo, color-scheme dark. Retire when each page is redone; do not extend to new pages."
+      },
+      {
+        "name": "room-card",
+        "routes": [
+          "/office Room tab"
+        ],
+        "source": "apps/web/src/app/(public)/office/board/room-panel.module.css",
+        "purpose": "Navy ground and Rosarivo scope around the connected room. The room CSS keeps its literal office palette. Remove the scope when the room is restyled."
       }
     ]
   },
   "components": [
     {
-      "name": "Entrance Button",
+      "name": "Primary Button",
       "kind": "button",
-      "refersTo": "button-entrance",
-      "description": "The single primary call to action; apricot pill with sliding arrow.",
-      "html": "<a class=\"ds-entrance\" href=\"#\">Explore the demo<svg class=\"ds-arrow\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></a>",
-      "css": ".ds-entrance{display:inline-flex;align-items:center;gap:16px;height:58px;padding:0 28px 0 32px;border-radius:999px;background:#f8d9a8;color:#232a46;font-family:Rosarivo,Georgia,serif;font-weight:400;font-size:20px;line-height:1;text-decoration:none;box-shadow:0 10px 24px -14px rgb(20 16 40 / 0.6);transition:background-color .2s ease}.ds-entrance:hover{background:#fbe3bc}.ds-entrance .ds-arrow{width:21px;height:21px;transition:translate .2s ease}.ds-entrance:hover .ds-arrow{translate:3px 0}.ds-entrance:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px}"
+      "refersTo": "button-primary",
+      "description": "The one filled call to action per view. The home hero uses it for Agent office (primary), with Explore the demo as the secondary.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Agent office</a>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:var(--radius-control);background:var(--btn-bg);color:var(--btn-fg);font-family:var(--font-sans),system-ui,sans-serif;font-size:15px;font-weight:500;line-height:1;text-decoration:none;white-space:nowrap;transition:opacity var(--dur-hover) var(--ease-out)}.ds-btn-primary:hover{opacity:.86}.ds-btn-primary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media (prefers-reduced-motion:reduce){.ds-btn-primary{transition:none}}"
     },
     {
-      "name": "Sign-in Ghost Pill",
+      "name": "Secondary Button",
       "kind": "button",
-      "refersTo": "button-sign-in",
-      "description": "Outline pill for sign in, set on the scene.",
-      "html": "<div class=\"ds-scene\"><a class=\"ds-signin\" href=\"#\">Sign in</a></div>",
-      "css": ".ds-scene{background:#1b2340;padding:24px}.ds-signin{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 22px;border:1.5px solid rgb(246 241 228 / 0.85);border-radius:999px;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;font-size:17px;line-height:1;text-decoration:none;transition:background-color .2s ease}.ds-signin:hover{background:rgb(246 241 228 / 0.12)}.ds-signin:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px}"
+      "refersTo": "button-secondary",
+      "description": "Outline partner to the primary button. Home hero: Explore the demo.",
+      "html": "<a class=\"ds-btn-secondary\" href=\"#\">Explore the demo</a>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border:1px solid color-mix(in srgb,var(--fg) 22%,transparent);border-radius:var(--radius-control);background:var(--bg);color:var(--fg);font-family:var(--font-sans),system-ui,sans-serif;font-size:15px;font-weight:500;line-height:1;text-decoration:none;white-space:nowrap;transition:border-color var(--dur-hover) var(--ease-out)}.ds-btn-secondary:hover{border-color:color-mix(in srgb,var(--fg) 40%,transparent)}.ds-btn-secondary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media (prefers-reduced-motion:reduce){.ds-btn-secondary{transition:none}}"
     },
     {
-      "name": "Site Navigation",
+      "name": "Site Header",
       "kind": "nav",
-      "refersTo": "nav-link",
-      "description": "Ivory serif links on the scene; the current page is underlined.",
-      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link\" aria-current=\"page\" href=\"#\">Home</a><a class=\"ds-nav-link\" href=\"#\">Demo</a><a class=\"ds-nav-link\" href=\"#\">Office</a></nav>",
-      "css": ".ds-nav{display:flex;gap:20px;background:#1b2340;padding:24px}.ds-nav-link{position:relative;padding:6px 0;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;font-size:17px;line-height:1;text-decoration:none}.ds-nav-link[aria-current=page]::after{content:\"\";position:absolute;left:0;right:0;bottom:-4px;height:2px;background:currentColor;opacity:.85}.ds-nav-link:hover{color:#fff}.ds-nav-link:focus-visible{outline:2px solid #f8d9a8;outline-offset:3px;border-radius:6px}"
+      "refersTo": "header",
+      "description": "Sticky 60px header on every Paper page: wordmark, Home, Demo, Agent office, then the account button.",
+      "html": "<header class=\"ds-header\"><div class=\"ds-header-inner\"><a class=\"ds-wordmark\" href=\"#\">Kentcrosswise</a><nav class=\"ds-nav\" aria-label=\"Main\"><a class=\"ds-nav-link\" href=\"#\" aria-current=\"page\">Home</a><a class=\"ds-nav-link\" href=\"#\">Demo</a><a class=\"ds-nav-link\" href=\"#\">Agent office</a><a class=\"ds-account\" href=\"#\">Sign in</a></nav></div></header>",
+      "css": ".ds-header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);color:var(--fg);font-family:var(--font-sans),system-ui,sans-serif}.ds-header-inner{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1120px;height:60px;margin:0 auto;padding:0 24px}.ds-wordmark{font-size:16px;font-weight:600;letter-spacing:-0.02em;line-height:1;color:var(--fg);text-decoration:none}.ds-nav{display:flex;align-items:center;gap:24px}.ds-nav-link{font-size:14px;line-height:1;color:var(--fg-muted);text-decoration:none;white-space:nowrap;transition:color var(--dur-hover) var(--ease-out)}.ds-nav-link:hover{color:var(--fg)}.ds-nav-link[aria-current=\"page\"]{color:var(--fg);font-weight:500}.ds-account{position:relative;display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--radius-control);background:var(--btn-bg);color:var(--btn-fg);font-size:14px;font-weight:500;line-height:1;text-decoration:none;white-space:nowrap}.ds-account::after{content:\"\";position:absolute;inset:-4px}.ds-header a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}"
     },
     {
-      "name": "Simulated Data Label",
-      "kind": "chip",
-      "refersTo": "simulated-label",
-      "description": "Always-visible label on any surface that shows demo data.",
-      "html": "<p class=\"ds-sim\">Simulated data<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 11v5.5M12 7.6v.1\"/></svg></p>",
-      "css": ".ds-sim{display:inline-flex;align-items:center;gap:7px;height:32px;margin:0;padding:0 14px;border:1px solid #e6cfb9;border-radius:999px;background:#f7e4d1;box-shadow:0 1px 2px rgb(120 90 60 / 0.12);color:#2a231e;font-family:Rosarivo,Georgia,serif;font-size:14px;line-height:1}.ds-sim svg{width:16px;height:16px}"
-    },
-    {
-      "name": "Hub Panel",
+      "name": "Product Still",
       "kind": "card",
-      "refersTo": "panel",
-      "description": "Translucent cream panel on the paper hub, with title, muted aside and hairline-divided rows.",
-      "html": "<div class=\"ds-hub\"><section class=\"ds-panel\"><h3 class=\"ds-panel-title\">Following</h3><span class=\"ds-panel-aside\">Total</span><ul class=\"ds-list\"><li><span>YouTube</span><span class=\"ds-fig\">5,120</span></li><li><span>Instagram</span><span class=\"ds-fig\">4,709</span></li></ul></section></div>",
-      "css": ".ds-hub{background:#eadbcd;border-radius:22px;padding:18px 16px 20px;box-shadow:0 40px 80px -36px rgb(8 10 30 / 0.6),inset 0 1px 0 rgb(255 255 255 / 0.7)}.ds-panel{position:relative;padding:14px 14px 12px;border:1px solid #e5d4c3;border-radius:12px;background:rgb(249 235 216 / 0.8);box-shadow:0 1px 2px rgb(120 90 60 / 0.08);color:#120e0b;font-family:Rosarivo,Georgia,serif}.ds-panel-title{margin:0;font-weight:400;font-size:15px;line-height:22px}.ds-panel-aside{position:absolute;right:14px;top:16px;font-size:11.5px;line-height:22px;color:#7d7166}.ds-list{list-style:none;margin:8px 0 0;padding:0}.ds-list li{display:flex;justify-content:space-between;align-items:center;height:52px;font-size:13px}.ds-list li+li{border-top:1px solid #e2d1c0}.ds-fig{font-family:'PT Serif',Rosarivo,Georgia,serif;font-size:18px;font-variant-numeric:lining-nums tabular-nums}"
+      "refersTo": "product-still",
+      "description": "Static framed picture of the hub on the home page: 170px sidebar, greeting, three cards, live activity log. The only shadowed surface.",
+      "html": "<div class=\"ds-still\"><aside class=\"ds-still-side\" aria-hidden=\"true\"><div class=\"ds-still-item ds-still-on\">Today</div><div class=\"ds-still-item\">People</div><div class=\"ds-still-item\">Mood</div></aside><div class=\"ds-still-main\"><div class=\"ds-still-greet\"><strong>Today</strong><span class=\"ds-still-mono\">Simulated data</span></div><div class=\"ds-still-cards\"><div class=\"ds-still-card\"><span class=\"ds-still-label\">Mood, 7 days</span></div><div class=\"ds-still-card\"><span class=\"ds-still-label\">Follow up</span><p class=\"ds-still-value\">Contact name</p></div><div class=\"ds-still-card\"><span class=\"ds-still-label\">Followers</span><p class=\"ds-still-value\">1,234</p></div></div></div></div>",
+      "css": ".ds-still{display:grid;grid-template-columns:170px minmax(0,1fr);min-height:300px;border:1px solid var(--line);border-radius:var(--radius-frame);background:var(--bg);overflow:hidden;box-shadow:0 1px 2px rgb(0 0 0 / .04),0 12px 40px -12px rgb(0 0 0 / .12);font-family:var(--font-sans),system-ui,sans-serif;color:var(--fg)}.ds-still-side{display:grid;align-content:start;gap:2px;padding:14px 10px;border-right:1px solid var(--line);background:var(--bg-soft);font-size:13px}.ds-still-item{padding:6px 8px;border-radius:6px;color:var(--fg-muted)}.ds-still-on{background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line)}.ds-still-main{display:grid;align-content:start;gap:16px;min-width:0;padding:20px}.ds-still-greet{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 12px}.ds-still-greet strong{font-size:20px;font-weight:600;letter-spacing:-0.02em}.ds-still-mono{font-family:var(--font-mono),ui-monospace,monospace;font-size:12px;color:var(--fg-muted)}.ds-still-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.ds-still-card{display:grid;align-content:start;gap:6px;min-width:0;padding:14px;border:1px solid var(--line);border-radius:var(--radius-card)}.ds-still-label{font-family:var(--font-mono),ui-monospace,monospace;font-size:11px;letter-spacing:.06em;color:var(--fg-muted)}.ds-still-value{margin:0;font-size:14px;font-weight:500;line-height:1.4}@media (max-width:639px){.ds-still{grid-template-columns:minmax(0,1fr)}.ds-still-side{display:none}.ds-still-main{padding:16px}.ds-still-cards{grid-template-columns:minmax(0,1fr)}}"
     },
     {
-      "name": "Hub Sidebar Item",
+      "name": "Activity Row",
+      "kind": "custom",
+      "refersTo": "activity-row",
+      "description": "Row in a bordered live log (home product still and the /office activity list). Mono time, agent name, single-line title.",
+      "html": "<ul class=\"ds-log\"><li class=\"ds-log-row\"><time class=\"ds-log-time\" datetime=\"2026-11-11T15:42Z\">15:42</time><span class=\"ds-log-agent\">developer</span><span class=\"ds-log-title\">Opened a pull request</span></li><li class=\"ds-log-row\"><time class=\"ds-log-time\" datetime=\"2026-11-11T15:40Z\">15:40</time><span class=\"ds-log-agent\">qa</span><span class=\"ds-log-title\">Reviewed a pull request</span></li></ul>",
+      "css": ".ds-log{margin:0;padding:0;list-style:none;border:1px solid var(--line);border-radius:var(--radius-card);overflow:hidden;font-family:var(--font-sans),system-ui,sans-serif;font-size:13px;color:var(--fg)}.ds-log-row{display:flex;flex-wrap:nowrap;align-items:center;gap:16px;padding:8px 12px;border-top:1px solid var(--line)}.ds-log-row:first-child{border-top:0}.ds-log-time{flex:0 0 auto;font-family:var(--font-mono),ui-monospace,monospace;font-size:12px;color:var(--fg-muted)}.ds-log-agent{display:flex;flex:0 0 96px;align-items:center;gap:6px;font-weight:500;text-transform:capitalize}.ds-log-agent::before{content:\"\";width:6px;height:6px;border-radius:50%;background:var(--accent)}.ds-log-title{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg-muted)}"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Summary pill above the /office board: a coloured dot and words. Tone is colour only; the words carry the meaning.",
+      "html": "<span class=\"ds-pill\"><span class=\"ds-pill-dot\" data-tone=\"ok\"></span>Working</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg-muted);font-family:var(--font-sans),system-ui,sans-serif;font-size:13px}.ds-pill b{font-weight:500;color:var(--fg)}.ds-pill-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--idle)}.ds-pill-dot[data-tone=\"ok\"]{background:var(--ok)}.ds-pill-dot[data-tone=\"warn\"]{background:var(--warn)}"
+    },
+    {
+      "name": "Agent Card",
+      "kind": "card",
+      "refersTo": "agent-card",
+      "description": "One card per worker type on the /office Board tab: title, model tag, a now line and a last-event footer. Hairline only.",
+      "html": "<article class=\"ds-agent\"><header class=\"ds-agent-head\"><h3 class=\"ds-agent-title\">Developer</h3><span class=\"ds-agent-model\">Model</span></header><p class=\"ds-agent-what\">Plans and writes changes.</p><p class=\"ds-agent-now\"><span class=\"ds-agent-mono\">Now</span> Private task</p><footer class=\"ds-agent-foot\">Last event</footer></article>",
+      "css": ".ds-agent{display:grid;align-content:start;gap:10px;min-width:0;padding:16px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--bg);font-family:var(--font-sans),system-ui,sans-serif;color:var(--fg)}.ds-agent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}.ds-agent-title{margin:0;font-size:15px;font-weight:600;letter-spacing:-0.01em;overflow-wrap:anywhere}.ds-agent-model{flex:none;padding:2px 6px;border:1px solid var(--line);border-radius:6px;font-family:var(--font-mono),ui-monospace,monospace;font-size:11.5px;color:var(--fg-muted);white-space:nowrap}.ds-agent-what{margin:0;font-size:13px;color:var(--fg-muted)}.ds-agent-now{margin:0;font-size:13.5px}.ds-agent-mono{font-family:var(--font-mono),ui-monospace,monospace;font-size:11.5px;color:var(--fg-muted)}.ds-agent-foot{padding-top:8px;border-top:1px solid var(--line);font-family:var(--font-mono),ui-monospace,monospace;font-size:11.5px;color:var(--fg-muted)}"
+    },
+    {
+      "name": "Segmented Tabs",
       "kind": "nav",
-      "refersTo": "side-link",
-      "description": "Sidebar link with icon; honey fill when current.",
-      "html": "<div class=\"ds-side\"><a class=\"ds-side-link\" aria-current=\"page\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 11.5 12 5l8 6.5M6.5 10v9h11v-9M10 19v-5h4v5\"/></svg>Home</a><a class=\"ds-side-link\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 4h9l3 3v13H6z\"/></svg>Notes</a></div>",
-      "css": ".ds-side{display:grid;gap:4px;width:160px;padding:12px;background:#eadbcd}.ds-side-link{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;color:#1c1612;font-family:Rosarivo,Georgia,serif;font-size:13px;line-height:1;text-decoration:none;transition:background-color .2s ease}.ds-side-link svg{width:18px;height:18px;color:#241d18}.ds-side-link:hover{background:rgb(244 215 179 / 0.45)}.ds-side-link[aria-current=page]{background:#f4d7b3}.ds-side-link:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px;border-radius:6px}"
+      "refersTo": "segmented-tabs",
+      "description": "Board | Room tablist at the top right of /office. The selected tab gets a hairline and the soft fill.",
+      "html": "<div class=\"ds-seg\" role=\"tablist\"><button class=\"ds-seg-tab\" role=\"tab\" aria-selected=\"true\">Board</button><button class=\"ds-seg-tab\" role=\"tab\" aria-selected=\"false\">Room</button></div>",
+      "css": ".ds-seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-control)}.ds-seg-tab{min-height:36px;padding:0 12px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--fg-muted);font-family:inherit;font-size:14px;font-weight:500;line-height:1;cursor:pointer;transition:color var(--dur-hover) var(--ease-out),background-color var(--dur-hover) var(--ease-out)}.ds-seg-tab:hover{color:var(--fg)}.ds-seg-tab[aria-selected=\"true\"]{color:var(--fg);border-color:var(--line);background:var(--bg-soft)}.ds-seg-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media (prefers-reduced-motion:reduce){.ds-seg-tab{transition:none}}"
     },
     {
-      "name": "Day/Night Toggle",
-      "kind": "custom",
-      "refersTo": "day-night-toggle",
-      "description": "Two-option scene-light control; the only dark object on the paper.",
-      "html": "<div class=\"ds-toggle\" role=\"group\" aria-label=\"Scene light\"><button type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3.8\" fill=\"currentColor\"/><path d=\"M12 2.8v2.4m0 13.6v2.4M2.8 12h2.4m13.6 0h2.4M5.5 5.5l1.7 1.7m9.6 9.6 1.7 1.7m0-13-1.7 1.7m-9.6 9.6-1.7 1.7\"/></svg></button><button type=\"button\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z\"/></svg></button></div>",
-      "css": ".ds-toggle{display:inline-flex;align-items:center;justify-content:space-between;width:86px;height:40px;padding:3px;border-radius:999px;background:linear-gradient(90deg,#4b4541,#3c3a3d);box-shadow:inset 0 1px 2px rgb(0 0 0 / 0.3)}.ds-toggle button{display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:transparent;color:#ece4d8;cursor:pointer;transition:background-color .4s ease,color .4s ease}.ds-toggle button svg{width:19px;height:19px}.ds-toggle button[aria-pressed=true]{background:#f6e0bf;color:#3b3128;box-shadow:0 0 0 1px rgb(150 120 90 / 0.45),0 1px 3px rgb(0 0 0 / 0.3)}.ds-toggle button:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px}"
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Activity list filter: All, Orchestrator, Developer, QA, Docs, Scraper. The selected chip is aria-pressed.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">All</button><button class=\"ds-chip\" aria-pressed=\"false\">QA</button>",
+      "css": ".ds-chip{min-height:32px;padding:0 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--fg-muted);font-family:inherit;font-size:12.5px;line-height:1;cursor:pointer;transition:color var(--dur-hover) var(--ease-out),background-color var(--dur-hover) var(--ease-out)}.ds-chip:hover{color:var(--fg)}.ds-chip[aria-pressed=\"true\"]{color:var(--fg);border-color:var(--line);background:var(--bg-soft)}.ds-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media (prefers-reduced-motion:reduce){.ds-chip{transition:none}}"
     },
     {
-      "name": "Explore Row",
+      "name": "Room Card",
       "kind": "custom",
-      "refersTo": "explore-row",
-      "description": "Bordered cream link row with tile, name, description and trailing arrow.",
-      "html": "<a class=\"ds-explore\" href=\"#\"><span class=\"ds-explore-tile\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z\"/></svg></span><span class=\"ds-explore-name\">Explore the demo</span><span class=\"ds-explore-desc\">Try the full experience with simulated data.</span><svg class=\"ds-arrow\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></a>",
-      "css": ".ds-explore{display:grid;grid-template-columns:38px minmax(0,1fr) 16px;grid-template-rows:auto auto;column-gap:14px;row-gap:1px;align-items:center;min-height:54px;padding:8px 14px 8px 12px;border:1px solid #e3d1bf;border-radius:10px;background:rgb(249 233 213 / 0.85);color:#120e0b;font-family:Rosarivo,Georgia,serif;text-decoration:none;transition:background-color .2s ease,border-color .2s ease}.ds-explore:hover{background:rgb(255 248 236 / 0.9);border-color:#d9bfa3}.ds-explore:focus-visible{outline:2px solid #8a5a2b;outline-offset:3px}.ds-explore-tile{grid-row:1/3;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:linear-gradient(145deg,#f9e2bf,#f6e7d3);color:#3a2f22}.ds-explore-tile svg{width:19px;height:19px}.ds-explore-name{font-size:14.5px;line-height:19px}.ds-explore-desc{grid-column:2;font-size:11.5px;line-height:17px;color:#7d7166}.ds-explore .ds-arrow{grid-column:3;grid-row:1/3;width:16px;height:16px;color:#3f3630}"
+      "refersTo": "room-card",
+      "description": "Room tab frame on /office: a hairline frame around a scoped legacy navy block, the one navy use on a Paper page. Do not reuse outside the room.",
+      "html": "<div class=\"ds-room\"><div class=\"ds-room-scope\">Connected room</div></div>",
+      "css": ".ds-room{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius-frame);background:var(--bg)}.ds-room-scope{box-sizing:border-box;min-width:0;padding:16px;background:#1b2340;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;line-height:1.5}"
     }
   ],
   "narrative": {
-    "northStar": "The Paper Window in the Meadow",
-    "overview": "A painted dusk landscape (lake, mountains, a meadow with wildflowers, a warm beige retro computer in the grass) holds up a large ivory-and-greige paper window that is the personal hub. The scene is atmosphere; the window is where everything readable lives. Ivory serif type sits on the sky for the few words that address the visitor; every name, number and chart sits on paper.\n\nThe system is warm, quiet and editorial. One serif at one weight carries every letter, with hierarchy made by size alone. Colour is a dusk palette: apricot for the single way in, navy for the night that closes the page, greige and peach-cream paper for the hub, and two restrained chart inks (meadow green, ember coral). Depth comes from layered translucent paper and soft, long ambient shadows, never from hard edges.\n\nMotion is bounded and optional: a 2.4s day-to-night veil cross-fade driven by an explicit two-option toggle, and a fixed set of drifting firefly lights that pause offscreen and hold still under reduced motion. Painted things (scene, computer, portraits, paper grain) are authored rasters with embedded provenance; everything interactive or textual is semantic native DOM and inline SVG.",
+    "northStar": "Paper",
+    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo and /bot still use the legacy dusk shell until they are redone. Other pages are not covered yet.",
     "keyCharacteristics": [
-      "One serif (Rosarivo 400) for all letters; PT Serif 400 supplies lining, tabular digits only.",
-      "A paper hub window as the container for all product UI, set into a painted scene.",
-      "Apricot as the single call-to-action fill; ivory text and outline pills on the scene.",
-      "Translucent layered paper and soft ambient shadows for depth.",
-      "Pills and gently rounded panels; no sharp corners on interactive surfaces.",
-      "Bounded, user-controlled day/night motion with a reduced-motion still state."
+      "Plain and calm: a white page, black type, no decoration.",
+      "One blue accent, used for focus (and the home activity dot).",
+      "Hairline borders separate content; one shadow, on the home product still.",
+      "Geist for text; Geist Mono for timestamps and labels only.",
+      "Automatic dark mode from prefers-color-scheme; no toggle.",
+      "Short motion: 150ms hover, 300ms enter, plays once, nothing loops."
     ],
     "rules": [
       {
-        "name": "The Single Apricot Rule",
-        "body": "Apricot fills exactly one control per view: the primary entrance. Elsewhere it appears only as selection, focus and underline accents, never as a second filled button.",
+        "name": "The Focus-Only Accent Rule",
+        "body": "Accent is for focus. Do not add it to new elements. The activity dot is the one existing exception.",
         "section": "colors"
       },
       {
-        "name": "The Two Inks Rule",
-        "body": "Meadow green and ember coral are data inks. They mark chart lines, points and area washes and nothing else; chrome, buttons and text never borrow them.",
+        "name": "The Legacy Fence Rule",
+        "body": "The dusk navy palette and Rosarivo stay on /demo, /bot and the Room card. Do not extend them to new pages.",
         "section": "colors"
       },
       {
-        "name": "The Warm Ink Rule",
-        "body": "Text on paper is a warm brown-black, never neutral grey or pure black; muted text stays in the same warm family.",
-        "section": "colors"
-      },
-      {
-        "name": "The One Weight Rule",
-        "body": "Every letter is Rosarivo 400. Hierarchy comes from size, colour and placement; there is no bold, no italic emphasis and no uppercase tracking.",
+        "name": "The Geist Mono Rule",
+        "body": "Geist Mono is for timestamps and labels only. Hierarchy comes from size and weight; there is no third weight.",
         "section": "typography"
       },
       {
-        "name": "The Lining Numbers Rule",
-        "body": "Any numeral that carries data is set in the figure stack with `lining-nums tabular-nums`, so columns of counts and values align.",
-        "section": "typography"
-      },
-      {
-        "name": "The Layered Paper Rule",
-        "body": "Inside the hub, depth is translucency, not shadow: an inset surface with a warm left-to-cool-right light gradient, then panels at 80-85% cream over the grain. A new panel takes the paper whisper, never the window lift.",
+        "name": "The Hairline Rule",
+        "body": "Separate content with 1px --line borders. Shadows do not separate content.",
         "section": "elevation"
       },
       {
-        "name": "The Bounded Dusk Rule",
-        "body": "The scene's time of day changes only through the explicit toggle: a night veil cross-fades over 2.4s (`cubic-bezier(0.22, 1, 0.36, 1)`) and the lights brighten. Fireflies animate transform and opacity only, pause when the scene is offscreen, and under `prefers-reduced-motion` hold a still 0.55 glow with no transitions.",
+        "name": "The Single Shadow Rule",
+        "body": "The product still frame is the only shadow in the system. Do not add shadows to other components.",
         "section": "elevation"
+      },
+      {
+        "name": "The One Primary Rule",
+        "body": "Keep one primary button in each view.",
+        "section": "components"
       }
     ],
     "dos": [
-      "**Do** put all product UI (names, numbers, charts, lists) on the paper hub; keep only the wordmark, nav, headline, entrance and footer on the scene or navy.",
-      "**Do** set every letter in Rosarivo 400 and every data numeral in the PT Serif figure stack with lining, tabular numbers.",
-      "**Do** keep apricot to one filled control per view, and use the bark focus ring on paper and the apricot ring on the scene.",
-      "**Do** reflow below 1100px instead of scaling text down; keep chart labels at 11px or more on phones.",
-      "**Do** make painted elements authored rasters with embedded provenance, and build every control, label and chart as semantic DOM or inline SVG.",
-      "**Do** keep scene motion behind an explicit control, bounded in duration, paused offscreen and still under reduced motion.",
-      "**Do** show the Simulated data label wherever demo data appears."
+      "**Do** read colours, radii and motion from the tokens in `globals.css`.",
+      "**Do** keep one primary button in each view.",
+      "**Do** separate content with 1px `--line` borders.",
+      "**Do** keep motion to 150ms hover and 300ms enter, and turn it off under reduced motion.",
+      "**Do** keep the simulated-data note in the footer.",
+      "**Do** use a 4px grid for new spacing."
     ],
     "donts": [
-      "**Don't** introduce a second font weight, bold emphasis, or a second letter face.",
-      "**Don't** use meadow green or ember coral outside data marks.",
-      "**Don't** put text, UI or numbers inside a raster plate; plates carry only scenery, objects, portraits and grain.",
-      "**Don't** give panels the window's deep shadow; inside the hub, depth is layered paper.",
-      "**Don't** copy artwork from the reference video; the scene must stay original.",
-      "**Don't** treat the 1100px stage's absolute comp coordinates as spacing tokens for new surfaces."
+      "**Don't** add shadows except to the product still.",
+      "**Don't** use accent for anything but focus. The activity dot is the one existing exception.",
+      "**Don't** add looping or ambient animation, parallax or scroll effects.",
+      "**Don't** use Rosarivo or PT Serif on new pages.",
+      "**Don't** put literal colours in new components.",
+      "**Don't** extend the legacy dusk palette to new pages."
     ]
   }
 }
