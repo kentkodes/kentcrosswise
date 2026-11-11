@@ -297,8 +297,8 @@ The home page CSS uses no icons and no avatars.
 
 ### Buttons
 
-- **Primary.** Fill `--btn-bg`, text `--btn-fg`, 40px tall, 0 16px padding, 15px, weight 500, radius 8px. Hover drops opacity to 0.86 over 150ms. Used once per view: "Explore the demo" on the home hero.
-- **Secondary.** Fill `--bg`, text `--fg`, same size. 1px outline `color-mix(in srgb, var(--fg) 22%, transparent)`, 40% on hover, so it reads as a boundary in both themes. Used for "Agent office" on the home hero.
+- **Primary.** Fill `--btn-bg`, text `--btn-fg`, 40px tall, 0 16px padding, 15px, weight 500, radius 8px. Hover drops opacity to 0.86 over 150ms. Used once per view: "Agent office" on the home hero.
+- **Secondary.** Fill `--bg`, text `--fg`, same size. 1px outline `color-mix(in srgb, var(--fg) 22%, transparent)`, 40% on hover, so it reads as a boundary in both themes. Used for "Explore the demo" on the home hero.
 - **Account button (header).** Primary style at 36px tall, 14px, weight 500. A pseudo-element extends its hit area to 44px.
 
 Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`) so the legacy shell's own focus ring can override it.

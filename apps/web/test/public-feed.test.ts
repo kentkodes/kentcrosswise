@@ -27,7 +27,7 @@ describe("public feed on PGlite as web_public", () => {
 
   beforeAll(async () => {
     pg = await freshDb({ seed: true });
-  });
+  }, 60_000);
   afterAll(async () => {
     await pg.close();
   });

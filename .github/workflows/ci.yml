@@ -169,7 +169,14 @@ jobs:
         run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15 --build-file apps/web/.open-next/kcw-build.json
 
       - name: Playwright browsers
-        run: pnpm --filter web exec playwright install --with-deps chromium
+        run: |
+          # apt mirrors on the runner sometimes fail DNS for a few minutes; retry instead of failing the preview.
+          for attempt in 1 2 3; do
+            pnpm --filter web exec playwright install --with-deps chromium && exit 0
+            echo "::warning::Playwright browser install failed (attempt $attempt/3)"
+            [ "$attempt" -lt 3 ] && sleep 30
+          done
+          exit 1
 
       # No report or trace upload: a trace would contain the typed preview login token.
       - name: Playwright against the preview
