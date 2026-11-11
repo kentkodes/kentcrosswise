@@ -7,10 +7,11 @@ import {
   type LengthFelt,
 } from "@/server/essay-library";
 import { rateAction } from "../actions";
-import styles from "../essays.module.css";
+import styles from "./reader.module.css";
 
 const STARS = [1, 2, 3, 4, 5] as const;
 
+// Same fields, names, values and action as before; the native inputs are hidden and their labels are drawn as pills.
 export function RatingForm({
   essayId,
   rating,
@@ -24,32 +25,69 @@ export function RatingForm({
       <input type="hidden" name="essay_id" value={essayId} />
       <fieldset>
         <legend>Overall</legend>
-        {STARS.map((s) => (
-          <label key={s}>
-            <input type="radio" name="stars" value={s} defaultChecked={rating?.stars === s} required /> {s}
-          </label>
-        ))}
+        <div className={styles.choices}>
+          {STARS.map((s) => (
+            <label key={s} className={styles.pill}>
+              <input
+                className={styles.hidden}
+                type="radio"
+                name="stars"
+                value={s}
+                defaultChecked={rating?.stars === s}
+                required
+              />
+              {s}
+            </label>
+          ))}
+        </div>
       </fieldset>
       <fieldset>
         <legend>What worked</legend>
-        {WORKED_TAGS.map((t) => (
-          <label key={t}>
-            <input type="checkbox" name="worked" value={t} defaultChecked={rating?.worked.includes(t) ?? false} /> {WORKED_LABELS[t]}
-          </label>
-        ))}
+        <div className={styles.choices}>
+          {WORKED_TAGS.map((t) => (
+            <label key={t} className={styles.pill}>
+              <input
+                className={styles.hidden}
+                type="checkbox"
+                name="worked"
+                value={t}
+                defaultChecked={rating?.worked.includes(t) ?? false}
+              />
+              {WORKED_LABELS[t]}
+            </label>
+          ))}
+        </div>
       </fieldset>
       <fieldset>
         <legend>Length felt</legend>
-        <label>
-          <input type="radio" name="length_felt" value="" defaultChecked={rating === null || rating.lengthFelt === null} /> Not sure
-        </label>
-        {LENGTH_FELT.map((l) => (
-          <label key={l}>
-            <input type="radio" name="length_felt" value={l} defaultChecked={rating?.lengthFelt === l} /> {LENGTH_FELT_LABELS[l]}
+        <div className={styles.segmented}>
+          <label className={styles.segment}>
+            <input
+              className={styles.hidden}
+              type="radio"
+              name="length_felt"
+              value=""
+              defaultChecked={rating === null || rating.lengthFelt === null}
+            />
+            Not sure
           </label>
-        ))}
+          {LENGTH_FELT.map((l) => (
+            <label key={l} className={styles.segment}>
+              <input
+                className={styles.hidden}
+                type="radio"
+                name="length_felt"
+                value={l}
+                defaultChecked={rating?.lengthFelt === l}
+              />
+              {LENGTH_FELT_LABELS[l]}
+            </label>
+          ))}
+        </div>
       </fieldset>
-      <button type="submit">{rating ? "Update rating" : "Save rating"}</button>
+      <button type="submit" className={styles.submit}>
+        {rating ? "Update rating" : "Save rating"}
+      </button>
     </form>
   );
 }

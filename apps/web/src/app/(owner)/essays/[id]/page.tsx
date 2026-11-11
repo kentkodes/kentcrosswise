@@ -4,6 +4,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { PaperFrame } from "@/app/(public)/_site/paper-frame";
 import { isUuid } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
@@ -18,7 +19,8 @@ import {
 } from "@/server/essay-library";
 import { loadEssayText, textParagraphs } from "@/server/essay-text";
 import { noticeText } from "../../notices";
-import styles from "../essays.module.css";
+import styles from "./reader.module.css";
+import { newsreader } from "./reading-font";
 import { RatingForm } from "./rating-form";
 import { ReadingProgress } from "./reading-progress";
 
@@ -48,12 +50,16 @@ export default async function EssayReaderPage({
   const { essay, problem } = await load(id);
   if (problem) {
     return (
-      <main className={styles.page}>
-        <p role="alert">{problem}</p>
-        <p>
-          <Link href="/essays">Back to essays</Link>
-        </p>
-      </main>
+      <PaperFrame>
+        <div className={styles.column}>
+          <p role="alert" className={styles.status}>
+            {problem}
+          </p>
+          <p className={styles.back}>
+            <Link href="/essays">Back to essays</Link>
+          </p>
+        </div>
+      </PaperFrame>
     );
   }
   if (!essay) notFound();
@@ -63,36 +69,42 @@ export default async function EssayReaderPage({
   const text = await loadEssayText(essay.textS3Key);
   const paragraphs = text === null ? [] : textParagraphs(text);
   const minutes = readingMinutesOf(essay);
+  const kicker = [
+    essay.primaryType ? TYPE_LABELS[essay.primaryType] : null,
+    essay.lengthBand ? LENGTH_NAMES[essay.lengthBand] : null,
+    minutes !== null ? `${minutes} min read` : null,
+  ].filter((part): part is string => part !== null);
 
   return (
-    <main className={styles.page}>
-      <p>
-        <Link href="/essays">Back to essays</Link>
-      </p>
-      <header>
-        <h1>{essay.title}</h1>
-        <p className={styles.meta}>
-          {essay.author}
-          {essay.year !== null ? <> · {essay.year}</> : null}
+    <PaperFrame headerBelow={<ReadingProgress />}>
+      <div className={styles.column}>
+        <p className={styles.back}>
+          <Link href="/essays">
+            <span aria-hidden="true">← </span>Essays
+          </Link>
         </p>
-        <p className={styles.meta}>
-          {essay.primaryType ? TYPE_LABELS[essay.primaryType] : "Untyped"}
-          {essay.lengthBand ? <> · {LENGTH_NAMES[essay.lengthBand]}</> : null}
-          {minutes !== null ? <> · {minutes} min read</> : null}
-        </p>
-      </header>
-      <ReadingProgress />
-      {notice ? <p role="status">{notice}</p> : null}
-      {paragraphs.length === 0 ? (
-        <p role="status">Text unavailable</p>
-      ) : (
-        <article className={styles.body}>
-          {paragraphs.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-        </article>
-      )}
-      <RatingForm essayId={essay.id} rating={essay.rating} />
-    </main>
+        <header className={styles.head}>
+          {kicker.length > 0 ? <p className={styles.kicker}>{kicker.join(" · ")}</p> : null}
+          <h1 className={styles.title}>{essay.title}</h1>
+          <p className={styles.byline}>
+            {essay.author}
+            {essay.year !== null ? <> · {essay.year}</> : null}
+          </p>
+        </header>
+        {notice ? <p role="status" className={styles.status}>{notice}</p> : null}
+        {paragraphs.length === 0 ? (
+          <p role="status" className={styles.status}>
+            Text unavailable
+          </p>
+        ) : (
+          <article className={`${styles.body} ${newsreader.variable}`}>
+            {paragraphs.map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </article>
+        )}
+        <RatingForm essayId={essay.id} rating={essay.rating} />
+      </div>
+    </PaperFrame>
   );
 }
