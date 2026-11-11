@@ -1,5 +1,7 @@
 # Connected woodland office: design draft
 
+Superseded 2026-11-11: `/office/preview`, `/office/draft` and `/office/connected` were removed. `/office` is now the team board, and its Room tab holds the connected room. The route statements below describe the 2026-10 state.
+
 Draft prepared 2026-10-25 America/Chicago. The owner confirmed the outcome and draft workflow; this is a reviewable proposal for the next extension, not an approved final production specification or implemented behavior. The existing [preview brief](PREVIEW.md) describes the implemented two-robot baseline. [HANDOFF.md](../HANDOFF.md) records source/release status and holds.
 
 ## Confirmed direction

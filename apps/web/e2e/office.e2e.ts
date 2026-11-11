@@ -49,25 +49,15 @@ test("a bad cursor is a 400", async ({ request }) => {
   expect(res.status()).toBe(400);
 });
 
-test("the office page lists the events as text", async ({ page }) => {
+test("the office page shows the team board: five role cards and the activity list", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Agent office" }).click();
   await expect(page).toHaveURL(/\/office$/);
   await expect(page.getByRole("heading", { level: 1, name: "Agent office" })).toBeVisible();
-  const items = page.getByTestId("agent-events").locator("li");
-  if (expectDb) {
-    const feed = (await (await page.request.get("/api/public/agent-events")).json()) as Feed;
-    expect(feed.available, why(feed)).toBe(true);
-  } else {
-    await expect(items.first().or(page.getByRole("status"))).toBeVisible();
-    return;
-  }
-  await expect(items.first()).toBeVisible();
-  await expect(page.getByText("Add a health check page").first()).toBeVisible();
-  await expect(page.getByText("Private task").first()).toBeVisible();
-  const first = items.first();
-  await expect(first.locator("time")).toHaveCount(1);
-  await expect(first.locator("[data-field]")).toHaveCount(3);
+  const board = page.locator("#office-panel-board");
+  await expect(board.getByRole("heading", { level: 3 })).toHaveCount(5);
+  await expect(board.getByRole("region", { name: /^Activity/ })).toBeVisible();
+  // The board renders sanitized text only: no seed title and no seed marker, with or without a database.
   await expect(page.getByText("Seed private title")).toHaveCount(0);
   await expect(page.getByText("[seed]")).toHaveCount(0);
 });

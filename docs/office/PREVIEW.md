@@ -1,5 +1,7 @@
 # Woodland office preview
 
+Superseded 2026-11-11: `/office/preview`, `/office/draft` and `/office/connected` were removed. `/office` is now the team board, and its Room tab holds the connected room. The route statements below describe the 2026-10 state.
+
 ## Confirmed direction and current scope
 
 The accepted direction is an original overhead woodland studio with small friendly robots, coarse actual pixels and watch-and-inspect interaction. Developer → QA → filing cabinet is the first polished sequence, with changes requested, failed tests, owner waiting and terminal failure. The owner accepted smooth one-native-pixel movement and explicit full-motion autoplay (accepted source `5f689e8163f12c992036da962e91a3caf01b3bfc`) and requested feed integration.

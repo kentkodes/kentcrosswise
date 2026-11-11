@@ -1,20 +1,16 @@
-// Public: sanitized events with independent pixel-art illustrations and a readable event list.
-// It reads only the public feed API (D10: public pages import no server code).
+// Public: the agent office on the Paper frame. Board tab: one card per worker type and a filterable log,
+// from the public office feed. Room tab: the existing connected room. Reads only the public feed API.
 import type { Metadata } from "next";
-import { PublicShell } from "../_site/public-shell";
-import { OfficeFeed } from "./office-feed";
-import scene from "./preview/preview.module.css";
-import s from "./office.module.css";
+import { rosarivo } from "../_site/fonts";
+import { PaperFrame } from "../_site/paper-frame";
+import { OfficeBoard } from "./board/office-board";
 
 export const metadata: Metadata = { title: "Agent office | Kentcrosswise" };
 
 export default function OfficePage() {
   return (
-    <PublicShell current="/office">
-      <main className={scene.previewMain}>
-        <header className={s.heading}><h1>Agent office</h1><p>Real public activity, or a replay of the latest 20 events with original timestamps. Private tasks show as &quot;Private task&quot;.</p></header>
-        <OfficeFeed />
-      </main>
-    </PublicShell>
+    <PaperFrame current="/office">
+      <OfficeBoard roomFontClass={rosarivo.variable} />
+    </PaperFrame>
   );
 }

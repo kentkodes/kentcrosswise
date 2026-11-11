@@ -147,6 +147,35 @@ components:
     textColor: "{colors.fg-muted}"
     typography: "{typography.mono}"
     padding: "8px 12px"
+  status-pill:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg-muted}"
+    typography: "{typography.small}"
+    rounded: "{rounded.pill}"
+    padding: "4px 10px"
+  agent-card:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg}"
+    rounded: "{rounded.card}"
+    padding: "16px"
+  seat-tile:
+    textColor: "{colors.fg}"
+    typography: "{typography.small}"
+    rounded: "{rounded.control}"
+    padding: "8px 10px"
+  activity-list:
+    backgroundColor: "{colors.bg}"
+    rounded: "{rounded.card}"
+  segmented-tabs:
+    backgroundColor: "{colors.bg}"
+    textColor: "{colors.fg-muted}"
+    rounded: "{rounded.control}"
+  room-card:
+    backgroundColor: "{colors.legacy-dusk-navy}"
+    textColor: "{colors.legacy-ivory}"
+    typography: "{typography.legacy-body}"
+    rounded: "{rounded.frame}"
+    padding: "16px"
   office-target:
     rounded: "{rounded.office-target}"
     width: "44px"
@@ -168,7 +197,8 @@ Paper is the visual system for the public pages. It is plain and calm. A white p
 Status:
 
 - The home page, the shared header and the shared footer use Paper.
-- `/demo`, `/office` and `/bot` still use the legacy dusk shell. See [Legacy shell](#legacy-shell).
+- `/office` uses Paper with the App frame board (Board tab). Its Room tab is the one scoped legacy-navy block. See [Room card](#room-card) and [Legacy shell](#legacy-shell).
+- `/demo` and `/bot` still use the legacy dusk shell. See [Legacy shell](#legacy-shell).
 - Other pages are not covered yet. See [Page templates](#page-templates).
 
 Principles:
@@ -222,11 +252,11 @@ Rules:
 
 - Geist for text. Geist Mono only for timestamps and labels.
 - Hierarchy comes from size and weight. Do not add a third weight.
-- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays in the legacy shell.
+- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays in the legacy shell and in the Room card.
 
 ## Layout
 
-- Container: 1120px max width, centred. Used by the header, the footer and the home page.
+- Container: 1120px max width, centred. Used by the header, the footer, the home page and `/office`.
 - Gutters: 24px on each side, 16px under 640px. The header, the home page and the footer use the same gutters at every width.
 - Breakpoint: 640px. Phone rules apply below it.
 - Spacing: 4px grid, with these exceptions in the code: 2px (gap between product still sidebar items), 6px (sidebar item padding, card gap, gap before the agent name in the log), 10px (sidebar side padding), 14px (card padding and sidebar padding).
@@ -326,6 +356,62 @@ Rows in the live activity log, inside a 1px `--line` border with a 10px radius a
 - Title: `--fg-muted`, single line with an ellipsis.
 - Phone: the title moves to its own line under the time and agent.
 
+### Status pill
+
+Summary pills above the board on `/office`, in `apps/web/src/app/(public)/office/board/board.module.css`.
+
+- Pill: 1px `--line` border, 999px radius, 4px 10px padding, 13px text in `--fg-muted`. A count is set in `--fg`, weight 500.
+- Dot: 7px circle. `ok` is `--ok` (green), `warn` is `--warn` (amber), `idle` is `--idle` (grey). Tones are colour only; the words carry the meaning.
+- Shown: System (Paused, Working or Idle), the in-flight task count when above zero, and the feed (Updates delayed, Feed unavailable). Nothing is shown when the feed is fresh.
+
+### Agent card
+
+One card per agent on the Board tab: Orchestrator, Developer, QA, Docs-keeper and Scraper-builder. Developer is wider and holds the seat tiles.
+
+- Card: 1px `--line` border, 10px radius, 16px padding, 10px gap, no fill and no shadow. Three columns on desktop, one below a 720px container width.
+- Head: the title at 15px, weight 600, with a status dot. The model tag sits on the right: Geist Mono 11.5px in a 1px `--line` box with a 6px radius.
+- Now line: a mono label (Now, Waiting on …, or Last) and the task text. The text is "Private task" for a private task, never its title.
+- Footer: a 1px `--line` top border and "Last event" with a relative time. The time is a `<time>` with the absolute UTC value in its title.
+
+### Seat tile
+
+The four Developer seats inside the Developer card. Seat 1 to Seat 4.
+
+- Tile: 1px `--line` border, 8px radius, 8px 10px padding, 13px text. Two per row, four per row at 720px container width or more, one column on a phone.
+- Head: a dot and "Seat n". An idle seat shows only "Idle" with no text line.
+- An annex line in the card footer appears only when at least one extra worker is running.
+
+### Activity list
+
+The Activity list under the cards on `/office`. It is a bordered region with a title bar.
+
+- Region: 1px `--line` border, 10px radius, hidden overflow. The title bar has a 1px `--line` bottom border and holds the title and the filter chips.
+- Title: 14px, weight 600. "Activity" when the list is live, "Activity · replay" when it shows recorded events. A replay list has a note: "Latest recorded events with their original times."
+- Row: four columns on desktop (time, role, event, task), 12px gap, 9px 12px padding, a 1px `--line` top border on each row but the first. On a phone, time and role share a line and the event and task sit below. Long text wraps (`overflow-wrap: anywhere`).
+- Time: Geist Mono 12px in `--fg-muted`, as "Nov 11, 15:42 UTC".
+- Role: weight 500 with a 6px `--fg-muted` dot. Accent is not used here.
+- Withdrawn event: an italic `--fg-muted` line with no role.
+- Filter chips: All, Orchestrator, Developer, QA, Docs, Scraper. A 32px-tall text button with a 6px radius. The selected chip (`aria-pressed="true"`) has a 1px `--line` border and a `--bg-soft` fill with `--fg` text. The filter applies before the list is capped at 50 rows.
+- States: loading, empty, unavailable and "no events for this filter" each show one short `--fg-muted` line. An unavailable feed that still has rows keeps them and adds the note "Showing the last events received. Updates will retry."
+
+### Segmented tabs
+
+The Board | Room control at the top right of `/office`. It is a tablist.
+
+- Track: 1px `--line` border, 8px radius, 2px padding and gap.
+- Tab: 36px tall, 14px, weight 500, `--fg-muted`, 6px radius. Hover uses `--fg`.
+- Selected tab: `--fg` text, 1px `--line` border and a `--bg-soft` fill.
+- Keyboard: Left and Right arrows move between tabs and wrap at the ends. Only the selected tab is in the tab order.
+- Colour and motion transitions take 150ms and are off under reduced motion.
+
+### Room card
+
+The Room tab holds the connected office room (`office/connected/connected-office.tsx`) in one card.
+
+- Frame: 1px `--line` border, 12px radius, hidden overflow.
+- Scope: a block with `#1b2340` ground, `#f6f1e4` text, the Rosarivo variable and 16px padding. This is the one scoped legacy-navy block on a Paper page.
+- Why: the room's own CSS (`connected.module.css`) was written for the navy shell, and it is accepted as the visual baseline. Restyling it to Paper is a later task. The scope keeps the room looking as it did, and no other part of `/office` uses navy. Remove the scope when the room is redone.
+
 ### Feature rows
 
 Three short text blocks under the product still. A 1px `--line` top border, 32px padding above. Title in the Title style. Text in `--fg-muted` at the inherited 16px. Three columns with 32px gaps on desktop. One column with 24px gaps on phones.
@@ -336,10 +422,11 @@ A 44px square hit area with a 4px radius. Used by the legacy office room. See [L
 
 ## Page templates
 
-Four templates. Only Marketing is built.
+Four templates. Marketing and App frame are partly built.
 
 - **Marketing (home). Done.** Hero, product still, three feature rows, footer. Wide rhythm, 96px sections.
-- **App frame (`/demo`, `/office`). Planned.** The product still's sidebar and main area, filled with demo data. The log becomes a plain table. Office illustrations sit inside one contained card.
+- **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is the one scoped legacy-navy block (see [Room card](#room-card)).
+- **App frame (`/demo`). Planned.** The product still's sidebar and main area, filled with demo data. The log becomes a plain table. Office illustrations sit inside one contained card.
 - **Reading (essays, `/bot`). Planned.** Measure of about 680px. Larger body text. A list instead of cards.
 - **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
 
@@ -347,7 +434,7 @@ Do not build a template before its page is redone.
 
 ## Legacy shell
 
-`/demo`, `/office` and `/bot` still render inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`). They keep the old dusk look until they are redone.
+`/demo` and `/bot` still render inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`). They keep the old dusk look until they are redone. `/office` left the shell: it renders in the Paper frame, and only its Room card keeps the navy look (see below).
 
 The shell is styled in `public-shell.module.css`:
 
@@ -358,12 +445,11 @@ The shell is styled in `public-shell.module.css`:
 - Content measure: 48rem plus gutters. Gutters are 20px under 640px, 40px from 640px, and `max(40px, 6.25vw)` from 1100px.
 - The shell sets the header variables to ivory on navy: `--header-fg` `#f6f1e4`, `--header-muted` `rgb(246 241 228 / 0.65)`, `--header-line` `rgb(246 241 228 / 0.18)`, `--header-bg` `#1b2340`. The shared header and footer read these, so the account button is an ivory pill with navy text here.
 
-The office pages use these values in addition to the shell:
+The office room is the one legacy block left on `/office`:
 
-- `office/office.module.css` (live `/office`): `#dfd7c6` for explanatory text (`office-text`). Ivory alpha lines and button borders: `rgb(246 241 228 / 0.2)`, `0.3`, `0.6`, and button hover `0.12`. Event times use Rosarivo with lining, tabular figures.
-- `office/preview/preview.module.css` (imported by live `/office` and by the sub-routes): the office palette `office-control`, `office-control-edge`, `office-muted`, `office-hover`, `office-divider`, `office-teal`, `office-amber`, `office-ink`, plus apricot for selection and focus. Robot and desk targets are 44px with 4px radius.
-- The sub-routes `/office/preview`, `/office/draft` and `/office/connected` are `noindex`. They use the same shell and palette. Their own CSS is in their folders.
-- The room canvas colours are set in code in `office/preview/draw-office.ts` and `office/draft/draw-office.ts`. They are not listed here.
+- The Room card's scope (`office/board/room-panel.module.css`) sets `#1b2340` ground and `#f6f1e4` text around the connected room, and the Rosarivo variable. See [Room card](#room-card).
+- `office/connected/connected.module.css` (the room itself) uses the office palette literals: `#252e49`, `#232a46`, `#293d47` and `#3d465e` for surfaces, `#f8d9a8` apricot for selection and focus, `#e5d8bf` and `#d4c7b4` for text, and `#847d78`, `#756f69` and `#aaa28f` for lines. Event times use Rosarivo with lining, tabular figures.
+- The room canvas colours are set in code in `office/draft/draw-office.ts`. They are not listed here.
 - `bot/bot.module.css`: `#d9d6cd` for the status and note text, apricot `#f8d9a8` for the report link, and ivory `#f6f1e4` on hover.
 
 When a page is redone, remove its literal values and its use of the shell. Do not extend the legacy palette to new pages.

@@ -1,0 +1,41 @@
+/*
+ * Paper page frame for public pages (/ and /office): ground, Geist, 1120px container, shared gutters.
+ * Colours and motion come from the global tokens in globals.css; dark mode follows the OS setting.
+ */
+
+/* The root layout's globals.css centres a 48rem body; release it only while a Paper frame is mounted. */
+:global(body):has(.page) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+.page {
+  min-height: 100svh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus: 2px accent outline, offset 2px. Zero-specificity :where() keeps the shell's own ring on other pages. */
+:where(.page) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Border-box: the 1120px width includes the 24px gutters, the same as the header and footer. */
+.main {
+  box-sizing: border-box;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+@media (max-width: 639px) {
+  .main {
+    padding: 0 16px;
+  }
+}
