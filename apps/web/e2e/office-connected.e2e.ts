@@ -51,6 +51,93 @@ test("manual Next settles exactly one transition and pause freezes native pixels
   expect(await canvasBytes(page)).toBe(paused);
 });
 
+test("replay plays once and stops at its end; Play rewinds it", async ({ page }) => {
+  test.setTimeout(90_000);
+  await mockOfficeFeed(page, freshBootstrap);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await gotoRoom(page);
+  await expect(page.getByRole("status")).toContainText("Replay");
+  const log = page.getByRole("region", { name: "Event log" });
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  // The three fixture events play in order, then the replay stops and says so.
+  await expect(page.getByText("Replay finished · Play to watch again", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(log.locator("li")).toHaveCount(3);
+  await page.waitForTimeout(1_500);
+  await expect(log.locator("li")).toHaveCount(3);
+  await expect(page.getByText("Replay finished · Play to watch again", { exact: true })).toBeVisible();
+  // Play at the end rewinds: the first event starts again.
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(log.locator("li")).toHaveCount(1);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+});
+
+test("a live event after the replay finishes plays without pressing Play", async ({ page }) => {
+  test.setTimeout(120_000);
+  await commonMocks(page);
+  let live = false;
+  await page.route("**/api/public/office**", route => {
+    const mode = new URL(route.request().url()).searchParams.get("mode");
+    const e = freshBootstrap();
+    if (mode === "bootstrap") return route.fulfill({ json: e });
+    if (mode === "state") return route.fulfill({ json: stateOf(e) });
+    const value = emptyPage(e);
+    if (live) {
+      const event = structuredClone(e.history.replay!.events[2]!);
+      event.ref = "event_12345678-1234-4123-8123-123456789def"; event.position = { revision: "11", ordinal: 0 };
+      // The docs task keeps its public label: a new event for a task must match the snapshot's description.
+      event.task_ref = REFS.docs; event.execution_ref = REFS.docsRun; event.role = "docs"; event.type = "coding";
+      event.description = "Document the health endpoint";
+      value.revision = "11"; value.history.watermark = { revision: "11", ordinal: 0 };
+      value.events = [event]; value.history.through = event.position; value.history.has_more = false;
+    }
+    return route.fulfill({ json: value });
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await gotoRoom(page);
+  await expect(page.getByRole("status")).toContainText("Replay");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.getByText("Replay finished · Play to watch again", { exact: true })).toBeVisible({ timeout: 60_000 });
+  live = true;
+  // No Play press: the live event arrives on a poll, switches the room to live and plays itself.
+  await expect(page.getByRole("status")).toContainText("Live", { timeout: 30_000 });
+  await expect(page.getByRole("region", { name: "Event log" })).toContainText("Document the health endpoint", { timeout: 60_000 });
+  await expect(page.getByText("Replay finished · Play to watch again", { exact: true })).toHaveCount(0);
+});
+
+test("role filter chips filter the event log and station selection leaves them alone", async ({ page }) => {
+  await mockOfficeFeed(page, freshBootstrap);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await gotoRoom(page);
+  await expect(page.getByRole("status")).toContainText("Replay");
+  const log = page.getByRole("region", { name: "Event log" });
+  const filters = page.getByRole("group", { name: "Filter events" });
+  for (let n = 0; n < 3; n++) await page.getByRole("button", { name: "Next event", exact: true }).click();
+  await expect(log.locator("li")).toHaveCount(3);
+  await filters.getByRole("button", { name: "Docs", exact: true }).click();
+  await expect(filters.getByRole("button", { name: "Docs", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(filters.getByRole("button", { name: "All events", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(log.locator("li")).toHaveCount(1);
+  await expect(log.locator("li").first()).toContainText("Docs-keeper");
+  await filters.getByRole("button", { name: "QA", exact: true }).click();
+  await expect(log.locator("li")).toHaveCount(1);
+  await expect(log.locator("li").first()).toContainText("Merged");
+  // Selecting a station inspects it and leaves the chip where it is.
+  await page.getByRole("button", { name: "Developer seat 1", exact: true }).click();
+  await expect(filters.getByRole("button", { name: "QA", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await filters.getByRole("button", { name: "All events", exact: true }).click();
+  await expect(log.locator("li")).toHaveCount(3);
+});
+
+test("the room has no navy ground outside its canvas", async ({ page }) => {
+  await mockOfficeFeed(page, freshBootstrap);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await gotoRoom(page);
+  await expect(page.getByRole("status")).toContainText("Replay");
+  const navy = await page.locator("#office-panel-room").evaluate(root => [root, ...root.querySelectorAll("*")]
+    .filter(el => el.tagName !== "CANVAS" && getComputedStyle(el).backgroundColor === "rgb(27, 35, 64)").length);
+  expect(navy).toBe(0);
+});
+
 test("all QA executions remain inspectable and private task filter uses distinct histories", async ({ page }) => {
   const fixture = freshBootstrap();
   const qa = fixture.snapshot.executions![0]!;
@@ -62,7 +149,7 @@ test("all QA executions remain inspectable and private task filter uses distinct
   await page.emulateMedia({ reducedMotion: "reduce" });
   await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
-  await page.getByRole("button", { name: "QA", exact: true }).click();
+  await page.getByRole("region", { name: "Team" }).getByRole("button", { name: /^QA\b/ }).click();
   const inspector = page.getByRole("complementary", { name: "Agent details" });
   await expect(inspector).toContainText("2 executions reported");
   await inspector.getByRole("button", { name: /entry 2$/ }).click();
@@ -125,7 +212,7 @@ test("privacy withdrawal purges paused inspector and replay labels and rebinds d
   await installPausedClock(page);
   await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
-  await page.getByRole("button", { name: "QA", exact: true }).click();
+  await page.getByRole("region", { name: "Team" }).getByRole("button", { name: /^QA\b/ }).click();
   const inspector = page.getByRole("complementary", { name: "Agent details" });
   await expect(inspector).toContainText("Add a health endpoint");
   for (let n = 0; n < 3; n++) await page.getByRole("button", { name: "Next event", exact: true }).click();
@@ -261,12 +348,12 @@ test("keyboard seat and annex selection inspect their actual assignments", async
   await page.emulateMedia({ reducedMotion: "reduce" });
   await gotoRoom(page);
   await expect(page.getByRole("status")).toContainText("Replay");
-  const seat = page.getByRole("button", { name: "Developer · seat 2", exact: true });
+  const seat = page.getByRole("button", { name: "Developer seat 2", exact: true });
   await seat.focus(); await page.keyboard.press("Enter");
   const inspector = page.getByRole("complementary", { name: "Agent details" });
   await expect(inspector).toContainText("Seat two work");
   await expect(inspector).not.toContainText("Document the health endpoint");
-  await page.getByRole("button", { name: "Developer · annex", exact: true }).focus(); await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Developer annex", exact: true }).focus(); await page.keyboard.press("Enter");
   await expect(inspector).toContainText("annex seat 17");
   await expect(inspector).toContainText("Document the health endpoint");
   await expect(inspector).not.toContainText("Seat two work");

@@ -12,7 +12,12 @@ const TABS: readonly { id: Tab; label: string }[] = [
   { id: "room", label: "Room" },
 ];
 
-export function OfficeBoard({ roomFontClass }: { roomFontClass: string }) {
+const LEDE: Record<Tab, string> = {
+  board: "Five agents build Kentcrosswise. Each card shows what that agent is doing now, from the public office feed.",
+  room: "Each robot is an agent at its station. Pick an agent to see what it is working on.",
+};
+
+export function OfficeBoard() {
   const [tab, setTab] = useState<Tab>("board");
   const buttons = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
@@ -30,7 +35,7 @@ export function OfficeBoard({ roomFontClass }: { roomFontClass: string }) {
       <div className={s.head}>
         <div className={s.intro}>
           <h1 className={s.title}>Agent office</h1>
-          <p className={s.lede}>Five agents build Kentcrosswise. Each card shows what that agent is doing now, from the public office feed.</p>
+          <p className={s.lede}>{LEDE[tab]}</p>
         </div>
         <div className={s.seg} role="tablist" aria-label="Office view">
           {TABS.map((option, index) => (
@@ -58,7 +63,7 @@ export function OfficeBoard({ roomFontClass }: { roomFontClass: string }) {
         {tab === "board" && <BoardPanel />}
       </div>
       <div role="tabpanel" id="office-panel-room" aria-labelledby="office-tab-room" hidden={tab !== "room"}>
-        {tab === "room" && <RoomPanel fontClass={roomFontClass} />}
+        {tab === "room" && <RoomPanel />}
       </div>
     </>
   );

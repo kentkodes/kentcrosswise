@@ -16,7 +16,8 @@ export function drawOffice(ctx: CanvasRenderingContext2D, scene: Scene, selected
   const r = (x: number, y: number, w: number, h: number, color: string) => { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y - offset), w, h); };
   const height = annex ? ANNEX_HEIGHT : HEIGHT;
   const top = annex ? HEIGHT : 0;
-  r(0, top, WIDTH, height, C.navy);
+  // The ground is transparent, so the card's own ground shows through. Only the art keeps its palette.
+  ctx.clearRect(0, top - offset, WIDTH, height);
   r(18, top + 12, 348, height - 24, C.edge);
   r(22, top + 16, 340, height - 32, C.wood);
   r(26, top + (annex ? 20 : 56), 332, height - (annex ? 40 : 76), C.honey);

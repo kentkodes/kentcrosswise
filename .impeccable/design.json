@@ -276,210 +276,6 @@
         ],
         "purpose": "Dark-mode primary button text."
       },
-      "legacy-dusk-navy": {
-        "role": "legacy",
-        "displayName": "Dusk Navy",
-        "canonical": "#1b2340",
-        "oklch": "oklch(26.5% 0.055 270.6)",
-        "tonalRamp": [
-          "oklch(15% 0.055 270.6)",
-          "oklch(26% 0.055 270.6)",
-          "oklch(38% 0.055 270.6)",
-          "oklch(50% 0.055 270.6)",
-          "oklch(62% 0.055 270.6)",
-          "oklch(74% 0.055 270.6)",
-          "oklch(85% 0.055 270.6)",
-          "oklch(95% 0.055 270.6)"
-        ],
-        "purpose": "Legacy only: the Room card scope on /office. Not for new pages."
-      },
-      "legacy-ivory": {
-        "role": "legacy",
-        "displayName": "Ivory",
-        "canonical": "#f6f1e4",
-        "oklch": "oklch(95.8% 0.018 89.4)",
-        "tonalRamp": [
-          "oklch(15% 0.018 89.4)",
-          "oklch(26% 0.018 89.4)",
-          "oklch(38% 0.018 89.4)",
-          "oklch(50% 0.018 89.4)",
-          "oklch(62% 0.018 89.4)",
-          "oklch(74% 0.018 89.4)",
-          "oklch(85% 0.018 89.4)",
-          "oklch(95% 0.018 89.4)"
-        ],
-        "purpose": "Legacy only: text in the Room card scope."
-      },
-      "legacy-apricot": {
-        "role": "legacy",
-        "displayName": "Apricot",
-        "canonical": "#f8d9a8",
-        "oklch": "oklch(89.9% 0.072 79.0)",
-        "tonalRamp": [
-          "oklch(15% 0.072 79.0)",
-          "oklch(26% 0.072 79.0)",
-          "oklch(38% 0.072 79.0)",
-          "oklch(50% 0.072 79.0)",
-          "oklch(62% 0.072 79.0)",
-          "oklch(74% 0.072 79.0)",
-          "oklch(85% 0.072 79.0)",
-          "oklch(95% 0.072 79.0)"
-        ],
-        "purpose": "Legacy only: selection and focus ring in the connected room (the Room card scope)."
-      },
-      "legacy-selection-ink": {
-        "role": "legacy",
-        "displayName": "Warm Ink",
-        "canonical": "#120e0b",
-        "oklch": "oklch(16.8% 0.009 59.0)",
-        "tonalRamp": [
-          "oklch(15% 0.009 59.0)",
-          "oklch(26% 0.009 59.0)",
-          "oklch(38% 0.009 59.0)",
-          "oklch(50% 0.009 59.0)",
-          "oklch(62% 0.009 59.0)",
-          "oklch(74% 0.009 59.0)",
-          "oklch(85% 0.009 59.0)",
-          "oklch(95% 0.009 59.0)"
-        ],
-        "purpose": "Legacy only: text on the apricot selection."
-      },
-      "office-control": {
-        "role": "legacy",
-        "displayName": "Office Control Navy",
-        "canonical": "#252e49",
-        "oklch": "oklch(30.6% 0.051 269.2)",
-        "tonalRamp": [
-          "oklch(15% 0.051 269.2)",
-          "oklch(26% 0.051 269.2)",
-          "oklch(38% 0.051 269.2)",
-          "oklch(50% 0.051 269.2)",
-          "oklch(62% 0.051 269.2)",
-          "oklch(74% 0.051 269.2)",
-          "oklch(85% 0.051 269.2)",
-          "oklch(95% 0.051 269.2)"
-        ],
-        "purpose": "Legacy room surfaces (connected.module.css)."
-      },
-      "office-control-edge": {
-        "role": "legacy",
-        "displayName": "Office Edge Stone",
-        "canonical": "#aaa28f",
-        "oklch": "oklch(71.4% 0.028 87.9)",
-        "tonalRamp": [
-          "oklch(15% 0.028 87.9)",
-          "oklch(26% 0.028 87.9)",
-          "oklch(38% 0.028 87.9)",
-          "oklch(50% 0.028 87.9)",
-          "oklch(62% 0.028 87.9)",
-          "oklch(74% 0.028 87.9)",
-          "oklch(85% 0.028 87.9)",
-          "oklch(95% 0.028 87.9)"
-        ],
-        "purpose": "Legacy room button border and scrollbar thumb."
-      },
-      "office-muted": {
-        "role": "legacy",
-        "displayName": "Office Muted Cream",
-        "canonical": "#e5d8bf",
-        "oklch": "oklch(88.6% 0.036 83.8)",
-        "tonalRamp": [
-          "oklch(15% 0.036 83.8)",
-          "oklch(26% 0.036 83.8)",
-          "oklch(38% 0.036 83.8)",
-          "oklch(50% 0.036 83.8)",
-          "oklch(62% 0.036 83.8)",
-          "oklch(74% 0.036 83.8)",
-          "oklch(85% 0.036 83.8)",
-          "oklch(95% 0.036 83.8)"
-        ],
-        "purpose": "Legacy room secondary text."
-      },
-      "office-hover": {
-        "role": "legacy",
-        "displayName": "Office Hover Slate",
-        "canonical": "#3d465e",
-        "oklch": "oklch(39.6% 0.042 268.5)",
-        "tonalRamp": [
-          "oklch(15% 0.042 268.5)",
-          "oklch(26% 0.042 268.5)",
-          "oklch(38% 0.042 268.5)",
-          "oklch(50% 0.042 268.5)",
-          "oklch(62% 0.042 268.5)",
-          "oklch(74% 0.042 268.5)",
-          "oklch(85% 0.042 268.5)",
-          "oklch(95% 0.042 268.5)"
-        ],
-        "purpose": "Legacy room button hover fill."
-      },
-      "office-divider": {
-        "role": "legacy",
-        "displayName": "Office Divider Taupe",
-        "canonical": "#847d78",
-        "oklch": "oklch(59.4% 0.011 58.1)",
-        "tonalRamp": [
-          "oklch(15% 0.011 58.1)",
-          "oklch(26% 0.011 58.1)",
-          "oklch(38% 0.011 58.1)",
-          "oklch(50% 0.011 58.1)",
-          "oklch(62% 0.011 58.1)",
-          "oklch(74% 0.011 58.1)",
-          "oklch(85% 0.011 58.1)",
-          "oklch(95% 0.011 58.1)"
-        ],
-        "purpose": "Legacy room inspector and event rules."
-      },
-      "office-teal": {
-        "role": "legacy",
-        "displayName": "Office Teal",
-        "canonical": "#67baa6",
-        "oklch": "oklch(73.0% 0.087 176.3)",
-        "tonalRamp": [
-          "oklch(15% 0.087 176.3)",
-          "oklch(26% 0.087 176.3)",
-          "oklch(38% 0.087 176.3)",
-          "oklch(50% 0.087 176.3)",
-          "oklch(62% 0.087 176.3)",
-          "oklch(74% 0.087 176.3)",
-          "oklch(85% 0.087 176.3)",
-          "oklch(95% 0.087 176.3)"
-        ],
-        "purpose": "Legacy room canvas colour (draw-office.ts)."
-      },
-      "office-amber": {
-        "role": "legacy",
-        "displayName": "Office Amber",
-        "canonical": "#e4ad55",
-        "oklch": "oklch(78.2% 0.123 77.0)",
-        "tonalRamp": [
-          "oklch(15% 0.123 77.0)",
-          "oklch(26% 0.123 77.0)",
-          "oklch(38% 0.123 77.0)",
-          "oklch(50% 0.123 77.0)",
-          "oklch(62% 0.123 77.0)",
-          "oklch(74% 0.123 77.0)",
-          "oklch(85% 0.123 77.0)",
-          "oklch(95% 0.123 77.0)"
-        ],
-        "purpose": "Legacy room canvas colour (draw-office.ts)."
-      },
-      "office-ink": {
-        "role": "legacy",
-        "displayName": "Office Ink",
-        "canonical": "#232a46",
-        "oklch": "oklch(29.3% 0.052 272.2)",
-        "tonalRamp": [
-          "oklch(15% 0.052 272.2)",
-          "oklch(26% 0.052 272.2)",
-          "oklch(38% 0.052 272.2)",
-          "oklch(50% 0.052 272.2)",
-          "oklch(62% 0.052 272.2)",
-          "oklch(74% 0.052 272.2)",
-          "oklch(85% 0.052 272.2)",
-          "oklch(95% 0.052 272.2)"
-        ],
-        "purpose": "Legacy room text on the apricot selection."
-      },
       "ok": {
         "role": "status",
         "displayName": "Status Green",
@@ -573,10 +369,6 @@
         "displayName": "Mono label",
         "purpose": "Card labels at 11px, 0.06em (product still). Uppercase is not canonized; not for use as a kicker or eyebrow."
       },
-      "legacy-body": {
-        "displayName": "Legacy body",
-        "purpose": "Rosarivo 400 in the Room card scope only. Not for new pages."
-      },
       "reading-title": {
         "displayName": "Reading title",
         "purpose": "Essay title and /bot title: clamp(2rem, 6vw, 2.75rem) (32 to 44px), Geist 600, line-height 1.08, -0.03em, balanced wrapping."
@@ -624,16 +416,6 @@
         "name": "board-container",
         "value": "720px (container query)",
         "purpose": "Board container width: one column for agent cards below 720px, four seat tiles at or above."
-      }
-    ],
-    "legacyScopes": [
-      {
-        "name": "room-card",
-        "routes": [
-          "/office Room tab"
-        ],
-        "source": "apps/web/src/app/(public)/office/board/room-panel.module.css",
-        "purpose": "Navy ground and Rosarivo scope around the connected room. The room CSS keeps its literal office palette. Remove the scope when the room is restyled."
       }
     ]
   },
@@ -714,9 +496,17 @@
       "name": "Room Card",
       "kind": "custom",
       "refersTo": "room-card",
-      "description": "Room tab frame on /office: a hairline frame around a scoped legacy navy block, the one navy use on a Paper page. Do not reuse outside the room.",
-      "html": "<div class=\"ds-room\"><div class=\"ds-room-scope\">Connected room</div></div>",
-      "css": ".ds-room{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius-frame);background:var(--bg)}.ds-room-scope{box-sizing:border-box;min-width:0;padding:16px;background:#1b2340;color:#f6f1e4;font-family:Rosarivo,Georgia,serif;line-height:1.5}"
+      "description": "The Room tab: a Paper card around the drawing. Hairline 14px card, the drawing on a --bg-soft ground with a 6px radius and 16px padding (8px on phones), at most 768px wide, pixelated. The annex uses the same ground. Robot hit targets are invisible 44px buttons with the Paper focus ring. Controls, status pills, Now showing and the event log sit around it. No navy.",
+      "html": "<div class=\"ds-room-card\"><div class=\"ds-room-ground\"><div class=\"ds-room-art\">Connected room</div></div><p class=\"ds-room-note\">Click a robot, or pick an agent in the list.</p></div>",
+      "css": ".ds-room-card{display:grid;gap:12px;min-width:0;padding:14px;border:1px solid var(--line);border-radius:var(--radius-card)}.ds-room-ground{min-width:0;padding:16px;border-radius:6px;background:var(--bg-soft)}.ds-room-art{max-width:768px;margin-inline:auto;aspect-ratio:384/304}.ds-room-note{margin:0;font-size:13px;color:var(--fg-muted)}@media (max-width:639px){.ds-room-ground{padding:8px}}"
+    },
+    {
+      "name": "Room Team List",
+      "kind": "custom",
+      "refersTo": "room-team-list",
+      "description": "The Room tab's team list beside the room (desktop: right column, 340px; phones: below the room). A Team heading with a 6 stations label, then one 40px row per station: an 8px role dot, the name, and a 13px status word. Rows are aria-pressed buttons; selected = --bg-soft fill with a 1px --line border. Developer is a label row (n of 4 seats working) with five seat tiles (1 to 4, Annex). Unassigned executions sit below a hairline.",
+      "html": "<section class=\"ds-team\"><div class=\"ds-team-head\"><h2>Team</h2><span class=\"ds-label\">6 stations</span></div><button class=\"ds-team-row\" aria-pressed=\"true\"><span><i class=\"ds-team-dot\"></i>Orchestrator</span><span>Idle</span></button></section>",
+      "css": ".ds-team{display:grid;gap:2px}.ds-team-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 10px 8px}.ds-team-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 10px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--fg);font:inherit;font-size:14px;text-align:left}.ds-team-row:hover{background:var(--bg-soft)}.ds-team-row[aria-pressed=\"true\"]{background:var(--bg-soft);border-color:var(--line)}.ds-team-row span:last-child{font-size:13px;color:var(--fg-muted)}.ds-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:10px}@media (max-width:639px){.ds-team-row{min-height:44px}}"
     },
     {
       "name": "Demo App Frame",
@@ -825,7 +615,7 @@
   ],
   "narrative": {
     "northStar": "Paper",
-    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. The essay body is set in Newsreader. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo uses the Paper app frame (see the Demo App Frame component). /bot and the owner essay reader use Paper with a 680px reading column (see Reading Column). Other pages are not covered yet.",
+    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. The essay body is set in Newsreader. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper on both tabs: the Board tab and the Room tab (see Room Card). /demo uses the Paper app frame (see the Demo App Frame component). /bot and the owner essay reader use Paper with a 680px reading column (see Reading Column). Other pages are not covered yet.",
     "keyCharacteristics": [
       "Plain and calm: a white page, black type, no decoration.",
       "One blue accent, used for focus (and the home activity dot).",
@@ -841,8 +631,8 @@
         "section": "colors"
       },
       {
-        "name": "The Legacy Fence Rule",
-        "body": "The dusk navy palette and Rosarivo stay in the /office Room card scope only. Do not extend them to new pages.",
+        "name": "The Room Paper Rule",
+        "body": "The Room tab uses Paper tokens only. Its role dots take their colour from the drawing and are the one literal-colour exception.",
         "section": "colors"
       },
       {
@@ -869,6 +659,11 @@
         "name": "The Reading Font Rule",
         "body": "Newsreader is for the essay body only. Headings, controls and /bot stay in Geist.",
         "section": "typography"
+      },
+      {
+        "name": "The Replay Plays Once Rule",
+        "body": "The room's replay plays once and stops at its end. Play starts it again. Nothing loops.",
+        "section": "motion"
       }
     ],
     "dos": [
@@ -883,9 +678,8 @@
       "**Don't** add shadows except to the product still.",
       "**Don't** use accent for anything but focus. Two exceptions exist: the activity dot, and the /bot report link.",
       "**Don't** add looping or ambient animation, parallax or scroll effects.",
-      "**Don't** use Rosarivo or PT Serif on new pages.",
+      "**Don't** use PT Serif on new pages.",
       "**Don't** put literal colours in new components.",
-      "**Don't** extend the legacy dusk palette to new pages.",
       "**Don't** use Newsreader outside the essay body."
     ]
   }

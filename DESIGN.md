@@ -19,19 +19,7 @@ colors:
   btn-bg-dark: "#f2f2f4"
   btn-fg: "#ffffff"
   btn-fg-dark: "#0a0a0b"
-  legacy-dusk-navy: "#1b2340"
-  legacy-ivory: "#f6f1e4"
-  legacy-apricot: "#f8d9a8"
-  legacy-selection-ink: "#120e0b"
-  office-control: "#252e49"
-  office-control-edge: "#aaa28f"
-  office-muted: "#e5d8bf"
-  office-text: "#dfd7c6"
-  office-hover: "#3d465e"
-  office-divider: "#847d78"
-  office-teal: "#67baa6"
-  office-amber: "#e4ad55"
-  office-ink: "#232a46"
+
 typography:
   display:
     fontFamily: "Geist, system-ui, sans-serif"
@@ -85,11 +73,6 @@ typography:
     fontSize: "11px"
     fontWeight: 400
     letterSpacing: "0.06em"
-  legacy-body:
-    fontFamily: "Rosarivo, Georgia, serif"
-    fontSize: "16px"
-    fontWeight: 400
-    lineHeight: 1.5
   reading-body:
     fontFamily: "Newsreader, Georgia, serif"
     fontSize: "21px"
@@ -100,7 +83,6 @@ rounded:
   card: "10px"
   frame: "12px"
   item: "6px"
-  office-target: "4px"
   pill: "999px"
 spacing:
   grid: "4px"
@@ -175,16 +157,7 @@ components:
     backgroundColor: "{colors.bg}"
     textColor: "{colors.fg-muted}"
     rounded: "{rounded.control}"
-  room-card:
-    backgroundColor: "{colors.legacy-dusk-navy}"
-    textColor: "{colors.legacy-ivory}"
-    typography: "{typography.legacy-body}"
-    rounded: "{rounded.frame}"
-    padding: "16px"
-  office-target:
-    rounded: "{rounded.office-target}"
-    width: "44px"
-    height: "44px"
+
 ---
 
 Visual system for the Kentcrosswise public surfaces; the architectural design doc is `docs/DESIGN.md`, which this file does not replace.
@@ -198,7 +171,7 @@ Paper is the visual system for the public pages. It is plain and calm. A white p
 Status:
 
 - The home page, the shared header and the shared footer use Paper.
-- `/office` uses Paper with the App frame board (Board tab). Its Room tab is the one scoped legacy-navy block. See [Room card](#room-card) and [Legacy shell](#legacy-shell).
+- `/office` uses Paper on both tabs: the App frame board (Board tab) and the Room tab. See [Room card](#room-card).
 - `/demo` uses the Paper app frame. See [Demo app frame](#demo-app-frame).
 - `/bot` and the owner essay reader use Paper with a 680px reading column. See [Reading layout](#reading-layout).
 - Other pages are not covered yet. See [Page templates](#page-templates).
@@ -208,6 +181,7 @@ Principles:
 - Smooth and professional beats clever.
 - Shadows only on the home product still.
 - Motion is short and plays once. Nothing loops.
+- The room's replay plays once and stops at its end. Play starts it again.
 
 ## Colors
 
@@ -229,8 +203,7 @@ Rules:
 - Accent is for focus. Do not add it to new elements.
 - Header and footer links are `--fg-muted`, not accent.
 - New public CSS reads these tokens. It does not use literal colours.
-
-The office palette that remains is listed in [Legacy shell](#legacy-shell).
+- The only literal colours on the Room tab are the role dots, which match the drawing (see [Room card](#room-card)).
 
 ## Typography
 
@@ -254,7 +227,7 @@ Rules:
 
 - Geist for text. Geist Mono only for timestamps and labels.
 - Hierarchy comes from size and weight. Do not add a third weight.
-- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays only in the Room card.
+- PT Serif is not used.
 - Newsreader is for the essay body text only. Headings, controls and /bot stay in Geist.
 
 ## Layout
@@ -291,7 +264,6 @@ Radius tokens:
 - `frame` 12px: the product still frame.
 - `item` 6px: sidebar items in the product still. This value is in the code but not in the Paper spec.
 
-Legacy radii: `office-target` 4px for room targets, `pill` 999px for office buttons. See [Legacy shell](#legacy-shell).
 
 The home page CSS uses no icons and no avatars.
 
@@ -303,7 +275,7 @@ The home page CSS uses no icons and no avatars.
 - **Secondary.** Fill `--bg`, text `--fg`, same size. 1px outline `color-mix(in srgb, var(--fg) 22%, transparent)`, 40% on hover, so it reads as a boundary in both themes. Used for "Explore the demo" on the home hero.
 - **Account button (header).** Primary style at 36px tall, 14px, weight 500. A pseudo-element extends its hit area to 44px.
 
-Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`) so the Room card's own focus ring can override it.
+Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`).
 
 Hover transitions take 150ms with `--ease-out`. Under `prefers-reduced-motion: reduce` they are off.
 
@@ -371,7 +343,7 @@ Rows in the live activity log, inside a 1px `--line` border with a 10px radius a
 
 ### Status pill
 
-Summary pills above the board on `/office`, in `apps/web/src/app/(public)/office/board/board.module.css`.
+Summary pills above the board on `/office`, and the same pill style for the Room status line. Styles are in `apps/web/src/app/(public)/office/board/board.module.css` and `office/connected/connected.module.css`.
 
 - Pill: 1px `--line` border, 999px radius, 4px 10px padding, 13px text in `--fg-muted`. A count is set in `--fg`, weight 500.
 - Dot: 7px circle. `ok` is `--ok` (green), `warn` is `--warn` (amber), `idle` is `--idle` (grey). Tones are colour only; the words carry the meaning.
@@ -419,42 +391,33 @@ The Board | Room control at the top right of `/office`. It is a tablist.
 
 ### Room card
 
-The Room tab holds the connected office room (`office/connected/connected-office.tsx`) in one card.
+The Room tab (`office/connected/connected-office.tsx`, styled in `connected.module.css`) is in Paper. It has no navy ground.
 
-- Frame: 1px `--line` border, 12px radius, hidden overflow.
-- Scope: a block with `#1b2340` ground, `#f6f1e4` text, the Rosarivo variable and 16px padding. This is the one scoped legacy-navy block on a Paper page.
-- Why: the room's own CSS (`connected.module.css`) was written for the navy shell, and it is accepted as the visual baseline. Restyling it to Paper is a later task. The scope keeps the room looking as it did, and no other part of `/office` uses navy. Remove the scope when the room is redone.
+- Layout: from 880px of container width, the room card sits on the left and a 340px column holds the Team list, then Agent details. Below 880px the order is room card, Team list, Agent details. Now showing and the event log span the full width below.
+- Controls: a Playback group in the Segmented tabs track style (36px buttons, 44px on phones, a 2x2 grid on phones), the playback state text, and the status pills on the right.
+- Room card: 1px `--line` border, 10px radius, 14px padding, no fill. The drawing sits on a `--bg-soft` ground with a 6px radius and 16px padding (8px on phones), centred, at most 768px wide, pixelated. The annex (384x96) uses the same treatment when shown. Robot hit targets are invisible 44px buttons over the robots and take the Paper focus ring.
+- Team list: a section with a "Team" heading and a "6 stations" label. Rows are 40px `aria-pressed` buttons with an 8px role dot, the name and a 13px status word. Developer is a label row ("n of 4 seats working") above five seat tiles: 1 to 4 and Annex.
+- Agent details: a card with a model tag in Geist Mono, and a two-column fact list with 96px mono labels.
+- Now showing: a bordered row with the current event and its time in Geist Mono.
+- Event log: the Board's Activity list layout. Filter chips: All events, the five roles, and Selected task. Role chips filter the log. Selecting a station clears a "Selected task" filter back to "All events"; role chips stay as they are.
+- Motion: the replay plays once and stops at its end; Play starts it again. Hover and selected changes take 150ms and are off under reduced motion.
+- Colour exception: the role dots take their colour from `PEOPLE` in `office/draft/scene.ts`, which matches the robots in the drawing. They are the only literal colours on the Room tab. The drawing keeps its own palette in `office/draft/draw-office.ts`.
 
 ### Feature rows
 
 Three short text blocks under the product still. A 1px `--line` top border, 32px padding above. Title in the Title style. Text in `--fg-muted` at the inherited 16px. Three columns with 32px gaps on desktop. One column with 24px gaps on phones.
-
-### Office target
-
-A 44px square hit area with a 4px radius. Used by the legacy office room. See [Legacy shell](#legacy-shell).
 
 ## Page templates
 
 Four templates. Marketing and App frame are partly built.
 
 - **Marketing (home). Done.** Hero, product still, three feature rows, footer. Wide rhythm, 96px sections.
-- **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is the one scoped legacy-navy block (see [Room card](#room-card)).
+- **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is a Paper room card with a team list (see [Room card](#room-card)).
 - **App frame (`/demo`). Built.** The product still's sidebar and main area, filled with demo data. Tabs, a plain table for people, and bars for mood. See [Demo app frame](#demo-app-frame).
 - **Reading (owner essay reader, `/bot`). Built.** A 680px column with a reading progress line, Newsreader body text, pill rating controls. See [Reading layout](#reading-layout).
 - **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
 
 Do not build a template before its page is redone.
-
-## Legacy shell
-
-The dusk navy page shell (`PublicShell`) is gone. `/bot` moved to the Paper frame, and `/demo` and `/office` were already there. No page uses the navy ground now except the Room card on `/office`, which keeps its own scoped block.
-
-The office room is the one legacy block left on `/office`:
-
-- The Room card's scope (`office/board/room-panel.module.css`) sets `#1b2340` ground and `#f6f1e4` text around the connected room, and the Rosarivo variable. See [Room card](#room-card).
-- `office/connected/connected.module.css` (the room itself) uses the office palette literals: `#252e49`, `#232a46`, `#293d47` and `#3d465e` for surfaces, `#f8d9a8` apricot for selection and focus, `#e5d8bf` and `#d4c7b4` for text, and `#847d78`, `#756f69` and `#aaa28f` for lines. Event times use Rosarivo with lining, tabular figures.
-- The room canvas colours are set in code in `office/draft/draw-office.ts`. They are not listed here.
-When a page is redone, remove its literal values. Do not extend the legacy palette to new pages.
 
 ## Reading layout
 
@@ -485,7 +448,6 @@ Only the reader and `/bot` use this layout. The essay list, setup, console and o
 - **Don't** add shadows except to the product still.
 - **Don't** use accent for anything but focus. Two exceptions exist: the activity dot, and the "Report a bot issue" link on `/bot`.
 - **Don't** add looping or ambient animation, parallax or scroll effects.
-- **Don't** use Rosarivo or PT Serif on new pages.
+- **Don't** use PT Serif on new pages.
 - **Don't** put literal colours in new components.
-- **Don't** extend the legacy palette to new pages.
 - **Don't** use Newsreader outside the essay body.
