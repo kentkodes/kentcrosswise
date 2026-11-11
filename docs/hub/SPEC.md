@@ -14,7 +14,7 @@ A private hub for one person (the owner): capture thoughts from phone or compute
 ## Features (MVP)
 
 1. **Capture box.** A phone-friendly text box behind login. Every entry is stored raw, then routed.
-2. **Router.** Jev (Haiku 5.5 as fallback) classifies each entry as `crm_note`, `diary`, `todo`, `idea` or `agent_request`. The owner sees the result and can reassign it; corrections are stored. Low confidence puts the entry in the inbox for the owner to choose.
+2. **Router.** DeepSeek V4.1 Flash classifies each entry as `crm_note`, `diary`, `todo`, `idea` or `agent_request`. The owner sees the result and can reassign it; corrections are stored. Low confidence puts the entry in the inbox for the owner to choose.
 3. **CRM.** Contacts: name, how known, birthday, notes, tags. CRM notes link to contacts by name match (owner confirms when ambiguous). When a note implies a plan ("lunch with Sam next Tuesday"), the app suggests a Google Calendar event; the owner adds it with one tap. **Not included:** last-contact tracking and "you haven't talked to X" reminders.
 4. **Diary and mood.** A diary page for long entries; diary items from the capture box land here too. Each entry is scored 0–1 on energy, stress, happiness, satisfaction, sadness, anger, anxiety and gratitude, plus an overall sentiment from -1 to 1 (Haiku 5.5). The mood board charts these over time, with a toggle per metric and the overall line on top.
 5. **Social dashboard.** YouTube, Instagram and TikTok (all business/creator accounts). A daily snapshot of followers and views per source; totals plus a filter by source.
@@ -34,7 +34,7 @@ The owner is the orchestrator's boss and owns the overall idea; agents do the re
 - **QA.** Reviews PRs against the design docs and the QA playbook; writes and runs tests.
 - **Scraper-builder.** Writes and repairs per-site essay extractors.
 - **Docs-keeper.** After each merge, updates `AGENTS.md`, the design docs and the agent playbooks in `docs/agents/` so they match the code.
-- **Router / Categorizer.** Jev, with Haiku 5.5 as fallback. Routes capture entries and categorizes essays.
+- **Router / Categorizer.** DeepSeek V4.1 Flash. Routes capture entries and categorizes essays.
 
 Each agent that acts on GitHub is its own GitHub App owned by the owner's account.
 
@@ -50,7 +50,7 @@ Each agent that acts on GitHub is its own GitHub App owned by the owner's accoun
 
 ## Stack
 
-TypeScript on Node.js, one public monorepo `kentcrosswise`. Next.js on AWS Lambda via OpenNext behind CloudFront; S3; SQS; EventBridge Scheduler; Secrets Manager (every secret; none in the repo); Route 53 (`kentcrosswise.com`); Neon Postgres (branch per PR); Terraform (state in S3). Models: Haiku 5.5 for agents and mood scoring, Jev for routing and categorizing.
+TypeScript on Node.js, one public monorepo `kentcrosswise`. Next.js on AWS Lambda via OpenNext behind CloudFront; S3; SQS; EventBridge Scheduler; Secrets Manager (every secret; none in the repo); Route 53 (`kentcrosswise.com`); Neon Postgres (branch per PR); Terraform (state in S3). Models: Haiku 5.5 for agents and mood scoring, DeepSeek V4.1 Flash for routing and categorizing.
 
 ## Rules
 

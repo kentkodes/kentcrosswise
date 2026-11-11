@@ -18,7 +18,7 @@ Current architecture and accepted decisions, consolidated 2026-10-25 (latest off
 | D10 | Public pages import only `@kcw/demo-data` and `@kcw/xray`, enforced by an ESLint `no-restricted-imports` rule on `app/(public)/**`; the public agent feed reads one DB view through a role that can read nothing else | Private data cannot reach a public endpoint by accident. |
 | D11 | Agent office feed = polling a CloudFront-cached JSON endpoint (5 s) | No extra service; good enough for a public animation. |
 | D12 | Neon branches via `neondatabase/create-branch-action@v6` / `delete-branch-action` with the key from Secrets Manager; Neon projects created by hand, outside Terraform | Official actions, no GitHub secret, nothing to maintain. |
-| D13 | Orchestrator planner and public-title writer run Claude Opus 5.5 (`claude-opus-5-5`) at high effort; runtime worker calls (essay categorizer, later hooks and router) use DeepSeek V4.1 Flash through the first-party DeepSeek API (OpenAI-compatible, `https://api.deepseek.com`), model `deepseek-flash` (an alias, not a dated pin; the model id the API returns is stored with each result, so drift stays visible). The dated gateway id `deepseek/deepseek-v4.1-flash-1017` exists only on gateways and can be selected with the optional `deepseek_model` + `deepseek_base_url` secret keys. Jev is no longer used at runtime. Coding agents (Developer, QA, Scraper-builder, Docs-keeper) are unchanged for now (step 1 only). | Owner decision 2026-11-11 (replaces Q3: Haiku 5.5, and the Jev-first routing). |
+| D13 | Orchestrator planner and public-title writer run Claude Opus 5.5 (`claude-opus-5-5`) at high effort; runtime worker calls (essay categorizer, later hooks and router) use DeepSeek V4.1 Flash through the first-party DeepSeek API (OpenAI-compatible, `https://api.deepseek.com`), model `deepseek-flash` (an alias, not a dated pin; the model id the API returns is stored with each result, so drift stays visible). The dated gateway id `deepseek/deepseek-v4.1-flash-1017` exists only on gateways and can be selected with the optional `deepseek_model` + `deepseek_base_url` secret keys. Coding agents (Developer, QA, Scraper-builder, Docs-keeper) are unchanged for now (step 1 only). | Owner decision 2026-11-11 (replaces Q3: Haiku 5.5, and the earlier routing). |
 | D14 | Pin `@opennextjs/aws` 4.1.x + Next 16; own thin Terraform module for the OpenNext v4 output | No maintained module supports v4. |
 | D15 | Google refresh token (Calendar, YouTube) stored in Secrets Manager, written by the app at consent | It is a credential. |
 | D16 | Agents call Anthropic through **workload identity federation** (GitHub OIDC to a Claude Console federation rule); no Anthropic API key exists for Actions | No secret at all; IDs are repo variables. One service account per agent if the Console allows it (per-agent usage), **verify**. |
@@ -28,7 +28,7 @@ Current architecture and accepted decisions, consolidated 2026-10-25 (latest off
 | D21 | The per-PR preview DB URL goes in an **SSM Parameter Store SecureString** `/kcw/preview/pr-<n>/database-url` (standard tier, AWS-managed KMS key), created and deleted by `infra/preview` | Ephemeral synthetic-preview credentials remain encrypted and scoped to that PR's Lambda; preview origin verification also uses SSM. Pricing remains U12. |
 | D20 | At most 4 agent PRs in flight (orchestrator limit); preview Neon branches have `expires_at` = now + 3 h | Neon Free allows 10 branches per project (§5). |
 | D22 | The domain is optional in Terraform: `domain_name = ""` means no ACM certificate or Route 53 records, and prod and previews use their CloudFront `*.cloudfront.net` URLs. Setting the variable later adds the cert, aliases and DNS without recreating anything else. | The production domain is configured; optional-domain support remains useful for previews. |
-| D24 | Accepted from P1 build (2026-10-22): Node 24 (`.nvmrc`, `engines >=22.12`, engine-strict); TypeScript pinned `~6.0` (typescript-eslint doesn't support 7); ESLint 9. `(public)/**` may import `@kcw/demo-data` **and** `@kcw/xray` (X-ray is public by spec; amends D10). DB roles in migrations are NOLOGIN group roles; Neon login users are created outside the repo (bootstrap runbook) and granted membership, so no DB passwords live in git. Jev is called with `fetch` through `jev-adapter.ts`. | Recorded after Liaison verification. |
+| D24 | Accepted from P1 build (2026-10-22): Node 24 (`.nvmrc`, `engines >=22.12`, engine-strict); TypeScript pinned `~6.0` (typescript-eslint doesn't support 7); ESLint 9. `(public)/**` may import `@kcw/demo-data` **and** `@kcw/xray` (X-ray is public by spec; amends D10). DB roles in migrations are NOLOGIN group roles; Neon login users are created outside the repo (bootstrap runbook) and granted membership, so no DB passwords live in git. | Recorded after Liaison verification. |
 | D23 | AWS region `us-east-1` for every resource. Owner administration uses a named IAM user with MFA while Free Tier credits remain; IAM Identity Center follows after those credits are exhausted. Enrollment/login remain pending. GitHub repo `kentkodes/kentcrosswise` (public), owner id `107236483`, repo id `1430035147`, so the OIDC `sub` prefix is `repo:kentkodes@107236483/kentcrosswise@1430035147`. | Recorded from the owner's setup. |
 | D25 | The server Lambda Function URL uses **AuthType NONE**, guarded by a secret origin header: CloudFront adds `x-kcw-origin`, and the OpenNext server wrapper (`apps/web/src/server/origin-wrapper.ts`, wrapper override `kcw-origin-guard`) answers 403 to any request without the exact value (constant-time compare), before routing, the ISR cache, route handlers and server actions. Prod value: secret `kcw/prod/origin-verify`, key `origin_verify` (the owner fills a long random value). Preview value: Terraform `random_password` per preview, stored for the server in the SSM SecureString `/kcw/preview/pr-<n>/origin-verify`. The image-optimization Function URL keeps OAC + AWS_IAM (GET only); revalidation stays on SQS. | AWS requires clients that PUT/POST through OAC to a Function URL to send `x-amz-content-sha256`; browsers don't, which breaks Auth.js forms and server actions (CloudFront Developer Guide, restricting access to a Lambda function URL origin). The prod value has its own secret rather than a key in `kcw/prod/web` because Terraform must read it to configure CloudFront: the PR plan role and the deploy role can read this one value without reading the auth secret and Google client secret. **Residual risk:** the value lives in the CloudFront config and in Terraform state (private, encrypted bucket); the PR plan role can read the prod state, so PR CI code could learn it and call the Function URL directly. That bypasses CloudFront, not Auth.js. Rotate by changing the secret and re-applying prod. |
 
@@ -75,10 +75,9 @@ Components:
 - **Scheduler**: EventBridge schedules for the orchestrator sweeper (15 min), nightly source health + preview GC dispatch, weekly quality report, daily social snapshot, Instagram token refresh (every 30 days), and the watcher.
 - **Model providers** (`packages/core/models`): `classify(input, labels) -> {label, confidence, model}` and `complete/score`. Implementations:
   - `DeepseekProvider`: OpenAI-compatible Chat Completions over `fetch` (no SDK). Model defaults to the alias `deepseek-flash` and base URL to `https://api.deepseek.com` (first-party API); the optional secret keys `deepseek_model` and `deepseek_base_url` override them (e.g. a gateway with the dated id `deepseek/deepseek-v4.1-flash-1017`), so changing model or endpoint needs no code change. `classify` forces a function call returning `{label, confidence}` and falls back to a JSON object in the message; a label outside the labels is a non-retryable `ProviderError`. 429, 5xx and network errors are retried with backoff.
-  - `JevProvider` (no longer used at runtime; kept in the package): `@typesafe-ai/sdk`, `POST https://api.typesafe.ai/v1/systemone`, `choice` questions. The model is pinned in config to `jev-1.13.0` rather than `jev-latest`; it is upgraded deliberately after replaying stored `route_corrections`.
   - `AnthropicProvider`: the orchestrator planner passes `claude-opus-5-5` with `effort: high` (sent as `output_config.effort`); the default for other callers stays `claude-haiku-5-5` (prompts under 100K tokens, price cliff above that).
   - `FakeProvider`.
-  - `withFallback(threshold)` (not used at runtime now): Haiku when Jev's confidence is below the threshold or Jev returns an error (429/529 retried with backoff first).
+  - `withFallback(threshold)` (not used at runtime now): Haiku when the primary's confidence is below the threshold or the primary returns an error (429/529 retried with backoff first).
   - Every call writes a `usage_events` row.
 
 ## 2. Repo layout
@@ -330,7 +329,7 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | Name | Keys | Read by |
 |---|---|---|
 | `kcw/prod/web` | auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public | web Lambda |
-| `kcw/prod/models` | anthropic_api_key, deepseek_api_key, optional deepseek_base_url, optional deepseek_model, typesafe_api_key (no longer read), langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; agents use federation) |
+| `kcw/prod/models` | anthropic_api_key, deepseek_api_key, optional deepseek_base_url, optional deepseek_model, langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; agents use federation) |
 | `kcw/prod/orchestrator` | db_url, github_app_client_id, github_app_installation_id, github_app_private_key | orchestrator Lambda |
 | `kcw/prod/relay` | db_url | webhook relay Lambda (delivery dedupe, task lookup; its own secret so the relay cannot read the orchestrator App key) |
 | `kcw/prod/pipeline` | db_url | pipeline Lambdas |
@@ -365,10 +364,10 @@ Conventions for every task:
 
 | ID | Task | Files/areas | Depends | Definition of done |
 |---|---|---|---|---|
-| P1-00 | OWNER setup checklist, following research/infra.md §1-§8 and research/apis.md: AWS account hardening + admin identity (Q5), domain in Route 53, budget alert, Neon projects `kentcrosswise` + `kentcrosswise-ci` (with branch `base`), GitHub repo, Anthropic org + credits, Jev and LangSmith accounts | `docs/runbooks/bootstrap.md` (written by developer, links research, no restating) | - | Runbook exists; owner ticks each item; repo owner/repo numeric IDs recorded as repo variables |
+| P1-00 | OWNER setup checklist, following research/infra.md §1-§8 and research/apis.md: AWS account hardening + admin identity (Q5), domain in Route 53, budget alert, Neon projects `kentcrosswise` + `kentcrosswise-ci` (with branch `base`), GitHub repo, Anthropic org + credits, LangSmith account | `docs/runbooks/bootstrap.md` (written by developer, links research, no restating) | - | Runbook exists; owner ticks each item; repo owner/repo numeric IDs recorded as repo variables |
 | P1-01 | Monorepo skeleton | root configs, `packages/*` empty pkgs, `AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md` stubs, `.claude/settings.json` | - | `pnpm i && pnpm lint && pnpm typecheck && pnpm test` pass with one sample test per package |
 | P1-02 | `@kcw/secrets` | `packages/secrets` | 01 | `getSecret(name, key?)` caches per process and parses JSON; names starting with `/` are read as SSM SecureString parameters (preview DB URL, D21); can write (for token rotation); fake for tests; unit tests for cache, missing key, error |
-| P1-03 | `@kcw/core` model providers | `packages/core/models` | 01 | Interface + `AnthropicProvider`, `JevProvider` (`@typesafe-ai/sdk`, model from config, default `jev-1.13.0`; request built from api.typesafe.ai/openapi.json), `FakeProvider`, `withFallback(threshold)`; tests: fallback on low confidence, on error, after 429/529 retries, usage callback called with returned model id |
+| P1-03 | `@kcw/core` model providers | `packages/core/models` | 01 | Interface + `AnthropicProvider`, `FakeProvider`, `withFallback(threshold)`; tests: fallback on low confidence, on error, usage callback called with returned model id |
 | P1-04 | DB runner + 0001 hub/essays tables + roles | `packages/db/migrations/0001_*.sql`, `runner.ts`, `scripts/migrate.ts` | 01 | Runs on PGlite in tests; idempotent; constraint tests (mood ranges, unique snapshot day, text_hash unique) |
 | P1-05 | Synthetic seed + `@kcw/demo-data` | `packages/db/seeds`, `packages/demo-data` | 04 | Deterministic seeded generator (fake contacts, entries, mood series, social metrics); test: same seed = same output; grep test: no real-looking emails |
 | P1-06 | Next.js 16 app skeleton + route groups | `apps/web` | 01 | `pnpm --filter web build` passes; `(public)` home and `/demo` placeholder render; ESLint rule blocks `@kcw/db` imports under `(public)` (rule test with a fixture file) |
@@ -413,7 +412,7 @@ Conventions for every task:
 **Phase 3: Hub MVP**
 - Public `/terms` and `/privacy` pages (needed for TikTok domain-verified URLs; also used by Google/Meta app settings).
 - Capture box (phone layout) storing raw `entries`.
-- Router with Jev + Haiku fallback; inbox for low confidence; reassign + `route_corrections`.
+- Router on DeepSeek V4.1 Flash; inbox for low confidence; reassign + `route_corrections`.
 - Contacts CRUD; linking CRM notes to contacts, with an inbox item for ambiguous matches.
 - Google OAuth app **published "In production" (unverified, personal use)** so refresh tokens do not expire after 7 days; incremental consent for `calendar.events.owned`, `youtube.readonly`, `yt-analytics.readonly`; re-consent after publishing.
 - Calendar suggestion extraction; one-tap add via the Calendar API.
@@ -439,7 +438,7 @@ Conventions for every task:
 - Seed list drafting task (~300) → `seed_items` → owner approval in the inbox.
 - Source registry + watcher Lambda (robots.txt, per-site rate limit).
 - Validator: exact hash, MinHash near-dup, fuzzy metadata dup, quality checks; quarantine + an issue for the Scraper-builder.
-- Categorizer (Jev, Haiku fallback) and hook writer (Haiku).
+- Categorizer (DeepSeek V4.1 Flash) and hook writer (Haiku).
 - Extractors per seeded source (one issue per site, Scraper-builder).
 - Nightly source health check; weekly quality report.
 - Public demo with a handful of public-domain essays.
@@ -448,13 +447,12 @@ Conventions for every task:
 - Owner-driven feature tasks via the console; `agent_request` entries → approvals → tasks.
 - Embedding-based recommendations; EPUB/PDF import; Apple Shortcut capture; spending caps; Google Voice bridge.
 - Periodic dependency/security update tasks (critical by rule, so owner-approved).
-- Re-evaluate the Jev model pin when `jev-latest` moves.
 
 ## 10. Unverified items: status
 
 | ID | Item | Status |
 |---|---|---|
-| U1 | Jev API | **Resolved:** `POST https://api.typesafe.ai/v1/systemone`, SDK `@typesafe-ai/sdk`, choice answers carry `confidence` + `probabilities`, `jev-latest` = 1.13.0, $0.042/M input, output free (research/apis.md §5). **Open:** self-serve access ("early access"), numeric rate limits, exact field names (take them from the OpenAPI spec in P1-03) |
+| U1 | Former routing API | **Obsolete:** removed from the codebase and runtime (D13). No open items. |
 | U2 | Claude Code Action | **Resolved:** custom App token via `github_token`; model via `claude_args`; repo `.claude/` + CLAUDE.md load; plugins via inputs; `allowed_bots`; Bash off by default; base-branch config on PR events; federation auth (research/infra.md §6). Usage extraction/reporting is implemented from execution artifacts, including QA work/review and late-terminal reports. **Open:** real end-to-end usage completeness and one federation service account per agent |
 | U3 | OpenNext + Terraform | **Resolved:** `@opennextjs/aws` 4.1.12 with Next 16; no maintained Terraform module supports v4 (research/infra.md §8), hence D14 |
 | U4 | LangGraph JS checkpointer, interrupt/resume and Lambda bundle | Source implementation and local tests exist; runtime checkpoint ownership verified. Real-task persistence/interrupt/resume, deployed graph/model execution and trace flushing remain unverified (P2-18). |

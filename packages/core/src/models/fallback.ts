@@ -8,8 +8,8 @@ export interface FallbackOptions {
 }
 
 /**
- * Primary first (e.g. Jev, which already retried 429/529 with backoff); the fallback
- * (e.g. Haiku) when the primary errors or its confidence is below the threshold.
+ * Primary first (e.g. DeepSeek, which retries 429/529 with backoff itself); the fallback
+ * (e.g. Anthropic Haiku) when the primary errors or its confidence is below the threshold.
  * If the fallback also fails, its error propagates.
  */
 export function withFallback(primary: ModelProvider, fallback: ModelProvider, opts: FallbackOptions): ModelProvider {

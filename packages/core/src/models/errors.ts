@@ -22,7 +22,7 @@ export class ProviderError extends Error {
   }
 }
 
-/** 429 = rate limited, 529 = overloaded (Jev and Anthropic). Both are retried with backoff. */
+/** 429 = rate limited, 529 = overloaded. Both are retried with backoff. */
 export function isRetryableStatus(status: number): boolean {
   return status === 429 || status === 529;
 }
