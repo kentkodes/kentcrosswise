@@ -2,7 +2,7 @@
  * Shared public header (/, /demo, /office, /bot). Sticky, 60px row on desktop, centred to 1120px.
  * Colours come from the global tokens through local vars: `--header-fg`, `--header-muted`,
  * `--header-line`, `--header-bg`. They are read with a token fallback rather than declared here,
- * so a shell that sets them (public-shell.module.css) overrides them by inheritance.
+ * so a page that sets them overrides them by inheritance.
  * Placement in the page (grid cell, stacking) belongs to the page via className.
  */
 
@@ -34,8 +34,7 @@
   padding: 0 24px;
 }
 
-/* Focus: 2px outline, offset 2px. Specificity stays at one class so the shell's own
-   focus ring (public-shell.module.css) still wins on /demo, /office and /bot. */
+/* Focus: 2px outline, offset 2px. Specificity stays at one class so a page-level focus ring can win. */
 :where(.header) :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -83,8 +82,7 @@
   font-weight: 500;
 }
 
-/* Primary solid button. Inverts at the global defaults (--btn-bg / --btn-fg); the shell
-   sets --header-fg / --header-bg so it stays a light pill on the navy ground. */
+/* Primary solid button. Inverts at the global defaults (--btn-bg / --btn-fg). */
 /* The pill is 36px tall; ::after widens its hit area to 44px (4px above and below) without changing the visual. */
 .signIn {
   position: relative;

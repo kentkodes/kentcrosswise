@@ -2,7 +2,7 @@
 // Reading progress for the reader: how far the page has been scrolled. Not saved yet (reading_progress
 // persistence is not part of this slice).
 import { useEffect, useState } from "react";
-import styles from "../essays.module.css";
+import styles from "./reader.module.css";
 
 export function ReadingProgress() {
   const [pct, setPct] = useState(0);

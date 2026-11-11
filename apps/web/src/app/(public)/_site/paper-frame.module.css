@@ -20,7 +20,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Focus: 2px accent outline, offset 2px. Zero-specificity :where() keeps the shell's own ring on other pages. */
+/* Focus: 2px accent outline, offset 2px. Zero-specificity :where() lets a page-level ring win. */
 :where(.page) :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

@@ -15,9 +15,8 @@ export const geistMono = Geist_Mono({
   variable: "--font-mono",
 });
 
-// Rosarivo Regular, self-hosted (OFL, see src/fonts/rosarivo/). Used by the PublicShell pages (/demo, /bot) and by the
-// /office Room card, which mounts the connected room in a Rosarivo scope.
-
+// Rosarivo Regular, self-hosted (OFL, see src/fonts/rosarivo/). Used only by the /office Room card, which mounts
+// the connected room in a Rosarivo scope.
 export const rosarivo = localFont({
   src: "../../../fonts/rosarivo/Rosarivo-Regular.ttf",
   weight: "400",

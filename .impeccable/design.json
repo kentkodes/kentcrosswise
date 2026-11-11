@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T20:00:00Z",
+  "generatedAt": "2026-11-11T21:00:00Z",
   "title": "Design System: Kentcrosswise",
   "extensions": {
     "colorMeta": {
@@ -189,7 +189,7 @@
           "oklch(85% 0.221 265.8)",
           "oklch(95% 0.221 265.8)"
         ],
-        "purpose": "Focus outline on every interactive element. Also the home activity dot (the one other use)."
+        "purpose": "Focus outline on every interactive element. Also the home activity dot and the /bot report link (the two other uses)."
       },
       "accent-dark": {
         "role": "primary",
@@ -291,7 +291,7 @@
           "oklch(85% 0.055 270.6)",
           "oklch(95% 0.055 270.6)"
         ],
-        "purpose": "Legacy only: PublicShell ground (/bot) and the Room card scope."
+        "purpose": "Legacy only: the Room card scope on /office. Not for new pages."
       },
       "legacy-ivory": {
         "role": "legacy",
@@ -308,7 +308,7 @@
           "oklch(85% 0.018 89.4)",
           "oklch(95% 0.018 89.4)"
         ],
-        "purpose": "Legacy only: text on the navy shell and the Room card scope."
+        "purpose": "Legacy only: text in the Room card scope."
       },
       "legacy-apricot": {
         "role": "legacy",
@@ -325,7 +325,7 @@
           "oklch(85% 0.072 79.0)",
           "oklch(95% 0.072 79.0)"
         ],
-        "purpose": "Legacy only: selection, focus ring and report link on the navy shell and in the room."
+        "purpose": "Legacy only: selection and focus ring in the connected room (the Room card scope)."
       },
       "legacy-selection-ink": {
         "role": "legacy",
@@ -567,7 +567,7 @@
       },
       "mono": {
         "displayName": "Mono",
-        "purpose": "Geist Mono for timestamps and product still labels (12px). The build uppercases some card labels; that treatment is not canonized."
+        "purpose": "Geist Mono for timestamps and product still labels (12px), and literal code such as the /bot User-Agent. The build uppercases some card labels; that treatment is not canonized."
       },
       "mono-label": {
         "displayName": "Mono label",
@@ -575,7 +575,19 @@
       },
       "legacy-body": {
         "displayName": "Legacy body",
-        "purpose": "Rosarivo 400 on /bot and the Room card scope only. Not for new pages."
+        "purpose": "Rosarivo 400 in the Room card scope only. Not for new pages."
+      },
+      "reading-title": {
+        "displayName": "Reading title",
+        "purpose": "Essay title and /bot title: clamp(2rem, 6vw, 2.75rem) (32 to 44px), Geist 600, line-height 1.08, -0.03em, balanced wrapping."
+      },
+      "reading-byline": {
+        "displayName": "Reading byline",
+        "purpose": "Essay byline under the title: 17px, --fg-muted."
+      },
+      "reading-body": {
+        "displayName": "Reading body",
+        "purpose": "Essay article body only: Newsreader (--font-reading) 400, 21px, line-height 1.65; 19px under 640px. Paragraphs 1.1em apart. Not for headings, controls or /bot."
       }
     },
     "shadows": [
@@ -616,14 +628,6 @@
     ],
     "legacyScopes": [
       {
-        "name": "public-shell",
-        "routes": [
-          "/bot"
-        ],
-        "source": "apps/web/src/app/(public)/_site/public-shell.module.css",
-        "purpose": "Dusk navy ground, ivory text, Rosarivo, color-scheme dark. Retire when each page is redone; do not extend to new pages."
-      },
-      {
         "name": "room-card",
         "routes": [
           "/office Room tab"
@@ -654,7 +658,7 @@
       "name": "Site Header",
       "kind": "nav",
       "refersTo": "header",
-      "description": "Sticky 60px header on every Paper page: wordmark, Home, Demo, Agent office, then the account button.",
+      "description": "Sticky 60px header on every Paper page: wordmark, Home, Demo, Agent office, then the account button. A page can pass a full-width row under the header row (the essay reader passes its 2px progress line).",
       "html": "<header class=\"ds-header\"><div class=\"ds-header-inner\"><a class=\"ds-wordmark\" href=\"#\">Kentcrosswise</a><nav class=\"ds-nav\" aria-label=\"Main\"><a class=\"ds-nav-link\" href=\"#\" aria-current=\"page\">Home</a><a class=\"ds-nav-link\" href=\"#\">Demo</a><a class=\"ds-nav-link\" href=\"#\">Agent office</a><a class=\"ds-account\" href=\"#\">Sign in</a></nav></div></header>",
       "css": ".ds-header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);color:var(--fg);font-family:var(--font-sans),system-ui,sans-serif}.ds-header-inner{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1120px;height:60px;margin:0 auto;padding:0 24px}.ds-wordmark{font-size:16px;font-weight:600;letter-spacing:-0.02em;line-height:1;color:var(--fg);text-decoration:none}.ds-nav{display:flex;align-items:center;gap:24px}.ds-nav-link{font-size:14px;line-height:1;color:var(--fg-muted);text-decoration:none;white-space:nowrap;transition:color var(--dur-hover) var(--ease-out)}.ds-nav-link:hover{color:var(--fg)}.ds-nav-link[aria-current=\"page\"]{color:var(--fg);font-weight:500}.ds-account{position:relative;display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:var(--radius-control);background:var(--btn-bg);color:var(--btn-fg);font-size:14px;font-weight:500;line-height:1;text-decoration:none;white-space:nowrap}.ds-account::after{content:\"\";position:absolute;inset:-4px}.ds-header a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}"
     },
@@ -745,16 +749,88 @@
       "description": "/demo People tab: a plain table in its own horizontally scrolling box, so a phone scrolls the table and not the page. Table minimum width 520px; hairline row rules; no fills.",
       "html": "<div class=\"ds-table-box\"><table class=\"ds-table\"><thead><tr><th scope=\"col\">Name</th><th scope=\"col\">Last note</th></tr></thead><tbody><tr><td>Contact name</td><td>Note</td></tr></tbody></table></div>",
       "css": ".ds-table-box{overflow-x:auto}.ds-table{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}.ds-table th{padding:8px 0;border-bottom:1px solid var(--line);font-weight:500;text-align:left;color:var(--fg-muted)}.ds-table td{padding:12px 0;border-bottom:1px solid var(--line);vertical-align:top}"
+    },
+    {
+      "name": "Reading Progress",
+      "kind": "custom",
+      "refersTo": "reading-progress",
+      "description": "Essay reader: a 2px full-width line inside the sticky header, directly under the header row, so it stays in view. Track --line, fill --fg. Native progress element labelled \"Reading progress\". Shows how far the page is scrolled; not saved.",
+      "html": "<progress class=\"ds-read-progress\" value=\"40\" max=\"100\" aria-label=\"Reading progress\"></progress>",
+      "css": ".ds-read-progress{display:block;width:100%;height:2px;margin:0;border:0;appearance:none;-webkit-appearance:none;background:var(--line);color:var(--fg)}.ds-read-progress::-webkit-progress-bar{background:var(--line)}.ds-read-progress::-webkit-progress-value{background:var(--fg)}.ds-read-progress::-moz-progress-bar{background:var(--fg)}"
+    },
+    {
+      "name": "Reading Column",
+      "kind": "custom",
+      "refersTo": "reading-column",
+      "description": "The 680px reading column, centred in the 1120px container with the Paper gutters. Used by the essay reader (padding 40px top, 96px bottom) and /bot (56px top, 96px bottom; 40px and 64px under 640px).",
+      "html": "<div class=\"ds-column\"><p>Column content.</p></div>",
+      "css": ".ds-column{max-width:680px;margin:0 auto}"
+    },
+    {
+      "name": "Reading Header",
+      "kind": "custom",
+      "refersTo": "reading-header",
+      "description": "Title and byline above an essay: 28px above, 40px below. Title in the Reading title style with 10px above and 8px below; byline in the Reading byline style.",
+      "html": "<header class=\"ds-head\"><h1 class=\"ds-head-title\">Essay title</h1><p class=\"ds-head-byline\">Author, 1999</p></header>",
+      "css": ".ds-head{margin:28px 0 40px}.ds-head-title{margin:10px 0 8px;font-family:var(--font-sans),system-ui,sans-serif;font-size:clamp(2rem,6vw,2.75rem);font-weight:600;line-height:1.08;letter-spacing:-0.03em;text-wrap:balance;color:var(--fg)}.ds-head-byline{margin:0;font-size:17px;color:var(--fg-muted)}"
+    },
+    {
+      "name": "Reading Article",
+      "kind": "custom",
+      "refersTo": "reading-article",
+      "description": "The essay body. Newsreader is set on the article element only (--font-reading, loaded by reading-font.ts). Paragraphs 1.1em apart. Headings, controls and /bot stay in Geist.",
+      "html": "<article class=\"ds-article\"><p>Paragraph text.</p></article>",
+      "css": ".ds-article{font-family:var(--font-reading),Georgia,serif;font-size:21px;line-height:1.65;color:var(--fg)}.ds-article p{margin:0 0 1.1em}@media (max-width:639px){.ds-article{font-size:19px}}"
+    },
+    {
+      "name": "Rating Pill",
+      "kind": "chip",
+      "refersTo": "rating-pill",
+      "description": "Essay rating: Overall 1 to 5 and the What worked tags. Each pill is a label around a visually hidden native radio or checkbox, so the keyboard and screen reader behaviour is the native one. 44px tall, 44px minimum width, pill radius. Selected (:has(input:checked)) fills with --btn-bg and text --btn-fg. Focus is a 2px --accent ring, offset 2px, on the label (:has(input:focus-visible)). The rating block sits under a 1px --line top border, 56px below the article: h2 20px 600, legends 14px --fg-muted. Its Save or Update button is the Primary Button.",
+      "html": "<label class=\"ds-rate-pill\"><input class=\"ds-hidden\" type=\"radio\" name=\"stars\" value=\"4\">4</label>",
+      "css": ".ds-rate-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:44px;padding:0 14px;border:1px solid color-mix(in srgb,var(--fg) 22%,transparent);border-radius:999px;background:var(--bg);color:var(--fg);font-size:14px;line-height:1;cursor:pointer;transition:background-color var(--dur-hover) var(--ease-out),border-color var(--dur-hover) var(--ease-out)}.ds-rate-pill:hover{border-color:color-mix(in srgb,var(--fg) 40%,transparent)}.ds-rate-pill:has(input:checked){border-color:var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)}.ds-rate-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}.ds-hidden{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;opacity:0}@media (prefers-reduced-motion:reduce){.ds-rate-pill{transition:none}}"
+    },
+    {
+      "name": "Length Felt Control",
+      "kind": "custom",
+      "refersTo": "length-felt",
+      "description": "Length felt: one segmented group of radio labels, \"Not sure\" first, then Too long, Right, Too short. Track 1px --line border, 8px radius, 2px padding and gap, wraps when narrow. Segments 44px tall, 14px, --fg-muted; hover --fg. Selected segment: --bg-soft fill, --fg, weight 500, 1px inset --line ring (the same ring as the sidebar selection, not a shadow). Focus ring and hidden inputs as Rating Pill.",
+      "html": "<div class=\"ds-length\"><label class=\"ds-length-seg\"><input class=\"ds-hidden\" type=\"radio\" name=\"length_felt\" value=\"\">Not sure</label></div>",
+      "css": ".ds-length{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-control)}.ds-length-seg{position:relative;display:inline-flex;align-items:center;height:44px;padding:0 12px;border-radius:6px;color:var(--fg-muted);font-size:14px;cursor:pointer;transition:color var(--dur-hover) var(--ease-out),background-color var(--dur-hover) var(--ease-out)}.ds-length-seg:hover{color:var(--fg)}.ds-length-seg:has(input:checked){background:var(--bg-soft);color:var(--fg);font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}.ds-length-seg:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}"
+    },
+    {
+      "name": "Bot Status Pill",
+      "kind": "chip",
+      "refersTo": "bot-status-pill",
+      "description": "/bot status: a hairline pill with an 8px idle dot (--idle) and the words, 13px in --fg-muted. The words carry the meaning. Smaller and quieter than the /office Status Pill.",
+      "html": "<p class=\"ds-bot-status\"><span class=\"ds-bot-dot\" aria-hidden=\"true\"></span>In development. Automated discovery is not enabled.</p>",
+      "css": ".ds-bot-status{display:inline-flex;align-items:center;gap:8px;margin:0;padding:4px 12px;border:1px solid var(--line);border-radius:999px;font-family:var(--font-sans),system-ui,sans-serif;font-size:13px;color:var(--fg-muted)}.ds-bot-dot{width:8px;height:8px;border-radius:999px;background:var(--idle)}"
+    },
+    {
+      "name": "Bot User-Agent Block",
+      "kind": "custom",
+      "refersTo": "bot-agent",
+      "description": "/bot User-Agent: a literal mono block on --bg-soft with a 1px --line border, 10px radius, 14px 16px padding, 14px mono at 1.6. White-space pre with its own horizontal scroll, so the page never scrolls sideways.",
+      "html": "<pre class=\"ds-agent-ua\">KentcrosswiseBot/1.0 (+https://kentcrosswise.com/bot)</pre>",
+      "css": ".ds-agent-ua{margin:0;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--bg-soft);font-family:var(--font-mono),ui-monospace,monospace;font-size:14px;line-height:1.6;white-space:pre;overflow-x:auto;color:var(--fg)}"
+    },
+    {
+      "name": "Bot Report Link",
+      "kind": "custom",
+      "refersTo": "bot-report-link",
+      "description": "\"Report a bot issue\" on /bot: 17px text in --accent, 1px underline 0.2em below the baseline, 2px on hover. The one accent use besides focus and the activity dot, as the page spec asks.",
+      "html": "<a class=\"ds-bot-report\" href=\"#\">Report a bot issue</a>",
+      "css": ".ds-bot-report{color:var(--accent);font-size:17px;text-decoration-thickness:1px;text-underline-offset:0.2em}.ds-bot-report:hover{text-decoration-thickness:2px}"
     }
   ],
   "narrative": {
     "northStar": "Paper",
-    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo uses the Paper app frame (see the Demo App Frame component). /bot still uses the legacy dusk shell until it is redone. Other pages are not covered yet.",
+    "overview": "Paper is the visual system for the public pages. It is plain and calm. A white page holds black type. One blue accent marks focus. Hairline borders separate content, and shadows are used once. Text is set in Geist, with Geist Mono for timestamps and labels. The essay body is set in Newsreader. Dark mode follows the operating system setting. The page has no control for it.\n\nThe home page, the shared header and the shared footer use Paper. /office uses Paper with the Board tab; its Room tab is the one scoped legacy-navy block. /demo uses the Paper app frame (see the Demo App Frame component). /bot and the owner essay reader use Paper with a 680px reading column (see Reading Column). Other pages are not covered yet.",
     "keyCharacteristics": [
       "Plain and calm: a white page, black type, no decoration.",
       "One blue accent, used for focus (and the home activity dot).",
       "Hairline borders separate content; one shadow, on the home product still.",
-      "Geist for text; Geist Mono for timestamps and labels only.",
+      "Geist for text; Geist Mono for timestamps and labels only; Newsreader for the essay body only.",
       "Automatic dark mode from prefers-color-scheme; no toggle.",
       "Short motion: 150ms hover, 300ms enter, plays once, nothing loops."
     ],
@@ -766,12 +842,12 @@
       },
       {
         "name": "The Legacy Fence Rule",
-        "body": "The dusk navy palette and Rosarivo stay on /bot and the Room card. Do not extend them to new pages.",
+        "body": "The dusk navy palette and Rosarivo stay in the /office Room card scope only. Do not extend them to new pages.",
         "section": "colors"
       },
       {
         "name": "The Geist Mono Rule",
-        "body": "Geist Mono is for timestamps and labels only. Hierarchy comes from size and weight; there is no third weight.",
+        "body": "Geist Mono is for timestamps, labels and literal code such as the /bot User-Agent. Hierarchy comes from size and weight; there is no third weight.",
         "section": "typography"
       },
       {
@@ -788,6 +864,11 @@
         "name": "The One Primary Rule",
         "body": "Keep one primary button in each view.",
         "section": "components"
+      },
+      {
+        "name": "The Reading Font Rule",
+        "body": "Newsreader is for the essay body only. Headings, controls and /bot stay in Geist.",
+        "section": "typography"
       }
     ],
     "dos": [
@@ -800,11 +881,12 @@
     ],
     "donts": [
       "**Don't** add shadows except to the product still.",
-      "**Don't** use accent for anything but focus. The activity dot is the one existing exception.",
+      "**Don't** use accent for anything but focus. Two exceptions exist: the activity dot, and the /bot report link.",
       "**Don't** add looping or ambient animation, parallax or scroll effects.",
       "**Don't** use Rosarivo or PT Serif on new pages.",
       "**Don't** put literal colours in new components.",
-      "**Don't** extend the legacy dusk palette to new pages."
+      "**Don't** extend the legacy dusk palette to new pages.",
+      "**Don't** use Newsreader outside the essay body."
     ]
   }
 }

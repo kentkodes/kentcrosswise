@@ -1,7 +1,7 @@
 /*
  * Shared public footer. Colours use the same local-var pattern as the header (site-header.module.css):
- * `--header-fg`, `--header-muted`, `--header-line` fall back to the global tokens, and the PublicShell
- * overrides them to its ivory-on-navy values.
+ * `--header-fg`, `--header-muted`, `--header-line` fall back to the global tokens, and the page
+ * can override them.
  */
 
 .footer {
@@ -65,7 +65,7 @@
   color: var(--header-fg, var(--fg));
 }
 
-/* Focus: 2px outline, offset 2px. One class of specificity, so the shell's focus ring wins on
+/* Focus: 2px outline, offset 2px. One class of specificity, so a page-level focus ring wins on
    /demo, /office and /bot. */
 :where(.footer) :focus-visible {
   outline: 2px solid var(--accent);

@@ -2,6 +2,7 @@
 // Renders statically; the account link ("Sign in" or, for a signed-in visitor, "Your hub") is
 // resolved in the browser by AccountLink, so the public pages never read the session on the server.
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AccountLink } from "./account-link";
 import h from "./site-header.module.css";
 
@@ -16,11 +17,14 @@ const LINKS: { href: PublicPath; label: string }[] = [
 export function SiteHeader({
   current,
   className,
+  below,
 }: {
-  /** The page being shown; its link carries aria-current="page". */
-  current: PublicPath;
+  /** The page being shown; its link carries aria-current="page". Omitted on owner pages. */
+  current?: PublicPath;
   /** Placement from the page (e.g. its grid cell). */
   className?: string;
+  /** Full-width content under the header row, inside the sticky header (the reader's progress line). */
+  below?: ReactNode;
 }) {
   return (
     <header className={[h.header, className ?? ""].filter(Boolean).join(" ")}>
@@ -43,6 +47,7 @@ export function SiteHeader({
           </ul>
         </nav>
       </div>
+      {below}
     </header>
   );
 }

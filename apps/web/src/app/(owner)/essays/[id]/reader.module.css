@@ -1,0 +1,245 @@
+/*
+ * Essay reader (owner). Lives inside the Paper frame: a 680px reading column under the 1120px container.
+ * Colours and radii come from the global tokens; dark mode follows the OS setting. Geist for the UI and
+ * headings, Geist Mono for the kicker, Newsreader (--font-reading) only on the article body.
+ */
+
+.column {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 40px 0 96px;
+}
+
+.back {
+  margin: 0;
+  font-size: 14px;
+}
+
+.back a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.back a:hover {
+  color: var(--fg);
+}
+
+.head {
+  margin: 28px 0 40px;
+}
+
+.kicker {
+  margin: 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.title {
+  margin: 10px 0 8px;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.byline {
+  margin: 0;
+  font-size: 17px;
+  color: var(--fg-muted);
+}
+
+.status {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+/* Reading progress: a 2px line directly under the header, full width. */
+.progress {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin: 0;
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--line);
+  color: var(--fg);
+}
+
+.progress::-webkit-progress-bar {
+  background: var(--line);
+}
+
+.progress::-webkit-progress-value {
+  background: var(--fg);
+}
+
+.progress::-moz-progress-bar {
+  background: var(--fg);
+}
+
+/* The essay body. The Newsreader class is set on this element only (see page.tsx). */
+.body {
+  font-family: var(--font-reading), Georgia, serif;
+  font-size: 21px;
+  line-height: 1.65;
+  color: var(--fg);
+}
+
+.body p {
+  margin: 0 0 1.1em;
+}
+
+@media (max-width: 639px) {
+  .body {
+    font-size: 19px;
+  }
+}
+
+/* Rating: separated from the essay by a hairline. Field names and values are set by rating-form.tsx. */
+.rating {
+  margin-top: 56px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.rating h2 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.rating fieldset {
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+}
+
+.rating legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Native inputs stay in the tab order and keep their semantics; they are visually hidden and the label is the pill. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out);
+}
+
+.pill:hover {
+  border-color: color-mix(in srgb, var(--fg) 40%, transparent);
+}
+
+.pill:has(input:checked) {
+  border-color: var(--btn-bg);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+}
+
+.pill:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Length felt: one segmented group, "Not sure" first. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.segment {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out);
+}
+
+.segment:hover {
+  color: var(--fg);
+}
+
+.segment:has(input:checked) {
+  background: var(--bg-soft);
+  color: var(--fg);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.submit {
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--dur-hover) var(--ease-out);
+}
+
+.submit:hover {
+  opacity: 0.86;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .segment,
+  .submit {
+    transition: none;
+  }
+}

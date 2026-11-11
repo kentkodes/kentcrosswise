@@ -90,6 +90,11 @@ typography:
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.5
+  reading-body:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "21px"
+    fontWeight: 400
+    lineHeight: 1.65
 rounded:
   control: "8px"
   card: "10px"
@@ -180,10 +185,6 @@ components:
     rounded: "{rounded.office-target}"
     width: "44px"
     height: "44px"
-  legacy-shell:
-    backgroundColor: "{colors.legacy-dusk-navy}"
-    textColor: "{colors.legacy-ivory}"
-    typography: "{typography.legacy-body}"
 ---
 
 Visual system for the Kentcrosswise public surfaces; the architectural design doc is `docs/DESIGN.md`, which this file does not replace.
@@ -199,7 +200,7 @@ Status:
 - The home page, the shared header and the shared footer use Paper.
 - `/office` uses Paper with the App frame board (Board tab). Its Room tab is the one scoped legacy-navy block. See [Room card](#room-card) and [Legacy shell](#legacy-shell).
 - `/demo` uses the Paper app frame. See [Demo app frame](#demo-app-frame).
-- `/bot` still uses the legacy dusk shell. See [Legacy shell](#legacy-shell).
+- `/bot` and the owner essay reader use Paper with a 680px reading column. See [Reading layout](#reading-layout).
 - Other pages are not covered yet. See [Page templates](#page-templates).
 
 Principles:
@@ -229,11 +230,11 @@ Rules:
 - Header and footer links are `--fg-muted`, not accent.
 - New public CSS reads these tokens. It does not use literal colours.
 
-The legacy shell and its office palette are listed in the frontmatter and in [Legacy shell](#legacy-shell).
+The office palette that remains is listed in [Legacy shell](#legacy-shell).
 
 ## Typography
 
-Geist and Geist Mono load through `next/font/google` in `apps/web/src/app/(public)/_site/fonts.ts`. They are exposed as `--font-sans` and `--font-mono`. The fonts are self-hosted at build time, so the page makes no runtime request to Google. The CSS uses weights 400, 500 and 600.
+Geist and Geist Mono load through `next/font/google` in `apps/web/src/app/(public)/_site/fonts.ts`. They are exposed as `--font-sans` and `--font-mono`. Newsreader loads the same way from `apps/web/src/app/(owner)/essays/[id]/reading-font.ts`, the only file that imports it, and is exposed as `--font-reading`. It is set on the essay article only. The fonts are self-hosted at build time, so the page makes no runtime request to Google. The CSS uses weights 400, 500 and 600.
 
 | Style | Size | Weight | Line height | Tracking | Used for |
 |---|---|---|---|---|---|
@@ -253,7 +254,8 @@ Rules:
 
 - Geist for text. Geist Mono only for timestamps and labels.
 - Hierarchy comes from size and weight. Do not add a third weight.
-- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays in the legacy shell and in the Room card.
+- Rosarivo and PT Serif are not used on the new pages. Rosarivo stays only in the Room card.
+- Newsreader is for the essay body text only. Headings, controls and /bot stay in Geist.
 
 ## Layout
 
@@ -301,7 +303,7 @@ The home page CSS uses no icons and no avatars.
 - **Secondary.** Fill `--bg`, text `--fg`, same size. 1px outline `color-mix(in srgb, var(--fg) 22%, transparent)`, 40% on hover, so it reads as a boundary in both themes. Used for "Explore the demo" on the home hero.
 - **Account button (header).** Primary style at 36px tall, 14px, weight 500. A pseudo-element extends its hit area to 44px.
 
-Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`) so the legacy shell's own focus ring can override it.
+Focus on every button: 2px solid `--accent` outline, offset 2px. The rule uses low specificity (`:where`) so the Room card's own focus ring can override it.
 
 Hover transitions take 150ms with `--ease-out`. Under `prefers-reduced-motion: reduce` they are off.
 
@@ -315,7 +317,7 @@ Shared header in `apps/web/src/app/(public)/_site/site-header.module.css`.
 - Links are 14px `--fg-muted`. Hover and the current page (`aria-current`) use `--fg`. The current link is weight 500. There is no underline bar.
 - Phone (under 640px): two rows. The wordmark sits on its own row. The four links take the full width below it, space-between with at least 16px between them, 14px text, 44px tap targets. One row does not fit at 320px.
 
-Colours come from local variables: `--header-fg`, `--header-muted`, `--header-line` and `--header-bg`. Each reads its global token as a fallback. The legacy shell sets its own values.
+Colours come from local variables: `--header-fg`, `--header-muted`, `--header-line` and `--header-bg`. Each reads its global token as a fallback.
 
 ### Footer
 
@@ -438,32 +440,34 @@ Four templates. Marketing and App frame are partly built.
 - **Marketing (home). Done.** Hero, product still, three feature rows, footer. Wide rhythm, 96px sections.
 - **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is the one scoped legacy-navy block (see [Room card](#room-card)).
 - **App frame (`/demo`). Built.** The product still's sidebar and main area, filled with demo data. Tabs, a plain table for people, and bars for mood. See [Demo app frame](#demo-app-frame).
-- **Reading (essays, `/bot`). Planned.** Measure of about 680px. Larger body text. A list instead of cards.
+- **Reading (owner essay reader, `/bot`). Built.** A 680px column with a reading progress line, Newsreader body text, pill rating controls. See [Reading layout](#reading-layout).
 - **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
 
 Do not build a template before its page is redone.
 
 ## Legacy shell
 
-`/bot` still renders inside `PublicShell` (`apps/web/src/app/(public)/_site/public-shell.tsx`) and keeps the old dusk look until it is redone. `/demo` left the shell for the Paper app frame (see [Demo app frame](#demo-app-frame)). `/office` left the shell: it renders in the Paper frame, and only its Room card keeps the navy look (see below).
-
-The shell is styled in `public-shell.module.css`:
-
-- Ground `#1b2340` and text `#f6f1e4` (legacy-dusk-navy, legacy-ivory). The shell sets `color-scheme: dark`, so it does not follow the system setting.
-- Body text is Rosarivo 400 through `--font-rosarivo`, with Georgia and serif as fallbacks. Headings are not bold.
-- Selection: `#f8d9a8` background with `#120e0b` text.
-- Focus: 2px `#f8d9a8` outline, offset 3px, 6px radius.
-- Content measure: 48rem plus gutters. Gutters are 20px under 640px, 40px from 640px, and `max(40px, 6.25vw)` from 1100px.
-- The shell sets the header variables to ivory on navy: `--header-fg` `#f6f1e4`, `--header-muted` `rgb(246 241 228 / 0.65)`, `--header-line` `rgb(246 241 228 / 0.18)`, `--header-bg` `#1b2340`. The shared header and footer read these, so the account button is an ivory pill with navy text here.
+The dusk navy page shell (`PublicShell`) is gone. `/bot` moved to the Paper frame, and `/demo` and `/office` were already there. No page uses the navy ground now except the Room card on `/office`, which keeps its own scoped block.
 
 The office room is the one legacy block left on `/office`:
 
 - The Room card's scope (`office/board/room-panel.module.css`) sets `#1b2340` ground and `#f6f1e4` text around the connected room, and the Rosarivo variable. See [Room card](#room-card).
 - `office/connected/connected.module.css` (the room itself) uses the office palette literals: `#252e49`, `#232a46`, `#293d47` and `#3d465e` for surfaces, `#f8d9a8` apricot for selection and focus, `#e5d8bf` and `#d4c7b4` for text, and `#847d78`, `#756f69` and `#aaa28f` for lines. Event times use Rosarivo with lining, tabular figures.
 - The room canvas colours are set in code in `office/draft/draw-office.ts`. They are not listed here.
-- `bot/bot.module.css`: `#d9d6cd` for the status and note text, apricot `#f8d9a8` for the report link, and ivory `#f6f1e4` on hover.
+When a page is redone, remove its literal values. Do not extend the legacy palette to new pages.
 
-When a page is redone, remove its literal values and its use of the shell. Do not extend the legacy palette to new pages.
+## Reading layout
+
+The owner essay reader (`apps/web/src/app/(owner)/essays/[id]/`) and `/bot` (`apps/web/src/app/(public)/bot/`) share one reading column inside the Paper frame. Styles are in `reader.module.css` and `bot.module.css`.
+
+- Column: 680px, centred inside the 1120px container, with the Paper gutters.
+- Frame: `PaperFrame` with the shared header and footer. Owner pages pass no `current`, so no nav item is marked. The reader passes a 2px reading progress line (`headerBelow`). It renders full width inside the sticky header, under the header row, so it stays in view with the header at every header height.
+- Type: the title is Geist 600 at 44px (scales down on phones), with tight tracking. The mono kicker lists type, length and minutes (only the parts that exist). The article is Newsreader (`--font-reading`) at 21px and 1.65, 19px under 640px, with paragraphs spaced 1.1em. Newsreader is set on the article element only.
+- Rating: a hairline separates it from the essay. Overall is 1 to 5 as pills. What worked is pill checkboxes. Every rating target is 44px tall: the pills are 44px tall with a 44px minimum width, and the Length felt segments are 44px tall in one segmented group, with "Not sure" first. The native inputs stay and are visually hidden inside their labels, so keyboard and screen reader behaviour is unchanged. The selected pill fills with `--btn-bg`. Focus is the 2px `--accent` ring on the label.
+- Progress and status text are muted. "Text unavailable" and notices use `--fg-muted`.
+- `/bot`: the status is a hairline pill with an idle dot. The User-Agent is a mono block on `--bg-soft` with its own horizontal scroll. The "Report a bot issue" link is in `--accent`, an exception to the accent rule below, as the page spec asks.
+
+Only the reader and `/bot` use this layout. The essay list, setup, console and other owner pages keep their own styles.
 
 ## Do's and Don'ts
 
@@ -479,8 +483,9 @@ When a page is redone, remove its literal values and its use of the shell. Do no
 ### Don't
 
 - **Don't** add shadows except to the product still.
-- **Don't** use accent for anything but focus. The activity dot is the one existing exception.
+- **Don't** use accent for anything but focus. Two exceptions exist: the activity dot, and the "Report a bot issue" link on `/bot`.
 - **Don't** add looping or ambient animation, parallax or scroll effects.
 - **Don't** use Rosarivo or PT Serif on new pages.
 - **Don't** put literal colours in new components.
-- **Don't** extend the legacy dusk palette to new pages.
+- **Don't** extend the legacy palette to new pages.
+- **Don't** use Newsreader outside the essay body.
