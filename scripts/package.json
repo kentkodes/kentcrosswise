@@ -8,6 +8,7 @@
     "migrate": "tsx migrate.ts",
     "seed": "tsx seed.ts",
     "import-seed-list": "tsx import-seed-list.ts",
+    "link-seed-essays": "tsx link-seed-essays.ts",
     "register-source": "tsx register-source.ts",
     "match-seeds": "tsx match-seeds.ts",
     "essay-ingest": "tsx essay-ingest.ts",

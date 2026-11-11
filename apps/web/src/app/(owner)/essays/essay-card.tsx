@@ -15,8 +15,17 @@ export function EssayCardView({ card }: { card: Card }) {
       </p>
       <p className={styles.meta}>
         {card.primaryType ? TYPE_LABELS[card.primaryType] : "Untyped"}
-        {card.lengthBand ? <> · {LENGTH_NAMES[card.lengthBand]}</> : null}
-        {minutes !== null ? <> · {minutes} min read</> : null}
+        {card.kind === "link" ? (
+          <>
+            {" "}
+            <span className={styles.badge}>Link</span>
+          </>
+        ) : (
+          <>
+            {card.lengthBand ? <> · {LENGTH_NAMES[card.lengthBand]}</> : null}
+            {minutes !== null ? <> · {minutes} min read</> : null}
+          </>
+        )}
       </p>
       {card.hook ? <p>{card.hook}</p> : null}
     </article>

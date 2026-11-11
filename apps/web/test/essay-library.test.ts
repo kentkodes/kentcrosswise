@@ -7,6 +7,7 @@ import {
   EssayNotFoundError,
   externalHref,
   getReaderEssay,
+  linkSearchHref,
   listFeed,
   listRecommendations,
   parsePrefs,
@@ -120,7 +121,9 @@ describe("essay library as web_rw", () => {
   it("feeds active essays newest first when prefs are empty (quarantined and pending are never shown)", async () => {
     const prefs = { types: [], lengths: [] };
     const { cards, hasMore } = await asRw((db) => listFeed(db, prefs, 20));
-    expect(cards.map((c) => c.title)).toEqual(["Mules and Men", "Paywalled", "Sitting in Darkness", "How It Feels", "Roast Pig"]);
+    // Full-text essays first (newest first), then link-only essays, even though the link is newer.
+    expect(cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "How It Feels", "Roast Pig", "Paywalled"]);
+    expect(cards.findIndex((c) => c.kind === "link")).toBe(4);
     expect(hasMore).toBe(false);
     const multi = cards.find((c) => c.id === hurstonMulti)!;
     expect(multi.primaryType).toBe("cultural");
@@ -132,20 +135,44 @@ describe("essay library as web_rw", () => {
 
   it("paginates with one extra row to detect more", async () => {
     const first = await asRw((db) => listFeed(db, { types: [], lengths: [] }, 2));
-    expect(first.cards.map((c) => c.title)).toEqual(["Mules and Men", "Paywalled"]);
+    expect(first.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness"]);
     expect(first.hasMore).toBe(true);
   });
 
   it("filters by type (any matching category) and by length band", async () => {
     const byType = await asRw((db) => listFeed(db, { types: ["cultural"], lengths: [] }, 20));
     expect(byType.cards.map((c) => c.title)).toEqual(["Mules and Men", "Roast Pig"]);
+    // Link-only essays bypass the length filter (they have no text); full essays still need a band.
     const byLength = await asRw((db) => listFeed(db, { types: [], lengths: ["short"] }, 20));
-    expect(byLength.cards.map((c) => c.title)).toEqual(["Roast Pig"]);
-    // An active length filter hides essays with no word count (their length is unknown).
+    expect(byLength.cards.map((c) => c.title)).toEqual(["Roast Pig", "Paywalled"]);
     const allLengths = await asRw((db) => listFeed(db, { types: [], lengths: ["short", "medium", "long"] }, 20));
-    expect(allLengths.cards.map((c) => c.id)).not.toContain(eliot);
+    expect(allLengths.cards.map((c) => c.id)).toContain(eliot);
     const both = await asRw((db) => listFeed(db, { types: ["political"], lengths: ["medium"] }, 20));
     expect(both.cards).toEqual([]);
+  });
+
+  it("hides a full-text essay with no word count under an active length filter", async () => {
+    const unmeasured = await addEssay({ title: "Unmeasured", author: "Nobody", types: ["cultural"], createdAt: "2025-01-01T00:00:00Z" });
+    try {
+      const none = await asRw((db) => listFeed(db, { types: [], lengths: [] }, 50));
+      expect(none.cards.map((c) => c.id)).toContain(unmeasured);
+      const short = await asRw((db) => listFeed(db, { types: [], lengths: ["short"] }, 50));
+      expect(short.cards.map((c) => c.id)).not.toContain(unmeasured);
+      const all = await asRw((db) => listFeed(db, { types: [], lengths: ["short", "medium", "long"] }, 50));
+      expect(all.cards.map((c) => c.id)).not.toContain(unmeasured);
+    } finally {
+      await pg.query("DELETE FROM essay_categories WHERE essay_id = $1", [unmeasured]);
+      await pg.query("DELETE FROM essays WHERE id = $1", [unmeasured]);
+    }
+  });
+
+  it("lets link-only essays through the length filter but not the type filter", async () => {
+    const critical = await asRw((db) => listFeed(db, { types: ["critical"], lengths: ["medium"] }, 20));
+    expect(critical.cards.map((c) => c.title)).toEqual(["Paywalled"]);
+    expect(critical.cards[0]!.kind).toBe("link");
+    expect(critical.cards[0]!.wordCount).toBeNull();
+    const political = await asRw((db) => listFeed(db, { types: ["political"], lengths: ["short"] }, 20));
+    expect(political.cards).toEqual([]);
   });
 
   it("validates a rating: stars 1 to 5, known tags and length choices, canonical order", () => {
@@ -175,6 +202,10 @@ describe("essay library as web_rw", () => {
   it("refuses to rate an unknown, quarantined or malformed essay", async () => {
     await expect(asRw((db) => saveRating(db, randomUUID(), { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
     await expect(asRw((db) => saveRating(db, quarantined, { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
+    // Link-only essays have no text to read or rate: refused, and no rating row is written.
+    await expect(asRw((db) => saveRating(db, eliot, { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
+    const { rows } = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM ratings WHERE essay_id = $1", [eliot]);
+    expect(rows[0]!.n).toBe(0);
     await expect(asRw((db) => saveRating(db, "not-a-uuid", { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(InputError);
   });
 
@@ -239,6 +270,13 @@ describe("pure helpers", () => {
     expect(parseShow("9999")).toBe(500);
     expect(parseShow("x")).toBe(20);
     expect(parseShow(["40"])).toBe(20);
+  });
+
+  it("builds a https search link from the title and author, encoded, that externalHref accepts", () => {
+    const href = linkSearchHref("How It Feels & More", "Zora Neale Hurston");
+    expect(href).toBe("https://duckduckgo.com/?q=How%20It%20Feels%20%26%20More%20Zora%20Neale%20Hurston%20essay");
+    expect(externalHref(href)).toBe(href);
+    expect(linkSearchHref('A "Quoted" #1', "O'Neil")).toBe("https://duckduckgo.com/?q=A%20%22Quoted%22%20%231%20O'Neil%20essay");
   });
 
   it("only links http(s) sources", () => {
