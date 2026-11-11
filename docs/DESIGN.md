@@ -302,8 +302,9 @@ OIDC role trust. The repo is new, so the immutable `sub` applies. Prefix `P` = `
 | `kcw-gh-plan` | `P:pull_request` | read-only on prod resources + read prod state (for the prod plan) |
 | `kcw-gh-deploy` | `P:environment:prod` | full prod apply; read `kcw/prod/migrator` |
 | `kcw-gh-agent-{developer,qa,scraper,docs}` | Exact `P:environment:agent-publish-<role>`; GitHub environment permits main only | Own App secret only; SendMessage on orchestrator-in; shared main-ref role retired |
+| `kcw-gh-agent-model` | Exact `P:environment:agent-model`; GitHub environment permits main only | `GetSecretValue` on `kcw/agent/deepseek` only (work and QA review jobs, D16) |
 
-The pull_request/prod immutable forms were verified live on 2026-10-22; publisher environment isolation was verified on 2026-10-23. The Anthropic federation rule uses the same prefix `P`.
+The pull_request/prod immutable forms were verified live on 2026-10-22; publisher environment isolation was verified on 2026-10-23. The `agent-model` environment and role were added on 2026-11-10; their live trust is not yet independently verified.
 
 Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 1. `neondatabase/create-branch-action@v6`:
@@ -342,15 +343,15 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | `kcw/github/webhook-secret` | secret | relay Lambda |
 | `kcw/github/developer-app`, `qa-app`, `scraper-app`, `docs-app` | private_key | the matching `agent-*.yml` only (App client ids are repo variables) |
 | `kcw/ci` | neon_api_key (project-scoped to `kentcrosswise-ci` if available), e2e_login | `ci.yml`, `preview-gc.yml`; e2e_login also in the preview web Lambda |
-That is 16 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25, and `kcw/prod/relay`, P2-05/P2-06). No worker holds an Anthropic key: the work and QA review jobs use the DeepSeek key `kcw/agent/deepseek` (D16, updated 2026-11-10). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
+That is 17 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25, `kcw/prod/relay`, P2-05/P2-06, and `kcw/agent/deepseek`, D16). No worker holds an Anthropic key: the work and QA review jobs use the DeepSeek key `kcw/agent/deepseek` (D16, updated 2026-11-10). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
 
 When the owner pastes a value, it goes into the named secret under the listed key (console "Key/value" view). `docs/SETUP.md` uses these names.
 
 **Bootstrap exceptions (explicit):**
 1. The owner's selected named IAM-user/MFA administration identity applies `infra/bootstrap`; migrate to IAM Identity Center after Free Tier credits are exhausted. They are never stored anywhere.
 2. The owner types the secret values in by hand: App private keys, API keys, OAuth clients.
-3. The owner configures the Claude Console federation (issuer, service account(s), rule).
-4. Non-secret IDs are GitHub repo **variables**: AWS account and role ARNs, App client ids, Anthropic org/rule/service-account ids, Neon CI project id.
+3. The owner creates `kcw/agent/deepseek` by hand in the console (D16); Terraform creates neither that secret's container nor a value for it.
+4. Non-secret IDs are GitHub repo **variables**: AWS account and role ARNs, App client ids, Neon CI project id.
 
 No GitHub Actions secrets exist.
 
@@ -454,7 +455,7 @@ Conventions for every task:
 | ID | Item | Status |
 |---|---|---|
 | U1 | Former routing API | **Obsolete:** removed from the codebase and runtime (D13). No open items. |
-| U2 | Claude Code Action | **Resolved:** custom App token via `github_token`; model via `claude_args`; repo `.claude/` + CLAUDE.md load; plugins via inputs; `allowed_bots`; Bash off by default; base-branch config on PR events; federation auth (research/infra.md §6). Usage extraction/reporting is implemented from execution artifacts, including QA work/review and late-terminal reports. **Open:** real end-to-end usage completeness and one federation service account per agent |
+| U2 | Claude Code Action | **Resolved:** custom App token via `github_token`; model via `claude_args`; repo `.claude/` + CLAUDE.md load; plugins via inputs; `allowed_bots`; Bash off by default; base-branch config on PR events; model key `kcw/agent/deepseek` through environment `agent-model` (D16, replacing federation). Usage extraction/reporting is implemented from execution artifacts, including QA work/review and late-terminal reports. **Open:** real end-to-end usage completeness and live verification of the `agent-model` environment and role |
 | U3 | OpenNext + Terraform | **Resolved:** `@opennextjs/aws` 4.1.12 with Next 16; no maintained Terraform module supports v4 (research/infra.md §8), hence D14 |
 | U4 | LangGraph JS checkpointer, interrupt/resume and Lambda bundle | Source implementation and local tests exist; runtime checkpoint ownership verified. Real-task persistence/interrupt/resume, deployed graph/model execution and trace flushing remain unverified (P2-18). |
 | U5 | OIDC `sub` formats | **Resolved:** immutable `repo:OWNER@ID/REPO@ID:...` for a new repo (research/infra.md §3). `pull_request`, `environment:prod` and `ref:refs/heads/main` forms confirmed live 2026-10-22, with wrong roles refused (runbooks/bootstrap.md §4). **Open:** whether fork PRs get an id-token (assume no; same-repo guard anyway) |
@@ -472,7 +473,7 @@ Risks:
 - R1: Creating and destroying a CloudFront distribution per PR may take many minutes. Fallback: one shared preview distribution routing `pr-<n>.preview` hosts to per-PR origins.
 - R2: Public repo means prompt injection via issues/comments or via scraped pages. Mitigations: dispatch-only triggers (D6), `allowed_bots` limited to the orchestrator, no Workflows permission (D7), relay sender allowlist, scoped IAM per role, trusted config from main.
 - R3: Private text could leak into GitHub issues or CI logs. Mitigations: sanitizer, issue-text approval, no DB dumps in logs, Playwright traces only on synthetic data.
-- R4: Haiku 5.5 as developer may produce low-quality PRs; 3-attempt cap, then the owner.
+- R4: `deepseek-flash` as developer may produce low-quality PRs; 3-attempt cap, then the owner.
 - R5: Migrations are tested only on synthetic data (D4).
 - R6: Advisory usage extraction/reporting exists, but missing/malformed artifacts and delayed reports leave spend unknown. Verify completeness with real runs; the accepted $3 target permits overrun.
 - R7: TikTok production review will likely reject a personal app; sandbox may not return real stats. Manual entry is the fallback.

@@ -1,5 +1,14 @@
 # Kentcrosswise project handoff
 
+## Current state — 2026-11-11 UTC (worker agents on DeepSeek, merged)
+
+This section supersedes the 2026-11-10 section below for refs, worker model runtime and secret provisioning. It records merged source observed in this task checkout; live GitHub/AWS state was not re-checked.
+
+- **Refs:** default `main` is `2c3e4690f412992c0f78fd4a14bd9cf7af9f5a71` (PR #76), merged after `0e3fbac83ecb7c04f9af63ea72420a79324ad886` (PR #58) recorded below. Merged since then: PRs #59, #60 and #62-#74 plus #76 (#61 is design only), covering the essay reader (#67, #70, #72), link-only essays (#73), the $50 monthly model-spend cap (#69), the Opus 5.5 planner with DeepSeek runtime providers (#65; the price-row procedure is #71) and the worker model move (#74).
+- **Worker runtime (PR #74, `d2f4bac`):** the work jobs of all four `agent-*.yml` workflows and the QA review job run Claude Code Action on `deepseek-flash` through `https://api.deepseek.com/anthropic`. They read only `kcw/agent/deepseek` (key `deepseek_api_key`) through GitHub environment `agent-model` (main only) and AWS role `kcw-gh-agent-model` (repo variable `AWS_ROLE_AGENT_MODEL_ARN`); the model step clears inherited AWS credentials. Anthropic workload identity federation and the worker Anthropic key are removed; publisher environments and roles are unchanged.
+- **Secret provisioning (PR #76, `2c3e469`):** the owner creates `kcw/agent/deepseek` by hand in the Secrets Manager console. Terraform creates the `kcw-gh-agent-model` role and its read policy only, not the secret container or a value. DESIGN §6 and the bootstrap runbook now agree.
+- **Not re-verified:** live IAM/environment state and the secret's presence, the worker runtime under the new key, the deployed essay reader, and `KCW_AGENT_WORKFLOWS_ENABLED` (last recorded `false` on 2026-11-10). No live operation, dispatch or model run was performed.
+
 ## Current state — 2026-11-10 UTC (essay slice delivered)
 
 This section supersedes the sections below for essay work and for merge status. Older sections are historical chronology; PRs #44, #49, #51, #53, #54 and #55 to #58 are merged. Facts here were verified on 2026-11-10 from GitHub, AWS and read-only database queries.
