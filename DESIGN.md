@@ -415,7 +415,7 @@ Four templates. Marketing and App frame are partly built.
 - **App frame (`/office`). Built.** The Paper frame with a page heading, the Board | Room segmented tabs, status pills, agent cards, seat tiles and the filterable activity list. The Room tab is a Paper room card with a team list (see [Room card](#room-card)).
 - **App frame (`/demo`). Built.** The product still's sidebar and main area, filled with demo data. Tabs, a plain table for people, and bars for mood. See [Demo app frame](#demo-app-frame).
 - **Reading (owner essay reader, `/bot`). Built.** A 680px column with a reading progress line, Newsreader body text, pill rating controls. See [Reading layout](#reading-layout).
-- **Dense UI (owner console). Planned.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens.
+- **Dense UI (owner console). Built.** Tables, status dots, mono timestamps. The smallest type scale. Same tokens. See [Owner console (Dense UI)](#owner-console-dense-ui).
 
 Do not build a template before its page is redone.
 
@@ -430,7 +430,24 @@ The owner essay reader (`apps/web/src/app/(owner)/essays/[id]/`) and `/bot` (`ap
 - Progress and status text are muted. "Text unavailable" and notices use `--fg-muted`.
 - `/bot`: the status is a hairline pill with an idle dot. The User-Agent is a mono block on `--bg-soft` with its own horizontal scroll. The "Report a bot issue" link is in `--accent`, an exception to the accent rule below, as the page spec asks.
 
-Only the reader and `/bot` use this layout. The essay list, setup, console and other owner pages keep their own styles.
+Only the reader and `/bot` use this layout. The owner console pages use the Dense UI section below.
+
+## Owner console (Dense UI)
+
+The owner pages (`/hub`, `/console`, `/console/usage`, `/inbox`, `/essays`, `/essays/setup`) live in `apps/web/src/app/(owner)/`. Styles are in `owner.module.css`; the essay rows are in `essays/essays.module.css`. Same tokens as the rest of Paper; no literal colours.
+
+- **Frame and nav.** `OwnerFrame` in `owner-frame.tsx` wraps the Paper frame: a 28px Geist 600 heading (with optional actions on the right), then the owner nav. The nav is a row of links styled as a segmented track (Hub, Boss console, Inbox, Usage, Essays). The current page has `aria-current` and the selected style. On a phone the track scrolls inside itself. Pages do not render their own `main`.
+- **Type.** Body 14px with 1.5 line height; secondary text 13px muted; ids, timestamps and counts in Geist Mono 12px. Weights 400, 500 and 600 only. Section headings are 14px 600.
+- **Regions.** A 1px `--line` border, 10px radius and hidden overflow. An optional title bar with a muted count. Rows inside a region have 10px 12px padding and a 1px `--line` divider.
+- **Tables.** Full width inside a region. Header row on `--bg-soft` in 12px muted text. Cells 13px with 8px 12px padding. Numeric columns are right aligned with tabular numbers. The wrapper scrolls sideways on narrow screens.
+- **Status dots.** A 7px circle with the word beside it. `ok` for running and approved work, `warn` for paused, waiting, failed and pending approvals, `idle` for queued, cancelled and rejected. The mapping is in `tones.ts`.
+- **Buttons.** One primary (36px, 14px, 500) per view. Everything else is secondary (32px, 13px, 1px outline). Hover is 150ms and off under reduced motion.
+- **Inputs.** 36px tall, 1px `--line` border, 8px radius. Checkboxes keep their native form with the ink accent colour.
+- **Notices.** Not banners: a muted line with a dot. `role="status"` uses the ok dot, `role="alert"` the warn dot.
+- **Spend cap.** A region with the month-to-date sentence, a 4px meter (track `--line`, fill `--fg`) and the warn-dot notice when the cap is reached.
+- **Setup pills.** Essay types and lengths are pill checkboxes, the same pattern as the reader's rating pills.
+
+Timestamps in the owner console are UTC, shown as "Nov 11, 15:42 UTC" (`format.ts`).
 
 ## Do's and Don'ts
 
