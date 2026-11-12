@@ -170,9 +170,15 @@ describe("usageSummary prices DeepSeek usage by its written provider and model",
 });
 
 describe("formatUsd", () => {
-  it("formats cents under a dollar with 4 decimals", () => {
-    expect(formatUsd(0)).toBe("$0.0000");
-    expect(formatUsd(0.01234)).toBe("$0.0123");
+  it("uses 2 decimals, and <$0.01 for a non-zero cost that rounds to zero", () => {
+    expect(formatUsd(0)).toBe("$0.00");
+    expect(formatUsd(0.00004)).toBe("<$0.01");
+    expect(formatUsd(0.0021)).toBe("<$0.01");
+    expect(formatUsd(0.0049)).toBe("<$0.01");
+    expect(formatUsd(0.0136)).toBe("$0.01");
+    expect(formatUsd(0.136)).toBe("$0.14");
+    expect(formatUsd(0.34)).toBe("$0.34");
+    expect(formatUsd(3.9512)).toBe("$3.95");
     expect(formatUsd(12.345)).toBe("$12.35");
   });
 });
