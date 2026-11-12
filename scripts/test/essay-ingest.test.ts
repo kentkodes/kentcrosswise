@@ -6,10 +6,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { freshDb } from "../../packages/db/test/helpers";
+import type { Db } from "../../packages/essays/src/db";
+import { extractGutenbergText } from "../../packages/essays/src/extract/gutenberg-text";
 import { registerGutenbergSource } from "../../packages/essays/src/registry/bootstrap";
 import {
-  fetchPhase, IngestError, mapRsyncExit, MIRRORS, parseIds, rsyncCommand, spawnRunner, storePhase,
-  type RunRsync, type StoreDeps,
+  ESSAY_TEXT_PREFIX, fetchPhase, IngestError, mapRsyncExit, MIRRORS, parseIds, reextractPhase, rsyncCommand, spawnRunner,
+  storePhase, type RunRsync, type StoreDeps,
 } from "../lib/essay-ingest";
 import { createTextObjectWriter } from "../lib/pipelines/aws";
 
@@ -331,6 +333,245 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
   });
 });
 
+describe("re-extract phase on PGlite as a pipeline_rw member", () => {
+  const LOGIN = "reextract_test_app";
+  const IDS = { re: 311, holder: 312, dup: 313, same: 314, invalid: 315, race: 316, notStored: 317, noFiles: 318 };
+  const BASE = readFileSync(fixture("essay.txt"), "utf8");
+  /** The fixture with one phrase changed: valid text with its own hash. */
+  const variant = (word: string) => BASE.replace("Studies serve", `Studies ${word} serve`);
+  const sha = (text: string) => createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  /** The hash, key and word count the phase must compute for a raw file. */
+  const expectedFor = (raw: string) => {
+    const e = extractGutenbergText(raw);
+    return { hash: sha(e.text), key: `${ESSAY_TEXT_PREFIX}${sha(e.text)}.txt`, words: e.wordCount };
+  };
+  /** The hash a v1 extraction stored: no current text has it. */
+  const oldHash = (id: number) => sha(`v1 extraction of book ${id}`);
+  const RACE_HASH = "f".repeat(64);
+
+  let fresh: Awaited<ReturnType<typeof freshDb>>;
+  let dir: string;
+  let sourceId: string;
+  const puts: string[] = [];
+  const logs: string[] = [];
+
+  const q = async <T>(sql: string, params: unknown[] = []) => (await fresh.db.query<T>(sql, params)).rows;
+  const putObject = async (key: string) => {
+    puts.push(key);
+  };
+  const deps = (over: Partial<StoreDeps> = {}): StoreDeps => ({ db: fresh.db, putObject, dir, log: (l) => logs.push(l), ...over });
+  /** Runs `fn` as the login (a plain member of pipeline_rw), then back as the superuser. */
+  async function asIngest<T>(fn: () => Promise<T>): Promise<T> {
+    await fresh.db.exec(`SET ROLE ${LOGIN}`);
+    try {
+      return await fn();
+    } finally {
+      await fresh.db.exec("RESET ROLE");
+    }
+  }
+  const run = (ids: number[], over: Partial<StoreDeps> = {}) => asIngest(() => reextractPhase(ids, deps(over)));
+  const store = (ids: number[]) => asIngest(() => storePhase(ids, deps()));
+  const putText = (id: number, text: string) => {
+    mkdirSync(join(dir, String(id)), { recursive: true });
+    writeFileSync(join(dir, String(id), `${id}-0.txt`), text);
+  };
+  const urlOf = (id: number) => `https://www.gutenberg.org/ebooks/${id}`;
+  const setPaused = (v: boolean) =>
+    q("INSERT INTO system_flags (key, value) VALUES ('pipelines_paused', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [String(v)]);
+  const version = async () => (await q<{ v: string | null }>("SELECT extractor_version AS v FROM sources WHERE id = $1", [sourceId]))[0]?.v;
+  const quarantineCount = async () => Number((await q<{ n: string }>("SELECT count(*) AS n FROM quarantine"))[0]?.n);
+  /** Everything the re-extract must leave alone, plus the essay row itself. */
+  const snapshot = async (id: number) => ({
+    essay: (await q<Record<string, unknown>>("SELECT * FROM essays WHERE source_url = $1", [urlOf(id)]))[0],
+    categories: await q("SELECT c.* FROM essay_categories c JOIN essays e ON e.id = c.essay_id WHERE e.source_url = $1", [urlOf(id)]),
+    ratings: await q("SELECT r.* FROM ratings r JOIN essays e ON e.id = r.essay_id WHERE e.source_url = $1", [urlOf(id)]),
+    progress: await q("SELECT p.* FROM reading_progress p JOIN essays e ON e.id = p.essay_id WHERE e.source_url = $1", [urlOf(id)]),
+    urlRow: await q("SELECT * FROM essay_urls WHERE url = $1", [urlOf(id)]),
+  });
+  /** The essay row without the columns a re-extract may change. */
+  const keep = (row: Record<string, unknown> | undefined) => ({ ...row, text_hash: null, text_s3_key: null, word_count: null, length_band: null });
+
+  beforeAll(async () => {
+    fresh = await freshDb();
+    dir = join(tmp, "reextract");
+    sourceId = (await registerGutenbergSource(fresh.db)).id;
+    await fresh.db.exec(`CREATE ROLE ${LOGIN} LOGIN; GRANT pipeline_rw TO ${LOGIN};`);
+    await setPaused(false);
+    for (const id of Object.values(IDS)) {
+      const seed = await q<{ id: string }>(
+        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
+      await q(
+        `INSERT INTO seed_source_links (seed_item_id, source_id, candidate_url, candidate_title, candidate_author, tier, score, status)
+         VALUES ($1, $2, $3, 't', 'a', 'A', 1, 'approved')`, [seed[0]?.id, sourceId, urlOf(id)]);
+    }
+    // Store all but the never-stored book, each text distinct except where the test needs a duplicate.
+    putText(IDS.re, BASE);
+    putText(IDS.holder, variant("surely"));
+    putText(IDS.dup, variant("deeply"));
+    putText(IDS.same, variant("gently"));
+    putText(IDS.invalid, variant("firmly"));
+    putText(IDS.race, variant("boldly"));
+    putText(IDS.noFiles, variant("quietly"));
+    const stored = await store([IDS.re, IDS.holder, IDS.dup, IDS.same, IDS.invalid, IDS.race, IDS.noFiles]);
+    expect(stored.map((r) => r.code)).toEqual(Array(7).fill("stored"));
+
+    // Rows as an older extraction stored them: other hash, key and word count, same essay id and URL.
+    for (const id of [IDS.re, IDS.dup, IDS.race]) {
+      await q("UPDATE essays SET text_hash = $1, text_s3_key = $2, word_count = 999 WHERE source_url = $3",
+        [oldHash(id), `${ESSAY_TEXT_PREFIX}${oldHash(id)}.txt`, urlOf(id)]);
+    }
+    // The essay of IDS.re carries the owner's work, which must survive the re-extract.
+    await q("UPDATE essays SET status = 'active' WHERE source_url = $1", [urlOf(IDS.re)]);
+    const reEssayId = (await q<{ id: string }>("SELECT id FROM essays WHERE source_url = $1", [urlOf(IDS.re)]))[0]?.id;
+    await q("INSERT INTO essay_categories (essay_id, type, confidence, model) VALUES ($1, 'travel', 0.9, 'test-model')", [reEssayId]);
+    await q("INSERT INTO ratings (essay_id, stars, worked, length_felt) VALUES ($1, 4, ARRAY['prose']::text[], 'right')", [reEssayId]);
+    await q("INSERT INTO reading_progress (essay_id, pct) VALUES ($1, 35)", [reEssayId]);
+
+    // Files as the re-extract will find them.
+    putText(IDS.re, variant("truly"));
+    putText(IDS.dup, variant("surely")); // the holder's text: another essay already has this hash
+    putFile(dir, IDS.invalid, `${IDS.invalid}-0.txt`, "truncated.txt");
+  });
+  afterAll(async () => {
+    await fresh.pg.close();
+  });
+
+  it("re-extracts a stored essay in place: same row, new hash, key and word count, S3 put before the update", async () => {
+    const before = await snapshot(IDS.re);
+    const order: string[] = [];
+    const traced: Db = {
+      query: (sql, params) => {
+        if (/^UPDATE essays SET text_hash/.test(sql.trim())) order.push("update");
+        return fresh.db.query(sql, params);
+      },
+    };
+    const putFirst = async (key: string) => {
+      order.push("put");
+      puts.push(key);
+    };
+    const want = expectedFor(variant("truly"));
+    expect(await run([IDS.re], { db: traced, putObject: putFirst })).toEqual([
+      { id: IDS.re, code: "reextracted", words: { from: 999, to: want.words } },
+    ]);
+    expect(order).toEqual(["put", "update"]);
+    expect(puts.at(-1)).toBe(want.key);
+    const after = await snapshot(IDS.re);
+    expect(after.essay).toMatchObject({
+      id: before.essay?.id, status: "active", text_hash: want.hash, text_s3_key: want.key, word_count: want.words,
+    });
+    expect({ ...after, essay: keep(after.essay) }).toEqual({ ...before, essay: keep(before.essay) });
+    expect(logs).toContain(`essay-ingest: id=${IDS.re} code=reextracted words=999->${want.words}`);
+  });
+
+  it("leaves an unchanged essay alone: no put, no update", async () => {
+    const before = await snapshot(IDS.same);
+    const putsBefore = puts.length;
+    expect(await run([IDS.same])).toEqual([{ id: IDS.same, code: "unchanged" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect(await snapshot(IDS.same)).toEqual(before);
+  });
+
+  it("reports an invalid re-extraction without changing the essay or quarantining it", async () => {
+    const before = await snapshot(IDS.invalid);
+    const putsBefore = puts.length;
+    const quarantineBefore = await quarantineCount();
+    expect(await run([IDS.invalid])).toEqual([{ id: IDS.invalid, code: "invalid" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect(await quarantineCount()).toBe(quarantineBefore);
+    expect(await q("SELECT 1 FROM quarantine WHERE essay_url = $1", [urlOf(IDS.invalid)])).toHaveLength(0);
+    expect(await snapshot(IDS.invalid)).toEqual(before);
+  });
+
+  it("reports a re-extraction whose text another essay already has as duplicate", async () => {
+    const before = await snapshot(IDS.dup);
+    const putsBefore = puts.length;
+    expect(await run([IDS.dup])).toEqual([{ id: IDS.dup, code: "duplicate" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect(await snapshot(IDS.dup)).toEqual(before);
+  });
+
+  it("reports changed_concurrently when the hash changes before the update, and does not overwrite it", async () => {
+    const racing: Db = {
+      query: (sql, params) => {
+        if (!/^UPDATE essays SET text_hash/.test(sql.trim())) return fresh.db.query(sql, params);
+        return fresh.db
+          .query("UPDATE essays SET text_hash = $1 WHERE source_url = $2", [RACE_HASH, urlOf(IDS.race)])
+          .then(() => fresh.db.query(sql, params));
+      },
+    };
+    expect(await run([IDS.race], { db: racing })).toEqual([{ id: IDS.race, code: "changed_concurrently" }]);
+    expect((await snapshot(IDS.race)).essay).toMatchObject({
+      text_hash: RACE_HASH, text_s3_key: `${ESSAY_TEXT_PREFIX}${oldHash(IDS.race)}.txt`, word_count: 999,
+    });
+    // The object was put first; it is content-addressed, so it is harmless if nothing points at it.
+    expect(puts.at(-1)).toBe(expectedFor(variant("boldly")).key);
+  });
+
+  it("reports not_stored for an approved book with no stored essay, and writes nothing", async () => {
+    const putsBefore = puts.length;
+    expect(await run([IDS.notStored])).toEqual([{ id: IDS.notStored, code: "not_stored" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect(await q("SELECT 1 FROM essay_urls WHERE url = $1", [urlOf(IDS.notStored)])).toHaveLength(0);
+    expect(await q("SELECT 1 FROM essays WHERE source_url = $1", [urlOf(IDS.notStored)])).toHaveLength(0);
+  });
+
+  it("returns the analysis code (no_files) and changes nothing", async () => {
+    rmSync(join(dir, String(IDS.noFiles)), { recursive: true, force: true });
+    const before = await snapshot(IDS.noFiles);
+    expect(await run([IDS.noFiles])).toEqual([{ id: IDS.noFiles, code: "no_files" }]);
+    expect(await snapshot(IDS.noFiles)).toEqual(before);
+  });
+
+  it("sets the source extractor_version only when the batch covers every stored essay and all are OK", async () => {
+    await q("UPDATE sources SET extractor_version = '1' WHERE id = $1", [sourceId]);
+    logs.length = 0;
+    expect(await run([IDS.same, IDS.notStored])).toEqual([
+      { id: IDS.same, code: "unchanged" }, { id: IDS.notStored, code: "not_stored" },
+    ]);
+    expect(await version()).toBe("1");
+
+    // A one-book trial run is all OK but does not cover the other stored essays.
+    expect(await run([IDS.same])).toEqual([{ id: IDS.same, code: "unchanged" }]);
+    expect(await version()).toBe("1");
+    expect(logs.some((l) => l.includes("extractor_version"))).toBe(false);
+
+    // Detach the essays whose rerun is not OK, so the remaining stored essays can all be covered.
+    const notOk = [IDS.dup, IDS.invalid, IDS.race, IDS.noFiles].map(urlOf);
+    await q("UPDATE essays SET source_id = NULL WHERE source_url = ANY($1::text[])", [notOk]);
+    const all = await run([IDS.re, IDS.holder, IDS.same]);
+    expect(all.every((r) => r.code === "reextracted" || r.code === "unchanged")).toBe(true);
+    expect(await version()).toBe("2");
+    expect(logs).toContain("essay-ingest: source extractor_version=2");
+
+    logs.length = 0;
+    await run([IDS.re, IDS.holder, IDS.same]);
+    expect(logs.some((l) => l.includes("extractor_version"))).toBe(false);
+    await q("UPDATE essays SET source_id = $1 WHERE source_url = ANY($2::text[])", [sourceId, notOk]);
+  });
+
+  it("is refused while pipelines are paused, and when the flag is missing, with nothing changed", async () => {
+    const snap = JSON.stringify([await snapshot(IDS.re), puts.length]);
+    await setPaused(true);
+    await expect(run([IDS.re])).rejects.toThrow("pipelines_paused");
+    await q("DELETE FROM system_flags WHERE key = 'pipelines_paused'");
+    await expect(run([IDS.re])).rejects.toThrow("pipelines_paused");
+    await setPaused(false);
+    expect(JSON.stringify([await snapshot(IDS.re), puts.length])).toBe(snap);
+  });
+
+  it("logs ids and codes only, never essay text", async () => {
+    logs.length = 0;
+    expect(await run([IDS.re, IDS.invalid, IDS.dup])).toEqual([
+      { id: IDS.re, code: "unchanged" }, { id: IDS.invalid, code: "invalid" }, { id: IDS.dup, code: "duplicate" },
+    ]);
+    const all = logs.join("\n");
+    expect(all).toContain(`essay-ingest: id=${IDS.invalid} code=invalid`);
+    expect(all).toContain(`essay-ingest: id=${IDS.dup} code=duplicate`);
+    for (const l of LEAKS) expect(all).not.toContain(l);
+    expect(all).not.toContain("Studies");
+  });
+});
+
 describe("S3 writer", () => {
   const sent: Array<{ input: Record<string, unknown> }> = [];
   const client = (fail?: number) => ({
@@ -361,6 +602,13 @@ describe("CLI", () => {
 
   it("the store phase refuses a non-PGlite target without --confirm, before connecting", () => {
     const r = runCli(["--phase", "store", "--ids", "1342", "--bucket", "b"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("--confirm");
+    expect(r.stderr).not.toContain("10.255.255.1");
+  }, 60_000);
+
+  it("the reextract phase refuses a non-PGlite target without --confirm, before connecting", () => {
+    const r = runCli(["--phase", "reextract", "--ids", "1342", "--bucket", "b"]);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("--confirm");
     expect(r.stderr).not.toContain("10.255.255.1");
