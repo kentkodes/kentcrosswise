@@ -12,6 +12,10 @@ on:
         description: "Also categorize the stored essays (paid model calls)"
         type: boolean
         default: false
+      reextract:
+        description: "Re-extract already stored essays with the current extractor (keeps ids, ratings, categories)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -68,10 +72,15 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ESSAY_INGEST_ARN }}
           aws-region: us-east-1
       - name: Store
-        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != ''
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && !inputs.reextract
         env:
           KCW_BUCKET: kentcrosswise-pipelines-${{ vars.AWS_ACCOUNT_ID }}
         run: pnpm essay-ingest --phase store --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --bucket "$KCW_BUCKET" --secret kcw/prod/pipeline --confirm
+      - name: Re-extract
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.reextract
+        env:
+          KCW_BUCKET: kentcrosswise-pipelines-${{ vars.AWS_ACCOUNT_ID }}
+        run: pnpm essay-ingest --phase reextract --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --bucket "$KCW_BUCKET" --secret kcw/prod/pipeline --confirm
       - name: Categorize
-        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.categorize
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.categorize && !inputs.reextract
         run: pnpm essay-ingest --phase categorize --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --secret kcw/prod/pipeline --confirm

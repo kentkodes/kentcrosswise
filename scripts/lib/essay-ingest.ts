@@ -12,7 +12,7 @@ import { join } from "node:path";
 import type { Db } from "../../packages/essays/src/db";
 import { canonicalizeUrl, urlHash } from "../../packages/essays/src/crawl/canonical";
 import { gutenbergId } from "../../packages/essays/src/discovery/gutenberg";
-import { extractGutenbergText, type Extraction } from "../../packages/essays/src/extract/gutenberg-text";
+import { EXTRACTOR_VERSION, extractGutenbergText, type Extraction } from "../../packages/essays/src/extract/gutenberg-text";
 import { NO_USABLE_TEXT, bookDir, decodeUtf8, parseBookId, pickTextFile } from "../../packages/essays/src/fetch/gutenberg-path";
 import { gutenbergEbookUrl } from "../../packages/essays/src/match/gutenberg-records";
 import { recordOutcome } from "../../packages/essays/src/registry/health";
@@ -325,6 +325,101 @@ export async function storePhase(ids: readonly number[], deps: StoreDeps): Promi
 }
 
 export const STORE_OK: ReadonlySet<StoreCode> = new Set(["stored", "duplicate", "already_processed"]);
+
+// ------------------------------------------------------------------ re-extract phase
+
+export type ReextractCode =
+  | "reextracted" | "unchanged" | "not_stored" | "invalid" | "duplicate" | "changed_concurrently" | "no_files" | typeof NO_USABLE_TEXT;
+
+export const REEXTRACT_OK: ReadonlySet<ReextractCode> = new Set(["reextracted", "unchanged"]);
+
+export interface ReextractResult {
+  id: number;
+  code: ReextractCode;
+  words?: { from: number | null; to: number };
+}
+
+interface StoredEssay {
+  id: string;
+  text_hash: string;
+  word_count: number | null;
+}
+
+/**
+ * One stored book, re-analysed with the current extractor. Changes the essays row only (text_hash,
+ * text_s3_key, word_count), never its status, categories, ratings, progress or the essay_urls row.
+ */
+async function reextractBook(id: number, deps: StoreDeps): Promise<ReextractResult> {
+  const { db } = deps;
+  const url = bookUrl(id);
+
+  const urlRow = (await db.query<{ status: string }>("SELECT status FROM essay_urls WHERE url = $1", [url])).rows[0];
+  const essays = (
+    await db.query<StoredEssay>(
+      `SELECT e.id, e.text_hash, e.word_count
+         FROM essays e JOIN sources s ON s.id = e.source_id AND s.slug = $2
+        WHERE e.kind = 'full' AND e.source_url = $1`,
+      [url, GUTENBERG_SLUG],
+    )
+  ).rows;
+  const [stored] = essays;
+  if (urlRow?.status !== "fetched" || essays.length !== 1 || !stored) return { id, code: "not_stored" };
+
+  const a = await analyzeBook(deps.dir, id);
+  if (a.code !== null) return { id, code: a.code };
+  if (a.reasons.length) return { id, code: "invalid" };
+
+  const body = Buffer.from(a.extraction.text, "utf8");
+  const hash = createHash("sha256").update(body).digest("hex");
+  if (hash === stored.text_hash) return { id, code: "unchanged" };
+
+  const other = await db.query("SELECT 1 FROM essays WHERE text_hash = $1 AND id <> $2", [hash, stored.id]);
+  if (other.rows.length > 0) return { id, code: "duplicate" };
+
+  // S3 first, as in store: the object exists before the row points at it.
+  const key = `${ESSAY_TEXT_PREFIX}${hash}.txt`;
+  await deps.putObject(key, body);
+  const updated = await db.query(
+    `UPDATE essays SET text_hash = $1, text_s3_key = $2, word_count = $3
+      WHERE id = $4 AND text_hash = $5 RETURNING id`,
+    [hash, key, a.extraction.wordCount, stored.id, stored.text_hash],
+  );
+  if (updated.rows.length === 0) return { id, code: "changed_concurrently" };
+  return { id, code: "reextracted", words: { from: stored.word_count, to: a.extraction.wordCount } };
+}
+
+/**
+ * Per id, sequentially, with the store phase's pause check. When every id is OK (reextracted or unchanged),
+ * the Gutenberg source's extractor_version is set to the current EXTRACTOR_VERSION (only if it differs).
+ */
+export async function reextractPhase(ids: readonly number[], deps: StoreDeps): Promise<ReextractResult[]> {
+  await assertNotPaused(deps.db);
+  const results: ReextractResult[] = [];
+  for (const id of ids) {
+    const r = await reextractBook(id, deps);
+    results.push(r);
+    deps.log(
+      `essay-ingest: id=${id} code=${r.code}` + (r.words ? ` words=${r.words.from ?? "none"}->${r.words.to}` : ""),
+    );
+  }
+  // The source only reads as the current version once every stored full essay of it holds current text: all
+  // ids OK, and the batch covers every stored essay (a one-book trial run leaves the source alone).
+  const okUrls = new Set(results.filter((r) => REEXTRACT_OK.has(r.code)).map((r) => bookUrl(r.id)));
+  const stored = await deps.db.query<{ source_url: string | null }>(
+    `SELECT e.source_url FROM essays e JOIN sources s ON s.id = e.source_id AND s.slug = $1 WHERE e.kind = 'full'`,
+    [GUTENBERG_SLUG],
+  );
+  const coversAll = stored.rows.every((row) => row.source_url !== null && okUrls.has(row.source_url));
+  if (results.every((r) => REEXTRACT_OK.has(r.code)) && coversAll) {
+    const updated = await deps.db.query(
+      `UPDATE sources SET extractor_version = $1
+        WHERE slug = $2 AND extractor_version IS DISTINCT FROM $1 RETURNING id`,
+      [EXTRACTOR_VERSION, GUTENBERG_SLUG],
+    );
+    if (updated.rows.length > 0) deps.log(`essay-ingest: source extractor_version=${EXTRACTOR_VERSION}`);
+  }
+  return results;
+}
 
 /** Counts line for the summary. */
 export function summarize(codes: readonly string[]): string {

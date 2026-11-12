@@ -75,6 +75,30 @@ describe("essay-ingest workflow", () => {
     expect(yml.split("inputs.categorize")).toHaveLength(2);
   });
 
+  it("re-extracts only when asked: opt-in input, its own gated step, store and categorize skipped", () => {
+    expect(yml).toMatch(/ {6}reextract:\n {8}description: "Re-extract already stored essays with the current extractor \(keeps ids, ratings, categories\)"\n {8}type: boolean\n {8}default: false\n/);
+    const store = step("--phase store");
+    expect(store).toContain("if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && !inputs.reextract");
+    const re = step("--phase reextract");
+    expect(re).toContain("if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.reextract");
+    expect(re).toContain('--ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --bucket "$KCW_BUCKET" --secret kcw/prod/pipeline --confirm');
+    expect(re).toContain("KCW_BUCKET: kentcrosswise-pipelines-${{ vars.AWS_ACCOUNT_ID }}");
+    expect(re).not.toMatch(/inputs\.book_ids|\$\{\{ inputs\.(?!reextract)/);
+    expect(yml.split("--phase reextract")).toHaveLength(2);
+    expect(yml.indexOf("--phase reextract")).toBeGreaterThan(yml.indexOf("--phase store"));
+    expect(yml.indexOf("--phase reextract")).toBeGreaterThan(aws());
+    expect(yml.indexOf("--phase reextract")).toBeLessThan(yml.indexOf("--phase categorize"));
+    expect(yml.split("inputs.reextract")).toHaveLength(4);
+    const cat = step("--phase categorize");
+    expect(cat).toContain("&& inputs.categorize && !inputs.reextract");
+  });
+
+  it("passes no workflow input into a run script (inputs appear only in if and env values)", () => {
+    const runs = [...yml.matchAll(/run: [|>]?-?\n?(.*(?:\n {10}.*)*)/g)].map((m) => m[1]).join("\n");
+    expect(runs).not.toContain("inputs.");
+    expect(runs).not.toContain("${{");
+  });
+
   it("pins actions and installs without lifecycle scripts like the other workflows", () => {
     expect(yml).toContain("pnpm install --frozen-lockfile --ignore-scripts");
     expect(yml).toContain("persist-credentials: false");
