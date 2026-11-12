@@ -193,8 +193,9 @@ export function monthToDateRange(now: Date = new Date()): DayRange {
   return { from: `${today.slice(0, 8)}01`, to: today };
 }
 
-/** `$1.23`, or 4 decimals under a dollar; null is "no price". */
+/** `$1.23` (2 decimals); a non-zero cost that rounds to `$0.00` is `<$0.01`; null is "no price". */
 export function formatUsd(v: number | null): string {
   if (v === null) return "no price";
-  return `$${v.toFixed(v < 1 ? 4 : 2)}`;
+  const s = v.toFixed(2);
+  return v > 0 && s === "0.00" ? "<$0.01" : `$${s}`;
 }
