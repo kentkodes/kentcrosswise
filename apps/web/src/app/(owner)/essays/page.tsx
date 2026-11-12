@@ -17,9 +17,11 @@ import {
   type EssayCard,
   type Prefs,
 } from "@/server/essay-library";
+import { OwnerFrame } from "../owner-frame";
+import { Notice, Region } from "../owner-ui";
+import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { EssayCardView } from "./essay-card";
-import styles from "./essays.module.css";
 
 export const metadata: Metadata = { title: "Essays | Kentcrosswise" };
 
@@ -65,48 +67,52 @@ export default async function EssaysPage({ searchParams }: { searchParams: Promi
   const { data, problem } = await load(show);
 
   return (
-    <main className={styles.page}>
-      <h1>Essays</h1>
-      <p>
-        <Link href="/essays/setup">Setup</Link> · <Link href="/hub">Hub</Link>
-      </p>
-      {notice ? <p role="status">{notice}</p> : null}
-      {problem ? <p role="alert">{problem}</p> : null}
+    <OwnerFrame
+      title="Essays"
+      current="/essays"
+      actions={
+        <Link className={s.button} href="/essays/setup">
+          Setup
+        </Link>
+      }
+    >
+      {notice ? <Notice role="status" tone="ok">{notice}</Notice> : null}
+      {problem ? <Notice role="alert" tone="warn">{problem}</Notice> : null}
       {data ? (
         <>
-          <p className={styles.meta}>{describeSetup(data.prefs)}</p>
+          <p className={s.note}>{describeSetup(data.prefs)}</p>
 
-          <section aria-labelledby="recommended">
-            <h2 id="recommended">Recommended</h2>
+          <Region id="recommended" title="Recommended">
             {data.likedCount === 0 ? (
-              <p className={styles.meta}>
+              <p className={`${s.note} ${s.pad}`}>
                 No essay is rated 4 stars or more yet, so these are the newest unrated essays. Rate essays to tune this list.
               </p>
             ) : null}
-            {data.recommended.length === 0 ? <p>No unrated essays match your setup.</p> : null}
+            {data.recommended.length === 0 ? <p className={`${s.note} ${s.pad}`}>No unrated essays match your setup.</p> : null}
             <div data-testid="recommended">
               {data.recommended.map((card) => (
                 <EssayCardView key={card.id} card={card} />
               ))}
             </div>
-          </section>
+          </Region>
 
-          <section aria-labelledby="library">
-            <h2 id="library">Library</h2>
-            {data.feed.length === 0 ? <p>No essays match your setup yet.</p> : null}
+          <Region id="library" title="Library">
+            {data.feed.length === 0 ? <p className={`${s.note} ${s.pad}`}>No essays match your setup yet.</p> : null}
             <div data-testid="feed">
               {data.feed.map((card) => (
                 <EssayCardView key={card.id} card={card} />
               ))}
             </div>
             {data.hasMore && show < MAX_FEED_SHOW ? (
-              <p>
-                <Link href={`/essays?show=${Math.min(show + FEED_PAGE_SIZE, MAX_FEED_SHOW)}`}>Load more</Link>
-              </p>
+              <div className={`${s.pad} ${s.endRow}`}>
+                <Link className={s.button} href={`/essays?show=${Math.min(show + FEED_PAGE_SIZE, MAX_FEED_SHOW)}`}>
+                  Load more
+                </Link>
+              </div>
             ) : null}
-          </section>
+          </Region>
         </>
       ) : null}
-    </main>
+    </OwnerFrame>
   );
 }

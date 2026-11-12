@@ -1,12 +1,16 @@
 // Inbox (P2-14): approvals waiting on the owner (critical PRs, agent requests, ...). A decision
 // resumes the task's orchestrator thread. Owner only (the (owner) layout; actions check again).
 import type { Metadata } from "next";
-import Link from "next/link";
 import { listApprovals, type ApprovalRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
 import { requireOwner } from "@/server/owner";
+import { formatUtc } from "../format";
+import { OwnerFrame } from "../owner-frame";
+import { Dot, Notice, Region } from "../owner-ui";
+import s from "../owner.module.css";
 import { noticeText } from "../notices";
+import { approvalTone } from "../tones";
 import { decideAction, resendDecisionAction } from "./actions";
 
 export const metadata: Metadata = { title: "Inbox | Kentcrosswise" };
@@ -24,14 +28,14 @@ async function load(): Promise<{ data?: { pending: ApprovalRow[]; decided: Appro
 function Summary({ a }: { a: ApprovalRow }) {
   return (
     <>
-      <p>
-        <strong>{a.kind.replaceAll("_", " ")}</strong>
-        {a.taskId !== null ? <> · task #{a.taskId}</> : null}
-        {a.prNumber ? <> · PR #{a.prNumber}</> : null}
+      <p className={s.statusLine}>
+        <span className={s.emph}>{a.kind.replaceAll("_", " ")}</span>
+        {a.taskId !== null ? <span className={s.muted}>· task #{a.taskId}</span> : null}
+        {a.prNumber ? <span className={s.muted}>· PR #{a.prNumber}</span> : null}
       </p>
-      {a.taskText ? <p>{a.taskText}</p> : null}
+      {a.taskText ? <p className={s.taskText}>{a.taskText}</p> : null}
       {a.reasons.length > 0 ? (
-        <ul>
+        <ul className={s.reasons}>
           {a.reasons.map((r) => (
             <li key={r}>{r}</li>
           ))}
@@ -48,62 +52,72 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const queue = orchestratorQueue();
 
   return (
-    <main>
-      <h1>Inbox</h1>
-      <p>
-        <Link href="/console">Boss console</Link> · <Link href="/hub">Hub</Link>
-      </p>
-      {notice ? <p role="status">{notice}</p> : null}
-      {problem ? <p role="alert">{problem}</p> : null}
+    <OwnerFrame title="Inbox" current="/inbox">
+      {notice ? <Notice role="status" tone="ok">{notice}</Notice> : null}
+      {problem ? (
+        <Notice role="alert" tone="warn">
+          {problem}
+        </Notice>
+      ) : null}
       {data ? (
         <>
-          <section aria-labelledby="pending">
-            <h2 id="pending">Waiting on you ({data.pending.length})</h2>
-            {data.pending.length === 0 ? <p>Nothing is waiting on you.</p> : null}
-            <ul data-testid="pending">
+          <Region id="pending" title={`Waiting on you (${data.pending.length})`}>
+            {data.pending.length === 0 ? <p className={`${s.note} ${s.pad}`}>Nothing is waiting on you.</p> : null}
+            <ul data-testid="pending" className={s.list}>
               {data.pending.map((a) => (
                 <li key={a.id} data-approval-id={a.id}>
                   <Summary a={a} />
-                  <form action={decideAction}>
+                  <form action={decideAction} className={s.formRow}>
                     <input type="hidden" name="approval_id" value={a.id} />
-                    <label>
-                      Note <input type="text" name="note" maxLength={1000} />
-                    </label>{" "}
-                    <button type="submit" name="decision" value="approved">
+                    <label className={s.fieldLabel}>
+                      Note <input className={s.field} type="text" name="note" maxLength={1000} />
+                    </label>
+                    <button className={s.button} type="submit" name="decision" value="approved">
                       Approve
-                    </button>{" "}
-                    <button type="submit" name="decision" value="rejected">
+                    </button>
+                    <button className={s.button} type="submit" name="decision" value="rejected">
                       Reject
                     </button>
                   </form>
                 </li>
               ))}
             </ul>
-          </section>
-          <section aria-labelledby="decided">
-            <h2 id="decided">Decided</h2>
-            {data.decided.length === 0 ? <p>No decisions yet.</p> : null}
-            <ul data-testid="decided">
+          </Region>
+          <Region id="decided" title="Decided">
+            {data.decided.length === 0 ? <p className={`${s.note} ${s.pad}`}>No decisions yet.</p> : null}
+            <ul data-testid="decided" className={s.list}>
               {data.decided.map((a) => (
                 <li key={a.id} data-approval-id={a.id}>
                   <Summary a={a} />
-                  <p>
-                    <span data-field="status">{a.status}</span>
-                    {a.decidedAt ? <> on {a.decidedAt.replace("T", " ").slice(0, 16)}</> : null}
-                    {a.note ? <> · note: {a.note}</> : null}
+                  <p className={s.statusLine}>
+                    <Dot tone={approvalTone(a.status)} />
+                    <span data-field="status" className={s.emph}>
+                      {a.status}
+                    </span>
+                    {a.decidedAt ? (
+                      <>
+                        {" "}
+                        <time className={s.mono} dateTime={a.decidedAt}>
+                          {formatUtc(a.decidedAt)}
+                        </time>
+                      </>
+                    ) : null}
+                    {a.note ? <> <span>· note: {a.note}</span></> : null}
                   </p>
                   {queue.enabled && a.taskId !== null ? (
-                    <form action={resendDecisionAction}>
+                    <form action={resendDecisionAction} className={s.end}>
                       <input type="hidden" name="approval_id" value={a.id} />
-                      <button type="submit">Resend decision</button>
+                      <button className={s.button} type="submit">
+                        Resend decision
+                      </button>
                     </form>
                   ) : null}
                 </li>
               ))}
             </ul>
-          </section>
+          </Region>
         </>
       ) : null}
-    </main>
+    </OwnerFrame>
   );
 }
