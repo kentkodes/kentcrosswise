@@ -95,11 +95,14 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                       {a.status}
                     </span>
                     {a.decidedAt ? (
-                      <time className={s.mono} dateTime={a.decidedAt}>
-                        {formatUtc(a.decidedAt)}
-                      </time>
+                      <>
+                        {" "}
+                        <time className={s.mono} dateTime={a.decidedAt}>
+                          {formatUtc(a.decidedAt)}
+                        </time>
+                      </>
                     ) : null}
-                    {a.note ? <span>· note: {a.note}</span> : null}
+                    {a.note ? <> <span>· note: {a.note}</span></> : null}
                   </p>
                   {queue.enabled && a.taskId !== null ? (
                     <form action={resendDecisionAction} className={s.end}>

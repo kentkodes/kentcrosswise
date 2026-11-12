@@ -62,18 +62,23 @@ function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]
   return (
     <li id={`task-${task.id}`} data-task-id={task.id}>
       <p className={s.taskMeta}>
-        <span className={s.mono}>#{task.id}</span>
+        <span className={s.mono}>#{task.id}</span>{" "}
         <span className={s.statusWord}>
           <Dot tone={taskTone(task.status)} />
           <span data-field="status" className={s.emph}>
             {task.status}
           </span>
-        </span>
-        {task.waitingOn ? <span>waiting on {task.waitingOn}</span> : null}
+        </span>{" "}
+        {task.waitingOn ? <><span>waiting on {task.waitingOn}</span>{" "}</> : null}
         <span data-field="visibility">{task.isPrivate ? "private" : "public"}</span>
-        {task.publicTitle ? <span>public title: {task.publicTitle}</span> : null}
-        {task.prNumber ? <span>PR #{task.prNumber}</span> : null}
-        {task.parentId ? <span>{task.isDocs ? `docs update after #${task.parentId}` : `subtask of #${task.parentId}`}</span> : null}
+        {task.publicTitle ? <>{" "}<span>public title: {task.publicTitle}</span></> : null}
+        {task.prNumber ? <>{" "}<span>PR #{task.prNumber}</span></> : null}
+        {task.parentId ? (
+          <>
+            {" "}
+            <span>{task.isDocs ? `docs update after #${task.parentId}` : `subtask of #${task.parentId}`}</span>
+          </>
+        ) : null}
       </p>
       <p data-field="text" className={s.taskText}>
         {task.ownerText}
@@ -88,8 +93,8 @@ function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]
                   <li key={e.id}>
                     <time className={s.mono} dateTime={e.ts}>
                       {formatUtc(e.ts)}
-                    </time>
-                    <strong className={s.emph}>{e.agent}</strong>
+                    </time>{" "}
+                    <strong className={s.emph}>{e.agent}</strong>{" "}
                     <span className={s.muted}>{e.type.replaceAll("_", " ")}</span>
                   </li>
                 ))}
