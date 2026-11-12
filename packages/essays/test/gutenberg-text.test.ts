@@ -11,7 +11,7 @@ const verdict = (raw: string) => validateExtraction(extractGutenbergText(raw));
 describe("fixtures", () => {
   it("each text fixture carries a public-domain provenance line", () => {
     const names = readdirSync(DIR).filter((n) => n.endsWith(".txt"));
-    expect(names.length).toBe(6);
+    expect(names.length).toBe(7);
     for (const n of names) expect(read(n)).toMatch(/^Provenance: .*public-domain/);
   });
 });
@@ -93,6 +93,96 @@ describe("validateExtraction", () => {
   });
 });
 
+describe("clean essay text", () => {
+  it("removes every stripped pattern from the dirty fixture", () => {
+    const x = extractGutenbergText(read("dirty.txt"));
+    expect(x).toMatchObject({ hasStart: true, hasEnd: true });
+    expect(x.text.startsWith("Of Studies\nby Francis Bacon\n\nStudies serve for delight")).toBe(true);
+    expect(x.text).not.toMatch(/\[\s*(?:Illustration|Image|Picture|Figure|Frontispiece|Sidenote|Transcriber|Editor)/i);
+    expect(x.text).not.toMatch(/Transcriber|Synthetic Test Volunteers|Produced by|Transcribed from/i);
+    expect(x.text).not.toMatch(/\[\s*(?:Pg|Page|p\.)\s*\d/i);
+    expect(x.text).not.toMatch(/\{\d+\}/);
+    expect(x.text).not.toContain("*");
+    expect(x.text).not.toMatch(/[\u00AD\u200B-\u200D\u2060\uFEFF]/);
+    expect(x.text).not.toContain("Synthetic footer");
+    expect(verdict(read("dirty.txt"))).toEqual({ ok: true });
+  });
+
+  it("keeps the author's footnote markers and the footnote text", () => {
+    const { text } = extractGutenbergText(read("dirty.txt"));
+    expect(text).toContain("contend.[1]\n");
+    expect(text).toContain("wit[A], but");
+    expect(text.endsWith("[12] Cymini sectores: literally, cumin-seed cutters; a scornful name for pedants.\n")).toBe(true);
+  });
+
+  it("keeps emphasis words without their marks, and tokens with inner underscores or equals", () => {
+    const { text } = extractGutenbergText(read("dirty.txt"));
+    expect(text).toContain("use for delight, is in privateness");
+    expect(text).toContain("The bold word and the token a_b,\nlike snake_case, stay as written.");
+    expect(text).toContain("to prove and illustrate another\nthing, and to hold it fast, let him study");
+    expect(text).not.toMatch(/_delight_|=bold=/);
+  });
+
+  it("turns the separator row into exactly one paragraph break", () => {
+    const { text } = extractGutenbergText(read("dirty.txt"));
+    expect(text).toContain("affairs, come best, from those that are learned.\n\nTo spend too much time");
+    expect(text).not.toMatch(/\n{3,}/);
+  });
+
+  const inner = (body: string) => `*** START OF THE PROJECT GUTENBERG EBOOK X ***\n${body}\n*** END OF THE PROJECT GUTENBERG EBOOK X ***`;
+  const cleaned = (body: string) => extractGutenbergText(inner(body)).text;
+
+  it("joins words around an inline placeholder with one space", () => {
+    expect(cleaned("The study [Illustration] of the ship.")).toBe("The study of the ship.\n");
+    expect(cleaned("The study  [Image: a ship]  of the sea.")).toBe("The study of the sea.\n");
+    expect(cleaned("Histories [Figure 3] poets witty.")).toBe("Histories poets witty.\n");
+  });
+
+  it("treats a placeholder on its own line as a blank line", () => {
+    expect(cleaned("Alpha\n[Illustration]\nBeta")).toBe("Alpha\n\nBeta\n");
+    expect(cleaned("Alpha\n\n[Frontispiece: a ruin]\n\nBeta")).toBe("Alpha\n\nBeta\n");
+  });
+
+  it("keeps numeric, letter and mixed footnote markers", () => {
+    expect(cleaned("Note[12] here and [1] there, [A] too.")).toBe("Note[12] here and [1] there, [A] too.\n");
+  });
+
+  it("drops bracketed notes that span lines and hold a nested bracket", () => {
+    expect(cleaned("Text.\n[Transcriber's Note: a line\n[sic] more\nend.]\nAfter.")).toBe("Text.\n\nAfter.\n");
+    expect(cleaned("Text.\n[Editor’s note: changed.]\n\nAfter.")).toBe("Text.\n\nAfter.\n");
+  });
+
+  it("drops an unbracketed transcriber heading to the next blank line", () => {
+    expect(cleaned("Transcriber’s Notes: a line\nand its continuation\n\nKept.")).toBe("Kept.\n");
+    expect(cleaned("Transcriber's Note\nKept.")).toBe("");
+  });
+
+  it("drops a credit paragraph only where it starts a paragraph", () => {
+    expect(cleaned("Produced by someone\nat a press\n\nBody.")).toBe("Body.\n");
+    expect(cleaned("This eBook was produced by someone.\n\nBody.")).toBe("Body.\n");
+    expect(cleaned("Hello there.\nProduced by someone\n\nLater.")).toBe("Hello there.\nProduced by someone\n\nLater.\n");
+  });
+
+  it("removes soft hyphens and zero-width characters", () => {
+    expect(cleaned("co\u00ADmpany a\u200Bb\u2060c\uFEFFd")).toBe("company abcd\n");
+  });
+
+  it("removes emphasis marks only where they wrap word characters", () => {
+    expect(cleaned("_word_ and _several words here_, =bold=, snake_case, a_b, x = y, __init__")).toBe(
+      "word and several words here, bold, snake_case, a_b, x = y, __init__\n",
+    );
+  });
+
+  it("turns separator rows into one break and keeps prose with dashes", () => {
+    expect(cleaned("First.\n-----\nSecond.\n\n* * *\n\n\n = = =\nThird.\n\na - b")).toBe("First.\n\nSecond.\n\nThird.\n\na - b\n");
+  });
+
+  it("still rejects replacement characters after cleaning", () => {
+    const words = Array.from({ length: 320 }, (_, i) => `w${i}`).join(" ");
+    expect(verdict(inner(`${words} [Illustration] �`))).toEqual({ ok: false, reasons: ["bad_characters"] });
+  });
+});
+
 describe("mirror paths", () => {
   it("maps book ids to main-collection directories", () => {
     expect(bookDir(12345)).toBe("1/2/3/4/12345/");
@@ -117,6 +207,6 @@ describe("mirror paths", () => {
   it("decodes strictly as UTF-8", () => {
     expect(decodeUtf8(new TextEncoder().encode("café"))).toBe("café");
     expect(decodeUtf8(Uint8Array.from([0x63, 0x61, 0x66, 0xe9]))).toBeNull(); // latin-1 e-acute
-    expect(decodeUtf8(Uint8Array.from([0xef, 0xbb, 0xbf, 0x61]))).toBe("﻿a");
+    expect(decodeUtf8(Uint8Array.from([0xef, 0xbb, 0xbf, 0x61]))).toBe("\uFEFFa");
   });
 });
