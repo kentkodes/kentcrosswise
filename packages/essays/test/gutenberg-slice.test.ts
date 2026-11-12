@@ -7,6 +7,7 @@ import { ApplyError, applyReviewedLinks, loadApprovedSeeds } from "../src/match/
 import { catalogAuthors, gutenbergRecords, isCollectionTitle } from "../src/match/gutenberg-records";
 import { matchAll, type SeedInput } from "../src/match/match";
 import { REVIEW_COLUMNS, parseReviewTable, renderReviewTable, reviewCells, type ReviewRow } from "../src/match/review";
+import { EXTRACTOR_VERSION } from "../src/extract/gutenberg-text";
 import { GUTENBERG_SLUG, registerGutenbergSource } from "../src/registry/bootstrap";
 import { loadSource, parseCrawlRules, sourceAllows } from "../src/registry/source";
 import { essaysDb, type TestPg } from "./db-helpers";
@@ -59,7 +60,7 @@ describe("gutenberg source registration", () => {
     const source = (await loadSource(db, GUTENBERG_SLUG))!;
     expect(source).toMatchObject({
       name: "Project Gutenberg", baseUrl: "https://www.gutenberg.org", discoveryMode: "seed_targeted",
-      extractorId: "gutenberg-txt", extractorVersion: "1", licensePolicy: "pd_only", paused: false,
+      extractorId: "gutenberg-txt", extractorVersion: EXTRACTOR_VERSION, licensePolicy: "pd_only", paused: false,
       discovery: { kind: "catalog_csv", url: "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv" },
     });
     expect(() => parseCrawlRules({ allow_paths: source.crawlRules.allowPaths }, source.baseUrl)).not.toThrow();

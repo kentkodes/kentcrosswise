@@ -1,5 +1,6 @@
 import { BOT_USER_AGENT } from "../crawl/bot-contact";
 import type { Db } from "../db";
+import { EXTRACTOR_VERSION } from "../extract/gutenberg-text";
 import { CATALOG_URL } from "../discovery/watcher";
 
 export const GUTENBERG_SLUG = "gutenberg";
@@ -24,9 +25,14 @@ export async function registerGutenbergSource(db: Db): Promise<{ id: string; ins
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO sources
        (name, slug, base_url, discovery_mode, discovery, extractor_id, extractor_version, crawl_rules, license_policy)
-     VALUES ('Project Gutenberg', $1, 'https://www.gutenberg.org', 'seed_targeted', $2::jsonb, 'gutenberg-txt', '1', $3::jsonb, 'pd_only')
+     VALUES ('Project Gutenberg', $1, 'https://www.gutenberg.org', 'seed_targeted', $2::jsonb, 'gutenberg-txt', $3, $4::jsonb, 'pd_only')
      ON CONFLICT (slug) DO NOTHING RETURNING id`,
-    [GUTENBERG_SLUG, JSON.stringify({ kind: "catalog_csv", url: CATALOG_URL }), JSON.stringify(GUTENBERG_CRAWL_RULES)],
+    [
+      GUTENBERG_SLUG,
+      JSON.stringify({ kind: "catalog_csv", url: CATALOG_URL }),
+      EXTRACTOR_VERSION,
+      JSON.stringify(GUTENBERG_CRAWL_RULES),
+    ],
   );
   if (rows[0]) return { id: rows[0].id, inserted: true };
   const existing = await db.query<{ id: string }>("SELECT id FROM sources WHERE slug = $1", [GUTENBERG_SLUG]);
