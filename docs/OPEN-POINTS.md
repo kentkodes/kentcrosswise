@@ -4,7 +4,7 @@ Current backlog, 2026-11-14 UTC. Current state and holds are in [HANDOFF.md](HAN
 
 ## Autonomous development reliability (accepted priority, implementation pending)
 
-The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. Deliver in the order below; later implementation can identify independent work without weakening prerequisites. Source-review findings are not claims that a production incident occurred. Existing owner gates still apply.
+The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. For implementation, read the on-demand [execution plan](RELIABILITY-PLAN.md): scoped PR slices, trust boundaries, failure tests and session handoff. Deliver in the order below; later implementation can identify independent work without weakening prerequisites. Source-review findings are not claims that a production incident occurred. Existing owner gates still apply.
 
 | ID | Work and completion evidence |
 |---|---|
