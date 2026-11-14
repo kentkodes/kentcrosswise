@@ -1,23 +1,38 @@
 // Inbox (P2-14): approvals waiting on the owner (critical PRs, agent requests, ...). A decision
 // resumes the task's orchestrator thread. Owner only (the (owner) layout; actions check again).
 import type { Metadata } from "next";
+import { ROUTE_LABELS, type RouteKind } from "@/server/capture";
 import { listApprovals, type ApprovalRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
 import { requireOwner } from "@/server/owner";
+import { listRoutingInbox, type RoutingItem } from "@/server/router";
 import { formatUtc } from "../format";
 import { OwnerFrame } from "../owner-frame";
 import { Dot, Notice, Region } from "../owner-ui";
 import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { approvalTone } from "../tones";
-import { decideAction, resendDecisionAction } from "./actions";
+import { decideAction, reassignRoutingAction, resendDecisionAction } from "./actions";
 
 export const metadata: Metadata = { title: "Inbox | Kentcrosswise" };
 
-async function load(): Promise<{ data?: { pending: ApprovalRow[]; decided: ApprovalRow[] }; problem?: string }> {
+const KINDS = Object.keys(ROUTE_LABELS) as RouteKind[];
+
+interface InboxData {
+  pending: ApprovalRow[];
+  decided: ApprovalRow[];
+  routing: RoutingItem[];
+}
+
+async function load(): Promise<{ data?: InboxData; problem?: string }> {
   try {
-    return { data: await withDb("web_rw", (db) => listApprovals(db), { readOnly: true }) };
+    const data = await withDb(
+      "web_rw",
+      async (db) => ({ ...(await listApprovals(db)), routing: await listRoutingInbox(db) }),
+      { readOnly: true },
+    );
+    return { data };
   } catch (err) {
     if (err instanceof DbNotConfiguredError) return { problem: "The database is not connected yet." };
     console.error(`[inbox] ${dbErrorLabel(err)}`);
@@ -61,6 +76,39 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       ) : null}
       {data ? (
         <>
+          <Region id="routing" title={`Routing (${data.routing.length})`}>
+            {data.routing.length === 0 ? <p className={`${s.note} ${s.pad}`}>Nothing to route.</p> : null}
+            <ul data-testid="routing" className={s.list}>
+              {data.routing.map((r) => (
+                <li key={r.entryId} data-entry-id={r.entryId}>
+                  <p className={s.entryText}>{r.rawText}</p>
+                  <p className={s.entryMeta}>
+                    <time className={s.mono} dateTime={r.createdAt}>
+                      {formatUtc(r.createdAt)}
+                    </time>
+                    <span>
+                      Guess <span data-field="guess" className={s.emph}>{r.guess ? ROUTE_LABELS[r.guess] : "none"}</span>
+                      {r.confidence !== null ? <span className={s.mono}> {r.confidence.toFixed(2)}</span> : null}
+                    </span>
+                  </p>
+                  <form action={reassignRoutingAction} className={s.formRow}>
+                    <input type="hidden" name="entry_id" value={r.entryId} />
+                    {KINDS.map((k) => (
+                      <button
+                        key={k}
+                        className={k === r.guess ? `${s.button} ${s.primary}` : s.button}
+                        type="submit"
+                        name="to"
+                        value={k}
+                      >
+                        {ROUTE_LABELS[k]}
+                      </button>
+                    ))}
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </Region>
           <Region id="pending" title={`Waiting on you (${data.pending.length})`}>
             {data.pending.length === 0 ? <p className={`${s.note} ${s.pad}`}>Nothing is waiting on you.</p> : null}
             <ul data-testid="pending" className={s.list}>

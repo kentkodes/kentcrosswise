@@ -7,6 +7,13 @@ import { withDb } from "@/server/db";
 import { orchestratorQueue, ownerDecisionMessage, trySend } from "@/server/orchestrator-queue";
 import { requireOwner } from "@/server/owner";
 import { failureNotice, type NoticeCode } from "../notices";
+import { reassignNotice } from "../routing";
+
+/** Routing region: moves an entry to the kind the owner picked (the form's `to`), then closes its inbox item. */
+export async function reassignRoutingAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  redirect(`/inbox?n=${await reassignNotice(formData)}`);
+}
 
 export async function decideAction(formData: FormData): Promise<void> {
   await requireOwner();

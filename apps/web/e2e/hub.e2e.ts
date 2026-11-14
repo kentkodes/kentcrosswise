@@ -1,5 +1,6 @@
-// H2: the hub capture box. Previews (and the local run) have the synthetic seed, which already holds some
-// entries, and no router yet, so a new entry shows "Waiting for router".
+// H2: the hub capture box. H3: the route picker on each row. Previews (and the local run) have the synthetic seed,
+// which already holds some entries. Routing is off in these runs (no models secret), so a new entry shows
+// "Waiting for router" and has no "Route again" button.
 import { expect, test, type Page } from "@playwright/test";
 
 test("hub redirects to sign-in when logged out", async ({ page }) => {
@@ -9,7 +10,7 @@ test("hub redirects to sign-in when logged out", async ({ page }) => {
 });
 
 test.describe("as the preview owner", () => {
-  // Both tests check that their entry is the newest row, so they must not insert at the same time.
+  // Both capture tests check that their entry is the newest row, so they must not insert at the same time.
   test.describe.configure({ mode: "serial" });
   const token = process.env.KCW_E2E_LOGIN;
   test.skip(!token, "KCW_E2E_LOGIN is not set (prod targets have no preview login)");
@@ -22,6 +23,9 @@ test.describe("as the preview owner", () => {
     await page.goto(path);
   }
 
+  // The capture form's Save button (rows have Save buttons too, so scope to the capture region).
+  const captureSave = (page: Page) => page.getByTestId("capture").getByRole("button", { name: "Save" });
+
   test("saves an entry as pending, and an all-whitespace one creates no row", async ({ page }) => {
     await signIn(page, "/hub");
     await expect(page.getByRole("heading", { level: 1, name: "Hub" })).toBeVisible();
@@ -29,7 +33,7 @@ test.describe("as the preview owner", () => {
     const entries = page.getByTestId("entries").locator("> li");
 
     await page.getByLabel("Capture", { exact: true }).fill(`e2e capture ${stamp}`);
-    await page.getByRole("button", { name: "Save" }).click();
+    await captureSave(page).click();
     await expect(page.getByRole("status")).toHaveText("Saved");
     // The redirect leaves the box empty, and the new entry is the first row, pending.
     await expect(page.getByLabel("Capture", { exact: true })).toHaveValue("");
@@ -40,7 +44,7 @@ test.describe("as the preview owner", () => {
     // Whitespace passes the browser's required check, so the server refuses it and nothing is stored.
     const before = await entries.count();
     await page.getByLabel("Capture", { exact: true }).fill("   \n  ");
-    await page.getByRole("button", { name: "Save" }).click();
+    await captureSave(page).click();
     // Scoped: Next's own route announcer is also role=alert.
     await expect(page.getByRole("alert").filter({ hasText: "Nothing to save" })).toHaveCount(1);
     await expect(entries).toHaveCount(before);
@@ -60,6 +64,40 @@ test.describe("as the preview owner", () => {
     await expect(page.getByRole("status")).toHaveText("Saved");
     await expect(page.getByTestId("entries").locator("> li").first()).toContainText(`e2e keyboard ${stamp}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    expect((await page.getByRole("button", { name: "Save" }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await captureSave(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test("a pending entry is routed by hand: the row shows the new label, and no Route again while routing is off", async ({ page }) => {
+    await signIn(page, "/hub");
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const text = `e2e reassign ${stamp}`;
+    await page.getByLabel("Capture", { exact: true }).fill(text);
+    await captureSave(page).click();
+    await expect(page.getByRole("status")).toHaveText("Saved");
+
+    const row = page.getByTestId("entries").locator("> li").filter({ hasText: text });
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('[data-field="status"]')).toHaveText("Waiting for router");
+    await expect(row.getByRole("button", { name: "Route again" })).toHaveCount(0);
+
+    await row.getByRole("combobox").selectOption({ label: "Idea" });
+    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Routed to Idea.");
+    await expect(page.getByTestId("entries").locator("> li").filter({ hasText: text }).locator('[data-field="status"]')).toHaveText(
+      "Idea",
+    );
+  });
+
+  test("a row that needs the owner links to the routing inbox (local seed)", async ({ page }) => {
+    // The routing seed (e2e/support/local-db.ts) exists only in the local run.
+    test.skip(!!process.env.BASE_URL, "the routing seed is local only");
+    await signIn(page, "/hub");
+    const row = page.getByTestId("entries").locator("> li").filter({ hasText: "e2e route seed two" });
+    await expect(row).toHaveCount(1);
+    const link = row.getByRole("link", { name: "Needs you" });
+    await expect(link).toHaveAttribute("href", "/inbox#routing");
+    await link.click();
+    await expect(page).toHaveURL(/\/inbox#routing$/);
+    await expect(page.getByTestId("routing").locator("> li").filter({ hasText: "e2e route seed two" })).toHaveCount(1);
   });
 });
