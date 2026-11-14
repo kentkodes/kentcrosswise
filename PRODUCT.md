@@ -12,11 +12,11 @@ The owner uses a private personal hub. Logged-out visitors explore a public hub 
 
 ## Product Purpose
 
-Kentcrosswise brings together contacts, thoughts, mood, social snapshots, projects and a private essay library. The approved product specifications are [docs/hub/SPEC.md](docs/hub/SPEC.md) and [docs/essays/SPEC.md](docs/essays/SPEC.md); planned capabilities must not be presented as already delivered.
+Kentcrosswise's primary goal is autonomous development: durable tasks carried through implementation, independent review and delivery by disposable workers with approved permissions. The personal hub and private essay library are its demonstration workload. Reliability precedes further feature expansion. The accepted target is in [docs/DESIGN.md](docs/DESIGN.md); the demonstration requirements are [docs/hub/SPEC.md](docs/hub/SPEC.md) and [docs/essays/SPEC.md](docs/essays/SPEC.md). Planned capabilities must not be presented as already delivered.
 
 ## Positioning
 
-A personal hub built with a small team of AI agents, with a public demonstration visitors can explore. It is a personal project rather than a commercial SaaS offer.
+An autonomous development system demonstrated by a personal hub and a public view of sanitized execution activity. It is a personal project rather than a commercial SaaS offer.
 
 ## Operating Context
 
@@ -25,10 +25,10 @@ Visitors arrive on phones and desktop browsers. They come to understand the proj
 ## Capabilities and Constraints
 
 - Public routes: `/` (home), `/demo` (simulated hub in an app frame with Today, People, Mood, Following and Notes tabs), `/office` (team board and Room tab over the sanitized public event feed, with Live and Replay states) and `/bot` (essay bot information and contact).
-- Owner routes: hub links, Boss console with usage and spend cap, inbox, essay library, setup and reader.
+- Owner routes: capture and routing on the hub, Boss console with usage and a soft spend control, inbox, essay library, setup and reader. H3 assigns capture categories; downstream contact, diary and todo records are not created yet.
 - Public pages use only `@kcw/demo-data` and the permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication or infrastructure from a page change.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behaviour are required.
-- Not built yet: the private hub feature set (contacts, diary and mood, calendar, social stats), routing and the X-ray overlay. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
+- Not built yet: the remaining private hub features (contacts, diary and mood, calendar, social stats) and the X-ray overlay. The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
 
 ## Brand Commitments
 

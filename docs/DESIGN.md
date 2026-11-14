@@ -1,6 +1,6 @@
 # Kentcrosswise: Design
 
-Current architecture and accepted decisions, consolidated 2026-10-25 (latest office evidence 2026-10-26 UTC). Implements the approved [hub](hub/SPEC.md) and [essays](essays/SPEC.md) specs. [HANDOFF.md](HANDOFF.md) records observed source/deployment status; [OPEN-POINTS.md](OPEN-POINTS.md) is the active backlog. Vendor research is dated evidence, not a fresh validation. The task tables describe the delivery contract; they do not imply every live acceptance step has passed.
+Current architecture and accepted decisions, consolidated 2026-10-25; section 4.0 records the owner-accepted direction of 2026-11-14. Implements the approved [hub](hub/SPEC.md) and [essays](essays/SPEC.md) specs. [HANDOFF.md](HANDOFF.md) records observed source/deployment status; [OPEN-POINTS.md](OPEN-POINTS.md) is the active backlog. Vendor research is dated evidence, not a fresh validation. Accepted targets and task tables are delivery contracts, not claims that implementation or live acceptance has passed.
 
 ## 0. Accepted architecture decisions
 
@@ -182,6 +182,24 @@ The CI project has the same roles with synthetic data.
 
 ## 4. Agent system
 
+### 4.0 Accepted direction and task lifecycle (2026-11-14)
+
+**Success criterion:** autonomous development is the product; the personal hub and essays are its demonstration workload. Reliability precedes further feature expansion. Keep LangGraph, Lambda, SQS, Postgres and GitHub Actions; implement the ordered reliability work in [OPEN-POINTS.md](OPEN-POINTS.md) before expanding the demonstration.
+
+**Execution target:** durable tasks, disposable workers, reusable skills and approved permission profiles. Workers already start fresh per dispatch. The four current workflow/App profiles are authorities a worker may use, not four persistent AI minds. Office roles and seats present actual executions; they do not determine backend workforce size. Preserve pinned trusted instructions, isolated credentialed publishers, owner-critical gates and independent QA bound to the reviewed head.
+
+Each worker should receive a bounded task contract: goal, acceptance criteria, base revision, prerequisites, owned areas, context references, approved profile, execution limits and expected result/evidence. Load relevant source and documents on demand. Persist results and project knowledge outside worker conversations. Model selection remains separate from task identity and does not grant permissions. Feature PRs carry matching behavioral documentation; Docs-keeper supplies a consistency check within its permitted scope.
+
+| Event | Accepted target behavior |
+|---|---|
+| Retry after failure | Keep the logical task identity and record a separate attempt. Reuse completed results only while valid; stable operation identities and reconciliation prevent duplicate records, usage and external actions. |
+| Replan | Preserve prior attempts and evidence; explicitly supersede affected instructions/results. Revalidate dependent work before reuse and invalidate QA approvals for changed reviewed code. Moving an artifact into a new process is not evidence that it satisfies the revised contract. |
+| Capture category change | Follow the hub SPEC: move derived content while preserving the original capture, owner edits and source link. This is application data classification, not worker scheduling. |
+
+Schedule prerequisites before consumers. Sequential subtasks are the first implementation step; parallel work requires explicit independence. Track active execution capacity separately from an intentional limit on parked work/PRs; numeric limits remain to be chosen. Keep routing and categorization as ordinary application workflows with bounded model calls.
+
+**Implementation gap:** current planning sees owner text rather than a repository brief and returns strings; child threads start immediately without prerequisite gating; parked owner/CI/QA waits count toward the four-task limit. Separate attempt lineage, supersession, structured contracts and durable effect handling are not implemented. Checkpoints and FIFO delivery do not make external effects atomic. The descriptive PR loop and Q12 below record the current implementation; this target supersedes their scheduling/retry assumptions as reliability work lands. Current rollout holds remain in HANDOFF; this decision authorizes no live enablement or infrastructure apply.
+
 ### 4.1 Agents
 | Agent | Runs | Trigger | Input | Output | Model | GitHub App permissions (single repo) |
 |---|---|---|---|---|---|---|
@@ -192,13 +210,13 @@ The CI project has the same roles with synthetic data.
 | Docs-keeper | Actions `agent-docs.yml` | dispatch {task_id, pr} by the orchestrator after each task PR it merges (not for docs PRs; §4.2 step 8) | merged diff, canonical instructions, docs | PR updating `docs/agents/*`, DESIGN.md and project handoff | `deepseek-flash` | Contents RW, Pull requests RW, Metadata R. Webhook inactive |
 | Router / Categorizer | web / pipeline Lambdas | new entry / new essay | text | label + confidence | DeepSeek V4.1 Flash (`deepseek-flash`) | none |
 
-**Target final ruleset `main-protection`** (owner procedure in `docs/runbooks/github-apps.md`; the last observed live profile is interim, with zero approvals and ci/required only):
+**Target final ruleset `main-protection`** (owner procedure in `docs/runbooks/github-apps.md`; observed live profile and verification are recorded in HANDOFF):
 - PR required; 1 approval; dismiss stale approvals on.
 - Required checks: `ci/required` (expected source: GitHub Actions) and `kcw/merge-rules` (expected source: orchestrator App).
 - Squash only; block force pushes and deletions; empty bypass list.
 - "Require approval of the most recent reviewable push" stays **off**, because QA pushes tests and then approves.
 
-The PR author (Developer App) can never approve its own PR. Whether a GitHub App's approval counts toward required reviews is unconfirmed in GitHub's docs; P2-07 tests it live and has a fallback.
+The PR author (Developer App) can never approve its own PR. GitHub App approval acceptance is recorded under U13 and in HANDOFF; source configuration alone does not establish current live protection.
 
 **Accepted workflow boundary (Q14/Q15):** prepare → trusted start report → work → independent QA review when applicable → publish → report. Non-QA work holds a read-only GitHub token and only the DeepSeek key (environment `agent-model`, role `kcw-gh-agent-model`). QA work and review hold a read-only GitHub token and GitHub OIDC for Anthropic federation (no model key, no AWS role). Neither has a publisher role or App token. Trusted jobs run on fresh protected runners at the pinned source; only matching per-agent publisher roles may read their own App secret and send queue reports. The accepted contract is detailed in §11 and the [security cutover runbook](runbooks/agent-security-cutover.md).
 
@@ -212,7 +230,7 @@ Start reports emit coding/qa_reviewing. Final successful reports contain usage o
 1. The owner creates a task in the boss console. This writes a `tasks` row and sends the SQS message `{type: task.created}`.
 2. Orchestrator:
    - Checks `agents_paused` and the 4-in-flight limit (D20).
-   - Plans 1–5 nonrecursive subtasks under Q12; one subtask uses the task itself, multiple subtasks receive child rows.
+   - Plans 1-5 nonrecursive subtasks under Q12; one subtask uses the task itself, multiple subtasks receive child rows. Current children start immediately; prerequisite ordering remains reliability work under section 4.0.
    - Writes the public title and runs the sanitizer (4.5).
    - Creates the GitHub issue with sanitized text only. If the sanitizer fails, it creates `approvals(kind=issue_text)` and interrupts with `wait=owner`.
    - Dispatches `agent-developer.yml`, records event `task_assigned`, then `interrupt(wait=dev)`.
@@ -449,7 +467,7 @@ Conventions for every task:
 
 **Phase 6: Continuous expansion**
 - Owner-driven feature tasks via the console; `agent_request` entries → approvals → tasks.
-- Embedding-based recommendations; EPUB/PDF import; Apple Shortcut capture; spending caps; Google Voice bridge.
+- Embedding-based recommendations; EPUB/PDF import; Apple Shortcut capture; Google Voice bridge.
 - Periodic dependency/security update tasks (critical by rule, so owner-approved).
 
 ## 10. Unverified items: status
@@ -513,7 +531,7 @@ Resolved by the owner (via the Liaison):
 - **Docs-keeper dispatch (resolved 2026-10-24):** The owner accepted these defaults. (1) Only task PRs the orchestrator merges trigger Docs-keeper; owner/local merges do not (a push to main resolves no task in the relay). (2) The docs task row uses `source='github'` (no migration). (3) A docs PR's CI failure, QA changes request or refused merge goes to the owner; approve re-dispatches Docs-keeper, reject fails the docs task. (4) A run that changes nothing ends the docs task `done` silently, with no inbox item. (5) Agent workflows disabled (all jobs skipped): the docs task fails with a reason, with no inbox approval. (6) The orchestrator does not rely on workflow dispatch returning a run id; it finds the run by `run-name: docs task <id>`. (7) Conflicting docs PRs go to the owner. (8) Dispatch happens at merge, not after deploy (§4.2 step 8 as amended); `deployed` reporting stays future work. Loop prevention: a docs task's merge never creates a docs task, and `agent-docs.yml` still skips merged PRs authored by the Docs App.
 
 - **Q14/Q15:** Accepted split-job runtime, per-agent protected publishing and critical-path expansion; detailed contract below.
-- **Q12 (P2-11 defaults; owner-confirmed 2026-10-24):** Subtasks (§4.2 step 2). (1) The planner (Haiku, `@kcw/orchestrator/nodes`) splits a top-level task into 1 to 5 subtasks; a subtask is never split again. (2) One subtask: the task runs the PR loop itself, with no child row. (3) Two or more: one child `tasks` row each (`parent_id`, source and `is_private` copied, the subtask text as its private `owner_text`, thread `task-<id>`); the orchestrator starts each child's thread right after the split, and each child runs the public-title node and the PR loop on its own branch `kcw/task-<child id>`. (4) A parent with children holds no in-flight slot (D20 counts only tasks without children), so a split cannot deadlock the limit. (5) The parent waits with status `waiting`, `waiting_on` null; the next sweep after every child has ended sets it `done` (all merged) or `failed` (any child failed or was cancelled), so the parent can lag its last child by up to one sweep interval. (6) Model output is validated by hand (no schema library); an invalid answer is retried once with the error, then the task goes to the owner as a failure (`critical_pr` approval: approve plans again, reject fails the task). Provider errors fail the step and SQS redelivers the message.
+- **Q12 (P2-11 defaults; owner-confirmed 2026-10-24):** Subtasks (§4.2 step 2). (1) The planner (`@kcw/orchestrator/nodes`; current model selection in D13 and section 4.1) splits a top-level task into 1 to 5 subtasks; a subtask is never split again. (2) One subtask: the task runs the PR loop itself, with no child row. (3) Two or more: one child `tasks` row each (`parent_id`, source and `is_private` copied, the subtask text as its private `owner_text`, thread `task-<id>`); the orchestrator starts each child's thread right after the split, and each child runs the public-title node and the PR loop on its own branch `kcw/task-<child id>`. (4) A parent with children holds no in-flight slot (D20 counts only tasks without children), so a split cannot deadlock the limit. (5) The parent waits with status `waiting`, `waiting_on` null; the next sweep after every child has ended sets it `done` (all merged) or `failed` (any child failed or was cancelled), so the parent can lag its last child by up to one sweep interval. (6) Model output is validated by hand (no schema library); an invalid answer is retried once with the error, then the task goes to the owner as a failure (`critical_pr` approval: approve plans again, reject fails the task). Provider errors fail the step and SQS redelivers the message.
 - **Prod migrations are strict (resolved 2026-10-23).** The owner filled `kcw/prod/migrator` ([runbooks/prod-db.md](runbooks/prod-db.md)), so `deploy.yml` runs `pnpm migrate --secret kcw/prod/migrator` without `--skip-if-unset` (used from 2026-10-22 until the prod DB was wired): a missing secret value, key or non-`postgres://` value now fails the deploy at **Migrate prod**, like access errors.
 - **C4 / Q1 (resolved 2026-10-22):** Owner chose an allowlist. `agents/merge-rules/approved-deps.json` lists pre-approved npm packages (exact names or scopes like `@aws-sdk/*`), seeded in P1-01 with the stack's libraries. A new dependency on the list is not critical; one off the list is critical. Editing the list itself is critical (owner-approved).
 - **Q5 (owner-selected 2026-10-25):** Named IAM user with MFA while Free Tier credits remain; migrate to IAM Identity Center after those credits are exhausted. The named IAM user with MFA and owner administration permissions is provisioned and verified.
