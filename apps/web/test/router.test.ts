@@ -55,11 +55,11 @@ describe("routerFromEnv", () => {
 
   it("builds the DeepSeek provider from the secret, with defaults, and reads the API key only when used", async () => {
     // A fake store: no AWS, and no call to any model (the provider is never asked to classify here).
-    const { store } = createFakeSecrets({ "kcw/prod/models": { deepseek_api_key: "fake-key" } });
+    const { store } = createFakeSecrets({ "kcw/prod/router": { deepseek_api_key: "fake-key" } });
     const get = vi.spyOn(store, "get");
     setDefaultSecretStore(store);
-    expect(routingEnabled({ [MODELS_SECRET_ENV]: "kcw/prod/models" })).toBe(true);
-    const provider = await routerFromEnv({ [MODELS_SECRET_ENV]: "kcw/prod/models" });
+    expect(routingEnabled({ [MODELS_SECRET_ENV]: "kcw/prod/router" })).toBe(true);
+    const provider = await routerFromEnv({ [MODELS_SECRET_ENV]: "kcw/prod/router" });
     expect(provider?.name).toBe("deepseek");
     const keyReads = get.mock.calls.filter(([, key]) => key === "deepseek_api_key");
     expect(keyReads).toHaveLength(0);

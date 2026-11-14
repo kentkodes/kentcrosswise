@@ -113,8 +113,8 @@ describe("settings", () => {
     await expect(loadProdSettings({}, store)).rejects.toThrow(/owner_email|google/);
   });
 
-  it("preview reads e2e_login from kcw/ci, or KCW_E2E_LOGIN locally", async () => {
-    const { store, aws } = createFakeSecrets({ "kcw/ci": { e2e_login: TOKEN, neon_api_key: "x" } });
+  it("preview reads e2e_login from kcw/ci/e2e-login, or KCW_E2E_LOGIN locally", async () => {
+    const { store, aws } = createFakeSecrets({ "kcw/ci/e2e-login": { e2e_login: TOKEN } });
     const fromSecret = await loadPreviewSettings({}, store);
     expect(fromSecret).toEqual({
       authSecret: derivePreviewAuthSecret(TOKEN),

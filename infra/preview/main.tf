@@ -95,6 +95,25 @@ data "aws_acm_certificate" "this" {
   most_recent = true
 }
 
+# AR1: shared, bootstrap-owned OACs and cache policies (infra/bootstrap/cloudfront-preview.tf).
+# kcw-gh-ci cannot create or update them. The OAC data source takes only an id, so the ids come
+# from SSM String parameters written by the bootstrap; cache policies are found by name.
+data "aws_ssm_parameter" "shared_s3_oac_id" {
+  name = "/kcw/shared/preview-cloudfront/s3-oac-id"
+}
+
+data "aws_ssm_parameter" "shared_lambda_oac_id" {
+  name = "/kcw/shared/preview-cloudfront/lambda-oac-id"
+}
+
+data "aws_cloudfront_cache_policy" "shared_server" {
+  name = "kcw-preview-server"
+}
+
+data "aws_cloudfront_cache_policy" "shared_image" {
+  name = "kcw-preview-image"
+}
+
 # D21: the per-PR DB URL lives in an SSM SecureString (AWS-managed key), readable only by this
 # preview's server role. Write-only value: Terraform sends it but does not keep it.
 resource "aws_ssm_parameter" "database_url" {
@@ -131,14 +150,20 @@ module "web" {
   domain_names             = local.has_domain ? [local.host] : []
   acm_certificate_arn      = local.has_domain ? data.aws_acm_certificate.this[0].arn : null
   route53_zone_id          = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
-  secret_names             = ["kcw/ci"]
-  ssm_parameter_names      = [aws_ssm_parameter.database_url.name]
+  secret_names             = ["kcw/ci/e2e-login"]
+  shared_cloudfront = {
+    s3_oac_id              = data.aws_ssm_parameter.shared_s3_oac_id.insecure_value
+    lambda_oac_id          = data.aws_ssm_parameter.shared_lambda_oac_id.insecure_value
+    server_cache_policy_id = data.aws_cloudfront_cache_policy.shared_server.id
+    image_cache_policy_id  = data.aws_cloudfront_cache_policy.shared_image.id
+  }
+  ssm_parameter_names = [aws_ssm_parameter.database_url.name]
 
   origin_verify_value       = random_password.origin_verify.result
   origin_verify_secret_name = aws_ssm_parameter.origin_verify.name
 
   server_environment = {
-    KCW_CI_SECRET          = "kcw/ci"
+    KCW_CI_SECRET          = "kcw/ci/e2e-login"
     KCW_DATABASE_URL_PARAM = aws_ssm_parameter.database_url.name
   }
 }
