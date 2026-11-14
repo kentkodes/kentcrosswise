@@ -10,10 +10,12 @@ resource "aws_iam_openid_connect_provider" "github" {
 locals {
   oidc_host = "token.actions.githubusercontent.com"
 
-  # kcw-gh-ci also serves preview-gc.yml's sweep job (dispatch/schedule on main), which runs in
-  # environment preview-gc so that agent workflows on main (ref:refs/heads/main) cannot use this role.
+  # kcw-gh-ci (AR1 slice 2): no pull_request subject, so no PR-context job can assume it. Its users are
+  # preview-trusted.yml (provision, teardown) and preview-gc.yml (closed-PR cleanup, sweep), all in
+  # environment preview-gc (main-only), so agent workflows on main (ref:refs/heads/main) cannot use it.
+  # kcw-gh-plan keeps pull_request: read-only prod plan (owner decision).
   role_subs = {
-    "kcw-gh-ci"     = ["${local.github_sub}:pull_request", "${local.github_sub}:environment:preview-gc"]
+    "kcw-gh-ci"     = ["${local.github_sub}:environment:preview-gc"]
     "kcw-gh-plan"   = ["${local.github_sub}:pull_request"]
     "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
     # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust, except

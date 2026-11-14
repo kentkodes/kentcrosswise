@@ -4,18 +4,6 @@
 import { ghGet, type GhOptions } from "./agent-github";
 import { CANDIDATE_ARTIFACT } from "./candidate-artifact";
 
-/**
- * PR A shadow namespace: the trusted path names its resources, Neon branch and state key with
- * `pr_number + SHADOW_PR_OFFSET`, so it cannot collide with the old `preview` job (names kcw-pr-<n>).
- * Removed in PR B, when the trusted path becomes the only one and uses the real number.
- */
-export const SHADOW_PR_OFFSET = 100_000;
-
-export function shadowPreviewId(pr: number): number {
-  if (!Number.isSafeInteger(pr) || pr <= 0 || pr >= SHADOW_PR_OFFSET) throw new Error(`PR number ${pr} is outside the shadow range`);
-  return pr + SHADOW_PR_OFFSET;
-}
-
 export interface GitHubRest {
   /** GET a JSON document; undefined on 404. */
   get<T>(path: string, what: string): Promise<T | undefined>;
@@ -63,7 +51,6 @@ export interface ResolveInput {
 
 export interface Resolved {
   prNumber: number;
-  previewId: number;
   artifactId: number;
 }
 
@@ -77,7 +64,7 @@ export async function resolveCandidate(api: GitHubRest, input: ResolveInput): Pr
   );
   if (!listed) throw new Error("ci run not found");
   const artifact = selectArtifact(listed.artifacts, input.runId, input.headSha);
-  return { prNumber: pr.number, previewId: shadowPreviewId(pr.number), artifactId: artifact.id };
+  return { prNumber: pr.number, artifactId: artifact.id };
 }
 
 /**

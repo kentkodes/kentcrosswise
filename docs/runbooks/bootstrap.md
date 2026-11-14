@@ -74,8 +74,8 @@ The current expected subjects are:
 
 | Role | Expected immutable subject suffix |
 |---|---|
-| kcw-gh-ci / kcw-gh-plan | pull_request |
-| kcw-gh-ci sweep | environment:preview-gc |
+| kcw-gh-plan | pull_request |
+| kcw-gh-ci | environment:preview-gc (no pull_request since the AR1 slice 2 cutover) |
 | kcw-gh-deploy | environment:prod |
 | kcw-gh-agent-<role> | environment:agent-publish-<role> |
 | kcw-gh-agent-model | environment:agent-model (Developer, Scraper-builder and Docs-keeper work jobs) |
@@ -239,3 +239,11 @@ Order matters: bootstrap before the merge (the preview job needs the shared Clou
 - Negative: with the `kcw-gh-ci` policy, `cloudfront:UpdateDistribution`/`TagResource`/`DeleteDistribution` on the prod distribution (tag `kcw:env=prod`) is denied.
 - Positive: a preview created with tags (distribution with `kcw:env=preview`, roles with `kcw:pr`) applies and destroys cleanly, using the shared OACs and cache policies.
 - Boundary: a preview role of PR 1 cannot read `/kcw/preview/pr-12/*`, the queues or buckets of another PR, or `kcw/ci`; it reads `kcw/ci/e2e-login`.
+
+## AR1 slice 2 cutover
+
+Order: owner merges the cutover PR (PR B) first, then runs the bootstrap apply. The old `preview` job is gone after the merge, so no pull_request job needs `kcw-gh-ci` any more.
+
+1. **Plan.** `terraform -chdir=infra/bootstrap plan`. Expect only the `kcw-gh-ci` assume-role policy changing in place: the `...:pull_request` subject is removed, `...:environment:preview-gc` remains. Nothing else changes; `kcw-gh-plan` keeps `pull_request`.
+2. **Apply.** `terraform -chdir=infra/bootstrap apply` (owner credentials).
+3. **Verify.** A PR's `preview-trusted` run (verify, provision, e2e, teardown) passes; a `pull_request` job that tries `aws-actions/configure-aws-credentials` with `vars.AWS_ROLE_CI_ARN` is refused (for example a throwaway PR step, then closed); the PR-closed `preview-gc` run (now `pull_request_target`) succeeds. Not run for the source change.

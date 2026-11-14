@@ -1,17 +1,18 @@
 # Preview garbage collection (DESIGN §5 step 6; P1-16). Removes preview leftovers of closed PRs
 # and of previews older than 24 h (CI runs that died before their teardown). Uses kcw-gh-ci.
 #
-# Triggers and OIDC subjects (kcw-gh-ci must trust both, see infra/bootstrap/iam.tf):
-#   - pull_request closed         -> ...:pull_request; cleans that PR only. Shares the PR's CI
-#                                    concurrency group, so it waits for a running CI teardown.
-#   - workflow_dispatch           -> job in environment `preview-gc` -> ...:environment:preview-gc.
-#     Nightly: the orchestrator sweeper (P2-17) dispatches it with dry_run=false and
-#     max_age_hours=24 between 06:15 and 07:15 UTC. No `schedule:` trigger (GitHub disables
+# Both jobs run in environment `preview-gc` (main-only), so the OIDC subject is ...:environment:preview-gc, the
+# only subject kcw-gh-ci trusts (infra/bootstrap/iam.tf). No pull_request job can assume it (AR1 slice 2).
+#   - pull_request_target closed  -> cleans that PR only. Runs the default branch's definition and checks out
+#                                    the default branch only, never the PR's code. Shares the PR's CI
+#                                    concurrency group, so it waits for a running CI run.
+#   - workflow_dispatch           -> sweep. Nightly: the orchestrator sweeper (P2-17) dispatches it with
+#     dry_run=false and max_age_hours=24 between 06:15 and 07:15 UTC. No `schedule:` trigger (GitHub disables
 #     schedules in public repos after 60 days without activity).
 name: preview-gc
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
   workflow_dispatch:
     inputs:
@@ -33,9 +34,10 @@ env:
 jobs:
   pr-closed:
     name: preview-gc (closed PR)
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: preview-gc
     concurrency:
       group: ci-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: false
@@ -44,10 +46,10 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      # Trusted code: the base branch, not the closed PR's head.
+      # Trusted code: the default branch, never the closed PR's head.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup
@@ -64,7 +66,7 @@ jobs:
 
   sweep:
     name: preview-gc (sweep)
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: preview-gc

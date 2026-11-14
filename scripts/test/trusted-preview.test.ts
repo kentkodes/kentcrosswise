@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkHead, resolveCandidate, selectArtifact, selectPullRequest, shadowPreviewId, SHADOW_PR_OFFSET, type GitHubRest } from "../lib/trusted-preview";
+import { checkHead, resolveCandidate, selectArtifact, selectPullRequest, type GitHubRest } from "../lib/trusted-preview";
 import { provisionJobName, runTitle, TRUSTED_WORKFLOW_PATH, verifyTrustedPreview } from "../lib/trusted-run";
 
 const SHA = "a".repeat(40);
@@ -16,24 +16,6 @@ function fake(routes: Record<string, unknown>): GitHubRest & { calls: string[] }
     },
   };
 }
-
-describe("shadow preview id", () => {
-  it("offsets the PR number and rejects out-of-range numbers", () => {
-    expect(shadowPreviewId(42)).toBe(100_042);
-    expect(SHADOW_PR_OFFSET).toBe(100_000);
-    expect(() => shadowPreviewId(0)).toThrow();
-    expect(() => shadowPreviewId(100_000)).toThrow();
-  });
-
-  it("keeps every preview name pattern valid", () => {
-    const n = shadowPreviewId(99_999);
-    expect(`kcw-pr-${n}`).toMatch(/^kcw-pr-[1-9][0-9]*$/);
-    expect(`preview/pr-${n}.tfstate`).toMatch(/^preview\/pr-(0|[1-9][0-9]*)\.tfstate$/);
-    expect(`/kcw/preview/pr-${n}/database-url`).toMatch(/^\/kcw\/preview\/pr-(0|[1-9][0-9]*)\//);
-    // The old preview job's prefix kcw-pr-42- cannot match kcw-pr-100042-...
-    expect(`kcw-pr-${shadowPreviewId(42)}-assets`.startsWith("kcw-pr-42-")).toBe(false);
-  });
-});
 
 describe("selectPullRequest", () => {
   const pr = (number: number, over: object = {}) => ({ number, state: "open", head: { sha: SHA, repo: { id: 7 } }, ...over });
@@ -64,12 +46,12 @@ describe("selectArtifact", () => {
 });
 
 describe("resolveCandidate and checkHead", () => {
-  it("resolves the PR, shadow id and artifact id through the API", async () => {
+  it("resolves the PR and artifact id through the API", async () => {
     const api = fake({
       "/repos/o/r/commits/": [{ number: 42, state: "open", head: { sha: SHA, repo: { id: 7 } } }],
       "/repos/o/r/actions/runs/99/artifacts": { artifacts: [{ id: 555, name: "candidate-preview", expired: false, workflow_run: { id: 99, head_sha: SHA } }] },
     });
-    expect(await resolveCandidate(api, { repo: "o/r", repositoryId: 7, runId: 99, headSha: SHA })).toEqual({ prNumber: 42, previewId: 100_042, artifactId: 555 });
+    expect(await resolveCandidate(api, { repo: "o/r", repositoryId: 7, runId: 99, headSha: SHA })).toEqual({ prNumber: 42, artifactId: 555 });
   });
 
   it("reports current, superseded and closed heads", async () => {

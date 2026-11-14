@@ -9,7 +9,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Repository and refs
 
-- Default branch `main` at `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (PR #104, merged 2026-11-14).
+- Default branch `main` at `712edfa` (PR #107, merged 2026-11-14).
 - Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge. This is the normal workflow.
 
 ## PRs and checks
@@ -47,5 +47,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. AR1 slice 1 (authority and secret split) is in #106: owner-gated bootstrap plan/apply, two new secret values, then CI and merge. Next: AR1 slices 2-3 per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md), then the remaining AR1-AR9 sequence. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
+1. AR1 slice 1 (authority and secret split) is in #106: owner-gated bootstrap plan/apply, two new secret values, then CI and merge. AR1 slice 2 PR B (cutover: old `preview` job removed, `kcw-gh-ci` without a `pull_request` subject) is the next PR; its bootstrap apply is owner-gated ([runbook](runbooks/bootstrap.md#ar1-slice-2-cutover)). Next: AR1 slices 2-3 per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md), then the remaining AR1-AR9 sequence. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
 2. Implementation decisions still needed: preview isolation technique, unknown-price policy, worker/WIP/time limits, alert destination/recovery targets and the scoped live acceptance task. No new budget or live enablement was approved. Public copy overclaims remain deferred under R1; worker context cost is now AR5 (former R3).

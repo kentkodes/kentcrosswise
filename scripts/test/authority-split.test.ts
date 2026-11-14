@@ -50,6 +50,12 @@ describe("preview runtime boundary", () => {
 });
 
 describe("kcw-gh-ci", () => {
+  it("has no pull_request subject; kcw-gh-plan keeps it (owner decision)", () => {
+    const subs = (role: string) => new RegExp(`"${role}"\\s*=\\s*\\[([^\\]]*)\\]`).exec(iam)?.[1];
+    expect(subs("kcw-gh-ci")).toBe('"${local.github_sub}:environment:preview-gc"');
+    expect(subs("kcw-gh-plan")).toBe('"${local.github_sub}:pull_request"');
+  });
+
   it("reads kcw/ci and kcw/ci/e2e-login", () => {
     const secret = statement(ci, "CiSecret");
     expect(secret).toContain("kcw/ci-??????");
@@ -132,10 +138,13 @@ describe("secret split", () => {
     expect(prod).toContain('names  = ["kcw/prod/orchestrator", "kcw/prod/models"]');
   });
 
-  it("the preview job reads the e2e login from its own secret", () => {
+  it("ci.yml reads no secrets; the trusted preview reads kcw/ci and takes the e2e login from an environment secret", () => {
     const ciYml = read(".github/workflows/ci.yml");
-    expect(ciYml).toContain("KCW_E2E, kcw/ci/e2e-login");
-    expect(ciYml).toContain("KCW_E2E_LOGIN: ${{ env.KCW_E2E_E2E_LOGIN }}");
-    expect(ciYml).toContain("KCW_CI, kcw/ci");
+    expect(ciYml).not.toContain("kcw/ci");
+    expect(ciYml).not.toContain("AWS_ROLE_CI_ARN");
+    const trusted = read(".github/workflows/preview-trusted.yml");
+    expect(trusted).toContain("KCW_CI, kcw/ci");
+    expect(trusted).not.toContain("KCW_E2E, kcw/ci/e2e-login");
+    expect(trusted).toContain("KCW_E2E_LOGIN: ${{ secrets.E2E_LOGIN }}");
   });
 });
