@@ -28,10 +28,14 @@ import { servePglite, type PgSocketServer } from "./pg-socket";
 const sha = (s: string) => createHash("sha1").update(s).digest("hex");
 const DEV_BOT = "kcw-developer[bot]";
 const SENDER = { id: 1, login: "kcw-orchestrator[bot]", type: "Bot" };
-const CLEAN: MergeInput = {
+/** A clean trusted merge-rules input for this PR and head. */
+const clean = (pr: number, head: string): MergeInput => ({
+  pr,
+  headSha: head,
   planSummary: { format: 1, infra: [], artifact: { count: 1, kinds: { create: 0, update: 1, delete: 0, replace: 0 } } },
   lockDiff: { added: [], existing: [] },
-};
+  uncoveredPaths: [],
+});
 const ROUTE: ChangedFile = { path: "apps/web/src/app/healthz/route.ts", status: "added" };
 const PLAN: Plan = { title: "Add a healthz page", body: "Add a /healthz route that returns ok.\n\nInclude a test." };
 
@@ -164,12 +168,12 @@ describe("task graph (P2-10)", () => {
   /** The Developer opens its PR (the fake GitHub learns it, with a clean merge-rules artifact). */
   function openPr(taskId: number, pr: number, head: string, files: ChangedFile[] = [ROUTE], patches: Record<string, string> = {}) {
     gh.prs.set(pr, { headSha: head, author: DEV_BOT, files, patches });
-    gh.artifacts.set(head, CLEAN);
+    gh.artifacts.set(head, clean(pr, head));
     return send(taskId, prEvent(taskId, "opened", pr, head));
   }
 
   /** New commits on the PR. */
-  function push(taskId: number, pr: number, head: string, artifact: MergeInput | null = CLEAN) {
+  function push(taskId: number, pr: number, head: string, artifact: MergeInput | null = clean(pr, head)) {
     gh.prs.get(pr)!.headSha = head;
     if (artifact) gh.artifacts.set(head, artifact);
     return send(taskId, prEvent(taskId, "synchronize", pr, head));
@@ -608,7 +612,7 @@ describe("task graph (P2-10)", () => {
     await sql("UPDATE system_flags SET value = 'true' WHERE key = 'agents_paused'");
     const head = sha(`${id}-1`);
     gh.prs.set(52, { headSha: head, author: DEV_BOT, files: [ROUTE] });
-    gh.artifacts.set(head, CLEAN);
+    gh.artifacts.set(head, clean(52, head));
     expect(await send(id, prEvent(id, "opened", 52, head))).toBe("deferred");
     const usage = [{ kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 10, output_tokens: 5 }];
     expect(await send(id, { task_id: id, agent: "developer", event_type: "coding", usage })).toBe("applied");
@@ -681,14 +685,15 @@ describe("task graph (P2-10)", () => {
     });
 
     it.each([
-      ["no_artifact", "the ci.yml run has no merge-rules-input artifact"],
-      ["no_run", "no ci.yml run was found for the PR head"],
+      ["no_artifact", "the trusted preview run has no merge-rules-input artifact"],
+      ["trusted_run_pending", "the trusted preview run for the PR head has not finished"],
+      ["trusted_run_failed", "the trusted preview run for the PR head did not pass"],
     ] as const)("%s: retried on CI events and sweeps, then critical after the timeout", async (reason, text) => {
       const id = await newTask();
       const head = sha(`${id}-1`);
       await toQa(id, 55, head);
       gh.artifacts.delete(head);
-      if (reason === "no_run") gh.headsWithoutRun.add(head);
+      if (reason !== "no_artifact") gh.trustedRunStates.set(head, reason === "trusted_run_pending" ? "pending" : "failed");
 
       expect(await send(id, reviewEvent(id, 55, head, "approved"))).toBe("applied");
       expect((await task(id)).waiting_on).toBe("ci");
@@ -768,6 +773,27 @@ describe("task graph (P2-10)", () => {
       expect(gh.merges).toEqual([]);
     });
 
+    it("an uncovered infra or workflow path from the trusted input is critical even when the PR files look clean", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 59, head);
+      gh.artifacts.set(head, { ...clean(59, head), uncoveredPaths: ["infra/preview/main.tf"] });
+      expect(await send(id, reviewEvent(id, 59, head, "approved"))).toBe("applied");
+      expect(gh.merges).toEqual([]);
+      expect((await pendingApproval(id)).reasons).toEqual([
+        "not covered by the trusted prod plan (owner reviews the PR's own plan): infra/preview/main.tf",
+      ]);
+    });
+
+    it("trusted input for another PR is critical at once (fail closed)", async () => {
+      const id = await newTask();
+      const head = sha(`${id}-1`);
+      await toQa(id, 61, head);
+      gh.artifacts.set(head, clean(62, head));
+      expect(await send(id, reviewEvent(id, 61, head, "approved"))).toBe("applied");
+      expect((await pendingApproval(id)).reasons[0]).toContain("malformed (ArtifactFormatError)");
+    });
+
     it("a malformed artifact is critical at once (fail closed)", async () => {
       const id = await newTask();
       const head = sha(`${id}-1`);
@@ -801,7 +827,7 @@ describe("task graph (P2-10)", () => {
     /** Docs-keeper's publisher opens the docs PR from the docs task's branch. */
     function openDocsPr(docs: number, pr: number, head: string, files: ChangedFile[] = [DESIGN_DOC]) {
       gh.prs.set(pr, { headSha: head, author: DOCS_BOT, files });
-      gh.artifacts.set(head, CLEAN);
+      gh.artifacts.set(head, clean(pr, head));
       return send(docs, prEvent(docs, "opened", pr, head));
     }
 

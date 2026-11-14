@@ -50,10 +50,11 @@ describe("preview runtime boundary", () => {
 });
 
 describe("kcw-gh-ci", () => {
-  it("has no pull_request subject; kcw-gh-plan keeps it (owner decision)", () => {
+  it("has no pull_request subject; kcw-gh-plan keeps it and adds the trusted prod-plan environment", () => {
     const subs = (role: string) => new RegExp(`"${role}"\\s*=\\s*\\[([^\\]]*)\\]`).exec(iam)?.[1];
     expect(subs("kcw-gh-ci")).toBe('"${local.github_sub}:environment:preview-gc"');
-    expect(subs("kcw-gh-plan")).toBe('"${local.github_sub}:pull_request"');
+    const plan = [...(subs("kcw-gh-plan") ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(plan).toEqual(["${local.github_sub}:pull_request", "${local.github_sub}:environment:prod-plan"]);
   });
 
   it("reads kcw/ci and kcw/ci/e2e-login", () => {

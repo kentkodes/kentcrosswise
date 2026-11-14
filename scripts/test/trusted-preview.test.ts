@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkHead, resolveCandidate, selectArtifact, selectPullRequest, type GitHubRest } from "../lib/trusted-preview";
-import { provisionJobName, runTitle, TRUSTED_WORKFLOW_PATH, verifyTrustedPreview } from "../lib/trusted-run";
 
 const SHA = "a".repeat(40);
+const BASE = "c".repeat(40);
 
 /** Fake API keyed by path prefix; records requested paths. */
 function fake(routes: Record<string, unknown>): GitHubRest & { calls: string[] } {
@@ -18,7 +18,7 @@ function fake(routes: Record<string, unknown>): GitHubRest & { calls: string[] }
 }
 
 describe("selectPullRequest", () => {
-  const pr = (number: number, over: object = {}) => ({ number, state: "open", head: { sha: SHA, repo: { id: 7 } }, ...over });
+  const pr = (number: number, over: object = {}) => ({ number, state: "open", head: { sha: SHA, repo: { id: 7 } }, base: { sha: BASE }, ...over });
   it("picks the single open same-repo PR at that head", () => {
     expect(selectPullRequest([pr(5)], SHA, 7).number).toBe(5);
   });
@@ -35,6 +35,12 @@ describe("selectArtifact", () => {
   it("selects the one live artifact of the run", () => {
     expect(selectArtifact([art(1)], 99, SHA).id).toBe(1);
   });
+  it("selects by kind: candidate-prod is not candidate-preview", () => {
+    const both = [art(1), art(2, { name: "candidate-prod" })];
+    expect(selectArtifact(both, 99, SHA, "prod").id).toBe(2);
+    expect(selectArtifact(both, 99, SHA, "preview").id).toBe(1);
+    expect(() => selectArtifact([art(1)], 99, SHA, "prod")).toThrow(/candidate-prod/);
+  });
   it("rejects zero, many, expired, other-run, other-name and other-head", () => {
     expect(() => selectArtifact([], 99, SHA)).toThrow();
     expect(() => selectArtifact([art(1), art(2)], 99, SHA)).toThrow();
@@ -46,12 +52,14 @@ describe("selectArtifact", () => {
 });
 
 describe("resolveCandidate and checkHead", () => {
-  it("resolves the PR and artifact id through the API", async () => {
+  it("resolves the PR, its base and both artifact ids through the API", async () => {
+    const artifact = (id: number, name: string) => ({ id, name, expired: false, workflow_run: { id: 99, head_sha: SHA } });
     const api = fake({
-      "/repos/o/r/commits/": [{ number: 42, state: "open", head: { sha: SHA, repo: { id: 7 } } }],
-      "/repos/o/r/actions/runs/99/artifacts": { artifacts: [{ id: 555, name: "candidate-preview", expired: false, workflow_run: { id: 99, head_sha: SHA } }] },
+      "/repos/o/r/commits/": [{ number: 42, state: "open", head: { sha: SHA, repo: { id: 7 } }, base: { sha: BASE } }],
+      "/repos/o/r/actions/runs/99/artifacts?name=candidate-preview": { artifacts: [artifact(555, "candidate-preview")] },
+      "/repos/o/r/actions/runs/99/artifacts?name=candidate-prod": { artifacts: [artifact(556, "candidate-prod")] },
     });
-    expect(await resolveCandidate(api, { repo: "o/r", repositoryId: 7, runId: 99, headSha: SHA })).toEqual({ prNumber: 42, artifactId: 555 });
+    expect(await resolveCandidate(api, { repo: "o/r", repositoryId: 7, runId: 99, headSha: SHA })).toEqual({ prNumber: 42, baseSha: BASE, artifactId: 555, prodArtifactId: 556 });
   });
 
   it("reports current, superseded and closed heads", async () => {
@@ -60,60 +68,5 @@ describe("resolveCandidate and checkHead", () => {
     expect(await checkHead(open("b".repeat(40)), "o/r", 42, SHA)).toBe("superseded");
     expect(await checkHead(fake({ "/repos/o/r/pulls/42": { state: "closed", head: { sha: SHA } } }), "o/r", 42, SHA)).toBe("closed");
     expect(await checkHead(fake({}), "o/r", 42, SHA)).toBe("closed");
-  });
-});
-
-describe("verifyTrustedPreview", () => {
-  const run = (over: object = {}) => ({
-    id: 11,
-    run_number: 3,
-    event: "workflow_run",
-    status: "completed",
-    conclusion: "success",
-    path: TRUSTED_WORKFLOW_PATH,
-    display_title: runTitle(SHA),
-    ...over,
-  });
-  const okJobs = ["verify", provisionJobName(42, SHA), "e2e", "teardown", "result"].map((name) => ({ name, conclusion: "success" }));
-  const api = (runs: object[], jobs: object[] = okJobs, repo: object | undefined = { default_branch: "main" }) =>
-    fake({
-      "/repos/o/r/actions/workflows/preview-trusted.yml/runs": { workflow_runs: runs },
-      "/repos/o/r/actions/runs/": { jobs },
-      "/repos/o/r": repo,
-    });
-  const input = { repo: "o/r", pr: 42, sha: SHA };
-
-  it("accepts a successful default-branch run that provisioned the PR at the head", async () => {
-    expect(await verifyTrustedPreview(api([run()]), input)).toEqual({ ok: true, runId: 11 });
-    expect(await verifyTrustedPreview(api([run({ path: `${TRUSTED_WORKFLOW_PATH}@refs/heads/main` })]), input)).toEqual({ ok: true, runId: 11 });
-  });
-
-  it("uses the latest run for the head, so a later failure wins", async () => {
-    const r = await verifyTrustedPreview(api([run(), run({ id: 12, run_number: 4, conclusion: "failure" })]), input);
-    expect(r).toMatchObject({ ok: false, reason: expect.stringContaining("12") });
-  });
-
-  it("rejects a wrong path, title, event, in-progress run and missing or failed jobs", async () => {
-    for (const bad of [
-      [run({ path: ".github/workflows/ci.yml" })],
-      [run({ path: `${TRUSTED_WORKFLOW_PATH}@refs/heads/feature` })],
-      [run({ display_title: runTitle("b".repeat(40)) })],
-      [run({ event: "push" })],
-      [run({ status: "in_progress", conclusion: null })],
-      [],
-    ]) {
-      expect((await verifyTrustedPreview(api(bad), input)).ok).toBe(false);
-    }
-    expect((await verifyTrustedPreview(api([run()], okJobs.filter((j) => j.name !== "e2e")), input)).ok).toBe(false);
-    expect((await verifyTrustedPreview(api([run()], okJobs.map((j) => (j.name === "teardown" ? { ...j, conclusion: "failure" } : j))), input)).ok).toBe(false);
-  });
-
-  it("rejects a run that provisioned another PR or head", async () => {
-    const jobs = okJobs.map((j) => (j.name.startsWith("provision") ? { ...j, name: provisionJobName(43, SHA) } : j));
-    expect(await verifyTrustedPreview(api([run()], jobs), input)).toMatchObject({ ok: false, reason: expect.stringContaining("did not provision") });
-  });
-
-  it("fails when the repository or workflow is not found", async () => {
-    expect((await verifyTrustedPreview(fake({}), input)).ok).toBe(false);
   });
 });

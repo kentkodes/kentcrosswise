@@ -10,11 +10,15 @@ import {
   extractEntries,
   LIMITS,
   parseId,
+  parseKind,
   parseManifest,
+  PROD_FILE,
+  PROD_ROOTS,
   prepareDumpForRestore,
   sha256Hex,
   validateBuildInfo,
   validateTar,
+  validateProdArchive,
   validateWebArchive,
   verifyManifest,
   WEB_FILE,
@@ -317,5 +321,74 @@ describe("pax extended headers", () => {
     expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a")), paxHdr(rec("path", ".open-next/b")), { ...stub }]))).toThrow(/in a row/);
     expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a"))]))).toThrow(/without an entry/);
     expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a")), { name: "l", type: "2" }]))).toThrow(/not allowed/);
+  });
+});
+
+// ---------- candidate-prod (AR1 slice 3) ----------
+
+describe("prod tar (candidate-prod)", () => {
+  const PROD_BUILD = JSON.stringify({ kcw_env: "prod", build_id: "abc123" });
+  const prodGood = (): Spec[] => [
+    { name: "apps/web/.open-next/", type: "5" },
+    { name: "apps/web/.open-next/kcw-build.json", data: PROD_BUILD },
+    ...PROD_ROOTS.slice(1).map((r) => ({ name: `${r}/index.mjs`, data: "export const handler = 1;" })),
+  ];
+
+  it("lists exactly the Terraform inputs of infra/prod", () => {
+    const tf = readFileSync(path.join(path.resolve(import.meta.dirname, "../.."), "infra/prod/main.tf"), "utf8") + readFileSync(path.join(path.resolve(import.meta.dirname, "../.."), "infra/prod/pipelines.tf"), "utf8");
+    const defaults = [...tf.matchAll(/default\s*=\s*"\.\.\/\.\.\/([^"]+)"/g)].map((m) => m[1]!).sort();
+    expect(defaults).toEqual([...PROD_ROOTS].sort());
+  });
+
+  it("accepts the roots and requires a prod build id and every Lambda index.mjs", () => {
+    const buf = tar(prodGood());
+    expect(validateProdArchive(buf).length).toBe(6);
+    expect(() => validateProdArchive(tar(prodGood().filter((s) => s.name !== "agents/webhook-relay/dist/index.mjs")))).toThrow(/webhook-relay\/dist\/index.mjs is missing/);
+    expect(() => validateProdArchive(tar(prodGood().filter((s) => !s.name.endsWith("kcw-build.json"))))).toThrow(/kcw-build.json is missing/);
+    const preview = prodGood().map((s) => (s.name.endsWith("kcw-build.json") ? { ...s, data: BUILD } : s));
+    expect(() => validateProdArchive(tar(preview))).toThrow(/"prod"/);
+  });
+
+  it.each([
+    ["outside the list", [{ name: "agents/orchestrator/src/x.ts" }]],
+    ["a parent directory entry", [{ name: "apps/web", type: "5" }]],
+    ["a sibling prefix of a root", [{ name: "agents/orchestrator/dist-evil/index.mjs" }]],
+    ["the preview root", [{ name: ".open-next/a" }]],
+    ["traversal", [{ name: "agents/orchestrator/dist/../src/x.ts" }]],
+    ["absolute path", [{ name: "/agents/orchestrator/dist/x" }]],
+    ["symlink", [{ name: "agents/orchestrator/dist/l", type: "2" }]],
+    ["hardlink", [{ name: "scripts/dist-pipelines/l", type: "1" }]],
+  ] as [string, Spec[]][])("rejects %s", (_label, specs) => {
+    expect(() => validateTar(tar([...specs]), PROD_ROOTS)).toThrow();
+  });
+
+  it("the preview roots still reject the prod layout", () => {
+    expect(() => validateTar(tar(prodGood()))).toThrow(/outside/);
+  });
+
+  it("extracts every root below the destination and refuses an existing one", () => {
+    const dest = mkdtempSync(path.join(tmpdir(), "kcw-extract-prod-"));
+    try {
+      const buf = tar(prodGood());
+      extractEntries(buf, validateProdArchive(buf), dest, PROD_ROOTS);
+      expect(readFileSync(path.join(dest, "scripts/dist-pipelines/index.mjs"), "utf8")).toBe("export const handler = 1;");
+      expect(readFileSync(path.join(dest, "apps/web/.open-next/kcw-build.json"), "utf8")).toBe(PROD_BUILD);
+      expect(() => extractEntries(buf, validateProdArchive(buf), dest, PROD_ROOTS)).toThrow(/already exists/);
+    } finally {
+      rmSync(dest, { recursive: true, force: true });
+    }
+  });
+
+  it("the prod manifest binds one file and cannot be read as a preview manifest", () => {
+    const sha = "a".repeat(40);
+    const prodTar = tar(prodGood());
+    const m = buildManifest({ repository_id: 7, pr_number: 42, head_sha: sha, run_id: 99, run_attempt: 1 }, { [PROD_FILE]: prodTar }, "prod");
+    expect(Object.keys(m.files)).toEqual([PROD_FILE]);
+    const parsed = parseManifest(JSON.stringify(m), "prod");
+    expect(() => verifyManifest(parsed, { repositoryId: 7, prNumber: 42, headSha: sha, runId: 99 }, { [PROD_FILE]: prodTar }, "prod")).not.toThrow();
+    expect(() => verifyManifest(parsed, { repositoryId: 7, prNumber: 42, headSha: sha, runId: 99 }, { [PROD_FILE]: Buffer.concat([prodTar, Buffer.alloc(512)]) }, "prod")).toThrow(/prod-build.tar does not match/);
+    expect(() => parseManifest(JSON.stringify(m))).toThrow(/exactly/);
+    expect(() => parseKind("other")).toThrow(/--kind/);
+    expect(parseKind(undefined)).toBe("preview");
   });
 });

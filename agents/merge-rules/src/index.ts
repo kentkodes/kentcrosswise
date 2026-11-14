@@ -13,6 +13,8 @@
 // - a new direct dependency not on approved-deps.json, or any edit of that file (C4);
 // - a new service (new Terraform provider, or a new AWS SDK client in the workspace);
 // - cost: any create in the prod plan summary;
+// - paths under infra/ or .github/ (AR1 slice 3): the trusted plan runs main's infrastructure with the PR's
+//   build as data, so the PR's own Terraform and workflow changes are not covered by it; the owner reviews them;
 // - the rules themselves (Q7): agents/merge-rules/**, scripts/lib/plan-summary.ts, pnpm-workspace.yaml.
 // Missing inputs fail closed: if a rule cannot be checked, the PR is critical.
 import defaultApprovedDeps from "../approved-deps.json" with { type: "json" };
@@ -30,7 +32,7 @@ export interface ChangedFile {
   previousPath?: string;
 }
 
-/** Copy of `scripts/lib/plan-summary.ts` PlanSummary (CI artifact `prod-plan-summary`), format 1. */
+/** Copy of `scripts/lib/plan-summary.ts` PlanSummary (inside the `merge-rules-input` artifact), format 1. */
 export interface PlanSummary {
   format: 1;
   infra: { address: string; kind: "create" | "update" | "delete" | "replace"; changed: string[] }[];
@@ -51,6 +53,8 @@ export interface MergeRulesInput {
   patches: Readonly<Record<string, string | undefined>>;
   /** The prod plan summary of the PR's head; `null` if CI produced none (fails closed). */
   planSummary: PlanSummary | null;
+  /** PR paths under `infra/` or `.github/` that the trusted prod plan does not cover (merge-rules-input format 2); `null` if missing (fails closed). */
+  uncoveredPaths: string[] | null;
   /** `null` if CI produced none: then any package.json or lockfile change is critical. */
   lockDiff: LockDiff | null;
   /** PR author login. Recorded for the caller; no v1 rule depends on it. */
@@ -204,6 +208,12 @@ export function evaluate(input: MergeRulesInput): MergeRulesResult {
       add(`production infrastructure change (${c.kind}): ${c.address}`);
       if (c.kind === "create") add(`cost (prod plan creates a resource): ${c.address}`);
     }
+  }
+
+  if (input.uncoveredPaths === null) {
+    add("uncovered infrastructure paths missing: cannot check what the trusted plan covers");
+  } else {
+    for (const p of input.uncoveredPaths) add(`not covered by the trusted prod plan (owner reviews the PR's own plan): ${p}`);
   }
 
   // Dependencies (C4).

@@ -1,10 +1,13 @@
 import type { MergeInput } from "@kcw/core/merge-input";
 import { beforeEach, describe, expect, it } from "vitest";
-import { FAKE_FIRST_RUN_ID, FakeGitHubClient, GitHubApiError, type GitHubClient } from "../src/github";
+import { ArtifactFormatError, FAKE_FIRST_RUN_ID, FakeGitHubClient, GitHubApiError, type GitHubClient } from "../src/github";
 
 const input: MergeInput = {
+  pr: 4,
+  headSha: "h4",
   planSummary: { format: 1, infra: [], artifact: { count: 0, kinds: { create: 0, update: 0, delete: 0, replace: 0 } } },
   lockDiff: { added: [], existing: [] },
+  uncoveredPaths: [],
 };
 
 let gh: FakeGitHubClient;
@@ -79,6 +82,14 @@ describe("FakeGitHubClient", () => {
     const got = await gh.getArtifact({ pr: 4, headSha: "h4" });
     expect(got).toMatchObject({ found: true, input });
     if (got.found) expect(got.input).not.toBe(input);
+
+    // Like the real client: content for another PR or head is a format error, and the trusted run states win.
+    gh.artifacts.set("h4", { ...input, pr: 5 });
+    await expect(gh.getArtifact({ pr: 4, headSha: "h4" })).rejects.toBeInstanceOf(ArtifactFormatError);
+    gh.trustedRunStates.set("h4", "pending");
+    await expect(gh.getArtifact({ pr: 4, headSha: "h4" })).resolves.toEqual({ found: false, reason: "trusted_run_pending" });
+    gh.trustedRunStates.set("h4", "failed");
+    await expect(gh.getArtifact({ pr: 4, headSha: "h4" })).resolves.toEqual({ found: false, reason: "trusted_run_failed" });
   });
 
   it("failNext throws once for that method", async () => {

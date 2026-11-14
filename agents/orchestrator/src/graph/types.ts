@@ -82,7 +82,7 @@ export type RetryTarget = "dev" | "qa" | "plan" | "docs";
 export type TaskKind = "work" | "docs";
 
 /** Why the merge step is waiting (Q11). */
-export type IncompleteReason = "ci_not_finished" | "head_moved" | "diff_incomplete" | "no_run" | "no_artifact";
+export type IncompleteReason = "ci_not_finished" | "head_moved" | "diff_incomplete" | "trusted_run_pending" | "trusted_run_failed" | "no_artifact";
 
 /** GitHub webhook events as the relay forwards them (only the fields the graph reads). */
 export type GitHubInput =

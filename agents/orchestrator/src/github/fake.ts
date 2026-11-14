@@ -3,6 +3,7 @@
 // OctokitGitHubClient: squash merge refused when the head moved, 409-style cancel of a finished run.
 import type { MergeInput } from "@kcw/core/merge-input";
 import {
+  ArtifactFormatError,
   GitHubApiError,
   MERGE_RULES_CHECK,
   type ArtifactResult,
@@ -80,8 +81,8 @@ export class FakeGitHubClient implements GitHubClient {
   readonly prs = new Map<number, FakePr>();
   /** Merge-rules artifacts by head SHA. */
   readonly artifacts = new Map<string, MergeInput>();
-  /** Head SHAs with no ci.yml run: getArtifact answers `no_run` instead of `no_artifact`. */
-  readonly headsWithoutRun = new Set<string>();
+  /** Heads whose trusted run is not usable: getArtifact answers `trusted_run_<state>` instead of reading `artifacts`. */
+  readonly trustedRunStates = new Map<string, "pending" | "failed">();
   /** Run ids that are still running (cancelRun of any other id returns `not_running`). */
   readonly runningRuns = new Set<number>();
   /** Workflow runs findWorkflowRun searches; tests add and update them. */
@@ -177,8 +178,11 @@ export class FakeGitHubClient implements GitHubClient {
 
   async getArtifact(input: GetArtifactInput): Promise<ArtifactResult> {
     this.#record("getArtifact", input);
+    const state = this.trustedRunStates.get(input.headSha);
+    if (state) return { found: false, reason: `trusted_run_${state}` };
     const found = this.artifacts.get(input.headSha);
-    if (!found) return { found: false, reason: this.headsWithoutRun.has(input.headSha) ? "no_run" : "no_artifact" };
+    if (!found) return { found: false, reason: "no_artifact" };
+    if (found.pr !== input.pr || found.headSha !== input.headSha) throw new ArtifactFormatError("merge-rules input belongs to another PR or head");
     return { found: true, input: structuredClone(found), runId: 1, artifactId: 1 };
   }
 

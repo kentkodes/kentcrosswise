@@ -48,7 +48,7 @@ describe("caches", () => {
         expect(body, `${file}:${name} must not use secrets`).not.toContain("secrets.");
       }
     }
-    expect(cached.sort()).toEqual(["ci.yml:candidate-build", "ci.yml:checks"]);
+    expect(cached.sort()).toEqual(["ci.yml:candidate-build", "ci.yml:candidate-prod-build", "ci.yml:checks"]);
   });
 
   it("no workflow or action uses actions/cache or another caching setting", () => {

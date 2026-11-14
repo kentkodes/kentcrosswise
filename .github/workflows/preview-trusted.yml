@@ -1,17 +1,24 @@
-# Trusted preview (AR1 slice 2): the only preview path; no pull_request job holds cloud credentials.
+# Trusted preview and trusted prod plan (AR1 slices 2 and 3): the only preview path and the only source of
+# merge-rules input; no pull_request job holds cloud credentials that matter.
 #
 # A workflow_run workflow always runs the definition on the default branch, so a pull request cannot change
-# this file or the scripts it runs: every checkout here is main, except the `e2e` job (see below). The
-# candidate's build is DATA: ci.yml's credential-free `candidate-build` job uploads `candidate-preview`
-# (Postgres dump, OpenNext tar, manifest); `verify` validates it, `provision` places it on the preview
-# infrastructure without executing any of it. Candidate code runs only in `e2e` (a synthetic login, no AWS)
-# and, as before, inside the preview Lambda under the preview permissions boundary.
+# this file or the scripts it runs: every checkout here is main, except the `e2e` job (see below) and the two
+# sparse checkouts of pnpm-lock.yaml in `prod-plan` (read as text). The candidate's builds are DATA: ci.yml's
+# credential-free jobs upload `candidate-preview` (Postgres dump, OpenNext tar, manifest) and `candidate-prod`
+# (the Terraform inputs of infra/prod as a tar, manifest); `verify` validates both, `provision` places the
+# preview build on the preview infrastructure and `prod-plan` plans main's infra/prod with the prod build,
+# without executing any of it. Candidate code runs only in `e2e` (a synthetic login, no AWS) and, as before,
+# inside the preview Lambda under the preview permissions boundary.
 #
-#   verify     no environment, no cloud credentials: pick the PR and artifact, validate, re-upload the files
+#   verify     no environment, no cloud credentials: pick the PR and artifacts, validate, re-upload the files
 #   provision  environment preview-gc (main-only; kcw-gh-ci trusts only environment:preview-gc): Neon branch, restore the dump, extract the build, terraform apply, smoke check
+#   prod-plan  environment prod-plan (main-only; kcw-gh-plan trusts it): read-only plan of main's infra/prod with the
+#              verified prod build, then the merge-rules input (artifact `merge-rules-input`, read by the
+#              orchestrator only from this run). The PR's own infra/** and .github/** changes are NOT in this
+#              plan; the input lists them as uncovered paths and merge-rules sends them to the owner.
 #   e2e        environment preview-e2e (secret E2E_LOGIN), no id-token: candidate Playwright tests against the preview
 #   teardown   environment preview-gc, always after provision started: destroy, Neon branch, clean check
-#   result     commit status kcw/trusted-preview (informational; merges verify the run itself)
+#   result     commit status kcw/trusted-preview (informational; merges verify the run itself); passes only with prod-plan
 #
 # Resources are named by the PR number (kcw-pr-<n>, preview/pr-<n>.tfstate, Neon branch, SSM path, kcw:pr tag).
 name: preview-trusted
@@ -54,6 +61,7 @@ jobs:
     outputs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
+      base_sha: ${{ steps.resolve.outputs.base_sha }}
     env:
       REPOSITORY_ID: ${{ github.repository_id }}
       RUN_ID: ${{ github.event.workflow_run.id }}
@@ -66,8 +74,8 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # The open same-repo PR whose head is exactly the triggering SHA, and the numeric id of the one live
-      # candidate-preview artifact of that run.
+      # The open same-repo PR whose head is exactly the triggering SHA, its base commit, and the numeric ids of
+      # the one live candidate-preview and the one live candidate-prod artifact of that run.
       - name: Resolve the PR and the artifact
         id: resolve
         env:
@@ -90,6 +98,20 @@ jobs:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
         run: pnpm verify-candidate verify --dir "$RUNNER_TEMP/candidate-in"
 
+      - name: Download candidate-prod
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.resolve.outputs.prod_artifact_id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-prod-in
+          merge-multiple: true
+
+      - name: Verify the prod artifact
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        run: pnpm verify-candidate verify --kind prod --dir "$RUNNER_TEMP/candidate-prod-in"
+
       # The verified bytes go to the next jobs as a same-run artifact; they verify again before using them
       # (verify is cheap), so nothing depends on this job beyond the PR/head outputs.
       - name: Upload the verified files
@@ -99,6 +121,110 @@ jobs:
           path: ${{ runner.temp }}/candidate-in/
           if-no-files-found: error
           retention-days: 1
+
+      - name: Upload the verified prod files
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified-candidate-prod-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-prod-in/
+          if-no-files-found: error
+          retention-days: 1
+
+  # AR1 slice 3: the prod plan that feeds merge-rules, from main's definition. Plans MAIN's infra/prod with the
+  # PR's prod build as data; kcw-gh-plan trusts only environment:prod-plan (main-only), so no pull_request job
+  # can assume it for this purpose. Nothing from the candidate runs here: the tar is extracted by our own code
+  # (no tar binary, no links) and the only candidate checkouts are pnpm-lock.yaml at the head and base SHAs,
+  # read as text by the merge-input script. No cache restore (default setup action).
+  prod-plan:
+    name: prod-plan
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: prod-plan
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    env:
+      PR_NUMBER: ${{ needs.verify.outputs.pr_number }}
+      HEAD_SHA: ${{ needs.verify.outputs.head_sha }}
+      BASE_SHA: ${{ needs.verify.outputs.base_sha }}
+      REPOSITORY_ID: ${{ github.repository_id }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - name: Download the verified prod files
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-candidate-prod-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-prod-in
+
+      # Verifies again, validates every tar entry, then extracts the fixed prod roots below the workspace.
+      - name: Verify and extract the candidate prod build
+        run: pnpm verify-candidate extract --kind prod --dir "$RUNNER_TEMP/candidate-prod-in" --dest "$GITHUB_WORKSPACE"
+
+      # Data only: the lockfiles are parsed as text by scripts/lib/lock-diff.ts. Nothing here is installed or run.
+      - name: Head lockfile (data)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.head_sha }}
+          path: lock-head
+          sparse-checkout: pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Base lockfile (data)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.base_sha }}
+          path: lock-base
+          sparse-checkout: pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: AWS credentials (kcw-gh-plan, read-only)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform init infra/prod
+        run: terraform -chdir=infra/prod init -backend-config="bucket=$TF_STATE_BUCKET"
+
+      # -lock=false: the plan role cannot write the lock object, and a plan changes nothing.
+      - name: Terraform plan infra/prod
+        run: terraform -chdir=infra/prod plan -lock=false -out=prod.tfplan
+
+      # The plan JSON contains sensitive values in clear text: it is summarized, then deleted, never uploaded.
+      - name: Plan summary
+        run: |
+          terraform -chdir=infra/prod show -json prod.tfplan > "$RUNNER_TEMP/prod-plan.json"
+          pnpm plan-summary --plan-json "$RUNNER_TEMP/prod-plan.json" --out "$RUNNER_TEMP/prod-plan-summary.json" --markdown "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/prod-plan.json" infra/prod/prod.tfplan
+
+      # merge-rules input format 2 (@kcw/core/merge-input): plan summary + lockfile diff + the PR's uncovered
+      # infra/.github paths from the GitHub files API. Pinned to this PR and head, which the reader re-checks.
+      - name: Merge-rules input
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm merge-input --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" --plan-summary "$RUNNER_TEMP/prod-plan-summary.json" --base-lock lock-base/pnpm-lock.yaml --head-lock lock-head/pnpm-lock.yaml --out "$RUNNER_TEMP/merge-rules-input.json" --markdown "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload merge-rules input
+        uses: actions/upload-artifact@v7
+        with:
+          name: merge-rules-input
+          path: ${{ runner.temp }}/merge-rules-input.json
+          if-no-files-found: error
+          retention-days: 30
 
   provision:
     name: provision (pr ${{ needs.verify.outputs.pr_number }} @ ${{ needs.verify.outputs.head_sha }})
@@ -356,14 +482,14 @@ jobs:
 
   result:
     name: result
-    needs: [verify, provision, e2e, teardown]
+    needs: [verify, provision, prod-plan, e2e, teardown]
     if: always() && needs.verify.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       statuses: write
     steps:
-      # Informational (merges verify the run itself). success only if provision, e2e and teardown all succeeded.
+      # Informational (merges verify the run itself). success only if provision, prod-plan, e2e and teardown all succeeded.
       - name: Post kcw/trusted-preview
         env:
           GH_TOKEN: ${{ github.token }}
@@ -372,13 +498,14 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           VERIFY: ${{ needs.verify.result }}
           PROVISION: ${{ needs.provision.result }}
+          PLAN: ${{ needs.prod-plan.result }}
           E2E: ${{ needs.e2e.result }}
           TEARDOWN: ${{ needs.teardown.result }}
         run: |
-          echo "verify=$VERIFY provision=$PROVISION e2e=$E2E teardown=$TEARDOWN"
+          echo "verify=$VERIFY provision=$PROVISION prod-plan=$PLAN e2e=$E2E teardown=$TEARDOWN"
           state=failure
           desc="Trusted preview did not pass"
-          if [ "$VERIFY" = success ] && [ "$PROVISION" = success ] && [ "$E2E" = success ] && [ "$TEARDOWN" = success ]; then
+          if [ "$VERIFY" = success ] && [ "$PROVISION" = success ] && [ "$PLAN" = success ] && [ "$E2E" = success ] && [ "$TEARDOWN" = success ]; then
             state=success
             desc="Trusted preview passed"
           fi

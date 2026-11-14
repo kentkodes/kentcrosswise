@@ -340,18 +340,28 @@ describe("dispatchWorkflow run details (RUN-ID-MAPPING-SPEC §1)", () => {
   });
 });
 
-describe("getArtifact", () => {
+describe("getArtifact (trusted run only)", () => {
+  const SHA = "a".repeat(40);
   const input: MergeInput = {
+    pr: 8,
+    headSha: SHA,
     planSummary: { format: 1, infra: [], artifact: { count: 1, kinds: { create: 0, update: 1, delete: 0, replace: 0 } } },
     lockDiff: { added: [{ importer: "agents/orchestrator", name: "@octokit/rest" }], existing: ["pg"] },
+    uncoveredPaths: ["infra/preview/main.tf"],
   };
-  const zip = writeZip([{ name: MERGE_INPUT_FILE, data: serializeMergeInput(input), descriptor: true }]);
-  const run = (id: number, created: string, prs: { number: number; head: { sha: string } }[] = [{ number: 8, head: { sha: "h8" } }]) => ({
-    id,
-    created_at: created,
-    head_sha: "h8",
-    pull_requests: prs,
+  const zipOf = (i: MergeInput) => writeZip([{ name: MERGE_INPUT_FILE, data: serializeMergeInput(i), descriptor: true }]);
+  const zip = zipOf(input);
+  const trustedRun = (over: object = {}) => ({
+    id: 900,
+    run_number: 5,
+    event: "workflow_run",
+    status: "completed",
+    conclusion: "success",
+    path: ".github/workflows/preview-trusted.yml",
+    display_title: `trusted-preview ${SHA}`,
+    ...over,
   });
+  const jobs = ["verify", "prod-plan", "e2e", "teardown", "result", `provision (pr 8 @ ${SHA})`].map((name) => ({ name, conclusion: "success" }));
   const artifact = (id: number, created: string, expired = false, size = zip.length) => ({
     id,
     name: MERGE_INPUT_ARTIFACT,
@@ -360,6 +370,13 @@ describe("getArtifact", () => {
     size_in_bytes: size,
   });
 
+  /** Serves the repository, the runs of preview-trusted.yml and the jobs of run 900. */
+  function serveRun(runs: object[] = [trustedRun()], runJobs: object[] = jobs) {
+    mock.on("GET", "/repos/o/r", () => json(200, { default_branch: "main" }));
+    mock.on("GET", "/repos/o/r/actions/workflows/preview-trusted.yml/runs", () => json(200, { workflow_runs: runs }));
+    mock.on("GET", "/repos/o/r/actions/runs/900/jobs", () => json(200, { jobs: runJobs }));
+  }
+
   function serveZip(body: Buffer = zip) {
     mock.on("GET", /^\/repos\/o\/r\/actions\/artifacts\/\d+\/zip$/, () => new Response(null, { status: 302, headers: { location: BLOB } }));
     mock.routes.push((c) =>
@@ -367,97 +384,91 @@ describe("getArtifact", () => {
     );
   }
 
-  it("lists ci.yml runs for the head SHA, takes the newest run's unexpired artifact and parses it", async () => {
-    mock.on("GET", "/repos/o/r/actions/workflows/ci.yml/runs", () =>
-      json(200, { total_count: 2, workflow_runs: [run(100, "2026-10-23T10:00:00Z"), run(101, "2026-10-23T11:00:00Z")] }),
-    );
-    mock.on("GET", "/repos/o/r/actions/runs/101/artifacts", () =>
+  it("reads the newest unexpired artifact of the trusted run for the head, never ci.yml runs", async () => {
+    serveRun();
+    mock.on("GET", "/repos/o/r/actions/runs/900/artifacts", () =>
       json(200, { total_count: 2, artifacts: [artifact(5, "2026-10-23T11:05:00Z", true), artifact(6, "2026-10-23T11:04:00Z")] }),
     );
     serveZip();
 
-    await expect(client.getArtifact({ pr: 8, headSha: "h8" })).resolves.toEqual({ found: true, input, runId: 101, artifactId: 6 });
+    await expect(client.getArtifact({ pr: 8, headSha: SHA })).resolves.toEqual({ found: true, input, runId: 900, artifactId: 6 });
 
-    const [runs, arts, dl, blob] = mock.api;
-    expect(Object.fromEntries(runs!.url.searchParams)).toEqual({ event: "pull_request", head_sha: "h8", per_page: "30" });
-    expect(arts!.url.searchParams.get("name")).toBe(MERGE_INPUT_ARTIFACT);
-    expect(dl!.url.pathname).toBe("/repos/o/r/actions/artifacts/6/zip");
+    expect(mock.api.some((c) => c.url.pathname.includes("/workflows/ci.yml/"))).toBe(false);
+    const arts = mock.api.find((c) => c.url.pathname.endsWith("/artifacts"))!;
+    expect(arts.url.searchParams.get("name")).toBe(MERGE_INPUT_ARTIFACT);
+    const runs = mock.api.find((c) => c.url.pathname.endsWith("/preview-trusted.yml/runs"))!;
+    expect(Object.fromEntries(runs.url.searchParams)).toEqual({ event: "workflow_run", per_page: "100" });
     // The signed storage URL is fetched without the installation token.
-    expect(blob!.url.href).toBe(BLOB);
-    expect(blob!.headers.authorization).toBeUndefined();
+    const blob = mock.api.find((c) => c.url.href === BLOB)!;
+    expect(blob.headers.authorization).toBeUndefined();
   });
 
-  it("falls back to the PR branch's runs matched by pull_requests[].head.sha when the SHA query is empty", async () => {
-    mock.on("GET", "/repos/o/r/actions/workflows/ci.yml/runs", (c) =>
-      c.url.searchParams.has("head_sha")
-        ? json(200, { total_count: 0, workflow_runs: [] })
-        : json(200, {
-            total_count: 3,
-            workflow_runs: [
-              { ...run(200, "2026-10-23T12:00:00Z"), head_sha: "merge-sha" },
-              run(201, "2026-10-23T13:00:00Z", [{ number: 8, head: { sha: "older-head" } }]),
-              run(202, "2026-10-23T09:00:00Z", [{ number: 9, head: { sha: "h8" } }]),
-            ],
-          }),
-    );
-    mock.on("GET", "/repos/o/r/pulls/8", () => json(200, { head: { sha: "h8", ref: "kcw/task-8" } }));
-    mock.on("GET", "/repos/o/r/actions/runs/200/artifacts", () => json(200, { total_count: 1, artifacts: [artifact(7, "2026-10-23T12:05:00Z")] }));
-    serveZip();
-
-    await expect(client.getArtifact({ pr: 8, headSha: "h8" })).resolves.toMatchObject({ found: true, runId: 200, artifactId: 7 });
-    const branchQuery = mock.api.filter((c) => c.url.pathname.endsWith("/runs"))[1]!;
-    expect(Object.fromEntries(branchQuery.url.searchParams)).toEqual({ event: "pull_request", branch: "kcw/task-8", per_page: "30" });
+  it("trusted_run_pending without a run for the head or while the latest run is in progress", async () => {
+    serveRun([trustedRun({ display_title: "trusted-preview other" })]);
+    await expect(client.getArtifact({ pr: 8, headSha: SHA })).resolves.toEqual({ found: false, reason: "trusted_run_pending" });
+    mock.routes = [];
+    serveRun([trustedRun({ status: "in_progress", conclusion: null })]);
+    await expect(client.getArtifact({ pr: 8, headSha: SHA })).resolves.toEqual({ found: false, reason: "trusted_run_pending" });
   });
 
-  it("ignores runs of another PR with the same head SHA", async () => {
-    mock.on("GET", "/repos/o/r/actions/workflows/ci.yml/runs", (c) =>
-      json(200, { workflow_runs: c.url.searchParams.has("head_sha") ? [run(300, "2026-10-23T10:00:00Z", [{ number: 99, head: { sha: "h8" } }])] : [] }),
-    );
-    mock.on("GET", "/repos/o/r/pulls/8", () => json(200, { head: { sha: "h8", ref: "kcw/task-8" } }));
-    await expect(client.getArtifact({ pr: 8, headSha: "h8" })).resolves.toEqual({ found: false, reason: "no_run" });
+  it.each([
+    ["a failed latest run", [trustedRun({ conclusion: "failure" })], jobs],
+    ["a run of another workflow path", [trustedRun({ path: ".github/workflows/ci.yml" })], jobs],
+    ["a run without the prod-plan job", [trustedRun()], jobs.filter((j) => j.name !== "prod-plan")],
+    ["a run that provisioned another PR", [trustedRun()], jobs.map((j) => (j.name.startsWith("provision") ? { ...j, name: `provision (pr 9 @ ${SHA})` } : j))],
+  ])("trusted_run_failed for %s", async (_label, runs, runJobs) => {
+    serveRun(runs, runJobs);
+    await expect(client.getArtifact({ pr: 8, headSha: SHA })).resolves.toEqual({ found: false, reason: "trusted_run_failed" });
+    expect(mock.api.some((c) => c.url.pathname.endsWith("/artifacts"))).toBe(false);
   });
 
-  it("no_artifact while the runs have none (or only expired ones)", async () => {
-    mock.on("GET", "/repos/o/r/actions/workflows/ci.yml/runs", () => json(200, { workflow_runs: [run(1, "a"), run(2, "b")] }));
-    mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a", true)] }));
-    mock.on("GET", "/repos/o/r/actions/runs/2/artifacts", () => json(200, { artifacts: [] }));
-    await expect(client.getArtifact({ pr: 8, headSha: "h8" })).resolves.toEqual({ found: false, reason: "no_artifact" });
+  it("no_artifact while the passed run has none (or only expired ones)", async () => {
+    serveRun();
+    mock.on("GET", "/repos/o/r/actions/runs/900/artifacts", () => json(200, { artifacts: [artifact(1, "a", true)] }));
+    await expect(client.getArtifact({ pr: 8, headSha: SHA })).resolves.toEqual({ found: false, reason: "no_artifact" });
   });
 
   describe("bad artifacts fail closed", () => {
     beforeEach(() => {
-      mock.on("GET", "/repos/o/r/actions/workflows/ci.yml/runs", () => json(200, { workflow_runs: [run(1, "a")] }));
+      serveRun();
+      mock.on("GET", "/repos/o/r/actions/runs/900/artifacts", () => json(200, { artifacts: [artifact(1, "a")] }));
     });
 
     it("zip without the file", async () => {
-      mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a")] }));
       serveZip(writeZip([{ name: "other.json", data: "{}" }]));
-      await expect(client.getArtifact({ pr: 8, headSha: "h8" })).rejects.toThrow(ArtifactFormatError);
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toThrow(ArtifactFormatError);
     });
 
     it("not a zip", async () => {
-      mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a")] }));
       serveZip(Buffer.from("<html>error page</html>"));
-      await expect(client.getArtifact({ pr: 8, headSha: "h8" })).rejects.toThrow(ArtifactFormatError);
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toThrow(ArtifactFormatError);
     });
 
-    it("file that parseMergeInput rejects", async () => {
-      mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a")] }));
-      serveZip(writeZip([{ name: MERGE_INPUT_FILE, data: '{"format":2}' }]));
-      await expect(client.getArtifact({ pr: 8, headSha: "h8" })).rejects.toThrow(MergeInputFormatError);
+    it("file that parseMergeInput rejects (format 1)", async () => {
+      serveZip(writeZip([{ name: MERGE_INPUT_FILE, data: '{"format":1}' }]));
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toThrow(MergeInputFormatError);
+    });
+
+    it.each([
+      ["another PR", { pr: 9 }],
+      ["another head", { headSha: "b".repeat(40) }],
+    ])("content for %s", async (_label, over) => {
+      serveZip(zipOf({ ...input, ...over }));
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toThrow(ArtifactFormatError);
     });
 
     it("declared size over the limit (not downloaded)", async () => {
-      mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a", false, MAX_ARTIFACT_BYTES + 1)] }));
-      await expect(client.getArtifact({ pr: 8, headSha: "h8" })).rejects.toThrow(ArtifactFormatError);
+      mock.routes = [];
+      serveRun();
+      mock.on("GET", "/repos/o/r/actions/runs/900/artifacts", () => json(200, { artifacts: [artifact(1, "a", false, MAX_ARTIFACT_BYTES + 1)] }));
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toThrow(ArtifactFormatError);
       expect(mock.api.some((c) => c.url.pathname.endsWith("/zip"))).toBe(false);
     });
 
     it("storage download failure is a GitHubApiError", async () => {
-      mock.on("GET", "/repos/o/r/actions/runs/1/artifacts", () => json(200, { artifacts: [artifact(1, "a")] }));
       mock.on("GET", "/repos/o/r/actions/artifacts/1/zip", () => new Response(null, { status: 302, headers: { location: BLOB } }));
       mock.routes.push((c) => (c.url.href === BLOB ? new Response("gone", { status: 410 }) : undefined));
-      await expect(client.getArtifact({ pr: 8, headSha: "h8" })).rejects.toMatchObject({ name: "GitHubApiError", status: 410 });
+      await expect(client.getArtifact({ pr: 8, headSha: SHA })).rejects.toMatchObject({ name: "GitHubApiError", status: 410 });
     });
   });
 });

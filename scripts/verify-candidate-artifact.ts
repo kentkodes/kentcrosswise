@@ -1,11 +1,12 @@
-// Trusted-side handling of the candidate-preview artifact (AR1 slice 2), run by preview-trusted.yml from
+// Trusted-side handling of the candidate-preview and candidate-prod artifacts (AR1 slices 2 and 3), run by preview-trusted.yml from
 // the main checkout. Logic and limits: lib/candidate-artifact.ts, lib/trusted-preview.ts.
 // Usage (paths are resolved against where pnpm was run; inputs come from the environment):
 //   pnpm verify-candidate resolve                 env GITHUB_TOKEN, GITHUB_REPOSITORY, REPOSITORY_ID, RUN_ID, HEAD_SHA
-//       -> step outputs pr_number, artifact_id, head_sha
-//   pnpm verify-candidate verify --dir <d>        env REPOSITORY_ID, PR_NUMBER, RUN_ID, HEAD_SHA
-//       Exactly the three files; manifest, sha256 and tar validated. Writes nothing.
-//   pnpm verify-candidate extract --dir <d> --dest <root>     (same env; verifies again, then extracts <root>/.open-next)
+//       -> step outputs pr_number, base_sha, artifact_id (candidate-preview), prod_artifact_id (candidate-prod), head_sha
+//   pnpm verify-candidate verify --dir <d> [--kind preview|prod]        env REPOSITORY_ID, PR_NUMBER, RUN_ID, HEAD_SHA
+//       Exactly the kind's files plus the manifest; manifest, sha256 and tar validated. Writes nothing.
+//   pnpm verify-candidate extract --dir <d> --dest <root> [--kind preview|prod]     (same env; verifies again, then
+//       extracts <root>/.open-next, or for prod the PROD_ROOTS below <root>)
 //   pnpm verify-candidate head --pr <n> --sha <sha> [--require]    env GITHUB_TOKEN, GITHUB_REPOSITORY
 //       -> step output state=current|superseded|closed; with --require, exit 1 unless current
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
@@ -15,13 +16,16 @@ import {
   checkDbDump,
   DB_FILE,
   extractEntries,
+  KINDS,
   MANIFEST_FILE,
   parseId,
+  parseKind,
   parseManifest,
   parseSha,
+  validateProdArchive,
   validateWebArchive,
   verifyManifest,
-  WEB_FILE,
+  type CandidateKind,
 } from "./lib/candidate-artifact";
 import { runMain } from "./lib/main";
 import { checkHead, ghRest, resolveCandidate } from "./lib/trusted-preview";
@@ -50,15 +54,16 @@ function api() {
   return { repo, rest: ghRest({ repo, token }) };
 }
 
-/** Reads the three files of a downloaded artifact directory (exactly these) and verifies them; returns the tar bytes. */
-function verifyDir(dir: string): Uint8Array {
-  const names = readdirSync(dir).sort();
-  if (names.join(",") !== [MANIFEST_FILE, DB_FILE, WEB_FILE].sort().join(",")) {
-    throw new Error(`artifact must contain exactly ${[DB_FILE, WEB_FILE, MANIFEST_FILE].join(", ")}`);
+/** Reads the files of a downloaded artifact directory (exactly the kind's files and the manifest) and verifies them; returns the tar bytes. */
+function verifyDir(dir: string, kind: CandidateKind): Uint8Array {
+  const { files: names, tarFile } = KINDS[kind];
+  const found = readdirSync(dir).sort();
+  if (found.join(",") !== [MANIFEST_FILE, ...names].sort().join(",")) {
+    throw new Error(`artifact must contain exactly ${[...names, MANIFEST_FILE].join(", ")}`);
   }
   const read = (name: string): Buffer => readFileSync(path.join(dir, name));
-  const manifest = parseManifest(read(MANIFEST_FILE).toString("utf8"));
-  const files = { [DB_FILE]: read(DB_FILE), [WEB_FILE]: read(WEB_FILE) };
+  const manifest = parseManifest(read(MANIFEST_FILE).toString("utf8"), kind);
+  const files = Object.fromEntries(names.map((n) => [n, read(n)]));
   verifyManifest(
     manifest,
     {
@@ -68,10 +73,16 @@ function verifyDir(dir: string): Uint8Array {
       runId: parseId(process.env.RUN_ID, "RUN_ID"),
     },
     files,
+    kind,
   );
-  checkDbDump(files[DB_FILE]);
-  validateWebArchive(files[WEB_FILE]);
-  return files[WEB_FILE];
+  const tar = files[tarFile]!;
+  if (kind === "preview") {
+    checkDbDump(files[DB_FILE]!);
+    validateWebArchive(tar);
+  } else {
+    validateProdArchive(tar);
+  }
+  return tar;
 }
 
 await runMain(async () => {
@@ -84,15 +95,22 @@ await runMain(async () => {
       runId: parseId(process.env.RUN_ID, "RUN_ID"),
       headSha,
     });
-    output({ pr_number: String(r.prNumber), artifact_id: String(r.artifactId), head_sha: headSha });
-    console.log(`verify-candidate: PR #${r.prNumber}, artifact ${r.artifactId}`);
+    output({
+      pr_number: String(r.prNumber),
+      base_sha: parseSha(r.baseSha, "PR base sha"),
+      artifact_id: String(r.artifactId),
+      prod_artifact_id: String(r.prodArtifactId),
+      head_sha: headSha,
+    });
+    console.log(`verify-candidate: PR #${r.prNumber}, artifacts ${r.artifactId} and ${r.prodArtifactId}`);
   } else if (command === "verify") {
-    verifyDir(pathArg("dir"));
+    verifyDir(pathArg("dir"), parseKind(args.kind));
     console.log("verify-candidate: manifest, files and archive are valid");
   } else if (command === "extract") {
-    const tar = verifyDir(pathArg("dir"));
-    const entries = validateWebArchive(tar);
-    extractEntries(tar, entries, pathArg("dest"));
+    const kind = parseKind(args.kind);
+    const tar = verifyDir(pathArg("dir"), kind);
+    const entries = kind === "prod" ? validateProdArchive(tar) : validateWebArchive(tar);
+    extractEntries(tar, entries, pathArg("dest"), KINDS[kind].roots);
     console.log(`verify-candidate: extracted ${entries.length} entries`);
   } else if (command === "head") {
     const { repo, rest } = api();
@@ -103,7 +121,7 @@ await runMain(async () => {
     console.log(`verify-candidate: PR #${pr} head ${sha} is ${state}`);
     if (args.require === true && state !== "current") throw new Error(`PR #${pr} head is no longer ${sha} (${state}); not deploying an older run`);
   } else {
-    console.log("Usage: pnpm verify-candidate resolve | verify --dir <d> | extract --dir <d> --dest <root> | head --pr <n> --sha <sha> [--require]");
+    console.log("Usage: pnpm verify-candidate resolve | verify --dir <d> [--kind prod] | extract --dir <d> --dest <root> [--kind prod] | head --pr <n> --sha <sha> [--require]");
     if (command !== "--help") process.exitCode = 1;
   }
 });

@@ -137,7 +137,7 @@ describe("publisher key CLI and authority", () => {
   it.each(["scripts/agent-private-key.ts", "scripts/lib/agent-private-key.ts"])("%s is already owner-critical", (file) => {
     const result = evaluate({ files: [{ path: file, status: "added" }], patches: {}, author: "test",
       planSummary: { format: 1, infra: [], artifact: { count: 0, kinds: { create: 0, update: 0, delete: 0, replace: 0 } } },
-      lockDiff: { added: [], existing: [] },
+      lockDiff: { added: [], existing: [] }, uncoveredPaths: [],
     });
     expect(result.reasons).toContain(`trusted agent automation: ${file}`);
   });

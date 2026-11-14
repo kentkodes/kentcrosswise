@@ -1,9 +1,11 @@
-// The candidate-preview artifact (AR1 slice 2): what the credential-free `candidate-build` job of ci.yml
-// produces and what the trusted preview-trusted.yml workflow accepts. The artifact is DATA from candidate
-// code: nothing in it is executed by a privileged job. This file is the whole validation (pure functions
+// The candidate artifacts (AR1 slices 2 and 3): what the credential-free `candidate-build` and
+// `candidate-prod-build` jobs of ci.yml produce and what the trusted preview-trusted.yml workflow accepts:
+// `candidate-preview` (SQL dump + preview build) and `candidate-prod` (the Terraform inputs of infra/prod).
+// Each artifact is DATA from candidate code: nothing in it is executed by a privileged job. This file is the whole validation (pure functions
 // over bytes; the CLI is scripts/verify-candidate-artifact.ts, tests in scripts/test/candidate-artifact.test.ts).
 //
-// Archive format: a plain (uncompressed) pax tar of `.open-next/`, written by `tar --format=pax` (pnpm
+// Archive format: a plain (uncompressed) pax tar of the allowed roots (`.open-next/` for the preview, the fixed
+// PROD_ROOTS list from the repo root for prod), written by `tar --format=pax` (pnpm
 // paths in a real build have components longer than ustar allows).
 // The artifact upload zip already compresses it, and an uncompressed tar needs no decompression-bomb
 // handling. Only regular files and directories are accepted. A pax extended header ('x') is accepted only
@@ -14,11 +16,38 @@ import { existsSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const CANDIDATE_ARTIFACT = "candidate-preview";
+export const PROD_ARTIFACT = "candidate-prod";
 export const DB_FILE = "preview-db.sql";
 export const WEB_FILE = "preview-web.tar";
+export const PROD_FILE = "prod-build.tar";
 export const MANIFEST_FILE = "candidate-manifest.json";
-/** The tar's single top-level directory, extracted into apps/web/. */
+/** The preview tar's single top-level directory, extracted into apps/web/. */
 export const OPEN_NEXT_DIR = ".open-next";
+/**
+ * The prod tar's top-level paths, relative to the repo root: exactly the Terraform inputs of infra/prod
+ * (variable defaults `web_artifact_dir`, `orchestrator_package_dir`, `sweeper_package_dir`,
+ * `relay_package_dir`, `pipeline_package_dir`; outputs of `pnpm build-web` and `pnpm build-lambdas`).
+ */
+export const PROD_ROOTS = [
+  "apps/web/.open-next",
+  "agents/orchestrator/dist",
+  "agents/orchestrator/dist-sweeper",
+  "agents/webhook-relay/dist",
+  "scripts/dist-pipelines",
+] as const;
+
+/** Which candidate artifact: its name, hashed files (the manifest lists exactly these), tar file and allowed tar roots. */
+export type CandidateKind = "preview" | "prod";
+export const KINDS = {
+  preview: { artifact: CANDIDATE_ARTIFACT, files: [DB_FILE, WEB_FILE], tarFile: WEB_FILE, roots: [OPEN_NEXT_DIR] },
+  prod: { artifact: PROD_ARTIFACT, files: [PROD_FILE], tarFile: PROD_FILE, roots: PROD_ROOTS },
+} as const satisfies Record<CandidateKind, { artifact: string; files: readonly string[]; tarFile: string; roots: readonly string[] }>;
+
+export function parseKind(raw: string | boolean | undefined): CandidateKind {
+  if (raw === undefined) return "preview";
+  if (raw === "preview" || raw === "prod") return raw;
+  throw new Error("--kind must be preview or prod");
+}
 
 /**
  * Limits. A current preview build is about 72 MB in 3,700 entries with the longest path at 157
@@ -54,7 +83,6 @@ export interface ExpectedCandidate {
 
 const SHA1 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
-const HASHED_FILES = [DB_FILE, WEB_FILE] as const;
 
 export function sha256Hex(data: Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -78,9 +106,9 @@ export function parseSha(raw: string | undefined, what: string): string {
   return raw.trim();
 }
 
-export function buildManifest(input: Omit<CandidateManifest, "schema" | "files">, files: Record<string, Uint8Array>): CandidateManifest {
+export function buildManifest(input: Omit<CandidateManifest, "schema" | "files">, files: Record<string, Uint8Array>, kind: CandidateKind = "preview"): CandidateManifest {
   const hashes: Record<string, string> = {};
-  for (const name of HASHED_FILES) {
+  for (const name of KINDS[kind].files) {
     const data = files[name];
     if (!data) throw new Error(`missing ${name}`);
     hashes[name] = sha256Hex(data);
@@ -88,7 +116,8 @@ export function buildManifest(input: Omit<CandidateManifest, "schema" | "files">
   return { schema: 1, ...input, files: hashes };
 }
 
-export function parseManifest(text: string): CandidateManifest {
+export function parseManifest(text: string, kind: CandidateKind = "preview"): CandidateManifest {
+  const hashed: readonly string[] = KINDS[kind].files;
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -103,8 +132,8 @@ export function parseManifest(text: string): CandidateManifest {
   if (typeof m.head_sha !== "string" || !SHA1.test(m.head_sha)) throw new Error("manifest: head_sha must be a 40-character lowercase hex SHA");
   const files = m.files;
   if (typeof files !== "object" || files === null || Array.isArray(files)) throw new Error("manifest: files must be an object");
-  if (Object.keys(files).sort().join(",") !== [...HASHED_FILES].sort().join(",")) {
-    throw new Error(`manifest: files must list exactly ${HASHED_FILES.join(" and ")}`);
+  if (Object.keys(files).sort().join(",") !== [...hashed].sort().join(",")) {
+    throw new Error(`manifest: files must list exactly ${hashed.join(" and ")}`);
   }
   const hashes: Record<string, string> = {};
   for (const [name, hash] of Object.entries(files)) {
@@ -124,14 +153,14 @@ export function parseManifest(text: string): CandidateManifest {
 
 /**
  * Checks the manifest against what the trusted workflow derived from the event and the API, and every
- * file's sha256 against the manifest. `files` holds the bytes of the two hashed files.
+ * file's sha256 against the manifest. `files` holds the bytes of the kind's hashed files.
  */
-export function verifyManifest(manifest: CandidateManifest, expected: ExpectedCandidate, files: Record<string, Uint8Array>): void {
+export function verifyManifest(manifest: CandidateManifest, expected: ExpectedCandidate, files: Record<string, Uint8Array>, kind: CandidateKind = "preview"): void {
   if (manifest.repository_id !== expected.repositoryId) throw new Error("manifest repository_id does not match this repository");
   if (manifest.pr_number !== expected.prNumber) throw new Error("manifest pr_number does not match the pull request");
   if (manifest.head_sha !== expected.headSha) throw new Error("manifest head_sha does not match the triggering run");
   if (manifest.run_id !== expected.runId) throw new Error("manifest run_id does not match the triggering run");
-  for (const name of HASHED_FILES) {
+  for (const name of KINDS[kind].files) {
     const data = files[name];
     if (!data) throw new Error(`missing ${name}`);
     if (sha256Hex(data) !== manifest.files[name]) throw new Error(`${name} does not match its manifest sha256`);
@@ -189,8 +218,13 @@ function checksumOk(buf: Uint8Array, at: number): boolean {
   return /^[0-7]+$/.test(text) && parseInt(text, 8) === sum;
 }
 
+/** True when `entry` is one of the roots or below one (whole path segments). */
+function underRoot(entry: string, roots: readonly string[]): boolean {
+  return roots.some((r) => entry === r || entry.startsWith(`${r}/`));
+}
+
 /** Validates an entry path; returns its segments. Rejects anything that could escape or surprise. */
-export function entrySegments(raw: string): string[] {
+export function entrySegments(raw: string, roots: readonly string[] = KINDS.preview.roots): string[] {
   if (raw === "") throw new Error("tar: empty entry name");
   if (raw.length > LIMITS.maxPathLength) throw new Error("tar: entry name too long");
   if (raw.startsWith("/")) throw new Error(`tar: absolute path rejected: ${JSON.stringify(raw)}`);
@@ -203,7 +237,7 @@ export function entrySegments(raw: string): string[] {
     if (s === "" || s === "." || s === "..") throw new Error(`tar: path segment not allowed: ${JSON.stringify(raw)}`);
     if (Buffer.byteLength(s) > LIMITS.maxSegmentLength) throw new Error("tar: path component too long");
   }
-  if (segments[0] !== OPEN_NEXT_DIR) throw new Error(`tar: entry outside ${OPEN_NEXT_DIR}/: ${JSON.stringify(raw)}`);
+  if (!underRoot(segments.join("/"), roots)) throw new Error(`tar: entry outside ${roots.join(", ")}: ${JSON.stringify(raw)}`);
   return segments;
 }
 
@@ -245,7 +279,7 @@ export function parsePax(data: Uint8Array): { path?: string } {
  * Validates the whole archive before anything is written: header checksums, entry types, paths,
  * duplicates, file/directory conflicts, counts and sizes, trailing data. Returns the entries.
  */
-export function validateTar(buf: Uint8Array): TarEntry[] {
+export function validateTar(buf: Uint8Array, roots: readonly string[] = KINDS.preview.roots): TarEntry[] {
   if (buf.length > LIMITS.maxTarBytes) throw new Error(`tar: archive is larger than ${LIMITS.maxTarBytes} bytes`);
   if (buf.length < BLOCK * 2 || buf.length % BLOCK !== 0) throw new Error("tar: not a whole number of 512-byte blocks");
   const entries: TarEntry[] = [];
@@ -287,7 +321,7 @@ export function validateTar(buf: Uint8Array): TarEntry[] {
       throw new Error(`tar: entry type ${JSON.stringify(type)} is not allowed (only regular files and directories): ${JSON.stringify(full)}`);
     }
     const size = octal(buf, at + 124, 12, "size");
-    const segments = entrySegments(full);
+    const segments = entrySegments(full, roots);
     const normalized = segments.join("/");
     if (type === "5" && size !== 0) throw new Error(`tar: directory with data: ${JSON.stringify(full)}`);
     if (type === "0" && full.endsWith("/")) throw new Error(`tar: file name ends with a slash: ${JSON.stringify(full)}`);
@@ -318,7 +352,7 @@ export function validateTar(buf: Uint8Array): TarEntry[] {
 }
 
 /** kcw-build.json is read by Terraform and smoke-check: it must be a plain JSON object with these fields. */
-export function validateBuildInfo(text: string): { kcw_env: "preview"; build_id: string } {
+export function validateBuildInfo(text: string, env: "preview" | "prod" = "preview"): { kcw_env: "preview" | "prod"; build_id: string } {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -327,9 +361,9 @@ export function validateBuildInfo(text: string): { kcw_env: "preview"; build_id:
   }
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("kcw-build.json must be a JSON object");
   const { kcw_env, build_id } = raw as { kcw_env?: unknown; build_id?: unknown };
-  if (kcw_env !== "preview") throw new Error('kcw-build.json: kcw_env must be "preview"');
+  if (kcw_env !== env) throw new Error(`kcw-build.json: kcw_env must be "${env}"`);
   if (typeof build_id !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(build_id)) throw new Error("kcw-build.json: build_id must be a short identifier string");
-  return { kcw_env, build_id };
+  return { kcw_env: env, build_id };
 }
 
 /** validateTar plus the kcw-build.json check; returns the entries to extract. */
@@ -341,15 +375,28 @@ export function validateWebArchive(buf: Uint8Array): TarEntry[] {
   return entries;
 }
 
+/** validateTar for the prod tar plus its contents: a prod kcw-build.json and an index.mjs in every Lambda directory. */
+export function validateProdArchive(buf: Uint8Array): TarEntry[] {
+  const entries = validateTar(buf, PROD_ROOTS);
+  const file = (p: string) => entries.find((e) => e.path === p && e.type === "file");
+  const build = file("apps/web/.open-next/kcw-build.json");
+  if (!build) throw new Error("tar: apps/web/.open-next/kcw-build.json is missing");
+  validateBuildInfo(Buffer.from(buf.subarray(build.offset, build.offset + build.size)).toString("utf8"), "prod");
+  for (const root of PROD_ROOTS.slice(1)) if (!file(`${root}/index.mjs`)) throw new Error(`tar: ${root}/index.mjs is missing`);
+  return entries;
+}
+
 /**
- * Extracts validated entries below `destRoot` (the directory that will contain `.open-next`). This
- * never calls tar and never creates a link, and it refuses to start if `.open-next` already exists,
- * so no pre-existing link can be followed. Files are created exclusively (`wx`).
+ * Extracts validated entries below `destRoot` (the directory that will contain the roots). This never
+ * calls tar and never creates a link, and it refuses to start if a root already exists, so no
+ * pre-existing link can be followed. Files are created exclusively (`wx`).
  */
-export function extractEntries(buf: Uint8Array, entries: readonly TarEntry[], destRoot: string): void {
+export function extractEntries(buf: Uint8Array, entries: readonly TarEntry[], destRoot: string, roots: readonly string[] = KINDS.preview.roots): void {
   const root = path.resolve(destRoot);
-  const target = path.join(root, OPEN_NEXT_DIR);
-  if (existsSync(target) || isLink(target)) throw new Error(`${target} already exists; extract into an empty location`);
+  for (const r of roots) {
+    const target = path.join(root, ...r.split("/"));
+    if (existsSync(target) || isLink(target)) throw new Error(`${target} already exists; extract into an empty location`);
+  }
   for (const entry of entries) {
     const dest = path.join(root, ...entry.path.split("/"));
     const rel = path.relative(root, dest);
