@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL, DeepseekProvider, type ModelProvider } from "@kcw/core/models";
 import { SecretKeyMissingError } from "@kcw/secrets";
 import type { Db } from "../../packages/essays/src/db";
-import { analyzeBook, assertNotPaused, bookUrl, inTransaction } from "./essay-ingest";
+import { analyzeBook, assertNotPaused, bookUrl, ESSAY_TEXT_PREFIX, inTransaction } from "./essay-ingest";
 
 /** The ten essay types (migration 0001 essay_categories.type check). */
 export const ESSAY_TYPES = [
@@ -78,7 +78,7 @@ export interface CategorizeResult {
 interface EssayRow {
   id: string;
   status: string;
-  text_hash: string;
+  text_s3_key: string | null;
   approved: boolean;
   categorized: boolean;
 }
@@ -98,7 +98,7 @@ async function categorizeBook(
   const url = bookUrl(id);
   const row = (
     await db.query<EssayRow>(
-      `SELECT e.id, e.status, e.text_hash,
+      `SELECT e.id, e.status, e.text_s3_key,
               EXISTS (SELECT 1 FROM seed_source_links l WHERE l.candidate_url = e.source_url AND l.status = 'approved') AS approved,
               EXISTS (SELECT 1 FROM essay_categories c WHERE c.essay_id = e.id) AS categorized
          FROM essays e WHERE e.source_url = $1 ORDER BY e.id LIMIT 1`,
@@ -111,9 +111,9 @@ async function categorizeBook(
 
   const a = await analyzeBook(deps.dir, id);
   if (a.code !== null) return { id, code: a.code };
-  if (createHash("sha256").update(Buffer.from(a.extraction.text, "utf8")).digest("hex") !== row.text_hash) {
-    return { id, code: "text_mismatch" };
-  }
+  // The local text must be the stored text: its raw-text hash is the content address of the stored object (the S3 key).
+  const contentKey = `${ESSAY_TEXT_PREFIX}${createHash("sha256").update(Buffer.from(a.extraction.text, "utf8")).digest("hex")}.txt`;
+  if (contentKey !== row.text_s3_key) return { id, code: "text_mismatch" };
 
   let m: ModelProvider;
   try {

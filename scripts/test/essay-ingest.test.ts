@@ -9,6 +9,8 @@ import { freshDb } from "../../packages/db/test/helpers";
 import type { Db } from "../../packages/essays/src/db";
 import { extractGutenbergText } from "../../packages/essays/src/extract/gutenberg-text";
 import { registerGutenbergSource } from "../../packages/essays/src/registry/bootstrap";
+import { minhash, normalizedTextHash } from "../../packages/essays/src/validate/duplicates";
+import { syntheticBook as syntheticBookOf } from "../../packages/essays/test/synthetic-book";
 import {
   ESSAY_TEXT_PREFIX, fetchPhase, IngestError, mapRsyncExit, MIRRORS, parseIds, reextractPhase, rsyncCommand, spawnRunner,
   storePhase, type RunRsync, type StoreDeps,
@@ -19,6 +21,10 @@ const FIXTURES = fileURLToPath(new URL("../../packages/essays/test/fixtures/gute
 const fixture = (name: string) => join(FIXTURES, name);
 // Phrases from the public-domain fixture body: none may ever appear in output.
 const LEAKS = ["Studies serve for delight", "wise men use them", "Bowling is good", "special receipt"];
+const BASE_TEXT = readFileSync(fixture("essay.txt"), "utf8");
+const sha = (text: string) => createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+/** A distinct Gutenberg-shaped book per tag, on the fixture's header and footer (see packages/essays/test/synthetic-book.ts). */
+const syntheticBook = (tag: string) => syntheticBookOf(BASE_TEXT, tag);
 
 const tmp = mkdtempSync(join(tmpdir(), "kcw-essay-ingest-"));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -153,7 +159,16 @@ describe("fetch phase (fake runner, no network)", () => {
 
 describe("store phase on PGlite as a pipeline_rw member", () => {
   const LOGIN = "ingest_test_app";
-  const IDS = { ok: 201, dup: 202, trunc: 203, stub: 204, garbled: 205, none: 206, only8: 207, latin1: 208, unapproved: 209, nolink: 210, crash: 211 };
+  const IDS = {
+    ok: 201, dup: 202, trunc: 203, stub: 204, garbled: 205, none: 206, only8: 207, latin1: 208, unapproved: 209, nolink: 210,
+    crash: 211, meta: 212, near: 213, both: 214, link: 215, casing: 216,
+  };
+  // Distinct titles (no two similar enough for the metadata check), except where a test needs the same work twice.
+  const TITLES: Record<number, string> = {
+    201: "Violet Harbour", 202: "Copper Lantern", 203: "Amber Meadow", 204: "Silver Orchard", 205: "Winter Compass",
+    206: "Marble Anchor", 207: "Velvet Thunder", 208: "Ember Falcon", 209: "Glacier Basket", 211: "Hollow Cabin",
+    212: "Violet Harbour", 213: "Thistle Garden", 214: "Violet Harbour", 215: "Gentle Ledger", 216: "Rustic Pavilion",
+  };
   let fresh: Awaited<ReturnType<typeof freshDb>>;
   let dir: string;
   let sourceId: string;
@@ -196,13 +211,14 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
       const status = id === IDS.unapproved ? "proposed" : "approved";
       if (id === IDS.nolink) continue;
       const seed = await q<{ id: string }>(
-        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
+        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [TITLES[id]]);
       await q(
         `INSERT INTO seed_source_links (seed_item_id, source_id, candidate_url, candidate_title, candidate_author, tier, score, status)
          VALUES ($1, $2, $3, 't', 'a', 'A', 1, $4)`, [seed[0]?.id, sourceId, urlOf(id), status]);
     }
     putFile(dir, IDS.ok, `${IDS.ok}-0.txt`, "essay.txt");
     putFile(dir, IDS.dup, `${IDS.dup}.txt`, "legacy.txt"); // same text as the essay fixture
+    putFile(dir, IDS.casing, `${IDS.casing}-0.txt`, Buffer.from(BASE_TEXT.replace("Studies serve for delight,", "STUDIES, SERVE for delight!")));
     putFile(dir, IDS.trunc, `${IDS.trunc}-0.txt`, "truncated.txt");
     putFile(dir, IDS.stub, `${IDS.stub}-0.txt`, "stub.txt");
     putFile(dir, IDS.garbled, `${IDS.garbled}-0.txt`, "replacement.txt");
@@ -211,12 +227,13 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
     putFile(dir, IDS.latin1, `${IDS.latin1}.txt`, Uint8Array.from([0x63, 0x61, 0x66, 0xe9]));
     putFile(dir, IDS.unapproved, `${IDS.unapproved}-0.txt`, "essay.txt");
     putFile(dir, IDS.nolink, `${IDS.nolink}-0.txt`, "essay.txt");
-    // A different text, so it is not a duplicate of the first book.
-    mkdirSync(join(dir, String(IDS.crash)), { recursive: true });
-    writeFileSync(
-      join(dir, String(IDS.crash), `${IDS.crash}-0.txt`),
-      readFileSync(fixture("essay.txt"), "utf8").replace("Studies serve", "Studies truly serve"),
-    );
+    // Distinct texts, so none of them is a duplicate of the first book.
+    putFile(dir, IDS.crash, `${IDS.crash}-0.txt`, Buffer.from(syntheticBook("crash")));
+    putFile(dir, IDS.meta, `${IDS.meta}-0.txt`, Buffer.from(syntheticBook("meta")));
+    // One-word edit of the first book (near duplicate), and the same edit under the first book's title and author.
+    putFile(dir, IDS.near, `${IDS.near}-0.txt`, Buffer.from(BASE_TEXT.replace("Studies serve", "Studies truly serve")));
+    putFile(dir, IDS.both, `${IDS.both}-0.txt`, Buffer.from(BASE_TEXT.replace("Studies serve", "Studies really serve")));
+    putFile(dir, IDS.link, `${IDS.link}-0.txt`, Buffer.from(syntheticBook("link")));
   });
   afterAll(async () => {
     await fresh.pg.close();
@@ -230,9 +247,11 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
     const sha = createHash("sha256").update(body).digest("hex");
     expect(objects.size).toBe(1);
     expect([...objects.keys()]).toEqual([`essays/text/${sha}.txt`]);
+    // text_hash is the normalized-text hash; the S3 key stays the raw-text hash.
     expect(row).toMatchObject({
-      kind: "full", status: "pending_category", title: `Seed title ${IDS.ok}`, author: "Francis Bacon", year: 1625, language: "en",
-      source_id: sourceId, source_url: urlOf(IDS.ok), text_hash: sha, text_s3_key: `essays/text/${sha}.txt`,
+      kind: "full", status: "pending_category", title: TITLES[IDS.ok], author: "Francis Bacon", year: 1625, language: "en",
+      source_id: sourceId, source_url: urlOf(IDS.ok), text_hash: normalizedTextHash(body), text_s3_key: `essays/text/${sha}.txt`,
+      minhash: minhash(body),
     });
     expect(Number(row?.word_count)).toBeGreaterThanOrEqual(300);
     expect(await urlRow(IDS.ok)).toEqual({ status: "fetched", attempts: 0 });
@@ -311,6 +330,71 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
     expect((await urlRow(IDS.crash))?.status).toBe("fetched");
   });
 
+  it("records a text that differs from a stored one only in case and punctuation as a duplicate", async () => {
+    const putsBefore = puts.length;
+    const essaysBefore = (await counts()).essays;
+    expect(await run([IDS.casing])).toEqual([{ id: IDS.casing, code: "duplicate" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect((await counts()).essays).toBe(essaysBefore);
+    expect(await urlRow(IDS.casing)).toEqual({ status: "fetched", attempts: 0 });
+  });
+
+  it("quarantines a near duplicate (a one-word edit of a stored essay) and stores nothing", async () => {
+    const putsBefore = puts.length;
+    const essaysBefore = (await counts()).essays;
+    expect(await run([IDS.near])).toEqual([{ id: IDS.near, code: "quarantined" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect((await counts()).essays).toBe(essaysBefore);
+    expect(await q("SELECT reasons FROM quarantine WHERE essay_url = $1", [urlOf(IDS.near)])).toEqual([{ reasons: ["near_duplicate"] }]);
+    expect((await urlRow(IDS.near))?.status).toBe("quarantined");
+  });
+
+  it("quarantines a metadata duplicate (same title and author as another seed's essay)", async () => {
+    const putsBefore = puts.length;
+    const essaysBefore = (await counts()).essays;
+    expect(await run([IDS.meta])).toEqual([{ id: IDS.meta, code: "quarantined" }]);
+    expect(puts.length).toBe(putsBefore);
+    expect((await counts()).essays).toBe(essaysBefore);
+    expect(await q("SELECT reasons FROM quarantine WHERE essay_url = $1", [urlOf(IDS.meta)])).toEqual([{ reasons: ["metadata_duplicate"] }]);
+  });
+
+  it("puts every reason that applies in one quarantine row", async () => {
+    expect(await run([IDS.both])).toEqual([{ id: IDS.both, code: "quarantined" }]);
+    expect(await q("SELECT reasons FROM quarantine WHERE essay_url = $1", [urlOf(IDS.both)])).toEqual([
+      { reasons: ["near_duplicate", "metadata_duplicate"] },
+    ]);
+    expect(await q("SELECT count(*) AS n FROM quarantine WHERE essay_url = $1", [urlOf(IDS.both)])).toEqual([{ n: 1 }]);
+  });
+
+  it("upgrades the seed's link-only essay in place when its full text arrives", async () => {
+    const seedId = (await q<{ id: string }>("SELECT id FROM seed_items WHERE title = $1", [TITLES[IDS.link]]))[0]?.id;
+    const essayId = (await q<{ id: string }>(
+      `INSERT INTO essays (kind, title, author, year, status, seed_item_id)
+       VALUES ('link', $1, 'Francis Bacon', 1625, 'active', $2) RETURNING id`,
+      [TITLES[IDS.link], seedId],
+    ))[0]?.id;
+    await q("UPDATE seed_items SET essay_id = $1 WHERE id = $2", [essayId, seedId]);
+    await q("INSERT INTO essay_categories (essay_id, type, confidence, model) VALUES ($1, 'travel', 1, 'seed-list')", [essayId]);
+    await q("INSERT INTO ratings (essay_id, stars, worked, length_felt) VALUES ($1, 4, ARRAY['prose']::text[], 'right')", [essayId]);
+
+    const text = extractGutenbergText(syntheticBook("link")).text;
+    expect(await run([IDS.link])).toEqual([{ id: IDS.link, code: "upgraded" }]);
+    const rows = await q<Record<string, unknown>>("SELECT * FROM essays WHERE seed_item_id = $1", [seedId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: essayId, kind: "full", status: "active", title: TITLES[IDS.link], author: "Francis Bacon", year: 1625,
+      language: "en", source_url: urlOf(IDS.link), source_id: sourceId, word_count: expect.any(Number),
+      text_hash: normalizedTextHash(text), text_s3_key: `${ESSAY_TEXT_PREFIX}${sha(text)}.txt`, minhash: minhash(text),
+    });
+    expect(await q("SELECT type FROM essay_categories WHERE essay_id = $1", [essayId])).toEqual([{ type: "travel" }]);
+    expect(await q("SELECT stars FROM ratings WHERE essay_id = $1", [essayId])).toEqual([{ stars: 4 }]);
+    expect(puts.at(-1)).toBe(`${ESSAY_TEXT_PREFIX}${sha(text)}.txt`);
+    expect(await urlRow(IDS.link)).toEqual({ status: "fetched", attempts: 0 });
+    // A rerun of the same book is already processed: nothing changes.
+    expect(await run([IDS.link])).toEqual([{ id: IDS.link, code: "already_processed" }]);
+    expect(await q("SELECT id FROM essays WHERE seed_item_id = $1", [seedId])).toEqual([{ id: essayId }]);
+  });
+
   it("does nothing while pipelines are paused, and when the flag is missing or malformed", async () => {
     const snapshot = JSON.stringify([await counts(), puts.length]);
     await setPaused(true);
@@ -335,15 +419,18 @@ describe("store phase on PGlite as a pipeline_rw member", () => {
 
 describe("re-extract phase on PGlite as a pipeline_rw member", () => {
   const LOGIN = "reextract_test_app";
-  const IDS = { re: 311, holder: 312, dup: 313, same: 314, invalid: 315, race: 316, notStored: 317, noFiles: 318 };
+  const IDS = { re: 311, holder: 312, dup: 313, same: 314, invalid: 315, race: 316, notStored: 317, noFiles: 318, legacyRaw: 319 };
+  const TITLES: Record<number, string> = {
+    311: "Ivory Pier", 312: "Rustic Pavilion", 313: "Scarlet Quay", 314: "Indigo Hollow", 315: "Golden Tundra",
+    316: "Hidden Summit", 317: "Frosted Lagoon", 318: "Bronze Reef", 319: "Jade Canyon",
+  };
   const BASE = readFileSync(fixture("essay.txt"), "utf8");
-  /** The fixture with one phrase changed: valid text with its own hash. */
-  const variant = (word: string) => BASE.replace("Studies serve", `Studies ${word} serve`);
-  const sha = (text: string) => createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
-  /** The hash, key and word count the phase must compute for a raw file. */
+  /** A distinct valid text per tag (see syntheticBook): its own hash, no near duplicate of another tag. */
+  const variant = (tag: string) => syntheticBook(tag);
+  /** The hashes, key and word count the phase must compute for a raw file: normalized hash, raw-text key. */
   const expectedFor = (raw: string) => {
     const e = extractGutenbergText(raw);
-    return { hash: sha(e.text), key: `${ESSAY_TEXT_PREFIX}${sha(e.text)}.txt`, words: e.wordCount };
+    return { hash: normalizedTextHash(e.text), key: `${ESSAY_TEXT_PREFIX}${sha(e.text)}.txt`, words: e.wordCount, minhash: minhash(e.text) };
   };
   /** The hash a v1 extraction stored: no current text has it. */
   const oldHash = (id: number) => sha(`v1 extraction of book ${id}`);
@@ -389,7 +476,8 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     urlRow: await q("SELECT * FROM essay_urls WHERE url = $1", [urlOf(id)]),
   });
   /** The essay row without the columns a re-extract may change. */
-  const keep = (row: Record<string, unknown> | undefined) => ({ ...row, text_hash: null, text_s3_key: null, word_count: null, length_band: null });
+  const keep = (row: Record<string, unknown> | undefined) =>
+    ({ ...row, text_hash: null, text_s3_key: null, word_count: null, length_band: null, minhash: null });
 
   beforeAll(async () => {
     fresh = await freshDb();
@@ -399,7 +487,7 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     await setPaused(false);
     for (const id of Object.values(IDS)) {
       const seed = await q<{ id: string }>(
-        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
+        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [TITLES[id]]);
       await q(
         `INSERT INTO seed_source_links (seed_item_id, source_id, candidate_url, candidate_title, candidate_author, tier, score, status)
          VALUES ($1, $2, $3, 't', 'a', 'A', 1, 'approved')`, [seed[0]?.id, sourceId, urlOf(id)]);
@@ -412,14 +500,18 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     putText(IDS.invalid, variant("firmly"));
     putText(IDS.race, variant("boldly"));
     putText(IDS.noFiles, variant("quietly"));
-    const stored = await store([IDS.re, IDS.holder, IDS.dup, IDS.same, IDS.invalid, IDS.race, IDS.noFiles]);
-    expect(stored.map((r) => r.code)).toEqual(Array(7).fill("stored"));
+    putText(IDS.legacyRaw, variant("legacy"));
+    const stored = await store([IDS.re, IDS.holder, IDS.dup, IDS.same, IDS.invalid, IDS.race, IDS.noFiles, IDS.legacyRaw]);
+    expect(stored.map((r) => r.code)).toEqual(Array(8).fill("stored"));
 
     // Rows as an older extraction stored them: other hash, key and word count, same essay id and URL.
     for (const id of [IDS.re, IDS.dup, IDS.race]) {
       await q("UPDATE essays SET text_hash = $1, text_s3_key = $2, word_count = 999 WHERE source_url = $3",
         [oldHash(id), `${ESSAY_TEXT_PREFIX}${oldHash(id)}.txt`, urlOf(id)]);
     }
+    // The row of the v2-era backfill case: the raw-text hash (the key's hash) and no minhash, as before v2.
+    await q("UPDATE essays SET text_hash = $1, minhash = NULL WHERE source_url = $2",
+      [sha(extractGutenbergText(variant("legacy")).text), urlOf(IDS.legacyRaw)]);
     // The essay of IDS.re carries the owner's work, which must survive the re-extract.
     await q("UPDATE essays SET status = 'active' WHERE source_url = $1", [urlOf(IDS.re)]);
     const reEssayId = (await q<{ id: string }>("SELECT id FROM essays WHERE source_url = $1", [urlOf(IDS.re)]))[0]?.id;
@@ -458,6 +550,7 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     const after = await snapshot(IDS.re);
     expect(after.essay).toMatchObject({
       id: before.essay?.id, status: "active", text_hash: want.hash, text_s3_key: want.key, word_count: want.words,
+      minhash: want.minhash,
     });
     expect({ ...after, essay: keep(after.essay) }).toEqual({ ...before, essay: keep(before.essay) });
     expect(logs).toContain(`essay-ingest: id=${IDS.re} code=reextracted words=999->${want.words}`);
@@ -522,6 +615,15 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     expect(await snapshot(IDS.noFiles)).toEqual(before);
   });
 
+  it("backfills a row stored with the raw-text hash and no minhash: reextracted once, then unchanged", async () => {
+    const want = expectedFor(variant("legacy"));
+    expect(await run([IDS.legacyRaw])).toEqual([
+      { id: IDS.legacyRaw, code: "reextracted", words: { from: want.words, to: want.words } },
+    ]);
+    expect((await snapshot(IDS.legacyRaw)).essay).toMatchObject({ text_hash: want.hash, text_s3_key: want.key, minhash: want.minhash });
+    expect(await run([IDS.legacyRaw])).toEqual([{ id: IDS.legacyRaw, code: "unchanged" }]);
+  });
+
   it("sets the source extractor_version only when the batch covers every stored essay and all are OK", async () => {
     await q("UPDATE sources SET extractor_version = '1' WHERE id = $1", [sourceId]);
     logs.length = 0;
@@ -538,13 +640,13 @@ describe("re-extract phase on PGlite as a pipeline_rw member", () => {
     // Detach the essays whose rerun is not OK, so the remaining stored essays can all be covered.
     const notOk = [IDS.dup, IDS.invalid, IDS.race, IDS.noFiles].map(urlOf);
     await q("UPDATE essays SET source_id = NULL WHERE source_url = ANY($1::text[])", [notOk]);
-    const all = await run([IDS.re, IDS.holder, IDS.same]);
+    const all = await run([IDS.re, IDS.holder, IDS.same, IDS.legacyRaw]);
     expect(all.every((r) => r.code === "reextracted" || r.code === "unchanged")).toBe(true);
     expect(await version()).toBe("2");
     expect(logs).toContain("essay-ingest: source extractor_version=2");
 
     logs.length = 0;
-    await run([IDS.re, IDS.holder, IDS.same]);
+    await run([IDS.re, IDS.holder, IDS.same, IDS.legacyRaw]);
     expect(logs.some((l) => l.includes("extractor_version"))).toBe(false);
     await q("UPDATE essays SET source_id = $1 WHERE source_url = ANY($2::text[])", [sourceId, notOk]);
   });

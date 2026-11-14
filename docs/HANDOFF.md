@@ -22,7 +22,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 - Public pages: `/` (Paper home), `/demo` (simulated hub in an app frame), `/office` (Board and Room tabs over the sanitized public feed), `/bot`.
 - Owner pages (Google sign-in, allowlisted owner): `/hub`, `/console`, `/console/usage`, `/inbox`, `/essays`, `/essays/setup`, `/essays/<id>` reader.
 - Agents: Orchestrator planner on Claude Opus 5.5 at high effort; Developer, Scraper-builder and Docs-keeper on DeepSeek Flash through DeepSeek's Anthropic-compatible endpoint; QA work and review on Claude Haiku 5.5 through Anthropic workload identity federation. Monthly model spend cap $50 (#69).
-- Essays: 300 approved seeds; 8 full Gutenberg texts in the private bucket (extractor v2, `sources.extractor_version = '2'` after the 2026-11-12 re-extraction run); the remaining approved seeds are link-only rows.
+- Essays: 300 approved seeds; 8 full Gutenberg texts in the private bucket (extractor v2, `sources.extractor_version = '2'` after the 2026-11-12 re-extraction run); the remaining approved seeds are link-only rows. Validator v2 (E7): `essays.text_hash` is now the sha256 of the normalized text (the S3 key stays the raw-text hash), `essays.minhash` holds a 128-slot MinHash; the store phase quarantines near duplicates (MinHash >= 0.9) and same-author titles at similarity >= 0.9, and upgrades a seed's link-only row in place when its full text arrives. The 8 stored rows keep the old raw hash until a `--phase reextract` run backfills them (owner-gated live step; run it before the next ingest).
 
 ## Verification
 

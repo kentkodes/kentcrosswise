@@ -1,10 +1,13 @@
 /**
- * Validator v1 for an extracted Gutenberg text. Pure; returns fixed reason codes only (never text).
+ * Validator for an extracted Gutenberg text. Pure; returns fixed reason codes only (never text).
+ * v1 checks (kept unchanged): start and end markers, license residue, bad characters, HTML tags, minimum words.
+ * v2 adds the duplicate checks in validate/duplicates.ts (exact, near, metadata); the store phase runs them
+ * against the stored essays and reports "near_duplicate" and "metadata_duplicate" here.
  * No language heuristic and no upper length limit: the owner hand-picks books, the catalog says `en`.
  */
 import type { Extraction } from "../extract/gutenberg-text";
 
-export const VALIDATOR_VERSION = "1";
+export const VALIDATOR_VERSION = "2";
 export const MIN_WORDS = 300;
 
 export type ReasonCode =
@@ -13,7 +16,9 @@ export type ReasonCode =
   | "license_residue"
   | "bad_characters"
   | "html_tags"
-  | "too_short";
+  | "too_short"
+  | "near_duplicate"
+  | "metadata_duplicate";
 
 // Phrases of the Project Gutenberg license block and its trademark notices; the markers cut these away.
 const LICENSE_RESIDUE = [

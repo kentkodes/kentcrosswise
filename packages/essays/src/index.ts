@@ -47,4 +47,15 @@ export { GUTENBERG_SLUG, registerGutenbergSource } from "./registry/bootstrap";
 export { NO_USABLE_TEXT, bookDir, decodeUtf8, parseBookId, pickTextFile } from "./fetch/gutenberg-path";
 export { EXTRACTOR_ID, EXTRACTOR_VERSION, extractGutenbergText, type Extraction } from "./extract/gutenberg-text";
 export { MIN_WORDS, VALIDATOR_VERSION, validateExtraction, type ReasonCode } from "./validate/basic";
+export {
+  METADATA_DUPLICATE_MIN_SIMILARITY,
+  MINHASH_SIZE,
+  NEAR_DUPLICATE_MIN_SIMILARITY,
+  isMetadataDuplicate,
+  minhash,
+  minhashSimilarity,
+  normalizeForHash,
+  normalizedTextHash,
+  type WorkRef,
+} from "./validate/duplicates";
 export { ApplyError, applyReviewedLinks, loadApprovedSeeds, proposeLinks, type ApplyResult } from "./match/links";
