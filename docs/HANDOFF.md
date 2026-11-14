@@ -14,7 +14,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 ## PRs and checks
 
 - Merged 2026-11-10 to 2026-11-12: #59-#96. Highlights: Paper home (#79), `/office` team board (#80) and Room tab (#90, #91), `/demo` app frame (#84), reading layout for the essay reader and `/bot` (#86), owner console in Dense UI (#93), deploy-time CloudFront invalidation and build-id smoke check (#81), QA on Claude Haiku 5.5 (#88), Gutenberg extractor v2 and in-place re-extraction (#92, #94), 2-decimal usage costs (#95), local e2e PGlite harness fix (#96).
-- No open PRs at observation time. Work in progress on unpublished branches: `/essays` list redesign (`frontend/essays-feed-20261113`) and the H2 capture box (`feat/hub-capture-20261113`).
+- 2026-11-13: `/essays` library for ~300 entries (#98) and the H2 capture box on `/hub` (#99: raw entries in `entries`, latest 10 with routing status, "Waiting for router" until H3).
 - Every deploy since #81 cleared the CloudFront cache and passed the build-id smoke check on `/`, `/demo`, `/office`, `/bot` and the `/hub` redirect.
 
 ## Ownership and changes
@@ -40,6 +40,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. Finish and merge the `/essays` list redesign and the H2 capture box (owner merge decision on each PR).
-2. Next MVP area in the accepted order: H3 routing (DeepSeek routing, low-confidence inbox, corrections), then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
-3. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and the planner's output-token limit (see OPEN-POINTS R1 and R2).
+1. Next MVP area in the accepted order: H3 routing (DeepSeek routing, low-confidence inbox, corrections), then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
+2. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and the planner's output-token limit (see OPEN-POINTS R1 and R2).
