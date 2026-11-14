@@ -62,13 +62,16 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 
 | Workflow | Trigger | What | AWS role (OIDC) |
 |---|---|---|---|
-| `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `preview` and `prod-plan`; `ci/required` aggregates them and is the required check | `kcw-gh-ci` (preview), `kcw-gh-plan` (read-only prod plan) |
+| `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `preview`, `candidate-build` (AR1 slice 2, shadow) and `prod-plan`; `ci/required` aggregates them and is the required check | `kcw-gh-ci` (preview), `kcw-gh-plan` (read-only prod plan) |
+| `preview-trusted.yml` | `workflow_run` of `ci` (AR1 slice 2, shadow; definition from `main`) | `verify` (artifact and PR checks, no credentials), `provision` (restore dump, extract build as data, apply `infra/preview` under PR number + 100000), `e2e` (candidate tests, environment `preview-e2e`, no AWS), `teardown`, `result` (status `kcw/trusted-preview`, not required) | `kcw-gh-ci` through environment `preview-gc` (provision, teardown) |
 | `deploy.yml` | push to `main` (environment `prod`) | strict prod migrate using `kcw/prod/migrator` (missing or invalid configuration fails deployment), prod `build-web`, `build-lambdas`, `terraform apply infra/prod` (uploads the builds), CloudFront invalidation of `/*`, build-id smoke check | `kcw-gh-deploy` |
 | `preview-gc.yml` | PR closed; nightly; manual (`dry_run`, default true) | removes preview leftovers of closed PRs or older than 24 h, then `check-preview-clean` | `kcw-gh-ci` (sweep job in environment `preview-gc`) |
 | `essay-ingest.yml` | manual, `main` only (environment `essay-ingest`) | rsync Gutenberg books, extract, validate, store text in the private bucket; optional `reextract` and `categorize` | `kcw-gh-essay-ingest` |
 | `agent-{developer,qa,scraper,docs}.yml` | orchestrator dispatch; inert while `KCW_AGENT_WORKFLOWS_ENABLED` is not `true` | prepare, model work, publish and report jobs (see "Isolated cloud workflow boundary" below) | `kcw-gh-agent-model`, `kcw-gh-agent-{role}` |
 
 Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci/e2e-login`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
+
+Trusted preview (AR1 slice 2, PR A, shadow; behaviour in DESIGN section 5): `candidate-build` in `ci.yml` has no credentials; it migrates and seeds a Postgres service, dumps it (`pg_dump --inserts`), builds the preview and uploads artifact `candidate-preview` (SQL dump, ustar tar of `.open-next`, manifest bound to repository, PR, head SHA and run). `preview-trusted.yml` verifies it from `main` (limits and checks in `scripts/lib/candidate-artifact.ts`), restores it with `pnpm restore-preview-db` and extracts it with `pnpm verify-candidate extract`, so the credentialed jobs never execute candidate code; only its `e2e` job does, with the synthetic login. The shadow path names everything with PR number + 100000 (state `preview/pr-<n+100000>.tfstate`, Neon `preview/pr-<n+100000>`) so it cannot collide with the old job; PR B removes the offset and the old job. `pnpm verify-trusted-preview --pr <n> --sha <sha>` is the merge-time check for PR B and is not wired yet. The merge-rules input remains candidate-produced until autonomous merges are enabled (Q6 deferred, agents paused).
 
 No Playwright report or trace is uploaded: a trace would contain the typed preview login token. The prod plan JSON contains sensitive values in clear text; CI keeps only the summary.
 
@@ -113,7 +116,7 @@ infra/modules/       web (OpenNext v4, see contract below), secrets (lookups + r
                      webhook relay Lambda + public Function URL; code = a directory with index.mjs
                      exporting handler, passed as orchestrator_package_dir / relay_package_dir;
                      infra/prod passes the pnpm build-lambdas output; null = the stubs in stub/)
-.github/workflows/   ci.yml, deploy.yml, preview-gc.yml, essay-ingest.yml (manual Gutenberg ingest, role kcw-gh-essay-ingest)
+.github/workflows/   ci.yml, preview-trusted.yml, deploy.yml, preview-gc.yml, essay-ingest.yml (manual Gutenberg ingest, role kcw-gh-essay-ingest)
 .github/actions/     setup (Node, pnpm, install, Terraform), neon-preview (Neon branch with the key from
                      Secrets Manager), preview-gc (find and remove preview leftovers)
 docs/                specs, design, research, agent playbooks, runbooks (owner)
