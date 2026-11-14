@@ -56,6 +56,50 @@
   color: var(--fg-muted);
 }
 
+/* Link-only essays: the hook under the byline, then the note and the source button above the rating form. */
+.hook {
+  margin: 16px 0 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.action {
+  margin: 0 0 24px;
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--dur-hover) var(--ease-out);
+}
+
+.source:hover {
+  background: var(--bg-soft);
+}
+
+/* Visually hidden text that still reaches screen readers. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Reading progress: a 2px line directly under the header, full width. */
 .progress {
   display: block;
@@ -239,7 +283,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pill,
   .segment,
-  .submit {
+  .submit,
+  .source {
     transition: none;
   }
 }

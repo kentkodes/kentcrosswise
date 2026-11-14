@@ -17,12 +17,12 @@ A private library of acclaimed essays, classic and modern, for the owner's own r
    - Types: argumentative, critical, comedic, creative/lyric, personal/memoir, philosophical, political, science/nature, cultural, travel.
    - Lengths: Short (<2k words), Medium (2–6k), Long (6k+).
 2. **Feed.** Infinite scroll of cards: title, author, year, type, length, reading time, a one-line hook.
-3. **Reader.** Opens from a card. Clean typography and a progress bar. Link-only entries open the source instead.
+3. **Reader.** Opens from a card. Clean typography and a progress bar. Link-only entries show a source link and the rating form instead.
 4. **Rating** at the end of each essay:
    - overall, 1–5 stars
    - what worked (multi-select): ideas, prose, argument, humor, emotion, surprise
    - length felt: too long / right / too short
-5. **Recommendations.** Filtered by the owner's types and lengths, ranked by similarity to highly rated essays (type, author, era, "what worked" tags). Embedding-based similarity comes later.
+5. **Recommendations.** Filtered by the owner's types and lengths; unrated full texts and link-only entries both qualify. Essays rated 4–5 stars pull up similar unrated ones (shared type, author, era), and a "what worked" tag on a liked essay lifts the types it suggests. Essays rated 1–2 stars push similar ones down. The last "length felt" answer nudges essays of the wrong length down. Each card says which liked essay it follows. Embedding-based similarity comes later.
 
 ## Library
 

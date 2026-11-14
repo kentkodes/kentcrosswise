@@ -1,6 +1,6 @@
 # Kentcrosswise open points
 
-Current backlog, 2026-11-13 UTC. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Delivery order: essay reader and recommendations, capture and routing, remaining hub/social/inbox, then X-ray and final acceptance.
+Current backlog, 2026-11-14 UTC. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Delivery order: essay reader and recommendations, capture and routing, remaining hub/social/inbox, then X-ray and final acceptance.
 
 ## Review candidates (2026-11-13, owner decision)
 
@@ -13,8 +13,6 @@ Current backlog, 2026-11-13 UTC. Current state and holds are in [HANDOFF.md](HAN
 
 | ID | Open work |
 |---|---|
-| E2 | `/essays` list for ~300 entries (in progress on `frontend/essays-feed-20261113`). |
-| E3 | Recommendations that change with ratings by type, author, era and tags; today Recommended lists unrated full texts. |
 | E5 | Further sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback. |
 | E7 | Validator: normalized hash, near-duplicate and fuzzy-metadata checks, quality checks; quarantine failures. |
