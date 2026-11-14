@@ -101,12 +101,14 @@ jobs:
           aws-region: us-east-1
           role-duration-seconds: 3600
 
-      # Exports KCW_CI_NEON_API_KEY and KCW_CI_E2E_LOGIN, masked, to the later steps of this job.
-      - name: Read kcw/ci
+      # Exports KCW_CI_NEON_API_KEY (kcw/ci) and KCW_E2E_E2E_LOGIN (kcw/ci/e2e-login), masked, to the
+      # later steps of this job.
+      - name: Read kcw/ci and kcw/ci/e2e-login
         uses: aws-actions/aws-secretsmanager-get-secrets@v3
         with:
           secret-ids: |
             KCW_CI, kcw/ci
+            KCW_E2E, kcw/ci/e2e-login
           parse-json-secrets: true
 
       - name: Preview build (KCW_ENV=preview)
@@ -182,7 +184,7 @@ jobs:
       - name: Playwright against the preview
         env:
           BASE_URL: ${{ steps.url.outputs.url }}
-          KCW_E2E_LOGIN: ${{ env.KCW_CI_E2E_LOGIN }}
+          KCW_E2E_LOGIN: ${{ env.KCW_E2E_E2E_LOGIN }}
         run: pnpm --filter web e2e
 
       # ---------- teardown: runs on success, failure and cancellation ----------

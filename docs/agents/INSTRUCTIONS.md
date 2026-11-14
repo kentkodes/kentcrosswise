@@ -68,7 +68,7 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 | `essay-ingest.yml` | manual, `main` only (environment `essay-ingest`) | rsync Gutenberg books, extract, validate, store text in the private bucket; optional `reextract` and `categorize` | `kcw-gh-essay-ingest` |
 | `agent-{developer,qa,scraper,docs}.yml` | orchestrator dispatch; inert while `KCW_AGENT_WORKFLOWS_ENABLED` is not `true` | prepare, model work, publish and report jobs (see "Isolated cloud workflow boundary" below) | `kcw-gh-agent-model`, `kcw-gh-agent-{role}` |
 
-Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
+Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci/e2e-login`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
 
 No Playwright report or trace is uploaded: a trace would contain the typed preview login token. The prod plan JSON contains sensitive values in clear text; CI keeps only the summary.
 
@@ -85,7 +85,7 @@ apps/web/            Next.js 16 App Router app. src/app/(public) = visitor pages
                      The (owner) layout redirects to /api/auth/signin unless the session is the allowlisted owner.
 apps/web/src/auth/   Auth.js v5 (next-auth beta): Google (prod, scopes openid email profile) + allowlist from
                      kcw/prod/web owner_email; preview builds (KCW_ENV=preview at build time) get a credentials
-                     provider keyed by kcw/ci e2e_login instead (preview-login.ts, never in a prod bundle).
+                     provider keyed by kcw/ci/e2e-login e2e_login instead (preview-login.ts, never in a prod bundle).
 apps/web/src/server/ server-only code; origin-wrapper.ts = the x-kcw-origin guard (D25)
 apps/web/e2e/        Playwright tests (public pages, owner redirect, preview login)
 packages/core/       shared types; src/models = model providers (Anthropic, DeepSeek, Fake, withFallback);

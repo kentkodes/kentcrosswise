@@ -5,6 +5,7 @@ locals {
   secrets = {
     "kcw/prod/web"                = "auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public"
     "kcw/prod/models"             = "anthropic_api_key, typesafe_api_key, langsmith_api_key"
+    "kcw/prod/router"             = "deepseek_api_key (read only by the prod web server for entry routing)"
     "kcw/prod/orchestrator"       = "db_url, github_app_client_id, github_app_installation_id, github_app_private_key"
     "kcw/prod/relay"              = "db_url (webhook relay: delivery dedupe in inbound_events, task lookup)"
     "kcw/prod/pipeline"           = "db_url"
@@ -18,7 +19,8 @@ locals {
     "kcw/github/qa-app"           = "private_key"
     "kcw/github/scraper-app"      = "private_key"
     "kcw/github/docs-app"         = "private_key"
-    "kcw/ci"                      = "neon_api_key, e2e_login"
+    "kcw/ci"                      = "neon_api_key (the preview provisioner key; CI only, never a preview runtime)"
+    "kcw/ci/e2e-login"            = "e2e_login (preview login token; read by CI and by the preview server)"
   }
 }
 

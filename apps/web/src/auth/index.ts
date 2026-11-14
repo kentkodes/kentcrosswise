@@ -10,7 +10,7 @@ import { loadProdSettings, type AuthSettings } from "./settings";
 
 let settingsPromise: Promise<AuthSettings> | undefined;
 
-/** Auth settings for this build (prod: kcw/prod/web; preview: kcw/ci e2e token). Cached per process. */
+/** Auth settings for this build (prod: kcw/prod/web; preview: kcw/ci/e2e-login token). Cached per process. */
 export function getAuthSettings(): Promise<AuthSettings> {
   settingsPromise ??= (async () => {
     const preview = await loadPreviewModule();

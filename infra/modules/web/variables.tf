@@ -136,3 +136,14 @@ variable "origin_verify_secret_key" {
   type        = string
   default     = null
 }
+
+variable "shared_cloudfront" {
+  description = "AR1: ids of the shared, bootstrap-owned OACs and cache policies a preview uses. null (prod): the module creates its own."
+  type = object({
+    s3_oac_id              = string
+    lambda_oac_id          = string
+    server_cache_policy_id = string
+    image_cache_policy_id  = string
+  })
+  default = null
+}

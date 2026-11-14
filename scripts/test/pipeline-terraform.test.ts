@@ -144,8 +144,10 @@ describe("bootstrap preview permissions for pipelines", () => {
     expect(passRole).toMatch(/variable = "iam:PassedToService"\s*values\s*= \["scheduler\.amazonaws\.com"\]/);
   });
 
-  it("boundary allows invoking preview functions only", () => {
+  it("boundary allows invoking only the role's own PR's preview functions", () => {
     const boundary = data(iam, "aws_iam_policy_document", "preview_boundary");
-    expect(boundary).toMatch(/actions\s*= \["lambda:InvokeFunction"\]\s*resources = \["\$\{local\.lambda_arn\}:function:\$\{local\.preview_names\}"\]/);
+    expect(boundary).toMatch(/actions\s*= \["lambda:InvokeFunction"\]/);
+    expect(boundary).toContain('"${local.lambda_arn}:function:kcw-pr-&{aws:PrincipalTag/kcw:pr}",');
+    expect(boundary).toContain('"${local.lambda_arn}:function:kcw-pr-&{aws:PrincipalTag/kcw:pr}-*",');
   });
 });

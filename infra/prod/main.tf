@@ -107,10 +107,11 @@ data "aws_secretsmanager_secret_version" "origin_verify" {
   secret_id = local.origin_verify_secret
 }
 
-# kcw/prod/models: the DeepSeek key for entry routing (H3). The web server reads it only through KCW_MODELS_SECRET.
+# kcw/prod/router: only the DeepSeek key for entry routing (H3), so the web server never reads the
+# orchestrator's models secret (AR1). The web server reads it through KCW_MODELS_SECRET (name kept).
 module "web_secrets" {
   source = "../modules/secrets"
-  names  = ["kcw/prod/web", "kcw/prod/models"]
+  names  = ["kcw/prod/web", "kcw/prod/router"]
 }
 
 # Essay text (E5 ingest) lives in the owner-created pipelines bucket (infra/bootstrap/pipelines.tf).
@@ -144,7 +145,7 @@ module "web" {
 
   server_environment = {
     KCW_WEB_SECRET             = "kcw/prod/web"
-    KCW_MODELS_SECRET          = "kcw/prod/models"
+    KCW_MODELS_SECRET          = "kcw/prod/router"
     KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
     ESSAY_TEXT_BUCKET          = local.essay_text_bucket
   }

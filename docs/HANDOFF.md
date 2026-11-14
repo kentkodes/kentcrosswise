@@ -47,5 +47,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. AR1 slice 1 (authority and secret split) per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md), then the remaining AR1-AR9 sequence. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
+1. AR1 slice 1 (authority and secret split) is in #106: owner-gated bootstrap plan/apply, two new secret values, then CI and merge. Next: AR1 slices 2-3 per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md), then the remaining AR1-AR9 sequence. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
 2. Implementation decisions still needed: preview isolation technique, unknown-price policy, worker/WIP/time limits, alert destination/recovery targets and the scoped live acceptance task. No new budget or live enablement was approved. Public copy overclaims remain deferred under R1; worker context cost is now AR5 (former R3).
