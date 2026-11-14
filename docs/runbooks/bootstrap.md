@@ -95,7 +95,7 @@ Secrets Manager console → the secret → *Retrieve secret value* → *Edit* �
 |                          | `google_client_id`, `google_client_secret` | Google Auth Platform → Clients; see the current account state in [SETUP.md](../SETUP.md)                                                                      |
 | `kcw/prod/origin-verify` | `origin_verify`                            | a long random value (below). CloudFront sends it to the server Lambda, which refuses requests without it (D25). Fill it before step 6, or the prod plan fails |
 | `kcw/ci`                 | `neon_api_key`                             | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered                                                                                   |
-|                          | `e2e_login`                                | a random string of at least 16 characters (below); the preview login token                                                                                    |
+| `kcw/ci/e2e-login`       | `e2e_login`                                | a random string of at least 16 characters (below); the preview login token                                                                                    |
 
 This is the foundation provisioning procedure, not a current empty-secret checklist. Production DB, model and App configuration has since been supplied; preserve existing values. VAPID/social/pipeline readiness remains feature-specific.
 
@@ -141,7 +141,7 @@ pnpm seed
 Remove-Item Env:DATABASE_URL
 ```
 
-**Build and apply** (preview build: contains the preview login, reads `kcw/ci`):
+**Build and apply** (preview build: contains the preview login, reads `kcw/ci/e2e-login`):
 
 ```powershell
 $env:KCW_ENV = "preview"; pnpm build-web; Remove-Item Env:KCW_ENV
@@ -157,7 +157,7 @@ The URL is never written to state (write-only SSM value). **Test**:
 
 ```powershell
 $env:BASE_URL = "<preview url>"
-$env:KCW_E2E_LOGIN = Read-Host -MaskInput "e2e_login from kcw/ci"
+$env:KCW_E2E_LOGIN = Read-Host -MaskInput "e2e_login from kcw/ci/e2e-login"
 pnpm --filter web e2e
 Remove-Item Env:BASE_URL, Env:KCW_E2E_LOGIN
 ```
@@ -222,3 +222,20 @@ The original foundation runs verified public home/demo responses, owner Google s
 - **Origin header (D25).** The server Function URL is public; only the `x-kcw-origin` check keeps direct calls out. The value is in the CloudFront config and in Terraform state, which the PR plan role can read.
 - `lambda:InvokeFunction` with `invoked_via_function_url` is granted next to `lambda:InvokeFunctionUrl` (to CloudFront for the image URL, to everyone for the public server URL); if the apply rejects it, report it.
 - `kcw-gh-ci` limits CloudFront distribution changes by the tag `kcw:env=preview` (`aws:RequestTag` / `aws:ResourceTag`); confirmed for create, update and delete by the P1-15 run (2026-10-22).
+
+## AR1 slice 1 cutover (authority and secret split)
+
+Owner steps, in order. Nothing here is run by an agent.
+
+1. **Review the plan.** From this branch: `terraform -chdir=infra/bootstrap plan`. Expect: new secret containers `kcw/ci/e2e-login` and `kcw/prod/router`; changed descriptions of `kcw/ci`; the preview boundary policy and the `kcw-gh-ci` policy updated in place; two OACs (`kcw-preview-s3`, `kcw-preview-lambda`), two cache policies (`kcw-preview-server`, `kcw-preview-image`) and two SSM String parameters under `/kcw/shared/preview-cloudfront/` created. Nothing destroyed or replaced.
+2. **Apply bootstrap.** `terraform -chdir=infra/bootstrap apply` (owner credentials).
+3. **Fill the new secrets** in the console (Key/value view): `kcw/ci/e2e-login` key `e2e_login` = the current `e2e_login` value of `kcw/ci`; `kcw/prod/router` key `deepseek_api_key` = the current DeepSeek key (from `kcw/prod/models`).
+4. **Merge the PR.** The deploy applies prod. Its plan must show only the web server's environment (`KCW_MODELS_SECRET`) and read-policy change to `kcw/prod/router`, plus the four `moved` CloudFront addresses (OACs and cache policies now indexed `[0]`). No CloudFront distribution, OAC or cache policy replaced or destroyed.
+5. **Optional, later:** remove `e2e_login` from `kcw/ci` and `deepseek_api_key` from `kcw/prod/models` once nothing reads them (the essay-ingest categorize step still reads `deepseek_api_key` from `kcw/prod/models`, so keep it while that step is in use).
+
+Order matters: bootstrap before the merge (the preview job needs the shared CloudFront resources, the new boundary and the filled `kcw/ci/e2e-login`), and fill the secrets before the merge (prod routing and previews read them at runtime). Old previews created before the change are destroyed by the old policy's deletes, which the new CI role keeps.
+
+**Verification evidence still needed after the apply** (IAM policy simulation or a throwaway PR; none was run for this change):
+- Negative: with the `kcw-gh-ci` policy, `cloudfront:UpdateDistribution`/`TagResource`/`DeleteDistribution` on the prod distribution (tag `kcw:env=prod`) is denied; `iam:TagRole`/`UntagRole` of `kcw:pr` on an existing `kcw-pr-*` role is denied.
+- Positive: a preview created with tags (distribution with `kcw:env=preview`, roles with `kcw:pr`) applies and destroys cleanly, using the shared OACs and cache policies.
+- Boundary: a preview role of PR 1 cannot read `/kcw/preview/pr-12/*`, the queues or buckets of another PR, or `kcw/ci`; it reads `kcw/ci/e2e-login`.

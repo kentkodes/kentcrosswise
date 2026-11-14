@@ -11,9 +11,9 @@ export const PREVIEW_PROVIDER_ID = "kcw-preview-login";
 /** Synthetic owner identity of preview environments. */
 export const PREVIEW_OWNER_EMAIL = "owner@preview.kentcrosswise.invalid";
 
-/** Secret holding `e2e_login` (DESIGN §6). */
+/** Secret holding `e2e_login` (DESIGN §6); the Neon key in kcw/ci is not readable by previews. */
 export const CI_SECRET_ENV = "KCW_CI_SECRET";
-export const DEFAULT_CI_SECRET = "kcw/ci";
+export const DEFAULT_CI_SECRET = "kcw/ci/e2e-login";
 
 /** Local runs (Playwright against next dev/start) may pass the token directly instead. */
 export const LOCAL_E2E_LOGIN_ENV = "KCW_E2E_LOGIN";

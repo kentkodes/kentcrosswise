@@ -298,7 +298,7 @@ OIDC role trust. The repo is new, so the immutable `sub` applies. Prefix `P` = `
 
 | Role | `sub` (StringEquals) | Permissions |
 |---|---|---|
-| `kcw-gh-ci` | `P:pull_request`, `P:environment:preview-gc` (the `preview-gc.yml` sweep job, which runs on main for dispatch/schedule; an environment keeps agent workflows on main out) | create/destroy resources tagged `kcw:env=preview` with name prefix `kcw-pr-*`; put/delete SSM parameters under `/kcw/preview/*`; read secret `kcw/ci`; preview state keys |
+| `kcw-gh-ci` | `P:pull_request`, `P:environment:preview-gc` (the `preview-gc.yml` sweep job, which runs on main for dispatch/schedule; an environment keeps agent workflows on main out) | create/destroy resources tagged `kcw:env=preview` with name prefix `kcw-pr-*`; put/delete SSM parameters under `/kcw/preview/*`; read secrets `kcw/ci` (Neon key) and `kcw/ci/e2e-login`; preview state keys. AR1: it cannot create or update CloudFront OACs or cache policies (previews use the shared `kcw-preview-*` ones from bootstrap), cannot touch a distribution tagged `kcw:env` other than `preview`, and cannot change or remove the `kcw:pr` tag of a role. The preview permissions boundary limits each preview role to its own PR's resources through that tag and lets it read only `kcw/ci/e2e-login` (never the Neon key). A distribution with no `kcw:env` tag is not protected by the deny; prod carries it via default_tags |
 | `kcw-gh-plan` | `P:pull_request` | read-only on prod resources + read prod state (for the prod plan) |
 | `kcw-gh-deploy` | `P:environment:prod` | full prod apply; read `kcw/prod/migrator` |
 | `kcw-gh-agent-{developer,qa,scraper,docs}` | Exact `P:environment:agent-publish-<role>`; GitHub environment permits main only | Own App secret only; SendMessage on orchestrator-in; shared main-ref role retired |
@@ -309,7 +309,7 @@ The pull_request/prod immutable forms were verified live on 2026-10-22; publishe
 Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 1. `neondatabase/create-branch-action@v6`:
    - project = `vars.NEON_CI_PROJECT_ID`, parent `base`, `branch_name: preview/pr-<n>`;
-   - `api_key` from Secrets Manager (`kcw/ci`);
+   - `api_key` from Secrets Manager (`kcw/ci`, key `neon_api_key`);
    - `expires_at` = now + 3 h.
    - Output `db_url_pooled` is masked explicitly with `::add-mask::` (auto-masking unverified).
 2. `migrate` + `seed`.
@@ -323,14 +323,15 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 - Previews live only for the length of a CI run, and `ci.yml` uses `concurrency: pr-<n>` with cancel-in-progress.
 - The orchestrator keeps at most 4 agent PRs in flight (D20), which leaves room for owner PRs.
 
-**Owner-only e2e login:** preview builds enable a credentials provider keyed by `kcw/ci` (`e2e_login`), compiled in only when `KCW_ENV=preview`. `deploy.yml` asserts that the prod bundle does not contain it.
+**Owner-only e2e login:** preview builds enable a credentials provider keyed by `kcw/ci/e2e-login` (`e2e_login`), compiled in only when `KCW_ENV=preview`. `deploy.yml` asserts that the prod bundle does not contain it.
 
 ## 6. Secrets (Secrets Manager, one JSON secret per consumer, D19)
 
 | Name | Keys | Read by |
 |---|---|---|
 | `kcw/prod/web` | auth_secret, google_client_id, google_client_secret, owner_email, vapid_public, vapid_private, db_url, db_url_public | web Lambda |
-| `kcw/prod/models` | anthropic_api_key, deepseek_api_key, optional deepseek_base_url, optional deepseek_model, langsmith_api_key | web, orchestrator, pipeline Lambdas (runtime only; Developer, Scraper-builder and Docs-keeper workers read `kcw/agent/deepseek` instead) |
+| `kcw/prod/models` | anthropic_api_key, deepseek_api_key, optional deepseek_base_url, optional deepseek_model, langsmith_api_key | orchestrator, pipeline Lambdas and the essay-ingest categorize step (runtime only; Developer, Scraper-builder and Docs-keeper workers read `kcw/agent/deepseek` instead) |
+| `kcw/prod/router` | deepseek_api_key | web Lambda only (entry routing, H3; AR1: the web server no longer reads `kcw/prod/models`) |
 | `kcw/agent/deepseek` | deepseek_api_key | work job of Developer, Scraper-builder and Docs-keeper only (environment `agent-model`, role `kcw-gh-agent-model`); created by the owner in the console, not by Terraform |
 | `kcw/prod/orchestrator` | db_url, github_app_client_id, github_app_installation_id, github_app_private_key | orchestrator Lambda |
 | `kcw/prod/relay` | db_url | webhook relay Lambda (delivery dedupe, task lookup; its own secret so the relay cannot read the orchestrator App key) |
@@ -342,8 +343,9 @@ Preview lifecycle (`ci.yml`, composite action `.github/actions/neon-preview`):
 | `kcw/prod/social/tiktok` | client_key, client_secret, refresh_token (rewritten; may rotate) | social Lambda (read + write) |
 | `kcw/github/webhook-secret` | secret | relay Lambda |
 | `kcw/github/developer-app`, `qa-app`, `scraper-app`, `docs-app` | private_key | the matching `agent-*.yml` only (App client ids are repo variables) |
-| `kcw/ci` | neon_api_key (project-scoped to `kentcrosswise-ci` if available), e2e_login | `ci.yml`, `preview-gc.yml`; e2e_login also in the preview web Lambda |
-That is 17 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25, `kcw/prod/relay`, P2-05/P2-06, and `kcw/agent/deepseek`, D16). No worker holds an Anthropic key: QA work and review authenticate by federation with no key, and the Developer, Scraper-builder and Docs-keeper work jobs use the DeepSeek key `kcw/agent/deepseek` (D16, updated 2026-11-11). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
+| `kcw/ci` | neon_api_key (project-scoped to `kentcrosswise-ci` if available); the preview provisioner key | `ci.yml`, `preview-gc.yml` (never a preview runtime) |
+| `kcw/ci/e2e-login` | e2e_login | `ci.yml` (Playwright) and the preview web Lambda (AR1) |
+That is 19 fixed secrets (the 14 of D19 plus `kcw/prod/origin-verify`, D25, `kcw/prod/relay`, P2-05/P2-06, `kcw/agent/deepseek`, D16, and `kcw/ci/e2e-login` and `kcw/prod/router`, AR1). No worker holds an Anthropic key: QA work and review authenticate by federation with no key, and the Developer, Scraper-builder and Docs-keeper work jobs use the DeepSeek key `kcw/agent/deepseek` (D16, updated 2026-11-11). The per-PR preview DB URL is not a Secrets Manager secret: it is the SSM SecureString `/kcw/preview/pr-<n>/database-url`, read only by that preview's web Lambda (D21).
 
 When the owner pastes a value, it goes into the named secret under the listed key (console "Key/value" view). `docs/SETUP.md` uses these names.
 

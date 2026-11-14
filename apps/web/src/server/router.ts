@@ -22,7 +22,7 @@ export const ROUTE_THRESHOLD = 0.6;
 const ROUTE_TIMEOUT_MS = 8000;
 const ROUTE_RETRIES = 1;
 
-/** Names the models secret (env holds the name only, D9). Unset means routing is off (preview and local). */
+/** Names the router secret, kcw/prod/router: the DeepSeek key, readable by the web server only (env holds the name only, D9). Unset means routing is off (preview and local). */
 export const MODELS_SECRET_ENV = "KCW_MODELS_SECRET";
 const API_KEY = "deepseek_api_key";
 const BASE_URL_KEY = "deepseek_base_url";

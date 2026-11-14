@@ -75,37 +75,56 @@ resource "aws_iam_role" "github" {
 # than this, whatever inline policy a PR writes.
 
 data "aws_iam_policy_document" "preview_boundary" {
+  # AR1: a preview role reaches only its own PR's resources. The role tag kcw:pr (preview provider
+  # default_tags: every role infra/preview and infra/modules/{web,pipelines} create carries it) is
+  # substituted into each ARN. Both "kcw-pr-<n>" and "kcw-pr-<n>-*" are listed, never "kcw-pr-<n>*",
+  # so pr-1 cannot match pr-12. kcw-gh-ci cannot change the tag of an existing role (below).
   statement {
-    sid       = "Logs"
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-    resources = ["${local.logs_arn}:log-group:/aws/lambda/${local.preview_names}:*"]
+    sid     = "Logs"
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = [
+      "${local.logs_arn}:log-group:/aws/lambda/kcw-pr-&{aws:PrincipalTag/kcw:pr}:*",
+      "${local.logs_arn}:log-group:/aws/lambda/kcw-pr-&{aws:PrincipalTag/kcw:pr}-*:*",
+    ]
   }
   statement {
-    sid       = "PreviewBuckets"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
-    resources = ["${local.arn_prefix}:s3:::${local.preview_names}", "${local.arn_prefix}:s3:::${local.preview_names}/*"]
+    sid     = "PreviewBuckets"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+    resources = [
+      "${local.arn_prefix}:s3:::kcw-pr-&{aws:PrincipalTag/kcw:pr}",
+      "${local.arn_prefix}:s3:::kcw-pr-&{aws:PrincipalTag/kcw:pr}/*",
+      "${local.arn_prefix}:s3:::kcw-pr-&{aws:PrincipalTag/kcw:pr}-*",
+      "${local.arn_prefix}:s3:::kcw-pr-&{aws:PrincipalTag/kcw:pr}-*/*",
+    ]
   }
   statement {
-    sid       = "PreviewQueues"
-    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
-    resources = ["${local.sqs_arn}:${local.preview_names}"]
+    sid     = "PreviewQueues"
+    actions = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+    resources = [
+      "${local.sqs_arn}:kcw-pr-&{aws:PrincipalTag/kcw:pr}",
+      "${local.sqs_arn}:kcw-pr-&{aws:PrincipalTag/kcw:pr}-*",
+    ]
   }
   statement {
     sid       = "PreviewParameters"
     actions   = ["ssm:GetParameter"]
-    resources = ["${local.ssm_arn}:parameter/kcw/preview/*"]
+    resources = ["${local.ssm_arn}:parameter/kcw/preview/pr-&{aws:PrincipalTag/kcw:pr}/*"]
   }
+  # Only the e2e login token; the Neon key in kcw/ci is for CI alone.
   statement {
     sid       = "CiSecret"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["${local.secret_arn}:kcw/ci-??????"]
+    resources = ["${local.secret_arn}:kcw/ci/e2e-login-??????"]
   }
   # A preview pipeline's Scheduler role (infra/modules/pipelines) carries this boundary and invokes
   # the preview watcher.
   statement {
-    sid       = "InvokePreviewFunctions"
-    actions   = ["lambda:InvokeFunction"]
-    resources = ["${local.lambda_arn}:function:${local.preview_names}"]
+    sid     = "InvokePreviewFunctions"
+    actions = ["lambda:InvokeFunction"]
+    resources = [
+      "${local.lambda_arn}:function:kcw-pr-&{aws:PrincipalTag/kcw:pr}",
+      "${local.lambda_arn}:function:kcw-pr-&{aws:PrincipalTag/kcw:pr}-*",
+    ]
   }
 }
 
@@ -133,10 +152,17 @@ data "aws_iam_policy_document" "ci" {
       values   = ["preview/*"]
     }
   }
+  # kcw/ci holds the Neon key (provisioner); kcw/ci/e2e-login the preview login token.
   statement {
     sid       = "CiSecret"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["${local.secret_arn}:kcw/ci-??????"]
+    resources = ["${local.secret_arn}:kcw/ci-??????", "${local.secret_arn}:kcw/ci/e2e-login-??????"]
+  }
+  # The shared preview OAC ids (infra/bootstrap/cloudfront-preview.tf); read only.
+  statement {
+    sid       = "SharedPreviewCloudFrontIds"
+    actions   = ["ssm:GetParameter"]
+    resources = ["${local.ssm_arn}:parameter/kcw/shared/preview-cloudfront/*"]
   }
   statement {
     sid = "PreviewParameters"
@@ -293,13 +319,13 @@ data "aws_iam_policy_document" "ci" {
       values   = ["preview"]
     }
   }
-  # OACs and cache policies have random ids, so they cannot be scoped by name.
+  # AR1: no Create/Update of OACs or cache policies; previews use the shared ones from
+  # infra/bootstrap/cloudfront-preview.tf (Get* is in the read-only statement below). The deletes stay
+  # only to destroy legacy previews created before this change; CloudFront refuses to delete an OAC
+  # or cache policy that a distribution still uses, so they cannot remove the shared ones.
   statement {
-    sid = "CloudFrontPoliciesAndOac"
-    actions = [
-      "cloudfront:CreateOriginAccessControl", "cloudfront:GetOriginAccessControl", "cloudfront:UpdateOriginAccessControl", "cloudfront:DeleteOriginAccessControl",
-      "cloudfront:CreateCachePolicy", "cloudfront:GetCachePolicy", "cloudfront:UpdateCachePolicy", "cloudfront:DeleteCachePolicy",
-    ]
+    sid       = "DeleteLegacyPreviewOacAndCachePolicies"
+    actions   = ["cloudfront:DeleteOriginAccessControl", "cloudfront:DeleteCachePolicy"]
     resources = ["*"]
   }
   statement {
@@ -328,6 +354,56 @@ data "aws_iam_policy_document" "ci" {
     }
   }
 
+  # TagNewPreviewDistributions and ChangePreviewDistributions would otherwise let a PR retag a
+  # distribution (prod's, say) as preview, then update or delete it. A distribution that already has
+  # a kcw:env tag other than preview is untouchable; create-with-tags still works because the
+  # resource tag does not exist yet. Residual: a distribution with no kcw:env tag is not protected;
+  # prod carries the tag through default_tags.
+  statement {
+    sid       = "NoTouchingNonPreviewDistributions"
+    effect    = "Deny"
+    actions   = ["cloudfront:TagResource", "cloudfront:UntagResource", "cloudfront:UpdateDistribution", "cloudfront:DeleteDistribution"]
+    resources = ["${local.cf_arn}:distribution/*"]
+    condition {
+      test     = "Null"
+      variable = "aws:ResourceTag/kcw:env"
+      values   = ["false"]
+    }
+    condition {
+      test     = "StringNotEquals"
+      variable = "aws:ResourceTag/kcw:env"
+      values   = ["preview"]
+    }
+  }
+  # The kcw:pr role tag scopes the preview boundary, so it must not change on an existing role.
+  # CreateRole with tags is unaffected: the resource tag is absent at that point.
+  statement {
+    sid       = "NoRetagPreviewRolePr"
+    effect    = "Deny"
+    actions   = ["iam:TagRole"]
+    resources = ["${local.iam_arn}:role/${local.preview_names}"]
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "aws:TagKeys"
+      values   = ["kcw:pr"]
+    }
+    condition {
+      test     = "Null"
+      variable = "aws:ResourceTag/kcw:pr"
+      values   = ["false"]
+    }
+  }
+  statement {
+    sid       = "NoUntagPreviewRolePr"
+    effect    = "Deny"
+    actions   = ["iam:UntagRole"]
+    resources = ["${local.iam_arn}:role/${local.preview_names}"]
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "aws:TagKeys"
+      values   = ["kcw:pr"]
+    }
+  }
   statement {
     sid       = "NoBoundaryEscape"
     effect    = "Deny"

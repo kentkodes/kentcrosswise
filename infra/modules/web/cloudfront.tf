@@ -1,7 +1,39 @@
 # CloudFront in front of S3 (assets, OAC), the image Function URL (OAC, GET only) and the server
 # Function URL (public, guarded by the x-kcw-origin header, D25).
 
+# AR1: previews cannot create OACs or cache policies (kcw-gh-ci lacks the permissions). They pass
+# shared, bootstrap-owned ones in var.shared_cloudfront; prod (null) creates its own as before.
+locals {
+  own_cloudfront         = var.shared_cloudfront == null
+  s3_oac_id              = local.own_cloudfront ? aws_cloudfront_origin_access_control.s3[0].id : var.shared_cloudfront.s3_oac_id
+  lambda_oac_id          = local.own_cloudfront ? aws_cloudfront_origin_access_control.lambda[0].id : var.shared_cloudfront.lambda_oac_id
+  server_cache_policy_id = local.own_cloudfront ? aws_cloudfront_cache_policy.server[0].id : var.shared_cloudfront.server_cache_policy_id
+  image_cache_policy_id  = local.own_cloudfront ? aws_cloudfront_cache_policy.image[0].id : var.shared_cloudfront.image_cache_policy_id
+}
+
+# Prod's existing resources keep their identity: they only gain the [0] index.
+moved {
+  from = aws_cloudfront_origin_access_control.s3
+  to   = aws_cloudfront_origin_access_control.s3[0]
+}
+
+moved {
+  from = aws_cloudfront_origin_access_control.lambda
+  to   = aws_cloudfront_origin_access_control.lambda[0]
+}
+
+moved {
+  from = aws_cloudfront_cache_policy.server
+  to   = aws_cloudfront_cache_policy.server[0]
+}
+
+moved {
+  from = aws_cloudfront_cache_policy.image
+  to   = aws_cloudfront_cache_policy.image[0]
+}
+
 resource "aws_cloudfront_origin_access_control" "s3" {
+  count                             = local.own_cloudfront ? 1 : 0
   name                              = "${var.name_prefix}-s3"
   description                       = "${var.name_prefix} assets bucket"
   origin_access_control_origin_type = "s3"
@@ -10,6 +42,7 @@ resource "aws_cloudfront_origin_access_control" "s3" {
 }
 
 resource "aws_cloudfront_origin_access_control" "lambda" {
+  count                             = local.own_cloudfront ? 1 : 0
   name                              = "${var.name_prefix}-lambda"
   description                       = "${var.name_prefix} image Function URL"
   origin_access_control_origin_type = "lambda"
@@ -39,6 +72,7 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
 # headers Next varies RSC responses on; cookies and other headers reach the origin via the origin
 # request policy without being part of the key (dynamic pages are sent with no-store).
 resource "aws_cloudfront_cache_policy" "server" {
+  count       = local.own_cloudfront ? 1 : 0
   name        = "${var.name_prefix}-server"
   min_ttl     = 0
   default_ttl = 0
@@ -64,6 +98,7 @@ resource "aws_cloudfront_cache_policy" "server" {
 }
 
 resource "aws_cloudfront_cache_policy" "image" {
+  count       = local.own_cloudfront ? 1 : 0
   name        = "${var.name_prefix}-image"
   min_ttl     = 0
   default_ttl = 86400
@@ -107,7 +142,7 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id                = local.s3_origin_id
     domain_name              = aws_s3_bucket.assets.bucket_regional_domain_name
     origin_path              = "/${local.assets_prefix}"
-    origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
+    origin_access_control_id = local.s3_oac_id
   }
 
   origin {
@@ -130,7 +165,7 @@ resource "aws_cloudfront_distribution" "this" {
   origin {
     origin_id                = local.image_origin_id
     domain_name              = split("/", aws_lambda_function_url.image.function_url)[2]
-    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    origin_access_control_id = local.lambda_oac_id
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -148,7 +183,7 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods          = ["GET", "HEAD", "OPTIONS"]
     cached_methods           = ["GET", "HEAD"]
     compress                 = true
-    cache_policy_id          = aws_cloudfront_cache_policy.image.id
+    cache_policy_id          = local.image_cache_policy_id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     function_association {
       event_type   = "viewer-request"
@@ -163,7 +198,7 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods          = local.all_methods
     cached_methods           = ["GET", "HEAD"]
     compress                 = true
-    cache_policy_id          = aws_cloudfront_cache_policy.server.id
+    cache_policy_id          = local.server_cache_policy_id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     function_association {
       event_type   = "viewer-request"
@@ -190,7 +225,7 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods          = local.all_methods
     cached_methods           = ["GET", "HEAD"]
     compress                 = true
-    cache_policy_id          = aws_cloudfront_cache_policy.server.id
+    cache_policy_id          = local.server_cache_policy_id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     function_association {
       event_type   = "viewer-request"
