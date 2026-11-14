@@ -256,3 +256,66 @@ describe("dump", () => {
     expect(prepareDumpForRestore(sql)).toBe(["SET statement_timeout = 0;", "SELECT 1;", "\\! id", ""].join("\n"));
   });
 });
+
+// ---------- pax extended headers ----------
+
+/** One pax record "<len> key=value\n" with a self-consistent length. */
+function rec(key: string, value: string): string {
+  const body = ` ${key}=${value}\n`;
+  let len = Buffer.byteLength(body) + 1;
+  while (String(len).length + Buffer.byteLength(body) !== len) len = String(len).length + Buffer.byteLength(body);
+  return `${len}${body}`;
+}
+const paxHdr = (records: string): Spec => ({ name: "./PaxHeaders.1/x", type: "x", data: records });
+
+describe("pax extended headers", () => {
+  const longName = `.open-next/node_modules/.pnpm/${"p".repeat(130)}/node_modules/x/index.js`;
+  const stub = { name: "stub" };
+
+  it("accepts a long path for the next entry only and extracts it", () => {
+    const buf = tar([{ name: ".open-next/", type: "5" }, { name: ".open-next/kcw-build.json", data: BUILD }, paxHdr(rec("path", longName) + rec("mtime", "1700000000.5")), { ...stub, data: "hi" }]);
+    const entries = validateWebArchive(buf);
+    expect(entries.at(-1)!.path).toBe(longName);
+    const dest = mkdtempSync(path.join(tmpdir(), "kcw-pax-"));
+    try {
+      extractEntries(buf, entries, dest);
+      expect(readFileSync(path.join(dest, ...longName.split("/")), "utf8")).toBe("hi");
+    } finally {
+      rmSync(dest, { recursive: true, force: true });
+    }
+  });
+
+  it("applies every path rule to the pax path", () => {
+    for (const p of ["/etc/passwd", ".open-next/../x", "other/file", ".open-next/a\b", `.open-next/${"c".repeat(256)}`, `.open-next/${"d/".repeat(600)}x`]) {
+      expect(() => validateTar(tar([paxHdr(rec("path", p)), { ...stub, data: "1" }]))).toThrow();
+    }
+  });
+
+  it("rejects disallowed keys, global headers and a bad mtime", () => {
+    for (const records of [rec("linkpath", ".open-next/a"), rec("size", "1"), rec("uid", "0"), rec("SCHILY.xattr.a", "b"), rec("mtime", "yesterday"), rec("path", ".open-next/a") + rec("path", ".open-next/b")]) {
+      expect(() => validateTar(tar([paxHdr(records), { ...stub, data: "1" }]))).toThrow();
+    }
+    expect(() => validateTar(tar([{ name: "pax_global_header", type: "g", data: rec("comment", "x") }, { name: ".open-next/a", data: "1" }]))).toThrow(/not allowed/);
+  });
+
+  it("rejects GNU long names", () => {
+    expect(() => validateTar(tar([{ name: "././@LongLink", type: "L", data: ".open-next/a\0" }, { name: ".open-next/a" }]))).toThrow(/not allowed/);
+    expect(() => validateTar(tar([{ name: "././@LongLink", type: "K", data: "x\0" }, { name: ".open-next/a" }]))).toThrow(/not allowed/);
+  });
+
+  it("rejects malformed record lengths and encodings", () => {
+    const good = rec("path", ".open-next/a");
+    for (const records of [good.replace(/^\d+/, "999"), good.replace(/^\d+/, "5"), `0${good}`, good.slice(0, -1), good + "x", "abc path=x\n", " path=x\n", good.replace(/^(\d+) /, "$1  ")]) {
+      expect(() => validateTar(tar([paxHdr(records), { ...stub, data: "1" }]))).toThrow();
+    }
+    const bad = Buffer.concat([Buffer.from("20 path=.open-next/\xff\n", "latin1")]);
+    expect(() => validateTar(tar([{ name: "h", type: "x", data: bad.toString("latin1") }, { ...stub, data: "1" }]))).toThrow();
+  });
+
+  it("rejects an oversized pax header, two in a row, and one that is not followed by a file or directory", () => {
+    expect(() => validateTar(tar([paxHdr(rec("path", `.open-next/${"a".repeat(9000)}`)), { ...stub }]))).toThrow(/too large/);
+    expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a")), paxHdr(rec("path", ".open-next/b")), { ...stub }]))).toThrow(/in a row/);
+    expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a"))]))).toThrow(/without an entry/);
+    expect(() => validateTar(tar([paxHdr(rec("path", ".open-next/a")), { name: "l", type: "2" }]))).toThrow(/not allowed/);
+  });
+});

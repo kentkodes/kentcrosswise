@@ -296,11 +296,12 @@ jobs:
           KCW_ENV: preview
         run: pnpm build-web
 
-      # Uncompressed ustar (the artifact zip compresses it); the trusted side accepts only this format.
+      # Uncompressed pax tar (the artifact zip compresses it; pnpm paths exceed ustar limits). atime/ctime are
+      # dropped to keep headers small; the trusted side accepts only path/mtime/atime/ctime pax records.
       - name: Archive the build (preview-web.tar)
         env:
           OUT_DIR: ${{ runner.temp }}/candidate
-        run: tar --format=ustar -cf "$OUT_DIR/preview-web.tar" -C apps/web .open-next
+        run: tar --format=pax --pax-option=delete=atime,delete=ctime -cf "$OUT_DIR/preview-web.tar" -C apps/web .open-next
 
       - name: Manifest (candidate-manifest.json)
         env:

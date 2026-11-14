@@ -3,10 +3,12 @@
 // code: nothing in it is executed by a privileged job. This file is the whole validation (pure functions
 // over bytes; the CLI is scripts/verify-candidate-artifact.ts, tests in scripts/test/candidate-artifact.test.ts).
 //
-// Archive format: a plain (uncompressed) ustar tar of `.open-next/`, written by `tar --format=ustar`.
+// Archive format: a plain (uncompressed) pax tar of `.open-next/`, written by `tar --format=pax` (pnpm
+// paths in a real build have components longer than ustar allows).
 // The artifact upload zip already compresses it, and an uncompressed tar needs no decompression-bomb
-// handling. Only regular files and directories are accepted. The parser reads ustar headers only: pax,
-// GNU long-name and every link/device/fifo entry are rejected, so names are at most 255 characters.
+// handling. Only regular files and directories are accepted. A pax extended header ('x') is accepted only
+// for the next entry and only with the keys path, mtime, atime, ctime; global pax headers, GNU long names
+// and every link/device/fifo entry are rejected.
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -27,7 +29,9 @@ export const LIMITS = {
   maxTotalBytes: 512 * 1024 * 1024,
   maxFileBytes: 128 * 1024 * 1024,
   maxTarBytes: 600 * 1024 * 1024,
-  maxPathLength: 255,
+  maxPathLength: 1024,
+  maxSegmentLength: 255,
+  maxPaxBytes: 8 * 1024,
   maxDbBytes: 64 * 1024 * 1024,
 } as const;
 
@@ -192,13 +196,49 @@ export function entrySegments(raw: string): string[] {
   if (raw.startsWith("/")) throw new Error(`tar: absolute path rejected: ${JSON.stringify(raw)}`);
   // eslint-disable-next-line no-control-regex
   if (/[\\:\u0000-\u001f\u007f]/.test(raw)) throw new Error(`tar: entry name has a backslash, colon or control character: ${JSON.stringify(raw)}`);
+  if (Buffer.byteLength(raw) > LIMITS.maxPathLength) throw new Error("tar: entry name too long");
   const trimmed = raw.endsWith("/") ? raw.slice(0, -1) : raw;
   const segments = trimmed.split("/");
   for (const s of segments) {
     if (s === "" || s === "." || s === "..") throw new Error(`tar: path segment not allowed: ${JSON.stringify(raw)}`);
+    if (Buffer.byteLength(s) > LIMITS.maxSegmentLength) throw new Error("tar: path component too long");
   }
   if (segments[0] !== OPEN_NEXT_DIR) throw new Error(`tar: entry outside ${OPEN_NEXT_DIR}/: ${JSON.stringify(raw)}`);
   return segments;
+}
+
+const PAX_KEYS = new Set(["path", "mtime", "atime", "ctime"]);
+
+/** Parses a pax extended header strictly ("<len> key=value\n" records, exact lengths); returns the path override. */
+export function parsePax(data: Uint8Array): { path?: string } {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(data);
+  } catch {
+    throw new Error("tar: pax header is not valid UTF-8");
+  }
+  const bytes = Buffer.from(data);
+  const out: { path?: string } = {};
+  const seenKeys = new Set<string>();
+  let pos = 0;
+  while (pos < bytes.length) {
+    let i = pos;
+    while (i < bytes.length && bytes[i]! >= 0x30 && bytes[i]! <= 0x39) i++;
+    if (i === pos || i - pos > 5 || bytes[i] !== 0x20 || (bytes[pos] === 0x30)) throw new Error("tar: malformed pax record length");
+    const len = Number(bytes.subarray(pos, i).toString("latin1"));
+    if (len < i - pos + 4 || pos + len > bytes.length || bytes[pos + len - 1] !== 0x0a) throw new Error("tar: pax record length does not match its content");
+    const body = bytes.subarray(i + 1, pos + len - 1).toString("utf8");
+    const eq = body.indexOf("=");
+    if (eq <= 0) throw new Error("tar: malformed pax record");
+    const key = body.slice(0, eq);
+    const value = body.slice(eq + 1);
+    if (!PAX_KEYS.has(key)) throw new Error(`tar: pax key ${JSON.stringify(key)} is not allowed`);
+    if (seenKeys.has(key)) throw new Error(`tar: duplicate pax key ${key}`);
+    seenKeys.add(key);
+    if (key === "path") out.path = value;
+    else if (!/^[0-9]+(\.[0-9]+)?$/.test(value)) throw new Error(`tar: pax ${key} is not a number`);
+    pos += len;
+  }
+  return out;
 }
 
 /**
@@ -215,6 +255,7 @@ export function validateTar(buf: Uint8Array): TarEntry[] {
   let total = 0;
   let at = 0;
   let ended = false;
+  let pax: { path?: string } | undefined;
   while (at < buf.length) {
     if (isZeroBlock(buf, at)) {
       // End of archive: this and every later block must be zero.
@@ -226,9 +267,22 @@ export function validateTar(buf: Uint8Array): TarEntry[] {
     if (!checksumOk(buf, at)) throw new Error("tar: bad header checksum");
     if (!cstr(buf, at + 257, 6).startsWith("ustar")) throw new Error("tar: not a ustar header (pax and GNU formats are rejected)");
     const type = String.fromCharCode(buf[at + 156] === 0 ? 0x30 : buf[at + 156]!);
+    if (type === "x") {
+      // Extended header for the next entry only; never two in a row, never at the end.
+      if (pax) throw new Error("tar: two pax headers in a row");
+      const psize = octal(buf, at + 124, 12, "pax size");
+      if (psize > LIMITS.maxPaxBytes) throw new Error("tar: pax header too large");
+      const pstart = at + BLOCK;
+      const ppadded = Math.ceil(psize / BLOCK) * BLOCK;
+      if (pstart + ppadded > buf.length) throw new Error("tar: pax data runs past the end of the archive");
+      pax = parsePax(buf.subarray(pstart, pstart + psize));
+      at = pstart + ppadded;
+      continue;
+    }
     const name = cstr(buf, at, 100);
     const prefix = cstr(buf, at + 345, 155);
-    const full = prefix ? `${prefix}/${name}` : name;
+    const full = pax?.path ?? (prefix ? `${prefix}/${name}` : name);
+    pax = undefined;
     if (type !== "0" && type !== "5") {
       throw new Error(`tar: entry type ${JSON.stringify(type)} is not allowed (only regular files and directories): ${JSON.stringify(full)}`);
     }
@@ -259,6 +313,7 @@ export function validateTar(buf: Uint8Array): TarEntry[] {
     at = dataStart + padded;
   }
   if (!ended) throw new Error("tar: missing end-of-archive marker");
+  if (pax) throw new Error("tar: pax header without an entry");
   return entries;
 }
 
