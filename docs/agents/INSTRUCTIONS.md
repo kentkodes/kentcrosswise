@@ -10,7 +10,7 @@ Follow current user instructions and the assigned task's scope within the permis
 
 The Bash allowlists in role playbooks describe the current Claude Code Action adapter (`--allowedTools`), not a universal tool API. Keep their restrictions when using another tool surface; tool availability is not permission. If a required operation is unavailable, report the missing capability and an explicit fallback for the Liaison/owner. No native agent universally discovers all three entrypoints; supply the canonical guide path explicitly when the tool does not load one.
 
-The Q15 source revision closes the earlier `.claude/**`-only detector gap with owner-accepted critical coverage for native/neutral instructions and the trusted automation/configuration/import closure, including every `pnpm-lock.yaml` edit. The owner explicitly accepted this stronger policy for the Q14/Q15 rollout on 2026-10-23; the approved product SPEC is unchanged. Review instruction changes with pinned trusted configuration and preserve role boundaries. See the [security cutover](../runbooks/agent-security-cutover.md) for the accepted source boundary and remaining live gates.
+Governance instructions, the trusted automation and configuration closure and every `pnpm-lock.yaml` edit are owner-critical (rule 10). Review instruction changes against pinned trusted configuration and preserve role boundaries; the [security cutover](../runbooks/agent-security-cutover.md) records the source boundary.
 
 ## Toolchain
 
@@ -63,8 +63,10 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 | Workflow | Trigger | What | AWS role (OIDC) |
 |---|---|---|---|
 | `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `preview` and `prod-plan`; `ci/required` aggregates them and is the required check | `kcw-gh-ci` (preview), `kcw-gh-plan` (read-only prod plan) |
-| `deploy.yml` | push to `main` (environment `prod`) | strict prod migrate using `kcw/prod/migrator` (missing or invalid configuration fails deployment, since #23), prod `build-web`, `build-lambdas`, `terraform apply infra/prod` (uploads the builds), smoke check | `kcw-gh-deploy` |
+| `deploy.yml` | push to `main` (environment `prod`) | strict prod migrate using `kcw/prod/migrator` (missing or invalid configuration fails deployment), prod `build-web`, `build-lambdas`, `terraform apply infra/prod` (uploads the builds), CloudFront invalidation of `/*`, build-id smoke check | `kcw-gh-deploy` |
 | `preview-gc.yml` | PR closed; nightly; manual (`dry_run`, default true) | removes preview leftovers of closed PRs or older than 24 h, then `check-preview-clean` | `kcw-gh-ci` (sweep job in environment `preview-gc`) |
+| `essay-ingest.yml` | manual, `main` only (environment `essay-ingest`) | rsync Gutenberg books, extract, validate, store text in the private bucket; optional `reextract` and `categorize` | `kcw-gh-essay-ingest` |
+| `agent-{developer,qa,scraper,docs}.yml` | orchestrator dispatch; inert while `KCW_AGENT_WORKFLOWS_ENABLED` is not `true` | prepare, model work, publish and report jobs (see "Isolated cloud workflow boundary" below) | `kcw-gh-agent-model`, `kcw-gh-agent-{role}` |
 
 Preview lifecycle (`preview` job, one per PR, names `kcw-pr-<n>`): pre-clean a stale preview of the same PR → Neon branch `preview/pr-<n>` from `base` in the CI project (`.github/actions/neon-preview`, 3 h TTL) → `pnpm migrate` + `pnpm seed` → `KCW_ENV=preview pnpm build-web` → `terraform apply infra/preview` (state key `preview/pr-<n>.tfstate`, DB URL in SSM `/kcw/preview/pr-<n>/database-url`) → Playwright with `BASE_URL` and `KCW_E2E_LOGIN` (from `kcw/ci`, masked) → teardown with `if: always()`: destroy, delete state object, delete Neon branch, `check-preview-clean --retries 5`. A new push cancels the running CI of that PR; its teardown still runs, and the next run or `preview-gc` removes anything a cut-off teardown left.
 
@@ -72,9 +74,9 @@ No Playwright report or trace is uploaded: a trace would contain the typed previ
 
 `prod-plan` uploads two artifacts: `prod-plan-summary` (the summary alone) and `merge-rules-input` (summary + lockfile diff in one file, which the orchestrator fetches for merge-rules). It checks out with `fetch-depth: 2`, so the base lockfile is `HEAD^1` of the PR merge commit.
 
-Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_DEVELOPER_ARN`, `AWS_ROLE_AGENT_QA_ARN`, `AWS_ROLE_AGENT_SCRAPER_ARN`, `AWS_ROLE_AGENT_DOCS_ARN`, `AWS_ROLE_AGENT_MODEL_ARN`, `KCW_AGENT_WORKFLOWS_ENABLED`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
+Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_DEVELOPER_ARN`, `AWS_ROLE_AGENT_QA_ARN`, `AWS_ROLE_AGENT_SCRAPER_ARN`, `AWS_ROLE_AGENT_DOCS_ARN`, `AWS_ROLE_AGENT_MODEL_ARN`, `AWS_ROLE_ESSAY_INGEST_ARN`, `KCW_AGENT_WORKFLOWS_ENABLED`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
 
-Once the `main` ruleset is applied (start of Phase 2), every change to `main` is a squash-merged PR with `ci/required` green.
+Every change to `main` is a squash-merged PR with `ci/required` green.
 
 ## Layout
 
@@ -91,9 +93,10 @@ packages/core/       shared types; src/models = model providers (Anthropic, Deep
 packages/db/         migrations/*.sql, runner, synthetic seed (seeds/)
 packages/secrets/    getSecret/putSecret (Secrets Manager; names starting with "/" are SSM SecureString)
 packages/demo-data/  deterministic simulated data for public pages
-packages/essays/     essays feature (stub)
+packages/essays/     essays pipeline: discovery, crawl, fetch, extract (gutenberg-txt), match, validate, registry, db
 packages/xray/       X-ray registry (stub)
-agents/merge-rules/  approved-deps.json (dependency allowlist); detector arrives in P2-04
+agents/merge-rules/  approved-deps.json (dependency allowlist) and the merge-rules evaluator
+agents/report/       kcw-report: the last step of every agent workflow sends usage and events to the orchestrator queue
 agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in schema lg (thread = task-<id>);
                      Lambda entry src/lambda.ts. Tests run node-postgres against PGlite served over the
                      wire protocol (test/pg-socket.ts), connected as orch_rw. src/github
@@ -102,7 +105,6 @@ agents/orchestrator/ SQS handler -> LangGraph graph, Postgres checkpointer in sc
                      TOKEN_PERMISSIONS), FakeGitHubClient for graph tests. src/graph
                      (`@kcw/orchestrator/graph`) = the task graph (PR loop of DESIGN §4.2-§4.3:
                      machine.ts state machine, store.ts DB as orch_rw, messages.ts queue parsing).
-                     lambda.ts runs the task graph (merged PR #26); live P2-18 verification remains held as recorded in HANDOFF
 scripts/             repo scripts (Node/TS via tsx), lib/ (logic), test/ (Vitest), repo-settings/ (expected ruleset)
 infra/bootstrap/     owner-applied once: state bucket, GitHub OIDC roles, empty secrets, certificate
 infra/prod/          prod composition (web + orchestrator); infra/preview/ = one per-PR web stack (D21)
@@ -128,7 +130,7 @@ docs/                specs, design, research, agent playbooks, runbooks (owner)
 7. **Scripts use Node: JavaScript runs with `node`, TypeScript with `tsx`**, never bash or PowerShell, so they work on Windows and Linux. Use `node:path`, no shell-specific syntax, no symlinks. Workflow `run:` steps are bash on Ubuntu and stay short; logic belongs in `scripts/`.
 8. **Tests use fakes, not cloud services.** DB tests run on PGlite (in-memory Postgres); AWS clients, `fetch` and model providers are injected and faked.
 9. **Dependencies:** a new dependency must be on [agents/merge-rules/approved-deps.json](../../agents/merge-rules/approved-deps.json) (exact names or scope globs such as `@aws-sdk/*`), otherwise the PR is critical and needs the owner. **Editing `approved-deps.json` itself is a critical change.** The owner-accepted Q15 policy also gates every `pnpm-lock.yaml` edit, including version/integrity changes for preapproved names. A new `package.json` must be added to `PACKAGE_FILES` in `scripts/test/approved-deps.test.ts`.
-10. **Critical changes (owner approval):** SQL that drops or renames; auth, secrets or IAM; `.github/**`; `.claude/**`; prod Terraform (`infra/prod`, `infra/modules/**`, `infra/bootstrap`) and any infrastructure change in the prod plan summary; any `docs/**/SPEC.md`; new dependencies off the allowlist or edits to it; new services; anything that raises cost. Historical D8 treated DESIGN.md, AGENTS.md and `docs/agents/*` as noncritical. The owner-accepted Q15 policy makes governance instructions and the trusted import/configuration/tooling closure owner-critical, including root `tsconfig.json`, `tsconfig.base.json` and all lockfile edits; routine design status and factual `docs/HANDOFF.md` remain ordinarily noncritical. The owner accepted this expansion for the rollout on 2026-10-23; it grants no role permission to edit owner-only paths.
+10. **Critical changes (owner approval):** SQL that drops or renames; auth, secrets or IAM; `.github/**`; `.claude/**`; prod Terraform (`infra/prod`, `infra/modules/**`, `infra/bootstrap`) and any infrastructure change in the prod plan summary; any `docs/**/SPEC.md`; new dependencies off the allowlist or edits to it; new services; anything that raises cost. Governance instructions and the trusted import/configuration/tooling closure are also owner-critical, including root `tsconfig.json`, `tsconfig.base.json` and all lockfile edits; routine design status and factual `docs/HANDOFF.md` updates are not. This grants no role permission to edit owner-only paths.
 11. Migrations are append-only: never edit an applied file (the runner checks checksums); add `NNNN_name.sql`.
 12. Never run `terraform apply`/`destroy`, never change GitHub settings, never call AWS with real credentials outside CI. Only the owner (runbooks) and the workflows do that.
 
