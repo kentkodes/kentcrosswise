@@ -308,6 +308,13 @@ jobs:
           OUT_DIR: ${{ runner.temp }}/candidate
         run: pnpm candidate-manifest --dir "$OUT_DIR"
 
+      # Early warning only (this job is candidate-controlled; the trusted verify job is the authority): the
+      # same validator the trusted side runs, so link entries or limit overruns fail this PR before merge.
+      - name: Self-check the artifact with the trusted validator
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
+        run: pnpm verify-candidate verify --dir "$OUT_DIR"
+
       - name: Upload candidate-preview
         uses: actions/upload-artifact@v7
         with:
