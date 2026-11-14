@@ -7,7 +7,9 @@ Current backlog, 2026-11-13 UTC. Current state and holds are in [HANDOFF.md](HAN
 | ID | Open point |
 |---|---|
 | R1 | Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private hub's contacts and mood are not built). Its "Simulated data" frame also shows real agent rows. |
-| R2 | The planner calls Opus 5.5 with `max_tokens` 1024 at high effort. Opus 5.5 always thinks, so thinking can use the whole limit and leave no JSON; neither model provider checks `stop_reason`. Raise the limit, check `stop_reason` (`max_tokens`, `refusal`), and consider structured output instead of hand-parsed JSON. |
+| R2 | The planner calls Opus 5.5 with `max_tokens` 1024 at high effort. Opus 5.5 always thinks, so thinking can use the whole limit and leave no JSON; neither model provider checks `stop_reason`. The 2026-11-11 canary already used 798 output tokens over two calls for a one-line task. Raise the limit, check `stop_reason` (`max_tokens`, `refusal`), and consider structured output instead of hand-parsed JSON. |
+
+| R3 | Worker context cost: the canary's one-line docs task sent about 1.1M input tokens to DeepSeek over about 40 turns, because each turn re-sends the large instruction, handoff and design files the playbooks require. Shorter required reading (this cleanup) is the first step; measure the next task's input tokens before doing more. |
 
 ## Essays (Phase 5)
 

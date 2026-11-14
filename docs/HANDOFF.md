@@ -28,7 +28,8 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 - 2026-11-13: live `/`, `/demo`, `/office` and `/bot` render. `/office` shows the Paused badge and a replay of the latest recorded events (last activity 2026-11-11).
 - Last recorded (2026-11-12): `agents_paused = true`, `KCW_AGENT_WORKFLOWS_ENABLED = false`, profile `final`. The owner checked the essay reader, `/console` and `/essays` signed in.
-- Not verified: a live planner run on Opus 5.5; the orchestrator's external-close path from #78 against a real task; Safari, Firefox and physical phones; the cases listed under "Runtime cases not yet exercised" in [OPEN-POINTS.md](OPEN-POINTS.md).
+- 2026-11-11 canary (task 4, one-line docs change): planner on Opus 5.5 (2 calls, 654 input / 798 output tokens), Developer and QA on DeepSeek (about 1.1M input / 11K output tokens), merged as #76 and deployed.
+- Not verified: a planner run on a larger task; the orchestrator's external-close path from #78 against a real task; Safari, Firefox and physical phones; the cases listed under "Runtime cases not yet exercised" in [OPEN-POINTS.md](OPEN-POINTS.md).
 
 ## Decisions and security holds
 
