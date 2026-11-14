@@ -42,4 +42,4 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 1. Finish and merge the `/essays` list redesign and the H2 capture box (owner merge decision on each PR).
 2. Next MVP area in the accepted order: H3 routing (DeepSeek routing, low-confidence inbox, corrections), then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
-3. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and the planner's output-token limit (see OPEN-POINTS R1 and R2).
+3. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and worker context cost (see OPEN-POINTS R1 and R3).

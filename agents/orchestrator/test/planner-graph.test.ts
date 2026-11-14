@@ -194,7 +194,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     const [a] = await pendingApprovals(id);
     expect(a!.kind).toBe("critical_pr");
     expect(a!.reasons).toEqual([
-      "Task failed: The planner model returned invalid output twice (subtasks is not an array).",
+      "Task failed: The planner model returned unusable output (subtasks is not an array).",
       "Approve to plan the task again; reject to mark the task failed.",
     ]);
     expect(await sql("SELECT 1 AS one FROM inbox_items WHERE ref_id = $1", [a!.id])).toEqual([{ one: 1 }]);
@@ -212,7 +212,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     replies.public_title.push('{"title": 42}', '{"title": "Add a page"}');
     await start(id);
     const [a] = await pendingApprovals(id);
-    expect(a!.reasons[0]).toBe("Task failed: The public-title model returned invalid output twice (body is not a string).");
+    expect(a!.reasons[0]).toBe("Task failed: The public-title model returned unusable output (body is not a string).");
     expect(await decide(id, a!.id, "rejected")).toBe("applied");
     expect(await task(id)).toMatchObject({ status: "failed" });
     expect(gh.calls).toEqual([]);

@@ -57,6 +57,35 @@ describe("planner node", () => {
     expect(provider.calls).toHaveLength(2);
   });
 
+  it("a reply stopped at the token limit throws PlannerOutputError at once (no retry)", async () => {
+    const provider = new FakeProvider({ complete: { text: "", stop: "max_tokens" } });
+    const err = await new ModelPlanner({ provider }).split(REQ).catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: "PlannerOutputError", node: "planner", reason: "reply stopped: max_tokens" });
+    expect(provider.calls).toHaveLength(1);
+  });
+
+  it("a refused reply throws PlannerOutputError at once in plan() (no retry)", async () => {
+    const provider = new FakeProvider({ complete: { text: "", stop: "refusal" } });
+    await expect(new ModelPlanner({ provider }).plan(REQ)).rejects.toMatchObject({
+      name: "PlannerOutputError",
+      node: "public_title",
+      reason: "reply stopped: refusal",
+    });
+    expect(provider.calls).toHaveLength(1);
+  });
+
+  it("asks with 8000 max tokens by default", async () => {
+    const limits: (number | undefined)[] = [];
+    const provider = new FakeProvider({
+      complete: (req) => {
+        limits.push(req.maxTokens);
+        return { text: '{"subtasks": ["Add a /healthz route"]}' };
+      },
+    });
+    await new ModelPlanner({ provider }).split(REQ);
+    expect(limits).toEqual([8000]);
+  });
+
   it("propagates provider errors unchanged", async () => {
     const provider = new FakeProvider({ complete: new Error("HTTP 529") });
     await expect(new ModelPlanner({ provider }).split(REQ)).rejects.toThrow("HTTP 529");

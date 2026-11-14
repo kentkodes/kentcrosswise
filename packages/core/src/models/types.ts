@@ -41,6 +41,8 @@ export interface CompleteRequest {
 
 export interface CompleteResult {
   text: string;
+  /** Why the reply ended: "max_tokens" or "refusal" means the text is cut off or withheld. */
+  stop: "end" | "max_tokens" | "refusal";
   model: string;
   provider: string;
   fallback?: FallbackInfo;

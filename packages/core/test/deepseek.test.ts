@@ -123,7 +123,7 @@ describe("DeepseekProvider", () => {
     });
     await p.classify(TEXT, LABELS);
     const done = await p.complete({ prompt: "hi", system: "be brief" });
-    expect(done).toEqual({ text: "Hello", model: DEFAULT_DEEPSEEK_MODEL, provider: "deepseek" });
+    expect(done).toEqual({ text: "Hello", stop: "end", model: DEFAULT_DEEPSEEK_MODEL, provider: "deepseek" });
     expect(usage).toEqual([
       { provider: "deepseek", model: RETURNED, operation: "classify", inputTokens: 120, outputTokens: 7 },
       { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, operation: "complete", inputTokens: 0, outputTokens: 0 },
@@ -137,6 +137,23 @@ describe("DeepseekProvider", () => {
     expect(body.messages).toEqual([{ role: "system", content: "sys" }, { role: "user", content: "hi" }]);
     expect(body.max_tokens).toBe(9);
     expect(body).not.toHaveProperty("tools");
+  });
+
+  it.each([
+    ["length", "max_tokens"],
+    ["content_filter", "refusal"],
+    ["stop", "end"],
+  ])("complete maps finish_reason %s to %s", async (finish_reason, stop) => {
+    const f = queue(json(200, { model: "m-1", choices: [{ message: { content: "x" }, finish_reason }] }));
+    expect(await make(f).complete({ prompt: "hi" })).toMatchObject({ stop });
+  });
+
+  it("classify throws a non-retryable ProviderError when finish_reason is length (one call only)", async () => {
+    const f = queue(json(200, { model: "m-1", choices: [{ message: { content: "" }, finish_reason: "length" }] }));
+    const err = await make(f).classify(TEXT, LABELS).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(err).toMatchObject({ message: "DeepSeek response stopped: max_tokens", retryable: false });
+    expect(f).toHaveBeenCalledTimes(1);
   });
 
   it("needs at least two labels", async () => {
