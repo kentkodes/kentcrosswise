@@ -48,7 +48,8 @@ describe("0005 relay_rw", () => {
          FROM pg_class c, aclexplode(c.relacl) a
         WHERE a.grantee = 'relay_rw'::regrole ORDER BY 1, 2`,
     );
-    expect(tables.rows).toEqual([{ obj: "inbound_events", priv: "DELETE" }]);
+    // 0011: the relay no longer releases a claim, so it has no table-level privilege at all.
+    expect(tables.rows).toEqual([]);
 
     const columns = await db.query<{ obj: string; priv: string }>(
       `SELECT c.relname || '.' || at.attname AS obj, a.privilege_type AS priv
@@ -60,6 +61,13 @@ describe("0005 relay_rw", () => {
       "SELECT agent_dispatches.role",
       "SELECT agent_dispatches.run_id",
       "SELECT agent_dispatches.task_id",
+      // 0011: the claim and its outbox row in one statement, then mark sent (agents/webhook-relay/src/store.ts).
+      "INSERT orchestrator_outbox.body",
+      "INSERT orchestrator_outbox.group_id",
+      "INSERT orchestrator_outbox.message_key",
+      "SELECT orchestrator_outbox.id",
+      "SELECT orchestrator_outbox.sent_at",
+      "UPDATE orchestrator_outbox.sent_at",
       "INSERT inbound_events.delivery_id",
       "SELECT inbound_events.delivery_id",
       "INSERT inbound_events.source",
@@ -90,7 +98,9 @@ describe("0005 relay_rw", () => {
       "INSERT INTO inbound_events (delivery_id, source) VALUES ($1, $2) ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id";
     expect(await asRelay(claim, ["d-1", "github"])).toEqual([{ delivery_id: "d-1" }]);
     expect(await asRelay(claim, ["d-1", "github"])).toEqual([]);
-    await asRelay("DELETE FROM inbound_events WHERE delivery_id = $1", ["d-1"]);
+    // 0011: no release any more.
+    await expect(asRelay("DELETE FROM inbound_events WHERE delivery_id = $1", ["d-1"])).rejects.toThrow(/permission denied/);
+    await db.exec("DELETE FROM inbound_events WHERE delivery_id = 'd-1'");
     for (const col of ["pr_number", "github_issue"]) {
       const rows = await asRelay<{ id: number }>(`SELECT id FROM tasks WHERE ${col} = $1 ORDER BY id DESC LIMIT 1`, [
         col === "pr_number" ? 12 : 11,
@@ -122,6 +132,7 @@ describe("0005 relay_rw", () => {
       "SELECT received_at FROM inbound_events",
       "INSERT INTO inbound_events (delivery_id, source, received_at) VALUES ('d-2', 'github', now())",
       "UPDATE inbound_events SET source = 'x'",
+      "DELETE FROM inbound_events",
       "SELECT owner_text FROM tasks",
       "SELECT * FROM tasks",
       "INSERT INTO tasks (source, owner_text) VALUES ('github', 'x')",

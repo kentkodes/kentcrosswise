@@ -111,8 +111,8 @@ function lazyStore(open: () => Promise<OpenedDb>): { store: RelayStore; close: (
   const get = async () => sqlRelayStore((await (opened ??= open())).db);
   return {
     store: {
-      claimDelivery: async (id, source) => (await get()).claimDelivery(id, source),
-      releaseDelivery: async (id) => (await get()).releaseDelivery(id),
+      claimAndEnqueue: async (id, source, group, body) => (await get()).claimAndEnqueue(id, source, group, body),
+      markOutboxSent: async (outboxId) => (await get()).markOutboxSent(outboxId),
       findTaskByPr: async (n) => (await get()).findTaskByPr(n),
       findTaskByIssue: async (n) => (await get()).findTaskByIssue(n),
       findDispatch: async (runId) => (await get()).findDispatch(runId),

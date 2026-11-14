@@ -112,7 +112,7 @@ describe("relay: run id mapping", () => {
     t.store.byRun.set(RUN, { task_id: 3, role: "developer" });
     const r = await t.run(request(replay()));
     expect(r).toEqual({ status: 200, body: { result: "forwarded" } });
-    expect(t.store.calls).toEqual(["dispatch", "claim"]);
+    expect(t.store.calls).toEqual(["dispatch", "claim", "mark"]);
     expect(t.sleeps).toEqual([]);
     expect(t.queue.sent).toHaveLength(1);
     const m = t.queue.sent[0]!;

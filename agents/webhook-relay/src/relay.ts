@@ -1,6 +1,6 @@
 // The relay's request logic (DESIGN §1, §4.3), independent of Lambda: verify the signature, drop
-// senders that are not our Apps or the owner, normalize, resolve the task, dedupe by delivery id,
-// enqueue. Responses never echo the request.
+// senders that are not our Apps or the owner, normalize, resolve the task, dedupe by delivery id
+// and store the message in the outbox (one statement), then send it. Responses never echo the request.
 import { threadIdOf } from "@kcw/core/events";
 import { normalize, senderOf } from "./normalize";
 import type { GitHubEventMessage, OrchestratorQueue } from "./queue";
@@ -17,7 +17,8 @@ export interface RelayRequest {
   body: Uint8Array;
 }
 
-export type RelayResult = "forwarded" | "duplicate" | "ignored" | "pong" | "rejected" | "error";
+/** `queued`: accepted and stored in the outbox, but not (confirmed) sent; the sweeper delivers it. */
+export type RelayResult = "forwarded" | "queued" | "duplicate" | "ignored" | "pong" | "rejected" | "error";
 
 export interface RelayResponse {
   status: number;
@@ -170,30 +171,30 @@ export async function handleDelivery(req: RelayRequest, deps: RelayDeps): Promis
     resume: { event: n.value.event, head_sha: n.value.head_sha, payload: forwarded },
   };
 
-  let claimed: boolean;
+  // The claim and the outbox row commit together (one statement). From here the delivery is
+  // durable: a failed or lost send is delivered by the sweeper's outbox part, so GitHub must not
+  // redeliver (it would be dropped as a duplicate anyway).
+  let outboxId: number | null;
   try {
-    claimed = await deps.store.claimDelivery(delivery, GITHUB_SOURCE);
+    outboxId = await deps.store.claimAndEnqueue(delivery, GITHUB_SOURCE, message.thread_id, JSON.stringify(message));
   } catch (err) {
     return done(respond(500, "error", "db"), errName(err));
   }
-  if (!claimed) return done(respond(200, "duplicate"), minutesNote);
+  if (outboxId === null) return done(respond(200, "duplicate"), minutesNote);
 
+  const detail = `${message.thread_id} ${message.resume.event}${minutesNote ? ` ${minutesNote}` : ""}${agentRun ? ` map=${agentRun}` : ""}`;
   try {
     await deps.queue.send(message);
   } catch (err) {
-    // Undo the claim so a redelivery of this id is processed, then report the failure to GitHub.
-    let released = "released";
-    try {
-      await deps.store.releaseDelivery(delivery);
-    } catch {
-      released = "release_failed";
-    }
-    return done(respond(502, "error", "queue"), `${errName(err)} ${released}`);
+    return done(respond(202, "queued", "send"), `${errName(err)} ${detail}`);
   }
-  return done(
-    respond(200, "forwarded"),
-    `${message.thread_id} ${message.resume.event}${minutesNote ? ` ${minutesNote}` : ""}${agentRun ? ` map=${agentRun}` : ""}`,
-  );
+  try {
+    await deps.store.markOutboxSent(outboxId);
+  } catch (err) {
+    // Sent but not marked: the sweeper resends the same key; the consumer's receipt drops the repeat.
+    return done(respond(202, "queued", "mark"), `${errName(err)} ${detail}`);
+  }
+  return done(respond(200, "forwarded"), detail);
 }
 
 /** Only the error class/AWS error name: messages may contain connection strings. */

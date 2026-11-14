@@ -4,14 +4,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createTask,
   decideApproval,
-  decidedApproval,
   getFlags,
   InputError,
   listApprovals,
   listEvents,
   listTasks,
   parseTaskId,
-  queuedTaskExists,
   setFlag,
 } from "../src/server/console";
 import { runAs, type Queryable } from "../src/server/db";
@@ -53,7 +51,31 @@ describe("console data as web_rw", () => {
     // A console task with no public title is "Private task" in the public view either way.
     const view = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM tasks WHERE id = $1 AND public_title IS NULL", [pub]);
     expect(view.rows[0]!.n).toBe(1);
-    await expect(asRw((db) => queuedTaskExists(db, id))).resolves.toBe(true);
+    // The task.created outbox row was committed with the task.
+    const outbox = await pg.query<{ message_key: string; group_id: string; body: string; sent_at: Date | null }>(
+      "SELECT message_key, group_id, body, sent_at FROM orchestrator_outbox WHERE message_key = $1",
+      [`task-created-${id}`],
+    );
+    expect(outbox.rows).toEqual([
+      {
+        message_key: `task-created-${id}`,
+        group_id: `task-${id}`,
+        body: JSON.stringify({ type: "task.created", task_id: id, message_key: `task-created-${id}` }),
+        sent_at: null,
+      },
+    ]);
+  });
+
+  it("a task whose transaction rolls back leaves no outbox row (same transaction)", async () => {
+    const before = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM orchestrator_outbox");
+    await expect(
+      asRw(async (db) => {
+        await createTask(db, { ownerText: "Rolled back", isPrivate: true });
+        throw new Error("later step failed");
+      }),
+    ).rejects.toThrow("later step failed");
+    const after = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM orchestrator_outbox");
+    expect(after.rows[0]!.n).toBe(before.rows[0]!.n);
   });
 
   it("rejects empty and oversized task text", async () => {
@@ -73,7 +95,7 @@ describe("console data as web_rw", () => {
     await expect(asRw((db) => listEvents(db, []))).resolves.toEqual([]);
   });
 
-  it("marks docs tasks (children of a merged task, source github) and never resends them", async () => {
+  it("marks docs tasks (children of a merged task, source github)", async () => {
     const merged = await asRw((db) => createTask(db, { ownerText: "Merged work", isPrivate: true }));
     const { rows } = await pg.query<{ id: string }>(
       "INSERT INTO tasks (parent_id, source, owner_text, is_private) VALUES ($1, 'github', 'Docs-keeper update after PR #9.', true) RETURNING id",
@@ -88,8 +110,6 @@ describe("console data as web_rw", () => {
     expect(tasks.find((t) => t.id === docs)).toMatchObject({ parentId: merged, isDocs: true, status: "queued" });
     expect(tasks.find((t) => t.id === subtask)).toMatchObject({ parentId: merged, isDocs: false });
     expect(tasks.find((t) => t.id === merged)).toMatchObject({ parentId: null, isDocs: false });
-    await expect(asRw((db) => queuedTaskExists(db, docs))).resolves.toBe(false);
-    await expect(asRw((db) => queuedTaskExists(db, subtask))).resolves.toBe(true);
     await pg.query("DELETE FROM tasks WHERE id = ANY($1::bigint[])", [[docs, subtask, merged]]);
   });
 
@@ -122,8 +142,18 @@ describe("console data as web_rw", () => {
     expect(after.decided[0]).toMatchObject({ id: SEED_APPROVAL_1, status: "approved", note: "ok" });
     const inbox = await pg.query<{ status: string }>("SELECT status FROM inbox_items WHERE ref_id = $1", [SEED_APPROVAL_1]);
     expect(inbox.rows[0]!.status).toBe("done");
-    await expect(asRw((db) => decidedApproval(db, SEED_APPROVAL_1))).resolves.toMatchObject({ decision: "approved" });
-    await expect(asRw((db) => decidedApproval(db, SEED_APPROVAL_2))).resolves.toBeUndefined();
+    // The seed approval has a task, so its owner.decision row was committed with the decision, once.
+    const outbox = await pg.query<{ message_key: string; group_id: string; body: string }>(
+      "SELECT message_key, group_id, body FROM orchestrator_outbox WHERE message_key = $1",
+      [`approval-${SEED_APPROVAL_1}`],
+    );
+    expect(outbox.rows).toHaveLength(1);
+    expect(outbox.rows[0]!.group_id).toBe(`task-${res.decided ? res.taskId : 0}`);
+    expect(JSON.parse(outbox.rows[0]!.body)).toMatchObject({
+      type: "owner.decision",
+      message_key: `approval-${SEED_APPROVAL_1}`,
+      resume: { approval_id: SEED_APPROVAL_1, decision: "approved" },
+    });
   });
 
   it("rejects bad approval ids and decisions", async () => {
@@ -149,7 +179,7 @@ describe("parseTaskId", () => {
 describe("orchestrator queue", () => {
   it("task.created matches the orchestrator handler's format and FIFO group", () => {
     expect(taskCreatedMessage(7)).toEqual({
-      body: { type: "task.created", task_id: 7 },
+      body: { type: "task.created", task_id: 7, message_key: "task-created-7" },
       groupId: "task-7",
       dedupId: "task-created-7",
     });
@@ -161,6 +191,7 @@ describe("orchestrator queue", () => {
         type: "owner.decision",
         task_id: 7,
         thread_id: "task-7",
+        message_key: `approval-${SEED_APPROVAL_1}`,
         resume: { approval_id: SEED_APPROVAL_1, decision: "rejected" },
       },
       groupId: "task-7",
@@ -177,7 +208,7 @@ describe("orchestrator queue", () => {
     await expect(queue.send(taskCreatedMessage(3))).resolves.toBe("sent");
     expect(sent[0]!.input).toEqual({
       QueueUrl: url,
-      MessageBody: '{"type":"task.created","task_id":3}',
+      MessageBody: '{"type":"task.created","task_id":3,"message_key":"task-created-3"}',
       MessageGroupId: "task-3",
       MessageDeduplicationId: "task-created-3",
     });

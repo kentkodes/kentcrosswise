@@ -1,10 +1,12 @@
 // Messages from the boss console and inbox to the orchestrator (DESIGN §4.2 step 1, §4.3, D5).
 // All orchestrator inputs go to the SQS FIFO queue orchestrator-in with MessageGroupId = the task's
 // thread id (task-<id>) and an explicit MessageDeduplicationId (the queue has no content-based dedupe).
+// Every message is first committed to orchestrator_outbox with the change it announces (outbox.ts),
+// and carries its logical `message_key` (= the deduplication id) for the consumer's receipts.
 //
 // KCW_ORCHESTRATOR_QUEUE_URL set (prod): messages are sent. Unset (previews have no orchestrator):
-// the queue is disabled, nothing is sent, and the pages say so; the database writes still happen,
-// so previews can test everything up to the queue.
+// the queue is disabled, nothing is sent, and the pages say so; the database writes (outbox row
+// included) still happen, so previews can test everything up to the queue.
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
 export const QUEUE_URL_ENV = "KCW_ORCHESTRATOR_QUEUE_URL";
@@ -13,10 +15,16 @@ export type Decision = "approved" | "rejected";
 
 /** What the orchestrator's handler parses (agents/orchestrator/src/handler.ts). */
 export type OrchestratorMessage =
-  | { type: "task.created"; task_id: number }
+  | { type: "task.created"; task_id: number; message_key: string }
   // §4.3 "Owner decisions": the resume value for the thread waiting on the owner. The P2-08 handler
   // drops unknown types without retrying; the P2-10 graph consumes this one.
-  | { type: "owner.decision"; task_id: number; thread_id: string; resume: { approval_id: string; decision: Decision } };
+  | {
+      type: "owner.decision";
+      task_id: number;
+      thread_id: string;
+      message_key: string;
+      resume: { approval_id: string; decision: Decision };
+    };
 
 export interface QueuedMessage {
   body: OrchestratorMessage;
@@ -27,20 +35,24 @@ export interface QueuedMessage {
 export const threadIdOf = (taskId: number) => `task-${taskId}`;
 
 export function taskCreatedMessage(taskId: number): QueuedMessage {
-  return { body: { type: "task.created", task_id: taskId }, groupId: threadIdOf(taskId), dedupId: `task-created-${taskId}` };
+  const key = `task-created-${taskId}`;
+  return { body: { type: "task.created", task_id: taskId, message_key: key }, groupId: threadIdOf(taskId), dedupId: key };
 }
 
 export function ownerDecisionMessage(taskId: number, approvalId: string, decision: Decision): QueuedMessage {
+  // One decision per approval: a resend within SQS's 5-minute window is deduplicated, a later one
+  // by the consumer's receipt.
+  const key = `approval-${approvalId}`;
   return {
     body: {
       type: "owner.decision",
       task_id: taskId,
       thread_id: threadIdOf(taskId),
+      message_key: key,
       resume: { approval_id: approvalId, decision },
     },
     groupId: threadIdOf(taskId),
-    // One decision per approval: a resend within SQS's 5-minute window is deduplicated.
-    dedupId: `approval-${approvalId}`,
+    dedupId: key,
   };
 }
 

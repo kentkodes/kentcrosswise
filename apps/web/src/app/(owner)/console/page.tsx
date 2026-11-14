@@ -13,7 +13,7 @@ import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { taskTone } from "../tones";
 import { EssayStatusSection } from "./essay-status";
-import { createTaskAction, resendTaskAction, setFlagAction } from "./actions";
+import { createTaskAction, setFlagAction } from "./actions";
 
 export const metadata: Metadata = { title: "Boss console | Kentcrosswise" };
 
@@ -57,8 +57,7 @@ function FlagSwitch({ name, label, on }: { name: keyof Flags; label: string; on:
   );
 }
 
-function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]; canSend: boolean }) {
-  const showResend = task.status === "queued" && canSend && !task.isDocs;
+function TaskItem({ task, events }: { task: TaskRow; events: EventRow[] }) {
   return (
     <li id={`task-${task.id}`} data-task-id={task.id}>
       <p className={s.taskMeta}>
@@ -83,32 +82,22 @@ function TaskItem({ task, events, canSend }: { task: TaskRow; events: EventRow[]
       <p data-field="text" className={s.taskText}>
         {task.ownerText}
       </p>
-      {events.length > 0 || showResend ? (
+      {events.length > 0 ? (
         <div className={s.endRow}>
-          {events.length > 0 ? (
-            <details className={s.events}>
-              <summary className={s.summary}>{events.length} events</summary>
-              <ol className={s.eventList}>
-                {events.map((e) => (
-                  <li key={e.id}>
-                    <time className={s.mono} dateTime={e.ts}>
-                      {formatUtc(e.ts)}
-                    </time>{" "}
-                    <strong className={s.emph}>{e.agent}</strong>{" "}
-                    <span className={s.muted}>{e.type.replaceAll("_", " ")}</span>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
-          {showResend ? (
-            <form action={resendTaskAction} className={s.end}>
-              <input type="hidden" name="task_id" value={task.id} />
-              <button className={s.button} type="submit">
-                Resend to orchestrator
-              </button>
-            </form>
-          ) : null}
+          <details className={s.events}>
+            <summary className={s.summary}>{events.length} events</summary>
+            <ol className={s.eventList}>
+              {events.map((e) => (
+                <li key={e.id}>
+                  <time className={s.mono} dateTime={e.ts}>
+                    {formatUtc(e.ts)}
+                  </time>{" "}
+                  <strong className={s.emph}>{e.agent}</strong>{" "}
+                  <span className={s.muted}>{e.type.replaceAll("_", " ")}</span>
+                </li>
+              ))}
+            </ol>
+          </details>
         </div>
       ) : null}
     </li>
@@ -157,7 +146,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
             {data.tasks.length === 0 ? <p className={`${s.note} ${s.pad}`}>No tasks yet.</p> : null}
             <ol data-testid="tasks" reversed className={s.list}>
               {data.tasks.map((t) => (
-                <TaskItem key={t.id} task={t} events={data.events.filter((e) => e.taskId === t.id)} canSend={queue.enabled} />
+                <TaskItem key={t.id} task={t} events={data.events.filter((e) => e.taskId === t.id)} />
               ))}
             </ol>
           </Region>

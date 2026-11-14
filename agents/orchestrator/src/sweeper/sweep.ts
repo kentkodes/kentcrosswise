@@ -3,6 +3,9 @@
 // reported as a failed part; it never sets the flag. Webhook-driven inputs are gated solely by
 // agents_paused. The report names failed parts by error class; the log line adds the error chain
 // (errors.ts describeError: classes, statuses, shortened messages with credentials redacted).
+//   outbox:     sends the orchestrator_outbox rows that are still unsent (migration 0011). Runs every
+//               sweep, whatever the spend gate says: these inputs were already accepted (the consumer
+//               still honours agents_paused). Failures back off per row and skip the rest of the group;
 //   spend:      month-to-date model cost (spend.ts). At or above SPEND_CAP_USD: set agents_paused
 //               (never cleared automatically), log spend_cap_reached, and dispatch nothing this run;
 //   tasks:      a sweep message per waiting/queued task (the graph decides timeouts and retries);
@@ -15,7 +18,7 @@ import { describeError } from "./errors";
 import { REDELIVERY_DEFAULTS, selectRedeliveries, type RedeliveryPlan } from "./deliveries";
 import { PREVIEW_GC_WORKFLOW, type SweeperGitHub } from "./github";
 import { nightlyGcWindow, sweepDedupeId, windowLabel, windowStart } from "./schedule";
-import { MAX_SWEEP_TASKS, type SweeperStore } from "./store";
+import { MAX_OUTBOX_ROWS, MAX_SWEEP_TASKS, type SweeperStore } from "./store";
 import { SPEND_CAP_USD, capReached, monthToDateSpend, utcMonth } from "./spend";
 
 /** The sweep message (P2-10 contract, parsed by graph/messages.ts). */
@@ -48,7 +51,7 @@ export interface SweepDeps {
   log?: (line: string) => void;
 }
 
-export type PartName = "spend" | "tasks" | "pause" | "gc" | "redeliver";
+export type PartName = "outbox" | "spend" | "tasks" | "pause" | "gc" | "redeliver";
 
 export interface SweepReport {
   window: string;
@@ -56,6 +59,9 @@ export interface SweepReport {
   spend: { month: string; spentUsd: number; unpricedEvents: number } | null;
   /** True when the cap was reached in this run (agents_paused is set; no sweep messages sent). */
   capReached: boolean;
+  /** Outbox rows sent, and rows whose send failed (they back off; their group's later rows wait). */
+  outboxSent: number;
+  outboxFailed: number;
   /** Sweep messages sent. */
   swept: number;
   paused: boolean | null;
@@ -76,6 +82,8 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     window: windowLabel(window),
     spend: null,
     capReached: false,
+    outboxSent: 0,
+    outboxFailed: 0,
     swept: 0,
     paused: null,
     cancelled: 0,
@@ -96,6 +104,28 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
       log(`sweeper: ${name} failed (${errName(err)}) ${describeError(err)}`);
     }
   };
+
+  await part("outbox", async () => {
+    const rows = await deps.store.listUnsentOutbox(MAX_OUTBOX_ROWS);
+    if (rows.length === MAX_OUTBOX_ROWS) log(`sweeper: ${MAX_OUTBOX_ROWS} outbox rows, the limit; the rest wait for the next run`);
+    const blocked = new Set<string>(); // FIFO: after a failure, later rows of the group must not overtake it
+    let firstError: string | undefined;
+    for (const row of rows) {
+      if (blocked.has(row.groupId)) continue;
+      try {
+        await deps.queue.send({ body: row.body, groupId: row.groupId, dedupeId: row.messageKey });
+      } catch (err) {
+        blocked.add(row.groupId);
+        report.outboxFailed += 1;
+        firstError ??= errName(err);
+        await deps.store.recordOutboxFailure(row.id, errName(err));
+        continue;
+      }
+      await deps.store.markOutboxSent(row.id);
+      report.outboxSent += 1;
+    }
+    if (firstError !== undefined) throw Object.assign(new Error("outbox send failed"), { name: firstError });
+  });
 
   // Set only when the spend check succeeded and the cap is not reached. Without it, no agent work is sent.
   let mayDispatch = false;
@@ -171,7 +201,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   log(
     `sweeper: window=${report.window} spend=${report.spend?.spentUsd.toFixed(2) ?? "unknown"} ` +
       `unpriced=${report.spend?.unpricedEvents ?? "unknown"} cap=${report.capReached ? "reached" : "ok"} ` +
-      `swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
+      `outbox=${report.outboxSent}/${report.outboxFailed} swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
       `gc=${report.gc} redelivered=${report.redelivered}` +
       (Object.keys(report.failed).length > 0 ? ` failed=${Object.keys(report.failed).join(",")}` : ""),
   );

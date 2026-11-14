@@ -132,8 +132,7 @@ GRANT CONNECT ON DATABASE kentcrosswise TO web_app, web_public_app, orch_app, re
 ### 3.3 The relay's role (`relay_rw`, migration 0005)
 
 The relay (`agents/webhook-relay/src/store.ts`) runs exactly these statements:
-- `INSERT INTO inbound_events (delivery_id, source) … ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id` (dedupe claim),
-- `DELETE FROM inbound_events WHERE delivery_id = $1` (release after a failed enqueue),
+- `WITH c AS (INSERT INTO inbound_events (delivery_id, source) … ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id) INSERT INTO orchestrator_outbox (message_key, group_id, body) SELECT delivery_id, … FROM c RETURNING id` (dedupe claim and outbox row in one statement, since 0011) and `UPDATE orchestrator_outbox SET sent_at = now() WHERE id = $1 AND sent_at IS NULL` (mark sent). Before 0011 the claim was a plain `INSERT` plus a `DELETE` release after a failed enqueue; 0011 revokes that `DELETE`,
 - `SELECT id FROM tasks WHERE pr_number = $1 …` and `… WHERE github_issue = $1 …` (task lookup),
 - `INSERT INTO usage_events (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key) SELECT …, (SELECT id FROM tasks WHERE id = $4), $5 ON CONFLICT (dedupe_key) DO NOTHING RETURNING id` (Actions minutes, since P2-15).
 
@@ -142,7 +141,8 @@ Migration `0005_relay_role.sql` creates the NOLOGIN group role `relay_rw` with e
 | Object | Grant | Why |
 |---|---|---|
 | schema `public` | `USAGE` | reach the tables |
-| `inbound_events` | `INSERT (delivery_id, source)`, `SELECT (delivery_id)`, `DELETE` | the claim's columns; `delivery_id` is read by the `ON CONFLICT` arbiter, `RETURNING` and the release's `WHERE`; `DELETE` has no column form |
+| `inbound_events` | `INSERT (delivery_id, source)`, `SELECT (delivery_id)` (`DELETE` until 0011) | the claim's columns; `delivery_id` is read by the `ON CONFLICT` arbiter and `RETURNING` |
+| `orchestrator_outbox` (0011) | `INSERT (message_key, group_id, body)`, `SELECT (id, sent_at)`, `UPDATE (sent_at)` | the outbox row of the claim, `id` is returned and read by the mark-sent `WHERE`; `packages/db/test/outbox.test.ts` runs the queries of `relay_rw`, `web_rw` and `orch_rw` as members |
 | `tasks` | `SELECT (id, pr_number, github_issue)` | the lookups and the task-exists subquery |
 | `usage_events` | `INSERT (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)`, `SELECT (id, dedupe_key)` | the inserted columns; `dedupe_key` is the arbiter, `id` is returned |
 

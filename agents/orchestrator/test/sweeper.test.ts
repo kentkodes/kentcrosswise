@@ -260,6 +260,12 @@ class FakeStore implements SweeperStore {
   async knownDeliveries(ids: readonly string[]) {
     return new Set(ids.filter((i) => this.known.has(i)));
   }
+  // The outbox part has its own tests (outbox.test.ts); here it has nothing to send.
+  async listUnsentOutbox() {
+    return [];
+  }
+  async markOutboxSent() {}
+  async recordOutboxFailure() {}
 }
 
 class FakeQueue {

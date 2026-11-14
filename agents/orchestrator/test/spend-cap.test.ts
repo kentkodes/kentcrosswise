@@ -18,6 +18,7 @@ import {
   type SpendPrice,
   type SweepTask,
   type SweeperGitHub,
+  type OutboxRow,
   type SweeperStore,
   type WebhookDelivery,
 } from "../src/sweeper";
@@ -162,6 +163,12 @@ class FakeSpendStore implements SweeperStore {
   async knownDeliveries(): Promise<Set<string>> {
     return new Set();
   }
+  outbox: OutboxRow[] = [];
+  async listUnsentOutbox() {
+    return this.outbox;
+  }
+  async markOutboxSent() {}
+  async recordOutboxFailure() {}
 }
 
 class FakeGitHub implements SweeperGitHub {
@@ -340,6 +347,17 @@ describe("runSweep spend cap", () => {
     expect(gh.dispatched).toHaveLength(1);
     expect(gh.listedDeliveries).toBe(1);
     expect(Object.keys(r.failed)).toEqual([]);
+  });
+
+  it("cap reached: accepted inputs in the outbox are still delivered (the consumer honours the pause)", async () => {
+    const store = new FakeSpendStore();
+    store.tasks = [{ id: 4 }];
+    store.events = spendOf(70);
+    store.outbox = [{ id: 1, messageKey: "task-created-9", groupId: "task-9", body: "{}" }];
+    const { sent, deps } = sweepSetup(store, GC_TIME);
+    const r = await runSweep(deps);
+    expect(r).toMatchObject({ capReached: true, outboxSent: 1 });
+    expect(sent).toEqual([{ body: "{}", groupId: "task-9", dedupeId: "task-created-9" }]);
   });
 
   it("after a manual clear while still over the cap, the next sweep re-sets the flag (one write)", async () => {

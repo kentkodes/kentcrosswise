@@ -4,7 +4,6 @@ import type { Metadata } from "next";
 import { ROUTE_LABELS, type RouteKind } from "@/server/capture";
 import { listApprovals, type ApprovalRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
-import { orchestratorQueue } from "@/server/orchestrator-queue";
 import { requireOwner } from "@/server/owner";
 import { listRoutingInbox, type RoutingItem } from "@/server/router";
 import { formatUtc } from "../format";
@@ -13,7 +12,7 @@ import { Dot, Notice, Region } from "../owner-ui";
 import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { approvalTone } from "../tones";
-import { decideAction, reassignRoutingAction, resendDecisionAction } from "./actions";
+import { decideAction, reassignRoutingAction } from "./actions";
 
 export const metadata: Metadata = { title: "Inbox | Kentcrosswise" };
 
@@ -64,7 +63,6 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   await requireOwner();
   const notice = noticeText((await searchParams).n);
   const { data, problem } = await load();
-  const queue = orchestratorQueue();
 
   return (
     <OwnerFrame title="Inbox" current="/inbox">
@@ -152,14 +150,6 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                     ) : null}
                     {a.note ? <> <span>· note: {a.note}</span></> : null}
                   </p>
-                  {queue.enabled && a.taskId !== null ? (
-                    <form action={resendDecisionAction} className={s.end}>
-                      <input type="hidden" name="approval_id" value={a.id} />
-                      <button className={s.button} type="submit">
-                        Resend decision
-                      </button>
-                    </form>
-                  ) : null}
                 </li>
               ))}
             </ul>

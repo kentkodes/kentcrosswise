@@ -1,7 +1,8 @@
 // Boss console and inbox data (P2-14, DESIGN §4.2, §4.3, Q2). Runs as web_rw. Owner pages only:
 // these rows include private text (owner_text) and must never reach a public route.
 import type { Queryable } from "./db";
-import type { Decision } from "./orchestrator-queue";
+import { insertOutbox } from "./outbox";
+import { ownerDecisionMessage, taskCreatedMessage, type Decision } from "./orchestrator-queue";
 
 export const MAX_TASK_TEXT = 4000;
 
@@ -56,7 +57,10 @@ export interface EventRow {
   type: string;
 }
 
-/** Inserts a console task (status queued, thread task-<id>) and returns its id. */
+/**
+ * Inserts a console task (status queued, thread task-<id>) and its task.created outbox row, in the
+ * caller's transaction, and returns its id. The caller sends the message after the commit.
+ */
 export async function createTask(db: Queryable, input: { ownerText: string; isPrivate: boolean }): Promise<number> {
   const text = input.ownerText.trim();
   if (text === "") throw new InputError("The task text is empty.");
@@ -67,6 +71,7 @@ export async function createTask(db: Queryable, input: { ownerText: string; isPr
   );
   const id = Number(rows[0]!.id);
   await db.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = $1", [id]);
+  await insertOutbox(db, taskCreatedMessage(id));
   return id;
 }
 
@@ -119,15 +124,6 @@ export async function listEvents(db: Queryable, taskIds: readonly number[], perT
     [taskIds, perTask],
   );
   return rows.map((r) => ({ id: Number(r.id), ts: iso(r.ts), taskId: Number(r.task_id), agent: r.agent, type: r.event_type }));
-}
-
-/**
- * A task whose task.created message may be (re)sent: only while it is still queued, and never a
- * docs task (the orchestrator starts those itself; a task.created would plan it as owner work).
- */
-export async function queuedTaskExists(db: Queryable, id: number): Promise<boolean> {
-  const { rows } = await db.query(`SELECT 1 FROM tasks WHERE id = $1 AND status = 'queued' AND NOT ${IS_DOCS_TASK}`, [id]);
-  return rows.length > 0;
 }
 
 // ---------------------------------------------------------------- flags (Q2)
@@ -209,7 +205,8 @@ export type DecideResult = { decided: true; taskId: number | null } | { decided:
 
 /**
  * Records the owner's decision if the approval is still pending (a second click or a stale page is
- * a no-op) and closes its inbox item.
+ * a no-op), closes its inbox item and, if it has a task, adds the owner.decision outbox row, all in
+ * the caller's transaction. The caller sends the message after the commit.
  */
 export async function decideApproval(
   db: Queryable,
@@ -229,18 +226,7 @@ export async function decideApproval(
       WHERE ref_table = 'approvals' AND ref_id = $1 AND status = 'open'`,
     [input.id],
   );
-  const taskId = rows[0]!.task_id;
-  return { decided: true, taskId: taskId === null ? null : Number(taskId) };
-}
-
-/** A decided approval (for resending its message); undefined if pending or unknown. */
-export async function decidedApproval(db: Queryable, id: string): Promise<{ taskId: number | null; decision: Decision } | undefined> {
-  if (!isUuid(id)) return undefined;
-  const { rows } = await db.query<{ task_id: string | null; status: string }>(
-    "SELECT task_id, status FROM approvals WHERE id = $1 AND status <> 'pending'",
-    [id],
-  );
-  const r = rows[0];
-  if (!r || !isDecision(r.status)) return undefined;
-  return { taskId: r.task_id === null ? null : Number(r.task_id), decision: r.status };
+  const taskId = rows[0]!.task_id === null ? null : Number(rows[0]!.task_id);
+  if (taskId !== null) await insertOutbox(db, ownerDecisionMessage(taskId, input.id, input.decision));
+  return { decided: true, taskId };
 }

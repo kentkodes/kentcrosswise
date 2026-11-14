@@ -139,13 +139,15 @@ describe("Lambda handler (Function URL v2) with fake secrets, fake SQS and PGlit
     expect(t.sqs.sent).toEqual([]);
   });
 
-  it("a queue failure is a 502 and the delivery can be retried", async () => {
+  it("a queue failure is a 202 queued and its redelivery is a duplicate (the outbox delivers)", async () => {
     const t = make();
     t.sqs.failWith = awsError("AccessDenied");
     const e = urlEvent("push", fixture("push"), { delivery: "retry-1" });
-    expect((await t.handler(e)).statusCode).toBe(502);
+    const first = await t.handler(e);
+    expect(first.statusCode).toBe(202);
+    expect(JSON.parse(first.body)).toEqual({ result: "queued", reason: "send" });
     t.sqs.failWith = undefined;
-    expect(JSON.parse((await t.handler(e)).body)).toEqual({ result: "forwarded" });
+    expect(JSON.parse((await t.handler(e)).body)).toEqual({ result: "duplicate" });
   });
 
   it("missing configuration or webhook secret is a 500 that logs no values", async () => {
