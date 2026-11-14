@@ -75,16 +75,9 @@ describe("kcw-gh-ci", () => {
     expect(deny).toMatch(/test\s*=\s*"StringNotEquals"\s*variable\s*=\s*"aws:ResourceTag\/kcw:env"\s*values\s*=\s*\["preview"\]/);
   });
 
-  it("denies changing or removing the kcw:pr tag of an existing role", () => {
-    const retag = statement(ci, "NoRetagPreviewRolePr");
-    expect(retag).toMatch(/effect\s*=\s*"Deny"/);
-    expect(retag).toContain('"iam:TagRole"');
-    expect(retag).toMatch(/ForAnyValue:StringEquals"\s*variable\s*=\s*"aws:TagKeys"\s*values\s*=\s*\["kcw:pr"\]/);
-    expect(retag).toMatch(/test\s*=\s*"Null"\s*variable\s*=\s*"aws:ResourceTag\/kcw:pr"\s*values\s*=\s*\["false"\]/);
-    const untag = statement(ci, "NoUntagPreviewRolePr");
-    expect(untag).toMatch(/effect\s*=\s*"Deny"/);
-    expect(untag).toContain('"iam:UntagRole"');
-    expect(untag).toMatch(/aws:TagKeys"\s*values\s*=\s*\["kcw:pr"\]/);
+  it("has no kcw:pr retag deny, which would also block CreateRole with tags", () => {
+    expect(ci).not.toContain("NoRetagPreviewRolePr");
+    expect(ci).not.toContain("NoUntagPreviewRolePr");
   });
 });
 

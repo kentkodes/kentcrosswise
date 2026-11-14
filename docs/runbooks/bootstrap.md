@@ -236,6 +236,6 @@ Owner steps, in order. Nothing here is run by an agent.
 Order matters: bootstrap before the merge (the preview job needs the shared CloudFront resources, the new boundary and the filled `kcw/ci/e2e-login`), and fill the secrets before the merge (prod routing and previews read them at runtime). Old previews created before the change are destroyed by the old policy's deletes, which the new CI role keeps.
 
 **Verification evidence still needed after the apply** (IAM policy simulation or a throwaway PR; none was run for this change):
-- Negative: with the `kcw-gh-ci` policy, `cloudfront:UpdateDistribution`/`TagResource`/`DeleteDistribution` on the prod distribution (tag `kcw:env=prod`) is denied; `iam:TagRole`/`UntagRole` of `kcw:pr` on an existing `kcw-pr-*` role is denied.
+- Negative: with the `kcw-gh-ci` policy, `cloudfront:UpdateDistribution`/`TagResource`/`DeleteDistribution` on the prod distribution (tag `kcw:env=prod`) is denied.
 - Positive: a preview created with tags (distribution with `kcw:env=preview`, roles with `kcw:pr`) applies and destroys cleanly, using the shared OACs and cache policies.
 - Boundary: a preview role of PR 1 cannot read `/kcw/preview/pr-12/*`, the queues or buckets of another PR, or `kcw/ci`; it reads `kcw/ci/e2e-login`.

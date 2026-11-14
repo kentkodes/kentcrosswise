@@ -78,7 +78,7 @@ data "aws_iam_policy_document" "preview_boundary" {
   # AR1: a preview role reaches only its own PR's resources. The role tag kcw:pr (preview provider
   # default_tags: every role infra/preview and infra/modules/{web,pipelines} create carries it) is
   # substituted into each ARN. Both "kcw-pr-<n>" and "kcw-pr-<n>-*" are listed, never "kcw-pr-<n>*",
-  # so pr-1 cannot match pr-12. kcw-gh-ci cannot change the tag of an existing role (below).
+  # so pr-1 cannot match pr-12. Preview runtime roles have no IAM actions, so cannot change the tag.
   statement {
     sid     = "Logs"
     actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
@@ -375,35 +375,10 @@ data "aws_iam_policy_document" "ci" {
       values   = ["preview"]
     }
   }
-  # The kcw:pr role tag scopes the preview boundary, so it must not change on an existing role.
-  # CreateRole with tags is unaffected: the resource tag is absent at that point.
-  statement {
-    sid       = "NoRetagPreviewRolePr"
-    effect    = "Deny"
-    actions   = ["iam:TagRole"]
-    resources = ["${local.iam_arn}:role/${local.preview_names}"]
-    condition {
-      test     = "ForAnyValue:StringEquals"
-      variable = "aws:TagKeys"
-      values   = ["kcw:pr"]
-    }
-    condition {
-      test     = "Null"
-      variable = "aws:ResourceTag/kcw:pr"
-      values   = ["false"]
-    }
-  }
-  statement {
-    sid       = "NoUntagPreviewRolePr"
-    effect    = "Deny"
-    actions   = ["iam:UntagRole"]
-    resources = ["${local.iam_arn}:role/${local.preview_names}"]
-    condition {
-      test     = "ForAnyValue:StringEquals"
-      variable = "aws:TagKeys"
-      values   = ["kcw:pr"]
-    }
-  }
+  # No deny on retagging kcw:pr: IAM evaluates iam:TagRole for CreateRole-with-tags against the new
+  # tags, so such a deny also blocked role creation (CI run 43628631876). It added nothing either:
+  # this role may create any kcw-pr-* role with any kcw:pr tag. The boundary protects against the
+  # preview runtime (no IAM actions), not against this role; slice 2 takes candidate code off it.
   statement {
     sid       = "NoBoundaryEscape"
     effect    = "Deny"
