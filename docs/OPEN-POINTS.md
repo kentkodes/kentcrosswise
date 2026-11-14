@@ -7,8 +7,7 @@ Current backlog, 2026-11-13 UTC. Current state and holds are in [HANDOFF.md](HAN
 | ID | Open point |
 |---|---|
 | R1 | Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private hub's contacts and mood are not built). Its "Simulated data" frame also shows real agent rows. |
-| R2 | The planner calls Opus 5.5 with `max_tokens` 1024 at high effort. Opus 5.5 always thinks, so thinking can use the whole limit and leave no JSON; neither model provider checks `stop_reason`. The 2026-11-11 canary already used 798 output tokens over two calls for a one-line task. Raise the limit, check `stop_reason` (`max_tokens`, `refusal`), and consider structured output instead of hand-parsed JSON. |
-
+| R2 | The planner calls Opus 5.5 with `max_tokens` 1024 at high effort. Opus 5.5 always thinks, so thinking can use the whole limit and leave no JSON; neither model provider checks `stop_reason`. The 2026-11-11 canary used 798 output tokens over two calls on a one-line task (per-call split not recorded), so a larger task can plausibly reach the limit. Raise the limit, check `stop_reason` (`max_tokens`, `refusal`), and consider structured output instead of hand-parsed JSON. |
 | R3 | Worker context cost: the canary's one-line docs task sent about 1.1M input tokens to DeepSeek over about 40 turns, because each turn re-sends the large instruction, handoff and design files the playbooks require. Shorter required reading (this cleanup) is the first step; measure the next task's input tokens before doing more. |
 
 ## Essays (Phase 5)
@@ -56,6 +55,7 @@ Each needs its own scoped, owner-approved run.
 
 - Agents: cold-container restart, bounded retry and failure recovery, active-agent cancellation, late or duplicate reports, conflict escalation, Scraper execution, no-op Docs completion.
 - Webhooks: retry of a real failed delivery and dedupe.
+- Spend: missing-cost injection and late or duplicate usage reports (A11).
 - Protected paths: owner approval and rejection through the inbox (A6).
 - Browsers: Safari, Firefox and physical phones (canvas, touch, reduced motion, playback).
 - Runtime adapters: native instruction loading in each supported local and cloud runtime (A13).
@@ -69,6 +69,7 @@ Each needs its own scoped, owner-approved run.
 - U9 Google consent screen and refresh-token longevity after incremental consent.
 - U10 Instagram development mode without App Review; TikTok sandbox stats.
 - U12 Current AWS pricing and free-tier state.
+- U2 QA on Claude Haiku 5.5 through Anthropic federation has not run live since #88 (the canary's QA ran on DeepSeek); federation usage reporting is unexercised.
 
 ## Later (Phase 6, not blockers)
 

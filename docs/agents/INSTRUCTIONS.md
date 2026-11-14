@@ -74,7 +74,7 @@ No Playwright report or trace is uploaded: a trace would contain the typed previ
 
 `prod-plan` uploads two artifacts: `prod-plan-summary` (the summary alone) and `merge-rules-input` (summary + lockfile diff in one file, which the orchestrator fetches for merge-rules). It checks out with `fetch-depth: 2`, so the base lockfile is `HEAD^1` of the PR merge commit.
 
-Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_DEVELOPER_ARN`, `AWS_ROLE_AGENT_QA_ARN`, `AWS_ROLE_AGENT_SCRAPER_ARN`, `AWS_ROLE_AGENT_DOCS_ARN`, `AWS_ROLE_AGENT_MODEL_ARN`, `KCW_AGENT_WORKFLOWS_ENABLED`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
+Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_DEVELOPER_ARN`, `AWS_ROLE_AGENT_QA_ARN`, `AWS_ROLE_AGENT_SCRAPER_ARN`, `AWS_ROLE_AGENT_DOCS_ARN`, `AWS_ROLE_AGENT_MODEL_ARN`, `AWS_ROLE_ESSAY_INGEST_ARN`, `KCW_AGENT_WORKFLOWS_ENABLED`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
 
 Every change to `main` is a squash-merged PR with `ci/required` green.
 
