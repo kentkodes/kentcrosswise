@@ -66,8 +66,9 @@ export const LENGTH_FELT_LABELS: Record<LengthFelt, string> = {
   too_short: "Too short",
 };
 
-export const FEED_PAGE_SIZE = 20;
+export const FEED_PAGE_SIZE = 50;
 export const MAX_FEED_SHOW = 500;
+export const SEARCH_MAX_LENGTH = 100;
 export const RECOMMENDATION_COUNT = 6;
 /** Average adult silent reading speed used when an essay has a word count but no stored reading time. */
 export const WORDS_PER_MINUTE = 230;
@@ -122,6 +123,44 @@ export function parseRating(input: { stars: unknown; worked: readonly unknown[];
 export function parseShow(v: unknown): number {
   const n = typeof v === "string" ? Number(v) : Number.NaN;
   return Number.isInteger(n) && n >= FEED_PAGE_SIZE ? Math.min(n, MAX_FEED_SHOW) : FEED_PAGE_SIZE;
+}
+
+export type FeedKind = "all" | "full" | "link";
+
+/** The library kind from `?kind=`: full or link; anything else (or none) is all. */
+export function parseKind(v: unknown): FeedKind {
+  return v === "full" || v === "link" ? v : "all";
+}
+
+/** The search from `?q=`: trimmed, at most SEARCH_MAX_LENGTH characters. Anything but a string is no search. */
+export function parseSearch(v: unknown): string {
+  return typeof v === "string" ? v.trim().slice(0, SEARCH_MAX_LENGTH).trim() : "";
+}
+
+/** A LIKE pattern matching the text as a literal substring: % _ and \ are escaped (the SQL uses ESCAPE '\\'). */
+export function likePattern(q: string): string {
+  return `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+/** The last whitespace-separated word of the author, lower-cased. The SQL sort key (SURNAME_SQL) uses the same rule. */
+export function authorSurname(author: string): string {
+  return (author.trim().split(/\s+/).pop() ?? "").toLowerCase();
+}
+
+/** The letter divider for a link row: A to Z by surname, or # when the surname does not start with a-z. */
+export function surnameInitial(author: string): string {
+  const first = authorSurname(author).charAt(0);
+  return /^[a-z]$/.test(first) ? first.toUpperCase() : "#";
+}
+
+/** A library URL that keeps the given filters. The defaults (All, no search, first page) are left out of the URL. */
+export function feedHref(f: { q?: string; kind?: FeedKind; show?: number }): string {
+  const params = new URLSearchParams();
+  if (f.q) params.set("q", f.q);
+  if (f.kind && f.kind !== "all") params.set("kind", f.kind);
+  if (f.show) params.set("show", String(f.show));
+  const query = params.toString();
+  return query ? `/essays?${query}` : "/essays";
 }
 
 /** An http(s) link for the owner to open, or null (no javascript:, data: or malformed URLs). */
@@ -222,19 +261,54 @@ function toCard(r: CardRow): EssayCard {
   };
 }
 
+/** Sort key for link-only essays, the same rule as authorSurname(). */
+const SURNAME_SQL = `lower(regexp_replace(regexp_replace(e.author, '[[:space:]]+$', ''), '^.*[[:space:]]', ''))`;
+
+/** The library: setup prefs, kind and search. $1 types, $2 lengths, $3 kind, $4 LIKE pattern or null. */
+const LIBRARY_FILTER = `e.status = 'active' AND ${PREFS_FILTER}
+  AND ($3::text = 'all' OR e.kind = $3::text)
+  AND ($4::text IS NULL OR e.title ILIKE $4::text ESCAPE '\\' OR e.author ILIKE $4::text ESCAPE '\\')`;
+
+export interface FeedFilter {
+  q: string;
+  kind: FeedKind;
+}
+
+export const NO_FEED_FILTER: FeedFilter = { q: "", kind: "all" };
+
+function libraryParams(prefs: Prefs, filter: FeedFilter): unknown[] {
+  return [prefs.types, prefs.lengths, filter.kind, filter.q ? likePattern(filter.q) : null];
+}
+
 /**
- * Active essays that pass the prefs: full-text essays newest first, then link-only essays newest first (the seed
- * links share one created_at, so they would otherwise bury the full essays). Fetches one extra row to know if there is more.
+ * Active essays that pass the prefs, the kind and the search. Full-text essays come first, newest first. Then link-only
+ * essays by author surname, title and id (the seed links share one created_at, so they would otherwise bury the full essays).
+ * Fetches one extra row to know if there is more.
  */
-export async function listFeed(db: Queryable, prefs: Prefs, limit: number): Promise<{ cards: EssayCard[]; hasMore: boolean }> {
+export async function listFeed(
+  db: Queryable,
+  prefs: Prefs,
+  limit: number,
+  filter: FeedFilter = NO_FEED_FILTER,
+): Promise<{ cards: EssayCard[]; hasMore: boolean }> {
   const { rows } = await db.query<CardRow>(
     `SELECT ${CARD_COLUMNS} FROM essays e
-      WHERE e.status = 'active' AND ${PREFS_FILTER}
-      ORDER BY (e.kind = 'full') DESC, e.created_at DESC, e.id
-      LIMIT $3`,
-    [prefs.types, prefs.lengths, limit + 1],
+      WHERE ${LIBRARY_FILTER}
+      ORDER BY (e.kind = 'full') DESC,
+        CASE WHEN e.kind = 'full' THEN e.created_at END DESC,
+        CASE WHEN e.kind = 'link' THEN ${SURNAME_SQL} END,
+        CASE WHEN e.kind = 'link' THEN lower(e.title) END,
+        e.id
+      LIMIT $5`,
+    [...libraryParams(prefs, filter), limit + 1],
   );
   return { cards: rows.slice(0, limit).map(toCard), hasMore: rows.length > limit };
+}
+
+/** How many essays match the prefs, kind and search in total (the feed shows the first page of them). */
+export async function countFeed(db: Queryable, prefs: Prefs, filter: FeedFilter = NO_FEED_FILTER): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM essays e WHERE ${LIBRARY_FILTER}`, libraryParams(prefs, filter));
+  return Number(rows[0]?.n ?? 0);
 }
 
 /**
