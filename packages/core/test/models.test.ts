@@ -131,6 +131,22 @@ describe("AnthropicProvider", () => {
     expect(high[0]).toMatchObject({ model: "claude-opus-5-5", output_config: { effort: "high" } });
   });
 
+  it.each([
+    ["end_turn", "end"],
+    ["max_tokens", "max_tokens"],
+    ["refusal", "refusal"],
+  ] as const)("complete maps stop_reason %s to %s", async (stop_reason, stop) => {
+    const { client } = fakeClient({ stop_reason, content: [{ type: "text", text: "x" }] as Message["content"] });
+    expect(await new AnthropicProvider({ client }).complete({ prompt: "hi" })).toMatchObject({ stop });
+  });
+
+  it("classify throws a non-retryable ProviderError when the reply stopped at max_tokens", async () => {
+    const { client } = fakeClient({ stop_reason: "max_tokens", content: [] });
+    const err = await new AnthropicProvider({ client }).classify(TEXT, LABELS).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(err).toMatchObject({ message: "Anthropic response stopped: max_tokens", retryable: false });
+  });
+
   it("wraps SDK errors in ProviderError", async () => {
     const client: AnthropicLike = { messages: { create: async () => Promise.reject(new Error("socket")) } };
     await expect(new AnthropicProvider({ client }).complete({ prompt: "hi" })).rejects.toBeInstanceOf(ProviderError);

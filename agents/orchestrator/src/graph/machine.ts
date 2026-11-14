@@ -317,7 +317,7 @@ class Machine {
     } catch (err) {
       if (!(err instanceof PlannerOutputError)) throw err;
       this.log(`planning failed: ${err.message}`);
-      await this.toOwnerFailure(`The ${err.node === "planner" ? "planner" : "public-title"} model returned invalid output twice (${err.reason}).`, "plan");
+      await this.toOwnerFailure(`The ${err.node === "planner" ? "planner" : "public-title"} model returned unusable output (${err.reason}).`, "plan");
       return "applied";
     }
 

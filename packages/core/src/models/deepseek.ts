@@ -36,7 +36,7 @@ interface ChatMessage {
 }
 interface ChatResponse {
   model?: unknown;
-  choices?: { message?: ChatMessage }[];
+  choices?: { message?: ChatMessage; finish_reason?: unknown }[];
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
 }
 
@@ -69,7 +69,7 @@ export class DeepseekProvider implements ModelProvider {
       },
       required: ["label", "confidence"],
     };
-    const { message, model } = await this.#chat("classify", {
+    const { message, model, finish } = await this.#chat("classify", {
       max_tokens: this.#opts.maxTokens ?? 256,
       messages: [
         { role: "system", content: system },
@@ -81,6 +81,9 @@ export class DeepseekProvider implements ModelProvider {
       tool_choice: { type: "function", function: { name: CLASSIFY_TOOL } },
     });
     const out = answerFrom(message);
+    if (finish === "max_tokens" || finish === "refusal") {
+      throw new ProviderError(`DeepSeek response stopped: ${finish}`, { provider: PROVIDER, retryable: false });
+    }
     if (typeof out.label !== "string" || !labels.includes(out.label)) {
       throw new ProviderError("DeepSeek response: label is not one of the labels", { provider: PROVIDER, retryable: false });
     }
@@ -89,20 +92,21 @@ export class DeepseekProvider implements ModelProvider {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const { message, model } = await this.#chat("complete", {
+    const { message, model, finish } = await this.#chat("complete", {
       max_tokens: req.maxTokens ?? this.#opts.maxTokens ?? 1024,
       messages: [
         ...(req.system !== undefined ? [{ role: "system", content: req.system }] : []),
         { role: "user", content: req.prompt },
       ],
     });
-    return { text: typeof message.content === "string" ? message.content : "", model, provider: PROVIDER };
+    const stop = finish === "max_tokens" ? "max_tokens" : finish === "refusal" ? "refusal" : "end";
+    return { text: typeof message.content === "string" ? message.content : "", stop, model, provider: PROVIDER };
   }
 
   async #chat(
     operation: UsageRecord["operation"],
     body: Record<string, unknown>,
-  ): Promise<{ message: ChatMessage; model: string }> {
+  ): Promise<{ message: ChatMessage; model: string; finish: "max_tokens" | "refusal" | "end" }> {
     const json = await withRetries(() => this.#post({ model: this.model, ...body }), this.#opts.retry);
     const model = typeof json.model === "string" && json.model.length > 0 ? json.model : this.model;
     const count = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
@@ -113,7 +117,10 @@ export class DeepseekProvider implements ModelProvider {
       inputTokens: count(json.usage?.prompt_tokens),
       outputTokens: count(json.usage?.completion_tokens),
     });
-    return { message: json.choices?.[0]?.message ?? {}, model };
+    // OpenAI-style finish_reason: "length" = token limit, "content_filter" = withheld.
+    const reason = json.choices?.[0]?.finish_reason;
+    const finish = reason === "length" ? "max_tokens" : reason === "content_filter" ? "refusal" : "end";
+    return { message: json.choices?.[0]?.message ?? {}, model, finish };
   }
 
   async #post(body: Record<string, unknown>): Promise<ChatResponse> {

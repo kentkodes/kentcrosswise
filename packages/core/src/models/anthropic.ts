@@ -74,6 +74,9 @@ export class AnthropicProvider implements ModelProvider {
       ],
       tool_choice: { type: "tool", name: CLASSIFY_TOOL },
     });
+    if (msg.stop_reason === "max_tokens" || msg.stop_reason === "refusal") {
+      throw new ProviderError(`Anthropic response stopped: ${msg.stop_reason}`, { provider: PROVIDER, retryable: false });
+    }
     const block = msg.content.find((b) => b.type === "tool_use" && b.name === CLASSIFY_TOOL);
     const out = block && block.type === "tool_use" ? (block.input as { label?: unknown; confidence?: unknown }) : {};
     if (typeof out.label !== "string" || !labels.includes(out.label)) {
@@ -93,7 +96,8 @@ export class AnthropicProvider implements ModelProvider {
     const text = msg.content
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("");
-    return { text, model: msg.model, provider: PROVIDER };
+    const stop = msg.stop_reason === "max_tokens" ? "max_tokens" : msg.stop_reason === "refusal" ? "refusal" : "end";
+    return { text, stop, model: msg.model, provider: PROVIDER };
   }
 
   async #create(operation: UsageRecord["operation"], params: MessageCreateParamsNonStreaming): Promise<Message> {

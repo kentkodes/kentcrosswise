@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 type ClassifyAnswer = { label: string; confidence: number; model?: string };
-type CompleteAnswer = { text: string; model?: string };
+type CompleteAnswer = { text: string; stop?: CompleteResult["stop"]; model?: string };
 type Scripted<T, A extends unknown[]> = T | Error | ((...args: A) => T | Error | Promise<T | Error>);
 
 export interface FakeProviderOptions {
@@ -56,6 +56,6 @@ export class FakeProvider implements ModelProvider {
       inputTokens: req.prompt.length,
       outputTokens: answer.text.length,
     });
-    return { text: answer.text, model, provider: this.name };
+    return { text: answer.text, stop: answer.stop ?? "end", model, provider: this.name };
   }
 }

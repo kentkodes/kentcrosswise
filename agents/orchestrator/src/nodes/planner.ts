@@ -2,8 +2,9 @@
 //
 // Both nodes ask for a JSON object and validate it by hand (the repo has no schema library). An
 // answer that fails validation is retried once, telling the model what was wrong; a second failure
-// throws PlannerOutputError, which the task graph sends to the owner. Provider errors propagate
-// unchanged (the step fails and SQS redelivers the message).
+// throws PlannerOutputError, which the task graph sends to the owner. A reply that stopped at the token
+// limit or was refused is not retried (the same limit or request would fail again): it throws at once.
+// Provider errors propagate unchanged (the step fails and SQS redelivers the message).
 import type { ModelProvider } from "@kcw/core/models";
 import { MAX_TITLE_LENGTH } from "@kcw/core/sanitize";
 import { MAX_SUBTASKS, PlannerOutputError, type Plan, type PlanRequest, type Planner } from "../graph/types";
@@ -34,6 +35,7 @@ export const PUBLIC_TITLE_SYSTEM = [
 
 export interface ModelPlannerOptions {
   provider: ModelProvider;
+  /** Opus 5.5 thinking counts toward the limit; 8000 keeps two planner calls well inside the 5-minute orchestrator Lambda timeout. */
   maxTokens?: number;
 }
 
@@ -53,13 +55,21 @@ export class ModelPlanner implements Planner {
 
   async #ask<T>(node: PlannerOutputError["node"], system: string, text: string, parse: (raw: string) => Parsed<T>): Promise<T> {
     const prompt = `<task>\n${text}\n</task>`;
-    const maxTokens = this.opts.maxTokens ?? 1024;
-    const first = parse((await this.opts.provider.complete({ system, prompt, maxTokens })).text);
-    if (first.ok) return first.value;
-    const retry = `${prompt}\n\nYour previous reply was invalid: ${first.reason}. Reply again with the JSON object only.`;
-    const second = parse((await this.opts.provider.complete({ system, prompt: retry, maxTokens })).text);
+    const maxTokens = this.opts.maxTokens ?? 8000;
+    const first = await this.#reply(node, system, prompt, maxTokens);
+    const parsed = parse(first);
+    if (parsed.ok) return parsed.value;
+    const retry = `${prompt}\n\nYour previous reply was invalid: ${parsed.reason}. Reply again with the JSON object only.`;
+    const second = parse(await this.#reply(node, system, retry, maxTokens));
     if (second.ok) return second.value;
     throw new PlannerOutputError(node, second.reason);
+  }
+
+  /** The reply text; a reply that stopped early or was refused throws at once, without a retry. */
+  async #reply(node: PlannerOutputError["node"], system: string, prompt: string, maxTokens: number): Promise<string> {
+    const { text, stop } = await this.opts.provider.complete({ system, prompt, maxTokens });
+    if (stop !== "end") throw new PlannerOutputError(node, `reply stopped: ${stop}`);
+    return text;
   }
 }
 
