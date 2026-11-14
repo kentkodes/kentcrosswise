@@ -24,7 +24,11 @@
     "check-repo-settings": "tsx check-repo-settings.ts",
     "apply-repo-settings": "tsx apply-repo-settings.ts",
     "agent-context": "tsx agent-context.ts",
-    "agent-publish": "tsx agent-publish.ts"
+    "agent-publish": "tsx agent-publish.ts",
+    "verify-candidate": "tsx verify-candidate-artifact.ts",
+    "candidate-manifest": "tsx write-candidate-manifest.ts",
+    "restore-preview-db": "tsx restore-preview-db.ts",
+    "verify-trusted-preview": "tsx verify-trusted-preview.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.1154.0",

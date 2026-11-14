@@ -1,0 +1,391 @@
+# Trusted preview (AR1 slice 2, PR A: runs in SHADOW next to ci.yml's `preview` job).
+#
+# A workflow_run workflow always runs the definition on the default branch, so a pull request cannot change
+# this file or the scripts it runs: every checkout here is main, except the `e2e` job (see below). The
+# candidate's build is DATA: ci.yml's credential-free `candidate-build` job uploads `candidate-preview`
+# (Postgres dump, OpenNext tar, manifest); `verify` validates it, `provision` places it on the preview
+# infrastructure without executing any of it. Candidate code runs only in `e2e` (a synthetic login, no AWS)
+# and, as before, inside the preview Lambda under the preview permissions boundary.
+#
+#   verify     no environment, no cloud credentials: pick the PR and artifact, validate, re-upload the files
+#   provision  environment preview-gc (main-only; kcw-gh-ci already trusts environment:preview-gc, so no IAM
+#              change in this PR): Neon branch, restore the dump, extract the build, terraform apply, smoke check
+#   e2e        environment preview-e2e (secret E2E_LOGIN), no id-token: candidate Playwright tests against the preview
+#   teardown   environment preview-gc, always after provision started: destroy, Neon branch, clean check
+#   result     commit status kcw/trusted-preview (shadow: not required by protection)
+#
+# SHADOW NAMESPACE (removed in PR B): the old `preview` job still owns kcw-pr-<n> and preview/pr-<n>.tfstate.
+# This workflow uses the PR number + 100000 for the Terraform variable, the state key, the Neon branch, the
+# SSM path and the kcw:pr tag (scripts/lib/trusted-preview.ts SHADOW_PR_OFFSET), so the two never collide.
+# preview-gc finds those numbers too: no such PR, so previews older than 24 h are cleaned, younger ones kept.
+name: preview-trusted
+run-name: trusted-preview ${{ github.event.workflow_run.head_sha }}
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions: {}
+
+# One live run per head branch; a newer qualifying run cancels the older one. Runs that will not do
+# anything (ci failed, cancelled, or not a pull_request) get a group of their own so they can never cancel
+# a running preview. Cancelled provisioning still runs its teardown unless a newer head owns the preview.
+concurrency:
+  group: trusted-preview-${{ github.event.workflow_run.head_branch }}-${{ (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') && 'live' || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  NEXT_TELEMETRY_DISABLED: "1"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  verify:
+    name: verify
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.path == '.github/workflows/ci.yml' &&
+      github.event.workflow_run.head_repository.id == github.repository_id
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      pull-requests: read
+      contents: read # checkout of main
+    outputs:
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      preview_id: ${{ steps.resolve.outputs.preview_id }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+    env:
+      REPOSITORY_ID: ${{ github.repository_id }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      # The default branch (workflow_run's GITHUB_SHA): trusted scripts only.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      # The open same-repo PR whose head is exactly the triggering SHA, and the numeric id of the one live
+      # candidate-preview artifact of that run.
+      - name: Resolve the PR and the artifact
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm verify-candidate resolve
+
+      # By numeric artifact id; the action also checks the digest GitHub recorded for the artifact.
+      - name: Download candidate-preview
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.resolve.outputs.artifact_id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-in
+          merge-multiple: true
+
+      # Manifest (repository, PR, head, run), sha256 of both files, tar validated entry by entry before any extraction.
+      - name: Verify the artifact
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        run: pnpm verify-candidate verify --dir "$RUNNER_TEMP/candidate-in"
+
+      # The verified bytes go to the next jobs as a same-run artifact; they verify again before using them
+      # (verify is cheap), so nothing depends on this job beyond the PR/head outputs.
+      - name: Upload the verified files
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified-candidate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-in/
+          if-no-files-found: error
+          retention-days: 1
+
+  provision:
+    name: provision (pr ${{ needs.verify.outputs.pr_number }} @ ${{ needs.verify.outputs.head_sha }})
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    # Reused on purpose: kcw-gh-ci trusts environment:preview-gc and that environment is main-only, so only
+    # this trusted definition can assume the role. No candidate code runs in this job.
+    environment: preview-gc
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    env:
+      # The shadow preview id (PR number + 100000), not the PR number.
+      PR_NUMBER: ${{ needs.verify.outputs.preview_id }}
+      REAL_PR: ${{ needs.verify.outputs.pr_number }}
+      HEAD_SHA: ${{ needs.verify.outputs.head_sha }}
+      REPOSITORY_ID: ${{ github.repository_id }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      NEON_CI_PROJECT_ID: ${{ vars.NEON_CI_PROJECT_ID }}
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          terraform: "true"
+
+      - name: Download the verified files
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-candidate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-in
+
+      # Verifies again, validates every tar entry, then extracts with our own code (no tar binary, no links).
+      - name: Verify and extract the candidate build into apps/web/.open-next
+        env:
+          PR_NUMBER: ${{ needs.verify.outputs.pr_number }}
+        run: pnpm verify-candidate extract --dir "$RUNNER_TEMP/candidate-in" --dest "$GITHUB_WORKSPACE/apps/web"
+
+      - name: AWS credentials (kcw-gh-ci)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      # Only the Neon provisioner key (KCW_CI_NEON_API_KEY). The e2e login is not read here.
+      - name: Read kcw/ci
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            KCW_CI, kcw/ci
+          parse-json-secrets: true
+
+      - name: Terraform init (preview/pr-${{ needs.verify.outputs.preview_id }}.tfstate)
+        id: tfinit
+        run: >-
+          terraform -chdir=infra/preview init
+          -backend-config="bucket=$TF_STATE_BUCKET"
+          -backend-config="key=preview/pr-$PR_NUMBER.tfstate"
+
+      - name: Stale preview from an earlier run?
+        id: stale
+        run: pnpm preview-gc find --pr "$PR_NUMBER" --force
+
+      - name: Stale preview - destroy
+        if: steps.stale.outputs.has_state == 'true'
+        env:
+          TF_VAR_database_url: unused-on-destroy
+        run: terraform -chdir=infra/preview destroy -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      - name: Stale preview - delete Neon branch
+        if: steps.stale.outputs.has_branch == 'true'
+        run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
+
+      - name: Neon branch preview/pr-${{ needs.verify.outputs.preview_id }}
+        id: neon
+        uses: ./.github/actions/neon-preview
+        with:
+          mode: create
+          pr_number: ${{ needs.verify.outputs.preview_id }}
+          project_id: ${{ vars.NEON_CI_PROJECT_ID }}
+
+      # The candidate's migrated + seeded schema as SQL text, executed by trusted code as one query.
+      - name: Restore the candidate database
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: pnpm restore-preview-db --file "$RUNNER_TEMP/candidate-in/preview-db.sql"
+
+      # An older run must not deploy over a newer head: stop unless the PR is open at exactly the verified head.
+      - name: PR head is still the verified head
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm verify-candidate head --pr "$REAL_PR" --sha "$HEAD_SHA" --require
+
+      - name: Terraform apply infra/preview
+        id: apply
+        env:
+          TF_VAR_database_url: ${{ steps.neon.outputs.db_url }}
+        run: terraform -chdir=infra/preview apply -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      - name: Preview URL
+        id: url
+        run: |
+          url="$(terraform -chdir=infra/preview output -raw url)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Trusted preview (shadow): $url" >> "$GITHUB_STEP_SUMMARY"
+
+      # kcw-build.json was validated as plain JSON (kcw_env preview, short build_id) before extraction.
+      - name: Wait for the preview
+        env:
+          BASE_URL: ${{ steps.url.outputs.url }}
+        run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15 --build-file apps/web/.open-next/kcw-build.json
+
+  e2e:
+    name: e2e
+    needs: [verify, provision]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Runs candidate test code. Holds only the synthetic preview login (environment secret E2E_LOGIN, which
+    # must equal kcw/ci/e2e-login); no id-token, no AWS, no Neon, read-only repository token.
+    environment: preview-e2e
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.head_sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Playwright browsers
+        run: |
+          # apt mirrors on the runner sometimes fail DNS for a few minutes; retry instead of failing.
+          for attempt in 1 2 3; do
+            pnpm --filter web exec playwright install --with-deps chromium && exit 0
+            echo "::warning::Playwright browser install failed (attempt $attempt/3)"
+            [ "$attempt" -lt 3 ] && sleep 30
+          done
+          exit 1
+
+      # No report or trace upload: a trace would contain the typed preview login token.
+      - name: Playwright against the preview
+        env:
+          BASE_URL: ${{ needs.provision.outputs.url }}
+          KCW_E2E_LOGIN: ${{ secrets.E2E_LOGIN }}
+        run: pnpm --filter web e2e
+
+  teardown:
+    name: teardown
+    needs: [verify, provision, e2e]
+    if: always() && needs.provision.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: preview-gc
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+    env:
+      PR_NUMBER: ${{ needs.verify.outputs.preview_id }}
+      REAL_PR: ${{ needs.verify.outputs.pr_number }}
+      HEAD_SHA: ${{ needs.verify.outputs.head_sha }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      NEON_CI_PROJECT_ID: ${{ vars.NEON_CI_PROJECT_ID }}
+      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
+    steps:
+      # Every step here uses always() so a cancelled run still tears down.
+      - uses: actions/checkout@v7
+        if: always()
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        if: always()
+        with:
+          terraform: "true"
+
+      # A newer push of the same PR owns this preview now (its own run pre-cleans it); an older, cancelled run
+      # must not delete the replacement. If the check itself fails, tear down anyway.
+      - name: Does a newer head own the preview?
+        id: owner
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm verify-candidate head --pr "$REAL_PR" --sha "$HEAD_SHA"
+
+      - name: AWS credentials (kcw-gh-ci)
+        id: aws
+        if: always() && steps.owner.outputs.state != 'superseded'
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_CI_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      - name: Read kcw/ci
+        if: always() && steps.aws.outcome == 'success'
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            KCW_CI, kcw/ci
+          parse-json-secrets: true
+
+      # terraform destroy evaluates the preview config, which reads the build output: build main's, not the candidate's.
+      - name: Preview build from main (for terraform destroy)
+        id: build
+        if: always() && steps.aws.outcome == 'success'
+        continue-on-error: true
+        env:
+          KCW_ENV: preview
+        run: pnpm build-web
+
+      - name: Terraform init
+        id: tfinit
+        if: always() && steps.aws.outcome == 'success'
+        continue-on-error: true
+        run: >-
+          terraform -chdir=infra/preview init
+          -backend-config="bucket=$TF_STATE_BUCKET"
+          -backend-config="key=preview/pr-$PR_NUMBER.tfstate"
+
+      - name: Terraform destroy
+        id: destroy
+        if: always() && steps.tfinit.outcome == 'success' && steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          TF_VAR_database_url: unused-on-destroy
+        run: terraform -chdir=infra/preview destroy -auto-approve -lock-timeout=5m -var "pr_number=$PR_NUMBER"
+
+      # Only after a successful destroy: without the state, nothing could remove what is left.
+      - name: Delete the state object
+        if: always() && steps.destroy.outcome == 'success'
+        continue-on-error: true
+        run: aws s3 rm "s3://$TF_STATE_BUCKET/preview/pr-$PR_NUMBER.tfstate"
+
+      - name: Delete the Neon branch
+        if: always() && steps.aws.outcome == 'success'
+        continue-on-error: true
+        run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
+
+      # The authority on teardown: fails the job if anything of the shadow preview is left.
+      - name: Check nothing is left
+        if: always() && steps.aws.outcome == 'success'
+        run: pnpm check-preview-clean --pr "$PR_NUMBER" --retries 5 --retry-delay 30
+
+  result:
+    name: result
+    needs: [verify, provision, e2e, teardown]
+    if: always() && needs.verify.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      # Shadow only: nothing requires this context yet. success only if provision, e2e and teardown all succeeded.
+      - name: Post kcw/trusted-preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VERIFY: ${{ needs.verify.result }}
+          PROVISION: ${{ needs.provision.result }}
+          E2E: ${{ needs.e2e.result }}
+          TEARDOWN: ${{ needs.teardown.result }}
+        run: |
+          echo "verify=$VERIFY provision=$PROVISION e2e=$E2E teardown=$TEARDOWN"
+          state=failure
+          desc="Trusted preview did not pass"
+          if [ "$VERIFY" = success ] && [ "$PROVISION" = success ] && [ "$E2E" = success ] && [ "$TEARDOWN" = success ]; then
+            state=success
+            desc="Trusted preview passed (shadow)"
+          fi
+          gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context="kcw/trusted-preview" -f description="$desc" -f target_url="$RUN_URL"

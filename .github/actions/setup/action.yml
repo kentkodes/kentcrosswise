@@ -4,6 +4,14 @@ description: >-
   and optionally Terraform. Requires actions/checkout first. No credentials involved.
 
 inputs:
+  cache:
+    description: >-
+      Restore and save the pnpm store cache (true/false). Default false: nothing is restored or saved.
+      Only credential-free pull_request jobs may set true (their cache entries are PR-scoped). A job that
+      runs candidate code in the default-branch context (workflow_run, agent work) could poison a shared
+      cache entry that deploy, agent publish and trusted preview jobs would then restore.
+    required: false
+    default: "false"
   terraform:
     description: "Also install Terraform (true/false)"
     required: false
@@ -19,7 +27,7 @@ runs:
     - name: pnpm
       uses: pnpm/action-setup@v6
       with:
-        cache: true
+        cache: ${{ inputs.cache }}
 
     - name: Node
       uses: actions/setup-node@v7

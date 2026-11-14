@@ -56,6 +56,7 @@ runs:
       uses: actions/setup-node@v7
       with:
         node-version-file: .nvmrc
+        package-manager-cache: false
 
     - name: Branch name and expiry
       id: plan

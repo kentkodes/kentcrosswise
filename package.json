@@ -30,7 +30,11 @@
     "apply-repo-settings": "pnpm --filter @kcw/scripts apply-repo-settings",
     "agent-context": "pnpm --filter @kcw/scripts agent-context",
     "agent-publish": "pnpm --filter @kcw/scripts agent-publish",
-    "kcw-report": "pnpm --filter @kcw/report kcw-report"
+    "kcw-report": "pnpm --filter @kcw/report kcw-report",
+    "verify-candidate": "pnpm --filter @kcw/scripts verify-candidate",
+    "candidate-manifest": "pnpm --filter @kcw/scripts candidate-manifest",
+    "restore-preview-db": "pnpm --filter @kcw/scripts restore-preview-db",
+    "verify-trusted-preview": "pnpm --filter @kcw/scripts verify-trusted-preview"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

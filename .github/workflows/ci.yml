@@ -2,6 +2,10 @@
 #   checks     lint, typecheck, unit tests, Next build, terraform fmt (+ repo settings check, non-blocking)
 #   preview    same-repo PRs only: Neon branch + migrate + seed, preview build, terraform apply
 #              infra/preview, Playwright against it, then teardown in the same job (if: always())
+#   candidate-build  same-repo PRs only, AR1 slice 2 (shadow): runs the candidate's migrate, seed and preview
+#              build with NO credentials (no id-token, no secrets, no AWS) and uploads them as the data-only
+#              artifact `candidate-preview`. .github/workflows/preview-trusted.yml (workflow_run, defined by
+#              main) verifies it and provisions the preview in a separate trusted run. Replaces `preview` in PR B.
 #   prod-plan  same-repo PRs only: prod build + Lambda bundles, read-only prod plan; summary artifact, and
 #              the merge-rules-input artifact (plan summary + lockfile diff) the orchestrator fetches
 #   required   the aggregate check `ci/required` that the main ruleset requires
@@ -41,9 +45,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # cache: only credential-free pull_request jobs (checks, candidate-build) use the pnpm cache; see .github/actions/setup.
       - uses: ./.github/actions/setup
         with:
           terraform: "true"
+          cache: "true"
 
       - name: Lint
         run: pnpm lint
@@ -223,6 +229,100 @@ jobs:
         if: always() && steps.aws.outcome == 'success'
         run: pnpm check-preview-clean --pr "$PR_NUMBER" --retries 5 --retry-delay 30
 
+  # AR1 slice 2 (PR A, shadow): all candidate code that used to run beside AWS/Neon credentials runs here
+  # instead, with none. Output is data for preview-trusted.yml: a Postgres dump of the migrated + seeded
+  # candidate schema, the OpenNext preview build as a tar, and a manifest binding them to this run.
+  candidate-build:
+    name: candidate-build
+    needs: checks
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      # Major 17: the Neon CI project's version is not recorded in the repo (set this to match it).
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    # OUT_DIR is set per step: the runner context is not available in job-level env.
+    env:
+      REPOSITORY_ID: ${{ github.repository_id }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          cache: "true"
+
+      - name: Migrate and seed the service database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          pnpm migrate
+          pnpm seed
+
+      # The runner's default client is older than 17; pg_dump must not be older than the server.
+      - name: PostgreSQL 17 client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+
+      # Plain SQL with INSERTs (no COPY): the trusted side restores it as one simple query, not through psql.
+      - name: Dump the database (preview-db.sql)
+        env:
+          PGPASSWORD: postgres
+          OUT_DIR: ${{ runner.temp }}/candidate
+        run: |
+          mkdir -p "$OUT_DIR"
+          /usr/lib/postgresql/17/bin/pg_dump --host localhost --username postgres --dbname postgres --no-owner --no-privileges --clean --if-exists --inserts --file "$OUT_DIR/preview-db.sql"
+
+      - name: Preview build (KCW_ENV=preview)
+        env:
+          KCW_ENV: preview
+        run: pnpm build-web
+
+      # Uncompressed pax tar (the artifact zip compresses it; pnpm paths exceed ustar limits). atime/ctime are
+      # dropped to keep headers small; the trusted side accepts only path/mtime/atime/ctime pax records.
+      - name: Archive the build (preview-web.tar)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
+        run: tar --format=pax --pax-option=delete=atime,delete=ctime -cf "$OUT_DIR/preview-web.tar" -C apps/web .open-next
+
+      - name: Manifest (candidate-manifest.json)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
+        run: pnpm candidate-manifest --dir "$OUT_DIR"
+
+      # Early warning only (this job is candidate-controlled; the trusted verify job is the authority): the
+      # same validator the trusted side runs, so link entries or limit overruns fail this PR before merge.
+      - name: Self-check the artifact with the trusted validator
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
+        run: pnpm verify-candidate verify --dir "$OUT_DIR"
+
+      - name: Upload candidate-preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: candidate-preview
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 3
+
   prod-plan:
     name: prod-plan
     needs: checks
@@ -304,7 +404,7 @@ jobs:
 
   required:
     name: ci/required
-    needs: [checks, preview, prod-plan]
+    needs: [checks, preview, candidate-build, prod-plan]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -315,12 +415,14 @@ jobs:
           SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           CHECKS: ${{ needs.checks.result }}
           PREVIEW: ${{ needs.preview.result }}
+          CANDIDATE: ${{ needs['candidate-build'].result }}
           PLAN: ${{ needs['prod-plan'].result }}
         run: |
-          echo "checks=$CHECKS preview=$PREVIEW prod-plan=$PLAN same-repo=$SAME_REPO"
+          echo "checks=$CHECKS preview=$PREVIEW candidate-build=$CANDIDATE prod-plan=$PLAN same-repo=$SAME_REPO"
           test "$CHECKS" = success
           if [ "$SAME_REPO" = true ]; then
             test "$PREVIEW" = success
+            test "$CANDIDATE" = success
             test "$PLAN" = success
           else
             echo "Fork PR: preview and prod plan do not run."
