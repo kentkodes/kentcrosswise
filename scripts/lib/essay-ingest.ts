@@ -1,8 +1,9 @@
 // Essay ingest from the Project Gutenberg rsync mirror (docs/essays/GUTENBERG-SLICE-PLAN.md section 12).
 //   fetch phase: rsync one book directory at a time into a local directory, then extract and validate
 //                in memory and report a verdict. No database, no AWS.
-//   store phase: per approved book, extract, validate, put the text in S3 (content-addressed key), then
-//                one transaction (essays row + essay_urls status), or a quarantine row.
+//   store phase: per approved book, extract, validate (v1 checks, then exact, near and metadata duplicate checks),
+//                put the text in S3 (key = sha256 of the raw UTF-8 text), then one transaction: a new essays row,
+//                or the seed's link-only row upgraded in place; or a quarantine row. A repeated exact text writes nothing.
 // rsync runs through an injected runner (never a shell); S3 and the database are injected too.
 // Essay text never reaches a log line, an error or stdout: output is ids, counts and fixed codes.
 import { createHash } from "node:crypto";
@@ -18,6 +19,9 @@ import { gutenbergEbookUrl } from "../../packages/essays/src/match/gutenberg-rec
 import { recordOutcome } from "../../packages/essays/src/registry/health";
 import { GUTENBERG_SLUG } from "../../packages/essays/src/registry/bootstrap";
 import { validateExtraction, type ReasonCode } from "../../packages/essays/src/validate/basic";
+import {
+  isMetadataDuplicate, minhash, minhashSimilarity, NEAR_DUPLICATE_MIN_SIMILARITY, normalizedTextHash,
+} from "../../packages/essays/src/validate/duplicates";
 
 export const ESSAY_TEXT_PREFIX = "essays/text/";
 /** Tried in order; the second only after a connection-class failure of the first. */
@@ -27,7 +31,7 @@ export const PAUSE_BETWEEN_BOOKS_MS = 10_000;
 
 export type FetchCode = "mirror_unreachable" | "mirror_refused" | "timeout" | "no_files" | "rsync_failed";
 export type StoreCode =
-  | "stored" | "duplicate" | "quarantined" | "not_approved" | "already_processed" | "no_files" | typeof NO_USABLE_TEXT;
+  | "stored" | "upgraded" | "duplicate" | "quarantined" | "not_approved" | "already_processed" | "no_files" | typeof NO_USABLE_TEXT;
 
 /** A fixed-code failure (never carries book content or connection details). */
 export class IngestError extends Error {
@@ -276,34 +280,78 @@ async function storeBook(id: number, deps: StoreDeps): Promise<StoreCode> {
     return a.code;
   }
 
-  if (a.reasons.length) {
-    await inTransaction(db, async () => {
-      await db.query("INSERT INTO quarantine (essay_url, reasons) VALUES ($1, $2::jsonb)", [url, JSON.stringify(a.reasons)]);
-      await db.query("UPDATE essay_urls SET status = 'quarantined' WHERE url = $1", [url]);
-    });
-    return "quarantined";
+  if (a.reasons.length) return quarantineBook(db, url, a.reasons);
+
+  // Duplicate checks before anything is written (SPEC item 4). Exact first: an exact copy needs no S3 write.
+  const text = a.extraction.text;
+  const body = Buffer.from(text, "utf8");
+  const textHash = normalizedTextHash(text);
+  const signature = minhash(text);
+  const key = `${ESSAY_TEXT_PREFIX}${createHash("sha256").update(body).digest("hex")}.txt`;
+
+  const same = await db.query("SELECT 1 FROM essays WHERE text_hash = $1", [textHash]);
+  if (same.rows.length > 0) {
+    await db.query("UPDATE essay_urls SET status = 'fetched' WHERE url = $1", [url]);
+    return "duplicate";
   }
+
+  // Near and metadata checks run against the other seeds' essays; this seed's own link-only row is not a copy of it.
+  const reasons: ReasonCode[] = [];
+  const signatures = await db.query<{ minhash: number[] }>(
+    "SELECT minhash FROM essays WHERE kind = 'full' AND minhash IS NOT NULL AND seed_item_id IS DISTINCT FROM $1",
+    [link.seed_item_id],
+  );
+  if (signatures.rows.some((r) => minhashSimilarity(r.minhash, signature) >= NEAR_DUPLICATE_MIN_SIMILARITY)) {
+    reasons.push("near_duplicate");
+  }
+  const others = await db.query<{ title: string; author: string }>(
+    "SELECT title, author FROM essays WHERE seed_item_id IS DISTINCT FROM $1",
+    [link.seed_item_id],
+  );
+  const work = { title: link.title, author: link.author };
+  if (others.rows.some((r) => isMetadataDuplicate(work, r))) reasons.push("metadata_duplicate");
+  if (reasons.length > 0) return quarantineBook(db, url, reasons);
 
   // S3 first: the key is the content hash, so a crash before the commit leaves an object the next run
   // reuses, and the unique text_hash makes the row itself idempotent.
-  const body = Buffer.from(a.extraction.text, "utf8");
-  const hash = createHash("sha256").update(body).digest("hex");
-  const key = `${ESSAY_TEXT_PREFIX}${hash}.txt`;
   await deps.putObject(key, body);
 
-  let inserted = false;
+  let outcome: StoreCode = "duplicate";
   await inTransaction(db, async () => {
-    const { rows } = await db.query(
-      `INSERT INTO essays (kind, title, author, year, source_id, source_url, word_count, language, status, text_hash, text_s3_key, seed_item_id)
-       VALUES ('full', $1, $2, $3, $4, $5, $6, 'en', 'pending_category', $7, $8, $9)
-       ON CONFLICT (text_hash) DO NOTHING RETURNING id`,
-      [link.title, link.author, link.year, link.source_id, url, a.extraction.wordCount, hash, key, link.seed_item_id],
-    );
-    inserted = rows.length > 0;
+    const linkEssay = (
+      await db.query<{ id: string }>("SELECT id FROM essays WHERE kind = 'link' AND seed_item_id = $1 LIMIT 1", [link.seed_item_id])
+    ).rows[0];
+    if (linkEssay) {
+      // The link-only row keeps its id, status, categories, ratings and progress; it becomes the full essay.
+      await db.query(
+        `UPDATE essays SET kind = 'full', source_id = $1, source_url = $2, word_count = $3, language = 'en',
+                text_hash = $4, text_s3_key = $5, minhash = $6::integer[]
+          WHERE id = $7 AND kind = 'link'`,
+        [link.source_id, url, a.extraction.wordCount, textHash, key, signature, linkEssay.id],
+      );
+      outcome = "upgraded";
+    } else {
+      const { rows } = await db.query(
+        `INSERT INTO essays (kind, title, author, year, source_id, source_url, word_count, language, status, text_hash, text_s3_key, seed_item_id, minhash)
+         VALUES ('full', $1, $2, $3, $4, $5, $6, 'en', 'pending_category', $7, $8, $9, $10::integer[])
+         ON CONFLICT (text_hash) DO NOTHING RETURNING id`,
+        [link.title, link.author, link.year, link.source_id, url, a.extraction.wordCount, textHash, key, link.seed_item_id, signature],
+      );
+      // No row: the same text was stored by another run between the check above and this insert.
+      outcome = rows.length > 0 ? "stored" : "duplicate";
+    }
     await db.query("UPDATE essay_urls SET status = 'fetched' WHERE url = $1", [url]);
   });
-  // No row means the same text is already stored for another URL: the URL is fetched, the text a duplicate.
-  return inserted ? "stored" : "duplicate";
+  return outcome;
+}
+
+/** Quarantines a book with fixed reason codes only; no text is stored. */
+async function quarantineBook(db: Db, url: string, reasons: readonly ReasonCode[]): Promise<"quarantined"> {
+  await inTransaction(db, async () => {
+    await db.query("INSERT INTO quarantine (essay_url, reasons) VALUES ($1, $2::jsonb)", [url, JSON.stringify(reasons)]);
+    await db.query("UPDATE essay_urls SET status = 'quarantined' WHERE url = $1", [url]);
+  });
+  return "quarantined";
 }
 
 /** Throws `pipelines_paused` unless the pause flag is readable and false (fail closed). */
@@ -324,7 +372,7 @@ export async function storePhase(ids: readonly number[], deps: StoreDeps): Promi
   return results;
 }
 
-export const STORE_OK: ReadonlySet<StoreCode> = new Set(["stored", "duplicate", "already_processed"]);
+export const STORE_OK: ReadonlySet<StoreCode> = new Set(["stored", "upgraded", "duplicate", "already_processed"]);
 
 // ------------------------------------------------------------------ re-extract phase
 
@@ -342,12 +390,20 @@ export interface ReextractResult {
 interface StoredEssay {
   id: string;
   text_hash: string;
+  text_s3_key: string | null;
+  minhash: number[] | null;
   word_count: number | null;
+}
+
+/** True when a stored signature equals the computed one (a null stored signature never matches). */
+function sameSignature(stored: readonly number[] | null, signature: readonly number[]): boolean {
+  return stored !== null && stored.length === signature.length && stored.every((v, i) => v === signature[i]);
 }
 
 /**
  * One stored book, re-analysed with the current extractor. Changes the essays row only (text_hash,
- * text_s3_key, word_count), never its status, categories, ratings, progress or the essay_urls row.
+ * text_s3_key, word_count, minhash), never its status, categories, ratings, progress or the essay_urls row.
+ * Rows stored before v2 hold the raw-text hash and no minhash; they are backfilled here.
  */
 async function reextractBook(id: number, deps: StoreDeps): Promise<ReextractResult> {
   const { db } = deps;
@@ -356,7 +412,7 @@ async function reextractBook(id: number, deps: StoreDeps): Promise<ReextractResu
   const urlRow = (await db.query<{ status: string }>("SELECT status FROM essay_urls WHERE url = $1", [url])).rows[0];
   const essays = (
     await db.query<StoredEssay>(
-      `SELECT e.id, e.text_hash, e.word_count
+      `SELECT e.id, e.text_hash, e.text_s3_key, e.minhash, e.word_count
          FROM essays e JOIN sources s ON s.id = e.source_id AND s.slug = $2
         WHERE e.kind = 'full' AND e.source_url = $1`,
       [url, GUTENBERG_SLUG],
@@ -369,20 +425,24 @@ async function reextractBook(id: number, deps: StoreDeps): Promise<ReextractResu
   if (a.code !== null) return { id, code: a.code };
   if (a.reasons.length) return { id, code: "invalid" };
 
-  const body = Buffer.from(a.extraction.text, "utf8");
-  const hash = createHash("sha256").update(body).digest("hex");
-  if (hash === stored.text_hash) return { id, code: "unchanged" };
+  const text = a.extraction.text;
+  const body = Buffer.from(text, "utf8");
+  const key = `${ESSAY_TEXT_PREFIX}${createHash("sha256").update(body).digest("hex")}.txt`;
+  const textHash = normalizedTextHash(text);
+  const signature = minhash(text);
+  if (stored.text_s3_key === key && stored.text_hash === textHash && sameSignature(stored.minhash, signature)) {
+    return { id, code: "unchanged" };
+  }
 
-  const other = await db.query("SELECT 1 FROM essays WHERE text_hash = $1 AND id <> $2", [hash, stored.id]);
+  const other = await db.query("SELECT 1 FROM essays WHERE text_hash = $1 AND id <> $2", [textHash, stored.id]);
   if (other.rows.length > 0) return { id, code: "duplicate" };
 
   // S3 first, as in store: the object exists before the row points at it.
-  const key = `${ESSAY_TEXT_PREFIX}${hash}.txt`;
   await deps.putObject(key, body);
   const updated = await db.query(
-    `UPDATE essays SET text_hash = $1, text_s3_key = $2, word_count = $3
-      WHERE id = $4 AND text_hash = $5 RETURNING id`,
-    [hash, key, a.extraction.wordCount, stored.id, stored.text_hash],
+    `UPDATE essays SET text_hash = $1, text_s3_key = $2, word_count = $3, minhash = $4::integer[]
+      WHERE id = $5 AND text_hash = $6 RETURNING id`,
+    [textHash, key, a.extraction.wordCount, signature, stored.id, stored.text_hash],
   );
   if (updated.rows.length === 0) return { id, code: "changed_concurrently" };
   return { id, code: "reextracted", words: { from: stored.word_count, to: a.extraction.wordCount } };

@@ -6,7 +6,7 @@
 //                  local copy (DeepSeek), record the top type and make the essay active. Needs a database
 //                  and the models secret; non-PGlite targets need --confirm.
 //   --phase reextract  for each stored essay of a fetched book: re-extract the local copy with the current
-//                  extractor, put the new text in S3 and update text_hash, text_s3_key and word_count (ids,
+//                  extractor, put the new text in S3 and update text_hash, text_s3_key, word_count and minhash (ids,
 //                  status, categories and ratings kept). Needs --bucket and a database; --confirm for non-PGlite.
 // Output is book ids, counts and fixed codes only; never essay text.
 // Usage: pnpm essay-ingest --phase fetch --ids "1342 84" [--dir <path>]
@@ -47,7 +47,7 @@ categorize  per stored pending_category essay: classify the first 2000 words of 
        keys from --models-secret, default ${MODELS_SECRET}), store the
        top type and set the essay active. --confirm for any non-PGlite target. Skipped when pipelines_paused is set.
 reextract  per stored essay of a fetched book: re-extract the copy in --dir with the current extractor; S3 put of the
-       new text, then text_hash, text_s3_key and word_count of the same essay row (id, status, categories and
+       new text, then text_hash, text_s3_key, word_count and minhash of the same essay row (id, status, categories and
        ratings kept). Codes: reextracted, unchanged, not_stored, invalid (nothing changed, no quarantine), duplicate,
        changed_concurrently, no_files, no_usable_text. When the ids cover every stored Gutenberg essay and all are
        reextracted or unchanged, the source's extractor_version is set to the current one. --confirm for any non-PGlite target. Skipped when

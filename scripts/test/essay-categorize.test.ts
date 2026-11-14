@@ -12,6 +12,7 @@ import {
   EXCERPT_WORDS, ESSAY_TYPES, categorizePhase, modelsFromSecret, type CategorizeDeps,
 } from "../lib/essay-categorize";
 import { storePhase } from "../lib/essay-ingest";
+import { syntheticBook } from "../../packages/essays/test/synthetic-book";
 
 const FIXTURES = fileURLToPath(new URL("../../packages/essays/test/fixtures/gutenberg-text/", import.meta.url));
 const ESSAY = readFileSync(join(FIXTURES, "essay.txt"), "utf8");
@@ -24,6 +25,11 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 describe("categorize phase on PGlite as a pipeline_rw member", () => {
   const LOGIN = "categorize_test_app";
   const IDS = { ok: 301, low: 302, mismatch: 303, perr: 304, models: 305, cap: 306, missing: 308, noFile: 309, bad: 311, unsafe: 312 };
+  // Distinct titles, so the metadata check does not quarantine the stored books against each other.
+  const TITLES: Record<number, string> = {
+    301: "Violet Harbour", 302: "Copper Lantern", 303: "Amber Meadow", 304: "Silver Orchard", 305: "Winter Compass",
+    306: "Marble Anchor", 308: "Velvet Thunder", 309: "Ember Falcon", 311: "Glacier Basket", 312: "Hollow Cabin",
+  };
   let fresh: Awaited<ReturnType<typeof freshDb>>;
   let dir: string;
   const logs: string[] = [];
@@ -50,8 +56,12 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
   function writeBook(id: number, extraWords = 0): void {
     mkdirSync(join(dir, String(id)), { recursive: true });
     const extra = extraWords ? `\n\n${Array.from({ length: extraWords }, (_, i) => `padword${i}`).join(" ")}\n\n` : "";
-    const text = ESSAY.replace("special receipt", `special receipt ${id}`).replace("*** END OF", `${extra}*** END OF`);
-    writeFileSync(join(dir, String(id), `${id}-0.txt`), text);
+    // The first book is the fixture (its phrases feed the leak checks); the others are distinct synthetic books, so the
+    // store phase's near-duplicate check does not quarantine them. Each starts with the title line.
+    const base = id === IDS.ok
+      ? ESSAY.replace("special receipt", `special receipt ${id}`)
+      : syntheticBook(ESSAY, `book-${id}`, 420, "Of Studies\nby Francis Bacon\n\n");
+    writeFileSync(join(dir, String(id), `${id}-0.txt`), base.replace("*** END OF", `${extra}*** END OF`));
   }
 
   beforeAll(async () => {
@@ -63,7 +73,7 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     const stored = [IDS.ok, IDS.low, IDS.mismatch, IDS.perr, IDS.models, IDS.cap, IDS.noFile, IDS.bad, IDS.unsafe];
     for (const id of [...stored, IDS.missing]) {
       const seed = await q<{ id: string }>(
-        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [`Seed title ${id}`]);
+        "INSERT INTO seed_items (title, author, year, status) VALUES ($1, 'Francis Bacon', 1625, 'approved') RETURNING id", [TITLES[id]]);
       await q(
         `INSERT INTO seed_source_links (seed_item_id, source_id, candidate_url, candidate_title, candidate_author, tier, score, status)
          VALUES ($1, $2, $3, 't', 'a', 'A', 1, 'approved')`, [seed[0]?.id, sourceId, urlOf(id)]);
