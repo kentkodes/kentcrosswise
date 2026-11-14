@@ -6,7 +6,7 @@ Current backlog, 2026-11-14 UTC. Current state and holds are in [HANDOFF.md](HAN
 
 | ID | Open point |
 |---|---|
-| R1 | Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private hub's contacts and mood are not built). Its "Simulated data" frame also shows real agent rows. |
+| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private hub's contacts and mood are not built). Its "Simulated data" frame also shows real agent rows. |
 | R3 | Worker context cost: the canary's one-line docs task sent about 1.1M input tokens to DeepSeek over about 40 turns, because each turn re-sends the large instruction, handoff and design files the playbooks require. Shorter required reading (this cleanup) is the first step; measure the next task's input tokens before doing more. |
 
 ## Essays (Phase 5)
@@ -15,7 +15,6 @@ Current backlog, 2026-11-14 UTC. Current state and holds are in [HANDOFF.md](HAN
 |---|---|
 | E5 | Further sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback. With the first non-Gutenberg extractor, add the navigation/ad-text and language checks of SPEC item 4. |
-| E7 | Backfill the 8 stored Gutenberg rows (normalized `text_hash` and `minhash`) with a `--phase reextract` run before the next ingest; until then the exact and near checks cannot see them. |
 | E8 | DeepSeek categorization in production and hook writing. |
 | E10 | Nightly source health and weekly quality report; open a GitHub issue for quarantined essays once the Scraper-builder runs. |
 | E11 | Public demo with a few public-domain essays. |

@@ -14,7 +14,7 @@ A private hub for one person (the owner): capture thoughts from phone or compute
 ## Features (MVP)
 
 1. **Capture box.** A phone-friendly text box behind login. Every entry is stored raw, then routed.
-2. **Router.** DeepSeek V4.1 Flash classifies each entry as `crm_note`, `diary`, `todo`, `idea` or `agent_request`. The owner sees the result and can reassign it; corrections are stored. Low confidence puts the entry in the inbox for the owner to choose.
+2. **Router.** DeepSeek V4.1 Flash classifies each entry as `crm_note`, `diary`, `todo`, `idea` or `agent_request`. The owner sees the result and can reassign it; corrections are stored. Low confidence (below 0.6, provisional until a small labelled sample sets it) puts the entry in the inbox for the owner to choose.
 3. **CRM.** Contacts: name, how known, birthday, notes, tags. CRM notes link to contacts by name match (owner confirms when ambiguous). When a note implies a plan ("lunch with Sam next Tuesday"), the app suggests a Google Calendar event; the owner adds it with one tap. **Not included:** last-contact tracking and "you haven't talked to X" reminders.
 4. **Diary and mood.** A diary page for long entries; diary items from the capture box land here too. Each entry is scored 0–1 on energy, stress, happiness, satisfaction, sadness, anger, anxiety and gratitude, plus an overall sentiment from -1 to 1 (Haiku 5.5). The mood board charts these over time, with a toggle per metric and the overall line on top.
 5. **Social dashboard.** YouTube, Instagram and TikTok (all business/creator accounts). A daily snapshot of followers and views per source; totals plus a filter by source.

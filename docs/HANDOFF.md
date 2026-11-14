@@ -4,29 +4,30 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Observation and provenance
 
-- Observed 2026-11-13 UTC by the Liaison from fetched `origin/main`, the GitHub PR list and the public site. Production database, AWS and repository variables were not re-read for this update; values marked "last recorded" come from the 2026-11-12 session.
+- Observed 2026-11-14 UTC by the Liaison from fetched `origin/main`, the GitHub PR list, workflow runs and the public site (docs consistency pass after #101-#103). Production database, AWS and repository variables were not re-read; values marked "last recorded" come from the 2026-11-12 session.
 
 ## Repository and refs
 
-- Default branch `main` at `3471d533993e380bcb21f1c55d691a1744b7e8ff` (PR #96, merged 2026-11-12).
+- Default branch `main` at `05bd95b07e093207f65c42f5d216bf1215f6ed4e` (PR #103, merged 2026-11-14).
 - Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge. This is the normal workflow.
 
 ## PRs and checks
 
 - Merged 2026-11-10 to 2026-11-12: #59-#96. Highlights: Paper home (#79), `/office` team board (#80) and Room tab (#90, #91), `/demo` app frame (#84), reading layout for the essay reader and `/bot` (#86), owner console in Dense UI (#93), deploy-time CloudFront invalidation and build-id smoke check (#81), QA on Claude Haiku 5.5 (#88), Gutenberg extractor v2 and in-place re-extraction (#92, #94), 2-decimal usage costs (#95), local e2e PGlite harness fix (#96).
 - 2026-11-13: `/essays` library for ~300 entries (#98) and the H2 capture box on `/hub` (#99: raw entries in `entries`, latest 10 with routing status, "Waiting for router" until H3).
-- 2026-11-14: E3 recommendations (#101): ratings of every kind shape the list (likes pull, 1–2 star ratings push, what-worked tags, last length answer), link-only essays are recommended and rateable at `/essays/<id>`, and each recommended card names the liked essay it follows.
-- Every deploy since #81 cleared the CloudFront cache and passed the build-id smoke check on `/`, `/demo`, `/office`, `/bot` and the `/hub` redirect.
+- 2026-11-14: planner handles truncated and refused replies with an 8000-token limit (#100, R2). E3 recommendations (#101): ratings of every kind shape the list (likes pull, 1–2 star ratings push, what-worked tags, last length answer), link-only essays are recommended and rateable at `/essays/<id>`, and each recommended card names the liked essay it follows. H3 routing (#102): DeepSeek classifies each capture into the five kinds; confidence below 0.6 marks it "Needs you" with a routing inbox item; `/hub` rows have a route picker and owner changes store a correction; router calls are usage events; nothing downstream is created yet. The web server now reads `kcw/prod/models` (applied by the #102 deploy). Validator v2 (#103, E7), below under Essays.
+- Every deploy since #81 cleared the CloudFront cache and passed the build-id smoke check on `/`, `/demo`, `/office`, `/bot` and the `/hub` redirect; the #102 and #103 deploys did too.
 
 ## Ownership and changes
 
 - Public pages: `/` (Paper home), `/demo` (simulated hub in an app frame), `/office` (Board and Room tabs over the sanitized public feed), `/bot`.
 - Owner pages (Google sign-in, allowlisted owner): `/hub`, `/console`, `/console/usage`, `/inbox`, `/essays`, `/essays/setup`, `/essays/<id>` reader.
 - Agents: Orchestrator planner on Claude Opus 5.5 at high effort; Developer, Scraper-builder and Docs-keeper on DeepSeek Flash through DeepSeek's Anthropic-compatible endpoint; QA work and review on Claude Haiku 5.5 through Anthropic workload identity federation. Monthly model spend cap $50 (#69).
-- Essays: 300 approved seeds; 8 full Gutenberg texts in the private bucket (extractor v2, `sources.extractor_version = '2'` after the 2026-11-12 re-extraction run); the remaining approved seeds are link-only rows. Validator v2 (E7): `essays.text_hash` is now the sha256 of the normalized text (the S3 key stays the raw-text hash), `essays.minhash` holds a 128-slot MinHash; the store phase quarantines near duplicates (MinHash >= 0.9) and same-author titles at similarity >= 0.9, and upgrades a seed's link-only row in place when its full text arrives. The 8 stored rows keep the old raw hash until a `--phase reextract` run backfills them (owner-gated live step; run it before the next ingest).
+- Essays: 300 approved seeds; 8 full Gutenberg texts in the private bucket (extractor v2, `sources.extractor_version = '2'` after the 2026-11-12 re-extraction run); the remaining approved seeds are link-only rows. Validator v2 (E7): `essays.text_hash` is now the sha256 of the normalized text (the S3 key stays the raw-text hash), `essays.minhash` holds a 128-slot MinHash; the store phase quarantines near duplicates (MinHash >= 0.9) and same-author titles at similarity >= 0.9, and upgrades a seed's link-only row in place when its full text arrives. The 8 stored rows were backfilled on 2026-11-14 (essay-ingest run 43613965538, `reextract`: all 8 `reextracted`, word counts unchanged).
 
 ## Verification
 
+- 2026-11-14: after the #103 deploy, `/`, `/office`, `/demo`, `/bot` and `/healthz` return 200. Not verified: a live DeepSeek route of a real capture (owner prod capture test pending).
 - 2026-11-13: live `/`, `/demo`, `/office` and `/bot` render. `/office` shows the Paused badge and a replay of the latest recorded events (last activity 2026-11-11).
 - Last recorded (2026-11-12): `agents_paused = true`, `KCW_AGENT_WORKFLOWS_ENABLED = false`, profile `final`. The owner checked the essay reader, `/console` and `/essays` signed in.
 - 2026-11-11 canary (task 4, one-line docs change): planner on Opus 5.5 (2 calls, 654 input / 798 output tokens), Developer and QA on DeepSeek, before QA moved to Haiku in #88 (about 1.1M input / 11K output tokens), merged as #76 and deployed.
@@ -41,5 +42,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. H3 routing (#102): DeepSeek routes each new entry, low confidence goes to the inbox Routing region, the owner reassigns with corrections stored. Next is H4 contacts, then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
-2. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and worker context cost (see OPEN-POINTS R1 and R3).
+1. Next MVP work: the owner's prod capture test of H3 routing, then H4 contacts and the remaining hub, social and inbox items; in essays, E8 categorization in production and E12 acceptance (see [OPEN-POINTS.md](OPEN-POINTS.md)).
+2. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features (R1, kept for later), and worker context cost (R3).
