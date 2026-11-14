@@ -1,9 +1,10 @@
-// The CI artifact that feeds merge-rules (P2-13, DESIGN §4.2 step 7). ci.yml's prod-plan job
-// uploads it once per run; the orchestrator's GitHub client (P2-09 getArtifact) downloads it for
-// the PR's head SHA and passes `planSummary` and `lockDiff` to merge-rules `evaluate()`.
+// The artifact that feeds merge-rules (P2-13, DESIGN §4.2 step 7; trusted since AR1 slice 3). The `prod-plan`
+// job of preview-trusted.yml (defined by main, plans main's infra with the PR's build as data) uploads it;
+// the orchestrator's GitHub client (getArtifact) reads it only from the trusted run of the PR head and
+// passes `planSummary`, `lockDiff` and `uncoveredPaths` to merge-rules `evaluate()`.
 // Shared here so the producer (scripts/merge-input.ts) and the consumer use the same name and shape.
 
-/** Artifact name in `actions/upload-artifact` (ci.yml) and in the REST "list workflow run artifacts" response. */
+/** Artifact name in `actions/upload-artifact` (preview-trusted.yml) and in the REST "list workflow run artifacts" response. */
 export const MERGE_INPUT_ARTIFACT = "merge-rules-input";
 
 /** The one file in the artifact's zip. */
@@ -24,16 +25,22 @@ export interface MergeInputLockDiff {
   existing: string[];
 }
 
-/** Content of `merge-rules-input.json`. */
+/** Content of `merge-rules-input.json`. `uncoveredPaths`: sorted PR paths under `infra/` or `.github/` (renames count both paths), which the trusted plan (main's infra) does not cover. */
 export interface MergeInputFile {
-  format: 1;
+  format: 2;
+  pr: number;
+  headSha: string;
   planSummary: MergeInputPlanSummary;
   lockDiff: MergeInputLockDiff;
+  uncoveredPaths: string[];
 }
 
 export interface MergeInput {
+  pr: number;
+  headSha: string;
   planSummary: MergeInputPlanSummary;
   lockDiff: MergeInputLockDiff;
+  uncoveredPaths: string[];
 }
 
 export class MergeInputFormatError extends Error {
@@ -92,12 +99,28 @@ export function parseMergeInput(text: string): MergeInput {
   } catch {
     fail("not valid JSON");
   }
-  if (!isObject(raw) || raw.format !== 1) fail("format must be 1");
-  return { planSummary: parsePlanSummary(raw.planSummary), lockDiff: parseLockDiff(raw.lockDiff) };
+  if (!isObject(raw) || raw.format !== 2) fail("format must be 2");
+  if (typeof raw.pr !== "number" || !Number.isSafeInteger(raw.pr) || raw.pr <= 0) fail("pr must be a positive integer");
+  if (typeof raw.headSha !== "string" || !/^[0-9a-f]{40}$/.test(raw.headSha)) fail("headSha must be a 40-character lowercase hex SHA");
+  if (!isStringArray(raw.uncoveredPaths)) fail("uncoveredPaths must be an array of strings");
+  return {
+    pr: raw.pr,
+    headSha: raw.headSha,
+    planSummary: parsePlanSummary(raw.planSummary),
+    lockDiff: parseLockDiff(raw.lockDiff),
+    uncoveredPaths: [...raw.uncoveredPaths],
+  };
 }
 
 /** The file content CI uploads (stable key order, trailing newline). */
 export function serializeMergeInput(input: MergeInput): string {
-  const file: MergeInputFile = { format: 1, planSummary: input.planSummary, lockDiff: input.lockDiff };
+  const file: MergeInputFile = {
+    format: 2,
+    pr: input.pr,
+    headSha: input.headSha,
+    planSummary: input.planSummary,
+    lockDiff: input.lockDiff,
+    uncoveredPaths: input.uncoveredPaths,
+  };
   return `${JSON.stringify(file, null, 2)}\n`;
 }

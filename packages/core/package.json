@@ -9,7 +9,8 @@
     "./models": "./src/models/index.ts",
     "./events": "./src/events/index.ts",
     "./sanitize": "./src/sanitize/index.ts",
-    "./merge-input": "./src/merge-input/index.ts"
+    "./merge-input": "./src/merge-input/index.ts",
+    "./trusted-run": "./src/trusted-run/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

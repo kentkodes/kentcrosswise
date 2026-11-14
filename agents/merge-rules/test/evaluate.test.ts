@@ -25,6 +25,7 @@ function input(over: Partial<MergeRulesInput> = {}): MergeRulesInput {
     patches: { "packages/essays/src/index.ts": "@@ -1 +1 @@\n-a\n+b\n" },
     planSummary: EMPTY_PLAN,
     lockDiff: NO_DEPS,
+    uncoveredPaths: [],
     author: "kcw-developer[bot]",
     ...over,
   };
@@ -231,6 +232,21 @@ describe("prod plan non-empty (Q6: the infra list)", () => {
   it("a missing plan summary is critical (fails closed)", () => {
     expect(evaluate(input({ planSummary: null })).reasons).toEqual([
       "prod plan summary missing: cannot check production infrastructure or cost",
+    ]);
+  });
+});
+
+describe("paths the trusted plan does not cover (AR1 slice 3)", () => {
+  it("each uncovered path is a reason", () => {
+    expect(evaluate(input({ uncoveredPaths: ["infra/preview/main.tf", ".github/workflows/ci.yml"] })).reasons).toEqual([
+      "not covered by the trusted prod plan (owner reviews the PR's own plan): .github/workflows/ci.yml",
+      "not covered by the trusted prod plan (owner reviews the PR's own plan): infra/preview/main.tf",
+    ]);
+  });
+
+  it("missing uncovered paths fail closed", () => {
+    expect(evaluate(input({ uncoveredPaths: null })).reasons).toEqual([
+      "uncovered infrastructure paths missing: cannot check what the trusted plan covers",
     ]);
   });
 });

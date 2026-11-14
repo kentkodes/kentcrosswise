@@ -74,7 +74,7 @@ The current expected subjects are:
 
 | Role | Expected immutable subject suffix |
 |---|---|
-| kcw-gh-plan | pull_request |
+| kcw-gh-plan | pull_request and environment:prod-plan (AR1 slice 3) |
 | kcw-gh-ci | environment:preview-gc (no pull_request since the AR1 slice 2 cutover) |
 | kcw-gh-deploy | environment:prod |
 | kcw-gh-agent-<role> | environment:agent-publish-<role> |
@@ -207,7 +207,7 @@ Workflows: `ci.yml` (every PR), `deploy.yml` (push to main, environment `prod`),
    ```
 
 3. Merge a reviewed PR through the current ruleset. `deploy.yml` runs strict production migration using kcw/prod/migrator, builds, applies and smoke-checks public/owner routes. A missing or invalid migrator configuration fails deployment.
-4. Open a throwaway PR from a branch of this repo. `ci.yml` must be green, including `ci/required`; the `preview` job's last step prints `pr-<n> is clean`, and `prod-plan` uploads the `prod-plan-summary` artifact (a trivial PR shows no infrastructure changes).
+4. Open a throwaway PR from a branch of this repo. `ci.yml` must be green, including `ci/required`; the `preview` job's last step prints `pr-<n> is clean`, and the advisory `prod-plan` shows the plan in its step summary (a trivial PR shows no infrastructure changes).
 5. Close the PR. `preview-gc (closed PR)` runs and reports no leftovers.
 6. `gh workflow run preview-gc.yml --ref main` (dry run by default) reports leftovers without changing anything.
 
@@ -247,3 +247,12 @@ Order: owner merges the cutover PR (PR B) first, then runs the bootstrap apply. 
 1. **Plan.** `terraform -chdir=infra/bootstrap plan`. Expect only the `kcw-gh-ci` assume-role policy changing in place: the `...:pull_request` subject is removed, `...:environment:preview-gc` remains. Nothing else changes; `kcw-gh-plan` keeps `pull_request`.
 2. **Apply.** `terraform -chdir=infra/bootstrap apply` (owner credentials).
 3. **Verify.** A PR's `preview-trusted` run (verify, provision, e2e, teardown) passes; a `pull_request` job that tries `aws-actions/configure-aws-credentials` with `vars.AWS_ROLE_CI_ARN` is refused (for example a throwaway PR step, then closed); the PR-closed `preview-gc` run (now `pull_request_target`) succeeds. Not run for the source change.
+
+## AR1 slice 3 (trusted merge-rules input)
+
+Order: owner applies bootstrap, creates the environment, then merges the slice 3 PR. The new `prod-plan` job of `preview-trusted.yml` runs from `main` only after the merge, and it needs the trust and the environment first. Open PRs need a new push after the merge, because their earlier `ci` run has no `candidate-prod` artifact.
+
+1. **Plan.** `terraform -chdir=infra/bootstrap plan`. Expect only the `kcw-gh-plan` assume-role policy changing in place: `...:environment:prod-plan` is added next to `...:pull_request`. Nothing else changes.
+2. **Apply.** `terraform -chdir=infra/bootstrap apply` (owner credentials).
+3. **Environment.** Create GitHub environment `prod-plan` and set *Deployment branches* to *Selected branches* with `main` only (no tags, no other branches), like `preview-gc`. No secrets or variables belong to it: `AWS_ROLE_PLAN_ARN` and `TF_STATE_BUCKET` are repository variables.
+4. **Merge the PR**, then check on the next PR that the `preview-trusted` run has a green `prod-plan` job and artifact `merge-rules-input`, and that the orchestrator's merge step reads it. Not run for the source change.

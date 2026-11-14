@@ -9,7 +9,7 @@ export const DEFAULT_REPO = "kentkodes/kentcrosswise";
 /** The check the `main` ruleset requires from the orchestrator App (DESIGN §4.1). */
 export const MERGE_RULES_CHECK = "kcw/merge-rules";
 
-/** The PR workflow whose `prod-plan` job uploads the merge-rules artifact (P2-13). */
+/** The PR workflow whose completion the task graph waits for (`ci/required`). The merge-rules artifact comes from the trusted preview run instead (AR1 slice 3). */
 export const CI_WORKFLOW = "ci.yml";
 
 export interface CreateIssueInput {
@@ -106,10 +106,11 @@ export interface GetArtifactInput {
 export type ArtifactResult =
   | { found: true; input: MergeInput; runId: number; artifactId: number }
   /**
-   * `no_run`: no ci.yml run for this head yet; `no_artifact`: the runs have no (unexpired) artifact,
-   * e.g. prod-plan has not finished or failed. Callers treat merge-rules input as missing (fail closed).
+   * `trusted_run_pending`: no preview-trusted.yml run for this head yet, or it has not finished;
+   * `trusted_run_failed`: the latest run did not pass; `no_artifact`: the passed run has no (unexpired)
+   * artifact. Callers treat merge-rules input as missing (fail closed).
    */
-  | { found: false; reason: "no_run" | "no_artifact" };
+  | { found: false; reason: "trusted_run_pending" | "trusted_run_failed" | "no_artifact" };
 
 export interface FindWorkflowRunInput {
   /** Workflow file name, e.g. `agent-docs.yml`. */
@@ -137,7 +138,10 @@ export interface GitHubClient {
   postCheck(input: PostCheckInput): Promise<PostedCheck>;
   cancelRun(runId: number): Promise<CancelResult>;
   getDiff(pr: number): Promise<PrDiff>;
-  /** The P2-13 merge-rules input (`@kcw/core/merge-input`) of the PR head's ci.yml run. */
+  /**
+   * The merge-rules input (`@kcw/core/merge-input`) of the latest successful trusted run for the PR head
+   * (`@kcw/core/trusted-run`); content for another PR or head is an ArtifactFormatError.
+   */
   getArtifact(input: GetArtifactInput): Promise<ArtifactResult>;
   /** The newest workflow_dispatch run of `workflow` with that display title created since `createdAfter`, or null. */
   findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null>;

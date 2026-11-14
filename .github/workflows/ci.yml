@@ -5,8 +5,12 @@
 #              `candidate-preview`. .github/workflows/preview-trusted.yml (workflow_run, defined by main)
 #              verifies it and provisions the preview in a separate trusted run; no pull_request job can
 #              assume kcw-gh-ci (AR1 slice 2).
-#   prod-plan  same-repo PRs only: prod build + Lambda bundles, read-only prod plan; summary artifact, and
-#              the merge-rules-input artifact (plan summary + lockfile diff) the orchestrator fetches
+#   candidate-prod-build  same-repo PRs only, also credential-free: prod build + Lambda bundles as the data-only
+#              artifact `candidate-prod` (the Terraform inputs of infra/prod). preview-trusted.yml verifies it and
+#              runs the prod plan that feeds merge-rules from main's definition (AR1 slice 3).
+#   prod-plan  same-repo PRs only: ADVISORY read-only prod plan of this PR's own infra and build, shown in the step
+#              summary. Its output feeds nothing: it runs candidate code beside a plan role, so merge-rules never
+#              reads it (the trusted `prod-plan` job of preview-trusted.yml does that).
 #   required   the aggregate check `ci/required` that the main ruleset requires
 #
 # Fork PRs get `checks` only: no AWS role, no secrets (and the role trust would refuse them anyway).
@@ -169,6 +173,65 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # AR1 slice 3: the prod build the trusted prod plan (preview-trusted.yml) plans with. Same shape as
+  # candidate-build: no credentials, data-only output. Allowed tar roots: PROD_ROOTS in scripts/lib/candidate-artifact.ts.
+  candidate-prod-build:
+    name: candidate-prod-build
+    needs: checks
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      REPOSITORY_ID: ${{ github.repository_id }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          cache: "true"
+
+      # Prod build; build-web also fails if the preview login is in the bundle.
+      - name: Prod build
+        run: pnpm build-web
+
+      - name: Lambda bundles
+        run: pnpm build-lambdas
+
+      # Uncompressed pax tar from the repo root (same options as candidate-build); the paths are the fixed PROD_ROOTS.
+      - name: Archive the build (prod-build.tar)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate-prod
+        run: |
+          mkdir -p "$OUT_DIR"
+          tar --format=pax --pax-option=delete=atime,delete=ctime -cf "$OUT_DIR/prod-build.tar" apps/web/.open-next agents/orchestrator/dist agents/orchestrator/dist-sweeper agents/webhook-relay/dist scripts/dist-pipelines
+
+      - name: Manifest (candidate-manifest.json)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate-prod
+        run: pnpm candidate-manifest --kind prod --dir "$OUT_DIR"
+
+      # Early warning only (the trusted verify job is the authority), as in candidate-build.
+      - name: Self-check the artifact with the trusted validator
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate-prod
+        run: pnpm verify-candidate verify --kind prod --dir "$OUT_DIR"
+
+      - name: Upload candidate-prod
+        uses: actions/upload-artifact@v7
+        with:
+          name: candidate-prod
+          path: ${{ runner.temp }}/candidate-prod/
+          if-no-files-found: error
+          retention-days: 3
+
   prod-plan:
     name: prod-plan
     needs: checks
@@ -181,11 +244,9 @@ jobs:
     env:
       TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
     steps:
-      # fetch-depth 2: the PR merge commit and its parents; HEAD^1 is the base branch (lockfile diff).
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          fetch-depth: 2
 
       - uses: ./.github/actions/setup
         with:
@@ -215,42 +276,16 @@ jobs:
         run: terraform -chdir=infra/prod plan -lock=false -out=prod.tfplan
 
       # The plan JSON contains sensitive values in clear text: it is summarized, then deleted, never uploaded.
+      # The summary markdown is all this job keeps; no artifact is uploaded.
       - name: Plan summary
         run: |
           terraform -chdir=infra/prod show -json prod.tfplan > "$RUNNER_TEMP/prod-plan.json"
           pnpm plan-summary --plan-json "$RUNNER_TEMP/prod-plan.json" --out "$RUNNER_TEMP/prod-plan-summary.json" --markdown "$GITHUB_STEP_SUMMARY"
           rm -f "$RUNNER_TEMP/prod-plan.json" infra/prod/prod.tfplan
 
-      - name: Upload plan summary (for merge-rules)
-        uses: actions/upload-artifact@v7
-        with:
-          name: prod-plan-summary
-          path: ${{ runner.temp }}/prod-plan-summary.json
-          if-no-files-found: error
-          retention-days: 30
-
-      # P2-13: plan summary + lockfile diff in one file for the orchestrator (merge-rules). Name and
-      # shape are MERGE_INPUT_ARTIFACT / MERGE_INPUT_FILE in @kcw/core/merge-input. The base lockfile
-      # is the first parent of the PR merge commit (checkout fetch-depth 2).
-      - name: Merge-rules input
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          echo "base sha (event)=$BASE_SHA merge parent=$(git rev-parse HEAD^1)"
-          git show HEAD^1:pnpm-lock.yaml > "$RUNNER_TEMP/base-pnpm-lock.yaml"
-          pnpm merge-input --plan-summary "$RUNNER_TEMP/prod-plan-summary.json" --base-lock "$RUNNER_TEMP/base-pnpm-lock.yaml" --head-lock pnpm-lock.yaml --out "$RUNNER_TEMP/merge-rules-input.json" --markdown "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload merge-rules input
-        uses: actions/upload-artifact@v7
-        with:
-          name: merge-rules-input
-          path: ${{ runner.temp }}/merge-rules-input.json
-          if-no-files-found: error
-          retention-days: 30
-
   required:
     name: ci/required
-    needs: [checks, candidate-build, prod-plan]
+    needs: [checks, candidate-build, candidate-prod-build, prod-plan]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -261,13 +296,15 @@ jobs:
           SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           CHECKS: ${{ needs.checks.result }}
           CANDIDATE: ${{ needs['candidate-build'].result }}
+          CANDIDATE_PROD: ${{ needs['candidate-prod-build'].result }}
           PLAN: ${{ needs['prod-plan'].result }}
         run: |
-          echo "checks=$CHECKS candidate-build=$CANDIDATE prod-plan=$PLAN same-repo=$SAME_REPO"
+          echo "checks=$CHECKS candidate-build=$CANDIDATE candidate-prod-build=$CANDIDATE_PROD prod-plan=$PLAN same-repo=$SAME_REPO"
           test "$CHECKS" = success
           if [ "$SAME_REPO" = true ]; then
             test "$CANDIDATE" = success
+            test "$CANDIDATE_PROD" = success
             test "$PLAN" = success
           else
-            echo "Fork PR: candidate-build and prod plan do not run."
+            echo "Fork PR: candidate-build, candidate-prod-build and prod plan do not run."
           fi

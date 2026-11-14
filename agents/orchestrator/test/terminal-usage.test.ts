@@ -32,8 +32,11 @@ describe("terminal task usage", () => {
     const github = new FakeGitHubClient();
     github.prs.set(41, { headSha: head, author: "developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
     github.artifacts.set(head, {
+      pr: 41,
+      headSha: head,
       planSummary: { format: 1, infra: [], artifact: { count: 1, kinds: { create: 0, update: 1, delete: 0, replace: 0 } } },
       lockDiff: { added: [], existing: [] },
+      uncoveredPaths: [],
     });
     const graph = buildTaskGraph(new MemorySaver(), {
       github, store, now: () => new Date("2026-10-23T10:00:00Z"),

@@ -5,10 +5,10 @@ import { createPrivateKey } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { MERGE_INPUT_ARTIFACT, MERGE_INPUT_FILE, MergeInputFormatError, parseMergeInput } from "@kcw/core/merge-input";
+import { verifyTrustedPreview, type GitHubRead } from "@kcw/core/trusted-run";
 import { getSecret } from "@kcw/secrets";
 import {
   ArtifactFormatError,
-  CI_WORKFLOW,
   DEFAULT_REPO,
   GitHubApiError,
   GitHubConfigError,
@@ -153,6 +153,18 @@ export class OctokitGitHubClient implements GitHubClient {
     return { owner: this.owner, repo: this.repo };
   }
 
+  /** The read-only GET the shared trusted-run check needs (undefined on 404). */
+  readonly #reader: GitHubRead = {
+    get: async <T>(path: string) => {
+      try {
+        return (await this.#octokit.request(`GET ${path}`)).data as T;
+      } catch (err) {
+        if (statusOf(err) === 404) return undefined;
+        throw err;
+      }
+    },
+  };
+
   /** Runs one API call; any failure becomes a GitHubApiError carrying only the operation and status. */
   async #call<T>(operation: string, fn: () => Promise<T>): Promise<T> {
     try {
@@ -280,32 +292,33 @@ export class OctokitGitHubClient implements GitHubClient {
 
   async getArtifact(input: GetArtifactInput): Promise<ArtifactResult> {
     return this.#call("getArtifact", async () => {
-      const runs = await this.#ciRuns(input);
-      if (runs.length === 0) return { found: false, reason: "no_run" } as const;
-      for (const run of runs) {
-        const { data } = await this.#octokit.rest.actions.listWorkflowRunArtifacts({
-          ...this.#r,
-          run_id: run.id,
-          name: MERGE_INPUT_ARTIFACT,
-          per_page: 100,
-        });
-        const artifact = data.artifacts
-          .filter((a) => a.name === MERGE_INPUT_ARTIFACT && !a.expired)
-          .sort(newestFirst)[0];
-        if (!artifact) continue;
-        const zip = await this.#download(artifact.id, artifact.size_in_bytes);
-        let file: Buffer | undefined;
-        try {
-          file = readZipEntry(zip, MERGE_INPUT_FILE, { maxBytes: MAX_ARTIFACT_BYTES });
-        } catch (err) {
-          if (err instanceof ZipFormatError) throw new ArtifactFormatError(err.message, { cause: err });
-          throw err;
-        }
-        if (!file) throw new ArtifactFormatError(`${MERGE_INPUT_ARTIFACT} has no ${MERGE_INPUT_FILE}`);
-        // parseMergeInput throws MergeInputFormatError on any deviation: callers fail closed.
-        return { found: true, input: parseMergeInput(file.toString("utf8")), runId: run.id, artifactId: artifact.id };
+      // Only the trusted preview run (workflow from main) may supply merge-rules input: a pull_request
+      // workflow of the PR itself could forge it. The same check the owner merge script uses decides which run.
+      const trusted = await verifyTrustedPreview(this.#reader, { repo: `${this.owner}/${this.repo}`, pr: input.pr, sha: input.headSha });
+      if (!trusted.ok) return { found: false, reason: trusted.state === "pending" ? "trusted_run_pending" : "trusted_run_failed" } as const;
+      const { data } = await this.#octokit.rest.actions.listWorkflowRunArtifacts({
+        ...this.#r,
+        run_id: trusted.runId,
+        name: MERGE_INPUT_ARTIFACT,
+        per_page: 100,
+      });
+      const artifact = data.artifacts
+        .filter((a) => a.name === MERGE_INPUT_ARTIFACT && !a.expired)
+        .sort(newestFirst)[0];
+      if (!artifact) return { found: false, reason: "no_artifact" } as const;
+      const zip = await this.#download(artifact.id, artifact.size_in_bytes);
+      let file: Buffer | undefined;
+      try {
+        file = readZipEntry(zip, MERGE_INPUT_FILE, { maxBytes: MAX_ARTIFACT_BYTES });
+      } catch (err) {
+        if (err instanceof ZipFormatError) throw new ArtifactFormatError(err.message, { cause: err });
+        throw err;
       }
-      return { found: false, reason: "no_artifact" } as const;
+      if (!file) throw new ArtifactFormatError(`${MERGE_INPUT_ARTIFACT} has no ${MERGE_INPUT_FILE}`);
+      // parseMergeInput throws MergeInputFormatError on any deviation: callers fail closed.
+      const parsed = parseMergeInput(file.toString("utf8"));
+      if (parsed.pr !== input.pr || parsed.headSha !== input.headSha) throw new ArtifactFormatError(`${MERGE_INPUT_FILE} belongs to another PR or head`);
+      return { found: true, input: parsed, runId: trusted.runId, artifactId: artifact.id };
     });
   }
 
@@ -324,38 +337,6 @@ export class OctokitGitHubClient implements GitHubClient {
         .sort(newestFirst)[0];
       return run ? { id: run.id, status: run.status ?? "unknown", conclusion: run.conclusion ?? null } : null;
     });
-  }
-
-  /**
-   * ci.yml runs of the PR's head, newest first. A pull_request run's `head_sha` is expected to be
-   * the PR head (not the test merge commit GITHUB_SHA), so the first query filters by it. If it
-   * finds nothing, the fallback lists the PR branch's pull_request runs and keeps those whose
-   * `pull_requests` entry for this PR has the head SHA, which works whichever SHA the run carries.
-   */
-  async #ciRuns({ pr, headSha }: GetArtifactInput) {
-    const forThisPr = (r: { pull_requests: { number: number }[] | null }) =>
-      !r.pull_requests || r.pull_requests.length === 0 || r.pull_requests.some((p) => p.number === pr);
-    const { data: bySha } = await this.#octokit.rest.actions.listWorkflowRuns({
-      ...this.#r,
-      workflow_id: CI_WORKFLOW,
-      event: "pull_request",
-      head_sha: headSha,
-      per_page: 30,
-    });
-    const direct = bySha.workflow_runs.filter(forThisPr);
-    if (direct.length > 0) return direct.sort(newestFirst);
-
-    const { data: pull } = await this.#octokit.rest.pulls.get({ ...this.#r, pull_number: pr });
-    const { data: byBranch } = await this.#octokit.rest.actions.listWorkflowRuns({
-      ...this.#r,
-      workflow_id: CI_WORKFLOW,
-      event: "pull_request",
-      branch: pull.head.ref,
-      per_page: 30,
-    });
-    return byBranch.workflow_runs
-      .filter((r) => r.pull_requests?.some((p) => p.number === pr && p.head.sha === headSha))
-      .sort(newestFirst);
   }
 
   /**

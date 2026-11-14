@@ -60,8 +60,9 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   ci_not_finished: "CI has not finished on the PR head",
   head_moved: "the PR head changed while merge-rules was reading it",
   diff_incomplete: "GitHub listed only part of the changed files",
-  no_run: "no ci.yml run was found for the PR head",
-  no_artifact: "the ci.yml run has no merge-rules-input artifact",
+  trusted_run_pending: "the trusted preview run for the PR head has not finished",
+  trusted_run_failed: "the trusted preview run for the PR head did not pass",
+  no_artifact: "the trusted preview run has no merge-rules-input artifact",
 };
 
 /** Allowance for clock skew between the orchestrator and GitHub when looking up a docs run. */
@@ -577,6 +578,7 @@ class Machine {
       patches: diff.patches,
       planSummary: artifact.input.planSummary,
       lockDiff: artifact.input.lockDiff,
+      uncoveredPaths: artifact.input.uncoveredPaths,
       author: diff.author,
     });
     if (result.critical) return this.critical(result.reasons);

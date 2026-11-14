@@ -13,10 +13,15 @@ locals {
   # kcw-gh-ci (AR1 slice 2): no pull_request subject, so no PR-context job can assume it. Its users are
   # preview-trusted.yml (provision, teardown) and preview-gc.yml (closed-PR cleanup, sweep), all in
   # environment preview-gc (main-only), so agent workflows on main (ref:refs/heads/main) cannot use it.
-  # kcw-gh-plan keeps pull_request: read-only prod plan (owner decision).
+  # kcw-gh-plan (AR1 slice 3): pull_request for the advisory prod plan of ci.yml (its output feeds nothing), and
+  # environment:prod-plan (main-only) for the trusted prod plan of preview-trusted.yml, whose merge-rules input the
+  # orchestrator reads.
   role_subs = {
-    "kcw-gh-ci"     = ["${local.github_sub}:environment:preview-gc"]
-    "kcw-gh-plan"   = ["${local.github_sub}:pull_request"]
+    "kcw-gh-ci" = ["${local.github_sub}:environment:preview-gc"]
+    "kcw-gh-plan" = [
+      "${local.github_sub}:pull_request",
+      "${local.github_sub}:environment:prod-plan",
+    ]
     "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
     # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust, except
     # kcw-gh-agent-model below, which reads only the model key.
