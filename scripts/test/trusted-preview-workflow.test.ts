@@ -1,4 +1,4 @@
-// Shape of the AR1 slice 2 workflows (PR A, shadow): what each job may hold. Text-level checks, like authority-split.test.ts.
+// Shape of the AR1 slice 2 workflows (cutover): what each job may hold. Text-level checks, like authority-split.test.ts.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,7 +34,7 @@ describe("ci.yml candidate-build", () => {
     expect(job).toContain("retention-days: 3");
     expect(job).toContain("if: github.event.pull_request.head.repo.full_name == github.repository");
     const required = jobs(ci).required!;
-    expect(required).toContain("needs: [checks, preview, candidate-build, prod-plan]");
+    expect(required).toContain("needs: [checks, candidate-build, prod-plan]");
     expect(required).toContain('test "$CANDIDATE" = success');
   });
 });
@@ -91,14 +91,14 @@ describe("preview-trusted.yml", () => {
     expect(j.provision).not.toMatch(/\bpsql\b/);
   });
 
-  it("uses the shadow preview id for every resource name and checks the head before apply", () => {
-    expect(j.provision).toContain("PR_NUMBER: ${{ needs.verify.outputs.preview_id }}");
-    expect(j.provision).toContain("pr_number: ${{ needs.verify.outputs.preview_id }}");
+  it("names every resource by the PR number and checks the head before apply", () => {
+    expect(j.provision).toContain("PR_NUMBER: ${{ needs.verify.outputs.pr_number }}");
+    expect(j.provision).toContain("pr_number: ${{ needs.verify.outputs.pr_number }}");
     expect(j.provision).toContain('-backend-config="key=preview/pr-$PR_NUMBER.tfstate"');
     expect(j.provision.indexOf("verify-candidate head")).toBeGreaterThan(-1);
     expect(j.provision.indexOf("verify-candidate head")).toBeLessThan(j.provision.indexOf("terraform -chdir=infra/preview apply"));
     expect(j.provision).toContain("--require");
-    expect(j.teardown).toContain("PR_NUMBER: ${{ needs.verify.outputs.preview_id }}");
+    expect(j.teardown).toContain("PR_NUMBER: ${{ needs.verify.outputs.pr_number }}");
   });
 
   it("teardown runs after provision started and skips only when a newer head owns the preview", () => {

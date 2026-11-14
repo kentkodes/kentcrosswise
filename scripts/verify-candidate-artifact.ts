@@ -2,7 +2,7 @@
 // the main checkout. Logic and limits: lib/candidate-artifact.ts, lib/trusted-preview.ts.
 // Usage (paths are resolved against where pnpm was run; inputs come from the environment):
 //   pnpm verify-candidate resolve                 env GITHUB_TOKEN, GITHUB_REPOSITORY, REPOSITORY_ID, RUN_ID, HEAD_SHA
-//       -> step outputs pr_number, preview_id, artifact_id, head_sha
+//       -> step outputs pr_number, artifact_id, head_sha
 //   pnpm verify-candidate verify --dir <d>        env REPOSITORY_ID, PR_NUMBER, RUN_ID, HEAD_SHA
 //       Exactly the three files; manifest, sha256 and tar validated. Writes nothing.
 //   pnpm verify-candidate extract --dir <d> --dest <root>     (same env; verifies again, then extracts <root>/.open-next)
@@ -84,8 +84,8 @@ await runMain(async () => {
       runId: parseId(process.env.RUN_ID, "RUN_ID"),
       headSha,
     });
-    output({ pr_number: String(r.prNumber), preview_id: String(r.previewId), artifact_id: String(r.artifactId), head_sha: headSha });
-    console.log(`verify-candidate: PR #${r.prNumber}, artifact ${r.artifactId}, shadow preview id ${r.previewId}`);
+    output({ pr_number: String(r.prNumber), artifact_id: String(r.artifactId), head_sha: headSha });
+    console.log(`verify-candidate: PR #${r.prNumber}, artifact ${r.artifactId}`);
   } else if (command === "verify") {
     verifyDir(pathArg("dir"));
     console.log("verify-candidate: manifest, files and archive are valid");

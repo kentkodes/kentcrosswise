@@ -1,4 +1,4 @@
-# Trusted preview (AR1 slice 2, PR A: runs in SHADOW next to ci.yml's `preview` job).
+# Trusted preview (AR1 slice 2): the only preview path; no pull_request job holds cloud credentials.
 #
 # A workflow_run workflow always runs the definition on the default branch, so a pull request cannot change
 # this file or the scripts it runs: every checkout here is main, except the `e2e` job (see below). The
@@ -8,16 +8,12 @@
 # and, as before, inside the preview Lambda under the preview permissions boundary.
 #
 #   verify     no environment, no cloud credentials: pick the PR and artifact, validate, re-upload the files
-#   provision  environment preview-gc (main-only; kcw-gh-ci already trusts environment:preview-gc, so no IAM
-#              change in this PR): Neon branch, restore the dump, extract the build, terraform apply, smoke check
+#   provision  environment preview-gc (main-only; kcw-gh-ci trusts only environment:preview-gc): Neon branch, restore the dump, extract the build, terraform apply, smoke check
 #   e2e        environment preview-e2e (secret E2E_LOGIN), no id-token: candidate Playwright tests against the preview
 #   teardown   environment preview-gc, always after provision started: destroy, Neon branch, clean check
-#   result     commit status kcw/trusted-preview (shadow: not required by protection)
+#   result     commit status kcw/trusted-preview (informational; merges verify the run itself)
 #
-# SHADOW NAMESPACE (removed in PR B): the old `preview` job still owns kcw-pr-<n> and preview/pr-<n>.tfstate.
-# This workflow uses the PR number + 100000 for the Terraform variable, the state key, the Neon branch, the
-# SSM path and the kcw:pr tag (scripts/lib/trusted-preview.ts SHADOW_PR_OFFSET), so the two never collide.
-# preview-gc finds those numbers too: no such PR, so previews older than 24 h are cleaned, younger ones kept.
+# Resources are named by the PR number (kcw-pr-<n>, preview/pr-<n>.tfstate, Neon branch, SSM path, kcw:pr tag).
 name: preview-trusted
 run-name: trusted-preview ${{ github.event.workflow_run.head_sha }}
 
@@ -57,7 +53,6 @@ jobs:
       contents: read # checkout of main
     outputs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
-      preview_id: ${{ steps.resolve.outputs.preview_id }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
     env:
       REPOSITORY_ID: ${{ github.repository_id }}
@@ -110,8 +105,8 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    # Reused on purpose: kcw-gh-ci trusts environment:preview-gc and that environment is main-only, so only
-    # this trusted definition can assume the role. No candidate code runs in this job.
+    # kcw-gh-ci trusts only environment:preview-gc and that environment is main-only, so only
+    # trusted definitions can assume the role. No candidate code runs in this job.
     environment: preview-gc
     permissions:
       id-token: write
@@ -120,8 +115,7 @@ jobs:
     outputs:
       url: ${{ steps.url.outputs.url }}
     env:
-      # The shadow preview id (PR number + 100000), not the PR number.
-      PR_NUMBER: ${{ needs.verify.outputs.preview_id }}
+      PR_NUMBER: ${{ needs.verify.outputs.pr_number }}
       REAL_PR: ${{ needs.verify.outputs.pr_number }}
       HEAD_SHA: ${{ needs.verify.outputs.head_sha }}
       REPOSITORY_ID: ${{ github.repository_id }}
@@ -166,7 +160,7 @@ jobs:
             KCW_CI, kcw/ci
           parse-json-secrets: true
 
-      - name: Terraform init (preview/pr-${{ needs.verify.outputs.preview_id }}.tfstate)
+      - name: Terraform init (preview/pr-${{ needs.verify.outputs.pr_number }}.tfstate)
         id: tfinit
         run: >-
           terraform -chdir=infra/preview init
@@ -187,12 +181,12 @@ jobs:
         if: steps.stale.outputs.has_branch == 'true'
         run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
 
-      - name: Neon branch preview/pr-${{ needs.verify.outputs.preview_id }}
+      - name: Neon branch preview/pr-${{ needs.verify.outputs.pr_number }}
         id: neon
         uses: ./.github/actions/neon-preview
         with:
           mode: create
-          pr_number: ${{ needs.verify.outputs.preview_id }}
+          pr_number: ${{ needs.verify.outputs.pr_number }}
           project_id: ${{ vars.NEON_CI_PROJECT_ID }}
 
       # The candidate's migrated + seeded schema as SQL text, executed by trusted code as one query.
@@ -218,7 +212,7 @@ jobs:
         run: |
           url="$(terraform -chdir=infra/preview output -raw url)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Trusted preview (shadow): $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
 
       # kcw-build.json was validated as plain JSON (kcw_env preview, short build_id) before extraction.
       - name: Wait for the preview
@@ -273,7 +267,7 @@ jobs:
       contents: read
       pull-requests: read
     env:
-      PR_NUMBER: ${{ needs.verify.outputs.preview_id }}
+      PR_NUMBER: ${{ needs.verify.outputs.pr_number }}
       REAL_PR: ${{ needs.verify.outputs.pr_number }}
       HEAD_SHA: ${{ needs.verify.outputs.head_sha }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -355,7 +349,7 @@ jobs:
         continue-on-error: true
         run: pnpm preview-gc delete-neon --pr "$PR_NUMBER"
 
-      # The authority on teardown: fails the job if anything of the shadow preview is left.
+      # The authority on teardown: fails the job if anything of pr-<n> is left.
       - name: Check nothing is left
         if: always() && steps.aws.outcome == 'success'
         run: pnpm check-preview-clean --pr "$PR_NUMBER" --retries 5 --retry-delay 30
@@ -369,7 +363,7 @@ jobs:
     permissions:
       statuses: write
     steps:
-      # Shadow only: nothing requires this context yet. success only if provision, e2e and teardown all succeeded.
+      # Informational (merges verify the run itself). success only if provision, e2e and teardown all succeeded.
       - name: Post kcw/trusted-preview
         env:
           GH_TOKEN: ${{ github.token }}
@@ -386,6 +380,6 @@ jobs:
           desc="Trusted preview did not pass"
           if [ "$VERIFY" = success ] && [ "$PROVISION" = success ] && [ "$E2E" = success ] && [ "$TEARDOWN" = success ]; then
             state=success
-            desc="Trusted preview passed (shadow)"
+            desc="Trusted preview passed"
           fi
           gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context="kcw/trusted-preview" -f description="$desc" -f target_url="$RUN_URL"
