@@ -5,12 +5,11 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 ## Observation and provenance
 
 - Observed 2026-11-14 UTC by the Liaison from fetched `origin/main`, the GitHub PR list, workflow runs and the public site (docs consistency pass after #101-#103). Production database, AWS and repository variables were not re-read; values marked "last recorded" come from the 2026-11-12 session.
-- Initial 2026-11-14 documentation preparation: terminal `git fetch origin` failed DNS. Owned branch `review/adversarial-20261114` started at local `dc2a9f08ee8b6d0a2a90ed17c86f781a920d6201` (the #104 head atop #103); cached `origin/main` remains `05bd95b07e093207f65c42f5d216bf1215f6ed4e`, stale. Subsequent connector verification below establishes the remote source independently.
-- Subsequent connected GitHub verification, 2026-11-14: authenticated owner/repository access works; default main resolves to `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (#104). Compared #103 to main and verified the five changed blob hashes against the local #104 baseline, plus unchanged PRODUCT/DESIGN. Source is reconciled for this docs proposal; terminal tracking refs remain stale. Production state and protection were not re-read.
+- Reliability-direction docs, 2026-11-14: prepared offline on the #104 PR head (`dc2a9f0`, tree-identical to main `2fa8102`), then fetched and rebased onto `origin/main` `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (#104) as branch `docs/reliability-direction-20261114`. Production state and protection were not re-read.
 
 ## Repository and refs
 
-- Connected GitHub observation: main at `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (#104). Local cached `origin/main` remains #103 (`05bd95b`); distinguish it from the connector-verified head. Recheck the remote head before implementation/publication.
+- Default branch `main` at `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (PR #104, merged 2026-11-14).
 - Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge. This is the normal workflow.
 
 ## PRs and checks
@@ -22,7 +21,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Ownership and changes
 
-- Local direction commit `1b4ec38` changes PRODUCT, agent DESIGN, hub SPEC, OPEN-POINTS and this handoff. Subsequent preparation adds the on-demand reliability execution plan and updates its backlog/handoff pointers. This is a documentation proposal; runtime code, schemas, IAM, workflows, credentials and live systems are unchanged. Publication and CI do not establish a merged implementation or deployment.
+- The reliability-direction docs PR changes PRODUCT, agent DESIGN (section 4.0), hub SPEC, OPEN-POINTS (AR1-AR9) and this handoff, and adds the on-demand [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md). No design change to runtime: code, schemas, IAM, workflows, credentials and live systems are unchanged.
 - Public pages: `/` (Paper home), `/demo` (simulated hub in an app frame), `/office` (Board and Room tabs over the sanitized public feed), `/bot`.
 - Owner pages (Google sign-in, allowlisted owner): `/hub`, `/console`, `/console/usage`, `/inbox`, `/essays`, `/essays/setup`, `/essays/<id>` reader.
 - Agents: Orchestrator planner on Claude Opus 5.5 at high effort; Developer, Scraper-builder and Docs-keeper on DeepSeek Flash through DeepSeek's Anthropic-compatible endpoint; QA work and review on Claude Haiku 5.5 through Anthropic workload identity federation. Monthly model-spend control $50 (#69), soft because usage is delayed/incomplete and unpriced rows do not count toward enforcement today. The categorizer accounting gap remains open under AR3.
@@ -30,8 +29,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Verification
 
-- 2026-11-14 documentation proposal, working tree atop `dc2a9f0`: `node scripts/check-agent-docs.mjs` and `git diff --check` pass. Independent documentation review found stale DESIGN references to the planner model and future spending caps; both were reconciled. Runtime files are unchanged. The full test suite and live verification were not run.
-- Later execution preparation atop `1b4ec38`: connected GitHub reads are verified, but a Git tree creation attempt returned `403 Resource not accessible by integration`; account-level push permission did not confer integration write access. No remote branch/PR was created. Terminal fetch still fails DNS. The execution plan was checked against reconciled source and primary AWS/GitHub references. Independent security/lifecycle reviews were completed; saved planning inputs and pre-model run admission were clarified. It is not an implemented or live-verified fix.
+- 2026-11-14 reliability-direction docs: `node scripts/check-agent-docs.mjs` and `git diff --check` pass. Independent documentation and security/lifecycle reviews were reconciled; the execution plan was checked against source and primary AWS/GitHub references. It is a plan, not an implemented or live-verified fix. The full test suite and live verification were not run.
 - 2026-11-14: after the #103 deploy, `/`, `/office`, `/demo`, `/bot` and `/healthz` return 200. Not verified: a live DeepSeek route of a real capture (owner prod capture test pending).
 - 2026-11-13: live `/`, `/demo`, `/office` and `/bot` render. `/office` shows the Paused badge and a replay of the latest recorded events (last activity 2026-11-11).
 - Last recorded (2026-11-12): `agents_paused = true`, `KCW_AGENT_WORKFLOWS_ENABLED = false`, profile `final`. The owner checked the essay reader, `/console` and `/essays` signed in.
@@ -40,7 +38,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Decisions and security holds
 
-- Owner direction in the 2026-11-14 adversarial-review conversation: autonomous development is the main success criterion; the personal hub demonstrates the workflow. Adopt disposable workers and complete reliability work before expansion. The owner then accepted the default that retries retain task identity with separate attempts, replanning explicitly supersedes affected work and revalidates results/QA, and capture reclassification moves derived content while preserving the original capture and edits. This authorizes the local documentation proposal; implementation and privileged live actions remain separate. DESIGN section 4.0 is the canonical target, not a claim of delivered behavior.
+- Owner direction in the 2026-11-14 adversarial-review conversation: autonomous development is the main success criterion; the personal hub demonstrates the workflow. Adopt disposable workers and complete reliability work before expansion. The owner then accepted the default that retries retain task identity with separate attempts, replanning explicitly supersedes affected work and revalidates results/QA, and capture reclassification moves derived content while preserving the original capture and edits. This authorizes the direction documents; implementation and privileged live actions remain separate. DESIGN section 4.0 is the canonical target, not a claim of delivered behavior.
 - The owner next requested in-session GitHub access first, otherwise continued preparation for a Claude execution/CI handoff. This preparation supplies proposed implementation slices and tests; it grants no missing live approval or privileged workflow/IAM change. Numeric rollout settings in the execution plan are recommendations, not accepted changes to limits.
 - Agents stay paused and agent workflows stay disabled until the owner enables them. Each live step (enable flag, prod migrations or grants, workflow files, IAM or secrets, paid runs beyond cents) needs the owner's confirmation for that step.
 - Execution observations stay off. They are enabled with migrator SQL only after one controlled run confirms a signed `workflow_run` reaches `agent_runs`, including the sender-allowlist check (owner sign-off 2026-10-26).
@@ -49,5 +47,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. A Claude/other execution session with working Git networking/write access should fetch current main, reconcile the local documentation commits, publish the docs proposal and run CI. Read [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md) for AR1's three implementation slices and the remaining AR1-AR9 sequence; recheck the remote head before implementation. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step. No remote PR or CI run exists for this local proposal yet.
+1. AR1 slice 1 (authority and secret split) per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md), then the remaining AR1-AR9 sequence. Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
 2. Implementation decisions still needed: preview isolation technique, unknown-price policy, worker/WIP/time limits, alert destination/recovery targets and the scoped live acceptance task. No new budget or live enablement was approved. Public copy overclaims remain deferred under R1; worker context cost is now AR5 (former R3).

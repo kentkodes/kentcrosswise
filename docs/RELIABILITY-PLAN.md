@@ -1,6 +1,6 @@
 # Autonomous development reliability: execution plan
 
-Prepared 2026-11-14 against local `1b4ec38257c7d15e0757af62dfbca809cbe5d1c7`. The connected GitHub account subsequently verified main at `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (#104); its source matches the local #104 review baseline. Integration writes returned 403 and terminal fetch still fails DNS: publication/CI require an execution session with working Git access. Local tracking refs are stale, and production state is unverified. The accepted direction is [DESIGN section 4.0](DESIGN.md#40-accepted-direction-and-task-lifecycle-2026-11-14); [OPEN-POINTS](OPEN-POINTS.md) defines AR1-AR9. Read this plan when implementing those items, not for unrelated tasks.
+Prepared 2026-11-14 against main `2fa81024150dec6b5f6b20b1d36222e4ce1ba4ca` (#104); production state is unverified. The accepted direction is [DESIGN section 4.0](DESIGN.md#40-accepted-direction-and-task-lifecycle-2026-11-14); [OPEN-POINTS](OPEN-POINTS.md) defines AR1-AR9. Read this plan when implementing those items, not for unrelated tasks.
 
 ## Start and authorization
 
@@ -34,7 +34,7 @@ Implement AR1 in three reviewable slices:
 
 ### Slice 1: database-to-SQS outbox
 
-Change relay `src/relay.ts`, `store.ts`, orchestrator `sweeper/{store,sweep,deliveries}.ts`, web `server/{console,orchestrator-queue}.ts` and the relevant actions. Add a narrowly granted outbox in the next append-only migration after refreshed main: unique logical message key, normalized payload, pending/sent state and retry timestamps. Commit webhook receipt or owner/task mutation with its outbox intent; send after commit and drain unfinished rows through the existing sweeper. Reserve migration numbers after fetching, not from this stale snapshot.
+Change relay `src/relay.ts`, `store.ts`, orchestrator `sweeper/{store,sweep,deliveries}.ts`, web `server/{console,orchestrator-queue}.ts` and the relevant actions. Add a narrowly granted outbox in the next append-only migration after refreshed main: unique logical message key, normalized payload, pending/sent state and retry timestamps. Commit webhook receipt or owner/task mutation with its outbox intent; send after commit and drain unfinished rows through the existing sweeper. Reserve migration numbers after fetching current main.
 
 Keep consumer receipts/effects keyed by the original logical message identity. A crash after SQS acceptance but before marking sent may resend beyond SQS's dedupe window; a new transport message ID is not a new logical event. Review `relay_rw`, `orch_rw` and `web_rw` grants independently.
 
