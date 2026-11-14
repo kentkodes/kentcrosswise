@@ -253,8 +253,8 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # OUT_DIR is set per step: the runner context is not available in job-level env.
     env:
-      OUT_DIR: ${{ runner.temp }}/candidate
       REPOSITORY_ID: ${{ github.repository_id }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -286,9 +286,10 @@ jobs:
       - name: Dump the database (preview-db.sql)
         env:
           PGPASSWORD: postgres
+          OUT_DIR: ${{ runner.temp }}/candidate
         run: |
           mkdir -p "$OUT_DIR"
-          /usr/lib/postgresql/17/bin/pg_dump --host localhost --username postgres --dbname postgres             --no-owner --no-privileges --clean --if-exists --inserts --file "$OUT_DIR/preview-db.sql"
+          /usr/lib/postgresql/17/bin/pg_dump --host localhost --username postgres --dbname postgres --no-owner --no-privileges --clean --if-exists --inserts --file "$OUT_DIR/preview-db.sql"
 
       - name: Preview build (KCW_ENV=preview)
         env:
@@ -297,9 +298,13 @@ jobs:
 
       # Uncompressed ustar (the artifact zip compresses it); the trusted side accepts only this format.
       - name: Archive the build (preview-web.tar)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
         run: tar --format=ustar -cf "$OUT_DIR/preview-web.tar" -C apps/web .open-next
 
       - name: Manifest (candidate-manifest.json)
+        env:
+          OUT_DIR: ${{ runner.temp }}/candidate
         run: pnpm candidate-manifest --dir "$OUT_DIR"
 
       - name: Upload candidate-preview
