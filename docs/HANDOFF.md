@@ -15,6 +15,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 - Merged 2026-11-10 to 2026-11-12: #59-#96. Highlights: Paper home (#79), `/office` team board (#80) and Room tab (#90, #91), `/demo` app frame (#84), reading layout for the essay reader and `/bot` (#86), owner console in Dense UI (#93), deploy-time CloudFront invalidation and build-id smoke check (#81), QA on Claude Haiku 5.5 (#88), Gutenberg extractor v2 and in-place re-extraction (#92, #94), 2-decimal usage costs (#95), local e2e PGlite harness fix (#96).
 - 2026-11-13: `/essays` library for ~300 entries (#98) and the H2 capture box on `/hub` (#99: raw entries in `entries`, latest 10 with routing status, "Waiting for router" until H3).
+- 2026-11-14: E3 recommendations (#101): ratings of every kind shape the list (likes pull, 1–2 star ratings push, what-worked tags, last length answer), link-only essays are recommended and rateable at `/essays/<id>`, and each recommended card names the liked essay it follows.
 - Every deploy since #81 cleared the CloudFront cache and passed the build-id smoke check on `/`, `/demo`, `/office`, `/bot` and the `/hub` redirect.
 
 ## Ownership and changes
