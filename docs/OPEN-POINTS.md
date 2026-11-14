@@ -28,7 +28,6 @@ Current backlog, 2026-11-13 UTC. Current state and holds are in [HANDOFF.md](HAN
 | ID | Open work |
 |---|---|
 | H1 | Public `/terms` and `/privacy` pages and the provider/domain configuration they need. |
-| H2 | Phone-friendly private capture box, raw-entry persistence and routing status (in progress on `feat/hub-capture-20261113`). |
 | H3 | Routing on DeepSeek, low-confidence inbox, owner reassignment and stored corrections. |
 | H4 | Contacts: CRUD, aliases, tags, birthday, context, linking notes with owner resolution of ambiguous matches. |
 | H5 | Calendar OAuth with incremental consent, suggestion extraction, one-tap event creation. |
