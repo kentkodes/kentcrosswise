@@ -278,6 +278,15 @@
   opacity: 0.86;
 }
 
+/* Phone tap target: 44px tall on phones (36px elsewhere, like every button). Declared after .primary so it
+   wins at equal specificity. */
+@media (max-width: 639px) {
+  .tapTarget {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 /* Inputs: 1px line border, 8px radius, 36px tall (textarea auto). */
 
 .field {
@@ -304,6 +313,19 @@ textarea.field {
   height: auto;
   padding: 8px 10px;
   resize: vertical;
+}
+
+/* Hub capture box: grows with its text (field-sizing where supported, min-height otherwise), scrolls past
+   the cap. 16px text so iOS does not zoom on focus. */
+textarea.field.capture {
+  field-sizing: content;
+  min-height: 96px;
+  max-height: 50vh;
+  overflow-y: auto;
+  resize: none;
+  padding: 10px 12px;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .fieldLabel {
@@ -619,4 +641,25 @@ textarea.field {
   .pill {
     transition: none;
   }
+}
+
+/* Hub recent entries: raw text keeps its line breaks, clamped to three lines; the time and status sit below. */
+
+.entryText {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.entryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 6px 0 0;
+  font-size: 13px;
 }

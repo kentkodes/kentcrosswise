@@ -45,12 +45,11 @@ Q12 subtasks, Q13 usage rules, Q14/Q15 isolation/governance and merge-time Docs 
 
 ## Hub MVP still to build (Phase 3)
 
-The owner hub is a placeholder. Approved functionality below remains product work; existing public simulations and agent console do not establish the private hub MVP.
+The owner hub has the capture box (H2: raw entries and routing status on /hub); the rest is a placeholder. Approved functionality below remains product work; existing public simulations and agent console do not establish the private hub MVP.
 
 | ID | Open work |
 |---|---|
 | H1 | Public /terms and /privacy pages and required provider/domain configuration. |
-| H2 | Phone-friendly private capture box, raw-entry persistence and routing status. |
 | H3 | Routing on DeepSeek V4.1 Flash, low-confidence inbox, owner reassignment and stored route corrections. |
 | H4 | Contacts CRUD, aliases/tags/birthday/context and CRM-note linking with owner resolution of ambiguous matches. Last-contact reminders remain excluded. |
 | H5 | Incremental Calendar OAuth/offline consent, suggestion extraction and owner one-tap event creation. |
