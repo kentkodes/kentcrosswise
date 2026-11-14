@@ -45,9 +45,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # cache: only credential-free pull_request jobs (checks, candidate-build) use the pnpm cache; see .github/actions/setup.
       - uses: ./.github/actions/setup
         with:
           terraform: "true"
+          cache: "true"
 
       - name: Lint
         run: pnpm lint
@@ -264,6 +266,8 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup
+        with:
+          cache: "true"
 
       - name: Migrate and seed the service database
         env:
