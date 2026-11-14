@@ -234,10 +234,8 @@ interface CardRow {
 }
 
 export interface EssayCard extends EssayMeta {
-  kind: "full" | "link";
   title: string;
   hook: string | null;
-  lengthBand: LengthBand | null;
   wordCount: number | null;
   readingMinutes: number | null;
   primaryType: EssayType | null;
@@ -311,9 +309,19 @@ export async function countFeed(db: Queryable, prefs: Prefs, filter: FeedFilter 
   return Number(rows[0]?.n ?? 0);
 }
 
+/** A stored "what worked" list, without anything the allowlist does not know. */
+function readWorked(values: readonly string[] | null): WorkedTag[] {
+  return (values ?? []).filter((w): w is WorkedTag => (WORKED_TAGS as readonly string[]).includes(w));
+}
+
+/** A stored length answer, or null when it is empty or not one of the allowed answers. */
+function readLengthFelt(value: string | null): LengthFelt | null {
+  return (LENGTH_FELT as readonly string[]).includes(value ?? "") ? (value as LengthFelt) : null;
+}
+
 /**
- * Unrated active essays that pass the prefs, ranked against the owner's highly rated essays.
- * `likedCount` tells the page whether the order is by similarity or just newest first.
+ * Unrated active essays that pass the prefs, full text and link-only alike, ranked by the owner's whole rating
+ * history (see essay-recommend.ts). `likedCount` tells the page whether the order is by ratings or just newest first.
  */
 export async function listRecommendations(
   db: Queryable,
@@ -322,14 +330,23 @@ export async function listRecommendations(
 ): Promise<{ cards: Ranked<EssayCard>[]; likedCount: number }> {
   const candidates = await db.query<CardRow>(
     `SELECT ${CARD_COLUMNS} FROM essays e
-      WHERE e.status = 'active' AND e.kind = 'full' AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.essay_id = e.id) AND ${PREFS_FILTER}`,
+      WHERE e.status = 'active' AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.essay_id = e.id) AND ${PREFS_FILTER}`,
     [prefs.types, prefs.lengths],
   );
   // Only ratings of active essays count: a rating left on a quarantined essay must not shape the list.
-  const rated = await db.query<CardRow & { stars: number }>(
-    `SELECT ${CARD_COLUMNS}, r.stars FROM ratings r JOIN essays e ON e.id = r.essay_id WHERE e.status = 'active'`,
+  // Newest rating first, so when two liked essays pull a candidate equally, `because` names the latest one.
+  const rated = await db.query<CardRow & { stars: number; worked: string[] | null; length_felt: string | null; rated_at: Date | string }>(
+    `SELECT ${CARD_COLUMNS}, r.stars, r.worked, r.length_felt, r.rated_at
+       FROM ratings r JOIN essays e ON e.id = r.essay_id WHERE e.status = 'active'
+      ORDER BY r.rated_at DESC, e.id`,
   );
-  const ratedEssays: RatedEssay[] = rated.rows.map((r) => ({ ...toCard(r), stars: Number(r.stars) }));
+  const ratedEssays: RatedEssay[] = rated.rows.map((r) => ({
+    ...toCard(r),
+    stars: Number(r.stars),
+    worked: readWorked(r.worked),
+    lengthFelt: readLengthFelt(r.length_felt),
+    ratedAt: new Date(r.rated_at).getTime(),
+  }));
   const ranked = rankRecommendations(candidates.rows.map(toCard), ratedEssays);
   return { cards: ranked.slice(0, limit), likedCount: ratedEssays.filter((r) => r.stars >= LIKED_MIN_STARS).length };
 }
@@ -360,21 +377,20 @@ export async function getReaderEssay(db: Queryable, id: string): Promise<ReaderE
     rating:
       r.stars === null
         ? null
-        : {
-            stars: Number(r.stars),
-            worked: (r.worked ?? []).filter((w): w is WorkedTag => (WORKED_TAGS as readonly string[]).includes(w)),
-            lengthFelt: (LENGTH_FELT as readonly string[]).includes(r.length_felt ?? "") ? (r.length_felt as LengthFelt) : null,
-          },
+        : { stars: Number(r.stars), worked: readWorked(r.worked), lengthFelt: readLengthFelt(r.length_felt) },
   };
 }
 
-/** Upserts the owner's one rating for an active full-text essay. Link-only essays cannot be rated (EssayNotFoundError). */
+/**
+ * Upserts the owner's one rating for an active essay, full text or link-only (EssayNotFoundError when it is not
+ * in the library). A link's rating shapes the recommendations like any other.
+ */
 export async function saveRating(db: Queryable, essayId: string, input: RatingInput): Promise<void> {
   if (!isUuid(essayId)) throw new InputError("That essay id is not valid.");
   const r = parseRating({ stars: input.stars, worked: input.worked, lengthFelt: input.lengthFelt });
   const { rows } = await db.query<{ essay_id: string }>(
     `INSERT INTO ratings (essay_id, stars, worked, length_felt, rated_at)
-     SELECT e.id, $2, $3::text[], $4, now() FROM essays e WHERE e.id = $1 AND e.status = 'active' AND e.kind = 'full'
+     SELECT e.id, $2, $3::text[], $4, now() FROM essays e WHERE e.id = $1 AND e.status = 'active'
      ON CONFLICT (essay_id) DO UPDATE SET
        stars = EXCLUDED.stars, worked = EXCLUDED.worked, length_felt = EXCLUDED.length_felt, rated_at = EXCLUDED.rated_at
      RETURNING essay_id`,

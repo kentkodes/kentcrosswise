@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
+import type { Ranked } from "@/server/essay-recommend";
 import {
   FEED_PAGE_SIZE,
   LENGTH_NAMES,
@@ -40,7 +41,7 @@ const KIND_LABELS: Record<FeedKind, string> = { all: "All", full: "Full text", l
 
 type Loaded = {
   prefs: Prefs;
-  recommended: EssayCard[];
+  recommended: Ranked<EssayCard>[];
   likedCount: number;
   feed: EssayCard[];
   hasMore: boolean;
@@ -105,13 +106,13 @@ export default async function EssaysPage({ searchParams }: { searchParams: Promi
           <Region id="recommended" title="Recommended">
             {data.likedCount === 0 ? (
               <p className={`${s.note} ${s.pad}`}>
-                No essay is rated 4 stars or more yet, so these are the newest unrated essays. Rate essays to tune this list.
+                No essay is rated 4 stars or more yet, so these are the newest unrated essays, full texts first. Rate essays to tune this list.
               </p>
             ) : null}
             {data.recommended.length === 0 ? <p className={`${s.note} ${s.pad}`}>No unrated essays match your setup.</p> : null}
             <div data-testid="recommended">
               {data.recommended.map((card) => (
-                <EssayCardView key={card.id} card={card} />
+                <EssayCardView key={card.id} card={card} because={card.because} />
               ))}
             </div>
           </Region>

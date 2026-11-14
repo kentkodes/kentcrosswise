@@ -209,23 +209,24 @@ describe("essay library as web_rw", () => {
   it("refuses to rate an unknown, quarantined or malformed essay", async () => {
     await expect(asRw((db) => saveRating(db, randomUUID(), { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
     await expect(asRw((db) => saveRating(db, quarantined, { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
-    // Link-only essays have no text to read or rate: refused, and no rating row is written.
-    await expect(asRw((db) => saveRating(db, eliot, { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(EssayNotFoundError);
-    const { rows } = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM ratings WHERE essay_id = $1", [eliot]);
+    const { rows } = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM ratings WHERE essay_id = $1", [quarantined]);
     expect(rows[0]!.n).toBe(0);
     await expect(asRw((db) => saveRating(db, "not-a-uuid", { stars: 4, worked: [], lengthFelt: null }))).rejects.toBeInstanceOf(InputError);
   });
 
-  it("ranks recommendations by similarity to the 5-star essay and drops rated essays", async () => {
-    // Hurston's 5-star memoir (1937) beats the unrelated cultural pieces: author and era match Mules and Men.
+  it("ranks unrated essays, link-only ones included, by the owner's ratings and drops rated essays", async () => {
+    // Hurston's 5-star memoir is the liked essay (weight 2). Its too-short answer is on a medium essay.
+    // Mules and Men: same author and decade (4) x 2 = 8, less 1 for the too-short answer on a medium essay: 7.
+    // Paywalled (link): same decade only (1) x 2 = 2, and a link is never penalised.
+    // Sitting in Darkness: nothing shared, 0. Roast Pig: nothing shared, but a short essay is sunk by too-short: -1.
     const prefs = { types: [], lengths: [] };
     const rec = await asRw((db) => listRecommendations(db, prefs, 10));
     expect(rec.likedCount).toBe(1);
-    // Link-only essays are never recommended (there is no reader to open them in).
-    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig"]);
-    expect(rec.cards[0]!.score).toBe(4 * 2);
+    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Paywalled", "Sitting in Darkness", "Roast Pig"]);
+    expect(rec.cards.map((c) => c.score)).toEqual([7, 2, 0, -1]);
+    expect(rec.cards[0]!.because).toEqual({ id: hurston, title: "How It Feels", author: "Hurston" });
+    expect(rec.cards[2]!.because).toBeNull();
     expect(rec.cards.map((c) => c.id)).not.toContain(hurston);
-    expect(rec.cards.map((c) => c.id)).not.toContain(eliot);
   });
 
   it("applies prefs to recommendations too", async () => {
@@ -237,7 +238,8 @@ describe("essay library as web_rw", () => {
     await asRw((db) => saveRating(db, hurston, { stars: 3, worked: [], lengthFelt: null }));
     const rec = await asRw((db) => listRecommendations(db, { types: [], lengths: [] }, 10));
     expect(rec.likedCount).toBe(0);
-    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig"]);
+    // Full text first (newest first), then the unrated link.
+    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig", "Paywalled"]);
     expect(rec.cards.every((c) => c.score === 0)).toBe(true);
   });
 
@@ -246,16 +248,30 @@ describe("essay library as web_rw", () => {
     await pg.query("INSERT INTO ratings (essay_id, stars, worked) VALUES ($1, 5, '{}')", [quarantined]);
     const rec = await asRw((db) => listRecommendations(db, { types: [], lengths: [] }, 10));
     expect(rec.likedCount).toBe(0);
-    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig"]);
+    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig", "Paywalled"]);
     expect(rec.cards.every((c) => c.score === 0)).toBe(true);
     await pg.query("DELETE FROM ratings WHERE essay_id = $1", [quarantined]);
+  });
+
+  it("lets the owner rate a link-only essay, and a rated link leaves the recommendations", async () => {
+    await asRw((db) => saveRating(db, eliot, { stars: 4, worked: ["argument"], lengthFelt: null }));
+    const { rows } = await pg.query<{ n: number; stars: number }>("SELECT count(*)::int AS n, max(stars)::int AS stars FROM ratings WHERE essay_id = $1", [eliot]);
+    expect(rows[0]).toEqual({ n: 1, stars: 4 });
+    const rec = await asRw((db) => listRecommendations(db, { types: [], lengths: [] }, 10));
+    expect(rec.cards.map((c) => c.id)).not.toContain(eliot);
+    // The link is now the only liked essay (4 stars, weight 1). Its "argument" tag lifts the political Sitting in
+    // Darkness by 1. Mules and Men (1938) is one decade from the 1944 link: 1 x 1 = 1. Roast Pig matches nothing.
+    expect(rec.likedCount).toBe(1);
+    expect(rec.cards.map((c) => c.title)).toEqual(["Mules and Men", "Sitting in Darkness", "Roast Pig"]);
+    expect(rec.cards.map((c) => c.score)).toEqual([1, 1, 0]);
+    expect(rec.cards[0]!.because).toEqual({ id: eliot, title: "Paywalled", author: "Eliot" });
   });
 
   it("reads the reader essay with its rating for active essays only", async () => {
     const e = await asRw((db) => getReaderEssay(db, hurston));
     expect(e).toMatchObject({ title: "How It Feels", hook: "A hook.", rating: { stars: 3, worked: [], lengthFelt: null } });
     const link = await asRw((db) => getReaderEssay(db, eliot));
-    expect(link).toMatchObject({ kind: "link", sourceUrl: "https://example.com/essay", rating: null });
+    expect(link).toMatchObject({ kind: "link", sourceUrl: "https://example.com/essay", rating: { stars: 4, worked: ["argument"], lengthFelt: null } });
     await expect(asRw((db) => getReaderEssay(db, quarantined))).resolves.toBeUndefined();
     await expect(asRw((db) => getReaderEssay(db, "nope"))).resolves.toBeUndefined();
   });

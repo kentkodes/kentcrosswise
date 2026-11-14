@@ -135,10 +135,6 @@
   text-underline-offset: 3px;
 }
 
-.arrow {
-  color: var(--fg-muted);
-}
-
 .linkMeta {
   font-size: 13px;
   color: var(--fg-muted);

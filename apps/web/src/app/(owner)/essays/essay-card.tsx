@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { LENGTH_NAMES, TYPE_LABELS, readingMinutesOf, type EssayCard as Card } from "@/server/essay-library";
+import type { Because } from "@/server/essay-recommend";
 import styles from "./essays.module.css";
 
-export function EssayCardView({ card }: { card: Card }) {
+/** `because` is set on recommended cards only: the liked essay this card follows. */
+export function EssayCardView({ card, because }: { card: Card; because?: Because | null }) {
   const minutes = readingMinutesOf(card);
   return (
     <article className={styles.row} data-essay-id={card.id}>
@@ -27,22 +29,23 @@ export function EssayCardView({ card }: { card: Card }) {
           </>
         )}
       </p>
+      {because ? (
+        <p className={styles.meta}>
+          Because you liked <em>{because.title}</em> ({because.author})
+        </p>
+      ) : null}
       {card.hook ? <p className={styles.hook}>{card.hook}</p> : null}
     </article>
   );
 }
 
-/** A link-only essay: one line (it wraps on a phone) that opens the source in a new tab. */
+/** A link-only essay: one line (it wraps on a phone) that opens its reader page, where the source and the rating are. */
 export function LinkRowView({ card }: { card: Card }) {
   return (
     <article className={styles.linkRow} data-essay-id={card.id}>
-      <a className={styles.linkTitle} href={`/essays/${card.id}`} target="_blank" rel="noopener noreferrer">
+      <Link className={styles.linkTitle} href={`/essays/${card.id}`}>
         {card.title}
-        <span aria-hidden="true" className={styles.arrow}>
-          ↗
-        </span>{" "}
-        <span className={styles.srOnly}>opens the source in a new tab</span>
-      </a>
+      </Link>
       <span className={styles.linkMeta}>
         {card.author}
         {card.year !== null ? <> · {card.year}</> : null} · {card.primaryType ? TYPE_LABELS[card.primaryType] : "Untyped"}
