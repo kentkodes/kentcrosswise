@@ -31,3 +31,22 @@ export function EssayCardView({ card }: { card: Card }) {
     </article>
   );
 }
+
+/** A link-only essay: one line (it wraps on a phone) that opens the source in a new tab. */
+export function LinkRowView({ card }: { card: Card }) {
+  return (
+    <article className={styles.linkRow} data-essay-id={card.id}>
+      <a className={styles.linkTitle} href={`/essays/${card.id}`} target="_blank" rel="noopener noreferrer">
+        {card.title}
+        <span aria-hidden="true" className={styles.arrow}>
+          ↗
+        </span>{" "}
+        <span className={styles.srOnly}>opens the source in a new tab</span>
+      </a>
+      <span className={styles.linkMeta}>
+        {card.author}
+        {card.year !== null ? <> · {card.year}</> : null} · {card.primaryType ? TYPE_LABELS[card.primaryType] : "Untyped"}
+      </span>
+    </article>
+  );
+}

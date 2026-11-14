@@ -5,18 +5,26 @@ import { InputError } from "../src/server/console";
 import { runAs, type Queryable } from "../src/server/db";
 import {
   EssayNotFoundError,
+  authorSurname,
+  countFeed,
   externalHref,
+  feedHref,
   getReaderEssay,
+  likePattern,
   linkSearchHref,
   listFeed,
   listRecommendations,
+  parseKind,
   parsePrefs,
   parseRating,
+  parseSearch,
   parseShow,
   readPrefs,
   readingMinutesOf,
   saveRating,
   savePrefs,
+  surnameInitial,
+  type Prefs,
 } from "../src/server/essay-library";
 import { freshDb, pglitePool } from "./pglite";
 
@@ -253,17 +261,182 @@ describe("essay library as web_rw", () => {
   });
 });
 
+describe("library order, search, kind and count as web_rw", () => {
+  let pg: PGlite;
+  const asRw = <T>(fn: (db: Queryable) => Promise<T>) => runAs(pglitePool(pg), "web_rw", fn);
+  const NO_PREFS: Prefs = { types: [], lengths: [] };
+
+  async function add(title: string, author: string, createdAt: string, kind: "full" | "link", types: string[]): Promise<void> {
+    const link = kind === "link";
+    const { rows } = await pg.query<{ id: string }>(
+      `INSERT INTO essays (kind, title, author, word_count, source_url, text_hash, text_s3_key, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8) RETURNING id`,
+      [
+        kind,
+        title,
+        author,
+        link ? null : 2000,
+        link ? "https://example.com/essay" : null,
+        link ? null : randomUUID(),
+        link ? null : `essays/text/${randomUUID()}.txt`,
+        createdAt,
+      ],
+    );
+    for (const [i, type] of types.entries()) {
+      await pg.query("INSERT INTO essay_categories (essay_id, type, confidence, model) VALUES ($1, $2, $3, 'test')", [rows[0]!.id, type, 0.9 - i * 0.1]);
+    }
+  }
+
+  // Full essays newest first, then link essays by surname (Lamb, Mann, Rich, Smith, Xun), then title.
+  const ALL_TITLES = [
+    "Mules and Men",
+    "Rates: 100%",
+    "file_name notes",
+    "Roast Pig",
+    "Lamb Letters",
+    "Mann on Cities",
+    "Rich Lines",
+    "Alpha Essay",
+    "Zebra Essay",
+    "Lu Notes",
+  ];
+
+  beforeAll(async () => {
+    pg = await freshDb();
+    await add("Roast Pig", "Charles Lamb", "2026-01-01T00:00:00Z", "full", ["cultural"]);
+    await add("file_name notes", "Under Score", "2026-02-01T00:00:00Z", "full", ["cultural"]);
+    await add("Rates: 100%", "Percy Pct", "2026-03-01T00:00:00Z", "full", ["political"]);
+    await add("Mules and Men", "Zora Neale Hurston", "2026-07-01T00:00:00Z", "full", ["travel"]);
+    await add("Lamb Letters", "Charles Lamb", "2026-05-01T00:00:00Z", "link", ["critical"]);
+    await add("Mann on Cities", "Charles C. Mann", "2026-05-01T00:00:00Z", "link", ["travel"]);
+    await add("Rich Lines", "Adrienne Rich", "2026-05-01T00:00:00Z", "link", ["critical"]);
+    // Same surname and same created_at: the title breaks the tie.
+    await add("Zebra Essay", "Pat Smith", "2026-05-01T00:00:00Z", "link", []);
+    await add("Alpha Essay", "Pat Smith", "2026-05-01T00:00:00Z", "link", ["political"]);
+    // Padded author: the surname is still Xun.
+    await add("Lu Notes", "  Lu Xun ", "2026-05-01T00:00:00Z", "link", ["cultural"]);
+  });
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  it("lists full essays newest first, then links by surname, title and id", async () => {
+    const { cards, hasMore } = await asRw((db) => listFeed(db, NO_PREFS, 50));
+    expect(cards.map((c) => c.title)).toEqual(ALL_TITLES);
+    expect(hasMore).toBe(false);
+    const surnames = cards.filter((c) => c.kind === "link").map((c) => authorSurname(c.author));
+    expect(surnames).toEqual(["lamb", "mann", "rich", "smith", "smith", "xun"]);
+  });
+
+  it("filters by kind; all and unknown kinds show everything", async () => {
+    const full = await asRw((db) => listFeed(db, NO_PREFS, 50, { q: "", kind: "full" }));
+    expect(full.cards.map((c) => c.title)).toEqual(["Mules and Men", "Rates: 100%", "file_name notes", "Roast Pig"]);
+    const links = await asRw((db) => listFeed(db, NO_PREFS, 50, { q: "", kind: "link" }));
+    expect(links.cards.map((c) => c.title)).toEqual(ALL_TITLES.slice(4));
+    expect(links.cards.every((c) => c.kind === "link")).toBe(true);
+    const all = await asRw((db) => listFeed(db, NO_PREFS, 50, { q: "", kind: "all" }));
+    expect(all.cards.map((c) => c.title)).toEqual(ALL_TITLES);
+    expect(parseKind("bogus")).toBe("all");
+  });
+
+  it("searches title or author, case-insensitively, as a substring", async () => {
+    const search = (q: string) => asRw((db) => listFeed(db, NO_PREFS, 50, { q, kind: "all" })).then((r) => r.cards.map((c) => c.title));
+    expect(await search("HURSTON")).toEqual(["Mules and Men"]);
+    expect(await search("roast")).toEqual(["Roast Pig"]);
+    // Author matches on both kinds; full essays still come first.
+    expect(await search("lamb")).toEqual(["Roast Pig", "Lamb Letters"]);
+    expect(await search(parseSearch("  pat  "))).toEqual(["Alpha Essay", "Zebra Essay"]);
+    expect(await search("nothing here")).toEqual([]);
+  });
+
+  it("treats % and _ in the search as literal characters", async () => {
+    const search = (q: string) => asRw((db) => listFeed(db, NO_PREFS, 50, { q, kind: "all" })).then((r) => r.cards.map((c) => c.title));
+    // A bare % must not match every essay: only the title that really contains a percent sign.
+    expect(await search("%")).toEqual(["Rates: 100%"]);
+    expect(await search("100%")).toEqual(["Rates: 100%"]);
+    expect(await search("_")).toEqual(["file_name notes"]);
+    expect(await search("\\")).toEqual([]);
+  });
+
+  it("combines the search, the kind and the setup prefs", async () => {
+    const titles = (f: { types: Prefs["types"]; lengths: Prefs["lengths"] }, q: string, kind: "all" | "full" | "link") =>
+      asRw((db) => listFeed(db, f, 50, { q, kind })).then((r) => r.cards.map((c) => c.title));
+    expect(await titles(NO_PREFS, "mann", "link")).toEqual(["Mann on Cities"]);
+    expect(await titles(NO_PREFS, "lamb", "full")).toEqual(["Roast Pig"]);
+    expect(await titles({ types: ["critical"], lengths: [] }, "lamb", "all")).toEqual(["Lamb Letters"]);
+    expect(await titles(NO_PREFS, "rich", "full")).toEqual([]);
+    expect(await titles({ types: ["travel"], lengths: [] }, "pat", "all")).toEqual([]);
+  });
+
+  it("counts the same matches the feed lists, and hasMore follows the page size", async () => {
+    const count = (types: Prefs["types"], q: string, kind: "all" | "full" | "link") => asRw((db) => countFeed(db, { types, lengths: [] }, { q, kind }));
+    expect(await count([], "", "all")).toBe(10);
+    expect(await count([], "", "link")).toBe(6);
+    expect(await count([], "lamb", "all")).toBe(2);
+    expect(await count([], "nothing here", "all")).toBe(0);
+    expect(await count(["critical"], "", "all")).toBe(2);
+    const everything = await asRw((db) => listFeed(db, NO_PREFS, 500));
+    expect(await count([], "", "all")).toBe(everything.cards.length);
+
+    const page = await asRw((db) => listFeed(db, NO_PREFS, 4));
+    expect(page.cards).toHaveLength(4);
+    expect(page.hasMore).toBe(true);
+    const exact = await asRw((db) => listFeed(db, NO_PREFS, 10));
+    expect(exact.cards).toHaveLength(10);
+    expect(exact.hasMore).toBe(false);
+  });
+
+  it("keeps the search and kind in the links", () => {
+    expect(feedHref({})).toBe("/essays");
+    expect(feedHref({ kind: "all", q: "" })).toBe("/essays");
+    expect(feedHref({ q: "a b&c", kind: "link", show: 100 })).toBe("/essays?q=a+b%26c&kind=link&show=100");
+    expect(feedHref({ kind: "full" })).toBe("/essays?kind=full");
+  });
+});
+
 describe("pure helpers", () => {
   it("parses the feed size with one page as the default and a cap", () => {
-    expect(parseShow(undefined)).toBe(20);
-    expect(parseShow("40")).toBe(40);
-    expect(parseShow("5")).toBe(20);
+    expect(parseShow(undefined)).toBe(50);
+    expect(parseShow("50")).toBe(50);
+    expect(parseShow("20")).toBe(50);
+    expect(parseShow("100")).toBe(100);
     expect(parseShow("300")).toBe(300);
     expect(parseShow("500")).toBe(500);
     expect(parseShow("501")).toBe(500);
     expect(parseShow("9999")).toBe(500);
-    expect(parseShow("x")).toBe(20);
-    expect(parseShow(["40"])).toBe(20);
+    expect(parseShow("x")).toBe(50);
+    expect(parseShow(["100"])).toBe(50);
+  });
+
+  it("parses the kind: full or link, anything else is all", () => {
+    expect(parseKind("full")).toBe("full");
+    expect(parseKind("link")).toBe("link");
+    expect(parseKind("all")).toBe("all");
+    expect(parseKind("Links")).toBe("all");
+    expect(parseKind(undefined)).toBe("all");
+    expect(parseKind(["link"])).toBe("all");
+  });
+
+  it("parses the search: trimmed, at most 100 characters, anything but a string is empty", () => {
+    expect(parseSearch("  Lamb  ")).toBe("Lamb");
+    expect(parseSearch("a".repeat(150))).toBe("a".repeat(100));
+    expect(parseSearch("   ")).toBe("");
+    expect(parseSearch(["a"])).toBe("");
+    expect(parseSearch(undefined)).toBe("");
+  });
+
+  it("escapes LIKE wildcards and the escape character", () => {
+    expect(likePattern("a%_\\b")).toBe("%a\\%\\_\\\\b%");
+    expect(likePattern("plain")).toBe("%plain%");
+  });
+
+  it("takes the surname as the last word, lower-cased", () => {
+    expect(authorSurname("Charles C. Mann")).toBe("mann");
+    expect(authorSurname("  Lu Xun ")).toBe("xun");
+    expect(authorSurname("Plato")).toBe("plato");
+    expect(surnameInitial("Adrienne Rich")).toBe("R");
+    expect(surnameInitial("Lu Xun")).toBe("X");
+    expect(surnameInitial("Zoë Ébert")).toBe("#");
   });
 
   it("builds a https search link from the title and author, encoded, that externalHref accepts", () => {

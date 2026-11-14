@@ -43,11 +43,8 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Impeccable design-tool scratch: large captures stay local (.impeccable/build/ is already ignored by build/; its spec, regions and approved-comp JSON are force-added)
-.impeccable/review/*
-!.impeccable/review/components.json
-!.impeccable/review/hero.json
-.impeccable/mocks/01-*.png
-.impeccable/mocks/02-*.png
+# Impeccable design-tool scratch stays local; only design.json and surfaces/ are tracked
+.impeccable/review/
+.impeccable/mocks/
 .impeccable/hook.cache.json
 .impeccable/questions/
