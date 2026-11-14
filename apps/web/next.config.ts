@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // Inlined at build time: prod builds drop the preview-only login provider (see src/auth/env.ts).
   env: { KCW_ENV: parseKcwEnv(process.env.KCW_ENV) },
   // Workspace packages ship TypeScript source.
-  transpilePackages: ["@kcw/demo-data", "@kcw/xray", "@kcw/secrets"],
+  transpilePackages: ["@kcw/core", "@kcw/demo-data", "@kcw/xray", "@kcw/secrets"],
 };
 
 export default nextConfig;

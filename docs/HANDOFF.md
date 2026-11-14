@@ -41,5 +41,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. Next MVP area in the accepted order: H3 routing (DeepSeek routing, low-confidence inbox, corrections), then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
+1. H3 routing (#102): DeepSeek routes each new entry, low confidence goes to the inbox Routing region, the owner reassigns with corrections stored. Next is H4 contacts, then the remaining hub, social and inbox items in [OPEN-POINTS.md](OPEN-POINTS.md).
 2. Owner decisions pending from the 2026-11-13 review: public copy that overstates delivered features, and worker context cost (see OPEN-POINTS R1 and R3).
