@@ -35,7 +35,7 @@ export default async function DiaryPage({ searchParams }: { searchParams: Promis
   return (
     <OwnerFrame
       title="Diary"
-      current="/hub"
+      current="/diary"
       actions={
         <Link className={s.button} href="/mood">
           Mood board

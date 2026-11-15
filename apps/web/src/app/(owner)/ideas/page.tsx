@@ -32,7 +32,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
   const { rows, problem } = await loadIdeas();
 
   return (
-    <OwnerFrame title="Ideas" current="/hub">
+    <OwnerFrame title="Ideas" current="/ideas">
       {notice ? (
         <Notice role={ok ? "status" : "alert"} tone={ok ? "ok" : "warn"}>
           {notice}

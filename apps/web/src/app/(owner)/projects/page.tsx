@@ -53,7 +53,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   const tabSlug = selected?.slug ?? "";
 
   return (
-    <OwnerFrame title="Projects" current="/hub">
+    <OwnerFrame title="Projects" current="/projects">
       {notice ? (
         <Notice role={ok ? "status" : "alert"} tone={ok ? "ok" : "warn"}>
           {notice}

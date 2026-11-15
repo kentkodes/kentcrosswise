@@ -30,7 +30,7 @@ export default async function TodosPage({ searchParams }: { searchParams: Promis
   const { rows, problem } = await loadTodos();
 
   return (
-    <OwnerFrame title="Todos" current="/hub">
+    <OwnerFrame title="Todos" current="/todos">
       {notice ? (
         <Notice role={ok ? "status" : "alert"} tone={ok ? "ok" : "warn"}>
           {notice}

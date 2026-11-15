@@ -13,6 +13,7 @@ import {
 import { getSecret, SecretKeyMissingError } from "@kcw/secrets";
 import { ROUTE_LABELS, type RouteError, type RouteKind } from "./capture";
 import { withDb, type Queryable } from "./db";
+import { linkCrmNote } from "./contacts";
 import { applyRoute } from "./derived";
 import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
 
@@ -96,9 +97,39 @@ export async function recordRouterUsage(db: Queryable, u: UsageRecord): Promise<
 export type DbRun = <T>(fn: (db: Queryable) => Promise<T>) => Promise<T>;
 export const routerDb: DbRun = (fn) => withDb("web_rw", fn);
 
+/** The derived row a route created (null/absent when none: agent_request, or it already existed). */
+export type DerivedRow = { kind: RouteKind; id: string };
+
 export type RouteOutcome =
-  | { code: "routed" | "needs_owner"; kind: RouteKind }
+  | { code: "routed"; kind: RouteKind; derived?: DerivedRow | null }
+  | { code: "needs_owner"; kind: RouteKind }
   | { code: "already" | "cap" | "off" | "error" };
+
+/**
+ * applyRoute plus contact linking for a new CRM note, in the caller's transaction. The link step runs in a
+ * savepoint: if it fails, only the link is rolled back (the route and the note are kept, the note stays unlinked)
+ * and the error class is logged.
+ */
+export async function applyRouteLinked(
+  db: Queryable,
+  entryId: string,
+  from: RouteKind | null,
+  to: RouteKind,
+): Promise<DerivedRow | null> {
+  const created = await applyRoute(db, entryId, from, to);
+  if (created?.kind === "crm_note") {
+    await db.query("SAVEPOINT link_note");
+    try {
+      await linkCrmNote(db, created.id);
+      await db.query("RELEASE SAVEPOINT link_note");
+    } catch (err) {
+      console.error(`[router] link-${errorClass(err)}`);
+      await db.query("ROLLBACK TO SAVEPOINT link_note");
+      await db.query("RELEASE SAVEPOINT link_note");
+    }
+  }
+  return created;
+}
 
 /** The first 60 characters of the text on one line, with an ellipsis when cut. */
 export function routingTitle(text: string): string {
@@ -151,18 +182,19 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
         WHERE id = $1 AND route_kind IS NULL RETURNING id`,
       [entryId, kind, answer.confidence, answer.model, needsOwner ? "needs_owner" : "routed"],
     );
-    if (upd.rows.length === 0) return false;
-    if (!needsOwner) await applyRoute(db, entryId, null, kind);
+    if (upd.rows.length === 0) return { written: false as const };
+    let derived: DerivedRow | null = null;
+    if (!needsOwner) derived = await applyRouteLinked(db, entryId, null, kind);
     if (needsOwner) {
       await db.query(
         "INSERT INTO inbox_items (kind, ref_table, ref_id, title) VALUES ('routing', 'entries', $1, $2)",
         [entryId, routingTitle(before.text)],
       );
     }
-    return true;
+    return { written: true as const, derived };
   });
-  if (!written) return { code: "already" };
-  return { code: needsOwner ? "needs_owner" : "routed", kind };
+  if (!written.written) return { code: "already" };
+  return needsOwner ? { code: "needs_owner", kind } : { code: "routed", kind, derived: written.derived };
 }
 
 /** Stores a failed attempt: the fixed code, one more attempt, now. Only while the entry is still unrouted. */
@@ -184,20 +216,29 @@ async function recordFailure(run: DbRun, entryId: string, code: RouteError): Pro
  * the open routing inbox item for the entry is closed. Returns "not-found" for an unknown entry.
  */
 export async function reassignEntry(db: Queryable, entryId: string, to: RouteKind): Promise<"ok" | "not-found"> {
+  return (await reassignEntryDerived(db, entryId, to)).result;
+}
+
+/** reassignEntry that also returns the derived row it created (for scoring a new diary row after commit). */
+export async function reassignEntryDerived(
+  db: Queryable,
+  entryId: string,
+  to: RouteKind,
+): Promise<{ result: "ok" | "not-found"; derived: DerivedRow | null }> {
   const { rows } = await db.query<{ route_kind: RouteKind | null; status: string | null }>(
     "SELECT route_kind, status FROM entries WHERE id = $1 FOR UPDATE",
     [entryId],
   );
   const row = rows[0];
-  if (!row) return "not-found";
+  if (!row) return { result: "not-found", derived: null };
   // Saving the unchanged kind of a routed entry changes nothing (a derived row the owner deleted stays deleted).
-  if (row.status === "routed" && row.route_kind === to) return "ok";
+  if (row.status === "routed" && row.route_kind === to) return { result: "ok", derived: null };
   await db.query(
     "UPDATE entries SET route_kind = $2, routed_by = 'owner', status = 'routed', route_error = NULL WHERE id = $1",
     [entryId, to],
   );
   // A "needs you" entry has a guess but no derived row yet; a routed one has a row of its current kind.
-  await applyRoute(db, entryId, row.status === "needs_owner" ? null : row.route_kind, to);
+  const derived = await applyRouteLinked(db, entryId, row.status === "needs_owner" ? null : row.route_kind, to);
   if (row.route_kind !== null && row.route_kind !== to) {
     await db.query("INSERT INTO route_corrections (entry_id, from_kind, to_kind) VALUES ($1, $2, $3)", [entryId, row.route_kind, to]);
   }
@@ -205,7 +246,7 @@ export async function reassignEntry(db: Queryable, entryId: string, to: RouteKin
     "UPDATE inbox_items SET status = 'done', resolved_at = now() WHERE kind = 'routing' AND ref_table = 'entries' AND ref_id = $1 AND status = 'open'",
     [entryId],
   );
-  return "ok";
+  return { result: "ok", derived };
 }
 
 export interface RoutingItem {
