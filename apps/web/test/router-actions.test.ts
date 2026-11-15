@@ -23,6 +23,7 @@ vi.mock("../src/server/db", async () => ({ ...(await import("../src/server/db"))
 vi.mock("@/server/capture", async () => await import("../src/server/capture"));
 vi.mock("@/server/console", async () => await import("../src/server/console"));
 vi.mock("@/server/orchestrator-queue", async () => await import("../src/server/orchestrator-queue"));
+vi.mock("@/server/outbox", async () => await import("../src/server/outbox"));
 vi.mock("@/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
 vi.mock("../src/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
 

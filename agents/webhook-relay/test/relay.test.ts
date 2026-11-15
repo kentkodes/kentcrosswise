@@ -161,7 +161,7 @@ describe("normalization and task resolution", () => {
   it("branch kcw/task-<id> resolves without a database lookup", async () => {
     const t = setup();
     await t.run(request("push", fixture("push")));
-    expect(t.store.calls).toEqual(["claim"]);
+    expect(t.store.calls).toEqual(["claim", "mark"]);
   });
 
   it("branch task-<id> also resolves", async () => {
@@ -177,7 +177,7 @@ describe("normalization and task resolution", () => {
     const p = fixture("pull_request.opened");
     p.pull_request.head.ref = "owner-hotfix";
     await t.run(request("pull_request", p));
-    expect(t.store.calls).toEqual(["byPr", "claim"]);
+    expect(t.store.calls).toEqual(["byPr", "claim", "mark"]);
     expect(t.queue.sent[0]).toMatchObject({ task_id: 42 });
   });
 
@@ -238,15 +238,37 @@ describe("delivery dedupe (inbound_events)", () => {
     expect(t.queue.sent).toHaveLength(2);
   });
 
-  it("a failed queue send releases the claim, so a redelivery goes through", async () => {
+  it("claims and stores the outbox row (key = delivery id, group = thread id, body = the sent message) before sending", async () => {
+    const t = setup();
+    await t.run(request("push", fixture("push")));
+    expect(t.store.outbox).toHaveLength(1);
+    const row = t.store.outbox[0]!;
+    expect(row).toMatchObject({ key: DELIVERY, group: "task-42", sent: true });
+    expect(JSON.parse(row.body)).toEqual(t.queue.sent[0]);
+  });
+
+  it("a failed queue send is 202 queued: the claim and the outbox row stay for the sweeper", async () => {
     const t = setup();
     t.queue.failWith = Object.assign(new Error("synthetic"), { name: "QueueDoesNotExist" });
     const req = request("push", fixture("push"));
-    expect(await t.run(req)).toEqual({ status: 502, body: { result: "error", reason: "queue" } });
-    expect(t.store.claimed.size).toBe(0);
+    expect(await t.run(req)).toEqual({ status: 202, body: { result: "queued", reason: "send" } });
+    expect(t.store.claimed.size).toBe(1);
+    expect(t.store.outbox).toMatchObject([{ key: DELIVERY, sent: false }]);
+    expect(t.store.calls).not.toContain("mark");
+    expect(t.logs.join("\n")).toMatch(/relay: queued \(send\) .*QueueDoesNotExist/);
+    // GitHub's redelivery is a duplicate, not a second message: the outbox delivers it.
     t.queue.failWith = undefined;
-    expect((await t.run(req)).body.result).toBe("forwarded");
+    expect(await t.run(req)).toEqual({ status: 200, body: { result: "duplicate" } });
+    expect(t.queue.sent).toHaveLength(0);
+  });
+
+  it("a sent message whose mark-sent fails is 202 queued", async () => {
+    const t = setup();
+    t.store.failMark = Object.assign(new Error("postgres://user:pw@host/db"), { name: "DatabaseError" });
+    expect(await t.run(request("push", fixture("push")))).toEqual({ status: 202, body: { result: "queued", reason: "mark" } });
     expect(t.queue.sent).toHaveLength(1);
+    expect(t.store.outbox).toMatchObject([{ sent: false }]);
+    expect(t.logs.join("\n")).not.toMatch(/postgres:|pw@/);
   });
 
   it("a database failure is a 500 and nothing is sent", async () => {

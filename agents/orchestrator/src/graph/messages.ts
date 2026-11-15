@@ -1,8 +1,10 @@
 // Queue messages for the task graph (D5: everything arrives on orchestrator-in). All are untrusted
 // and validated here; the FIFO group must be the task's thread id. Error messages never quote input.
+// A message may carry a logical `message_key` (the relay's delivery id, or the web outbox key); the
+// consumer's receipts (receipts.ts) apply a keyed message once. Sweep and report messages have none.
 //
-//   {type:"task.created", task_id}                                       console (§4.2 step 1)
-//   {type:"owner.decision", task_id, thread_id, resume:{approval_id, decision}}   inbox (§4.3)
+//   {type:"task.created", task_id, message_key?}                         console (§4.2 step 1)
+//   {type:"owner.decision", task_id, thread_id, message_key?, resume:{approval_id, decision}}   inbox (§4.3)
 //   {type:"sweep", task_id, thread_id}                                   sweeper (§4.3, P2-17)
 //   {source:"github", delivery_id, task_id, thread_id, resume:{event, head_sha, payload}}   relay (P2-05)
 //   {task_id, agent, event_type?, usage?} (event, usage, or both)       kcw-report (P2-03)
@@ -25,6 +27,15 @@ function taskIdOf(x: Obj): number {
 /** Messages that carry thread_id must name the task's own thread. */
 function checkThread(x: Obj, taskId: number): void {
   if (x.thread_id !== threadIdOf(taskId)) throw new InputError("thread_id does not match task_id");
+}
+
+/** The web outbox's `message_key` (table limit 1..128); absent on messages sent before AR2. */
+function optionalKey(x: Obj): string | undefined {
+  if (x.message_key === undefined) return undefined;
+  if (typeof x.message_key !== "string" || x.message_key.length < 1 || x.message_key.length > 128) {
+    throw new InputError("message_key must be a string of 1 to 128 characters");
+  }
+  return x.message_key;
 }
 
 const strOrNull = (v: unknown, max = 255): string | null => {
@@ -101,7 +112,11 @@ function parseGitHubPayload(p: unknown): GitHubInput {
  * Parses one queue message for the task graph. `messageId` is the SQS message id (the same on a
  * redelivery), kept so a redelivered message is not applied twice.
  */
-export function parseTaskMessage(body: string, groupId: string | undefined, messageId: string): { task_id: number; input: TaskInput } {
+export function parseTaskMessage(
+  body: string,
+  groupId: string | undefined,
+  messageId: string,
+): { task_id: number; input: TaskInput; message_key?: string } {
   let x: unknown;
   try {
     x = JSON.parse(body);
@@ -112,12 +127,15 @@ export function parseTaskMessage(body: string, groupId: string | undefined, mess
 
   let taskId: number;
   let input: TaskInput;
+  let messageKey: string | undefined;
   if (x.type === "task.created") {
     taskId = taskIdOf(x);
+    messageKey = optionalKey(x);
     input = { kind: "start", message_id: messageId };
   } else if (x.type === "owner.decision") {
     taskId = taskIdOf(x);
     checkThread(x, taskId);
+    messageKey = optionalKey(x);
     const r = x.resume;
     if (!isObject(r) || typeof r.approval_id !== "string" || !UUID.test(r.approval_id)) {
       throw new InputError("resume.approval_id must be a uuid");
@@ -136,6 +154,7 @@ export function parseTaskMessage(body: string, groupId: string | undefined, mess
     if (typeof x.delivery_id !== "string" || x.delivery_id.length === 0 || x.delivery_id.length > 100) {
       throw new InputError("delivery_id must be a string");
     }
+    messageKey = x.delivery_id;
     if (!isObject(x.resume)) throw new InputError("resume must be an object");
     input = { ...parseGitHubPayload(x.resume.payload), message_id: messageId };
   } else if (x.type === undefined && x.source === undefined) {
@@ -147,5 +166,5 @@ export function parseTaskMessage(body: string, groupId: string | undefined, mess
   }
 
   if (groupId !== threadIdOf(taskId)) throw new InputError("MessageGroupId does not match the task's thread id");
-  return { task_id: taskId, input };
+  return messageKey === undefined ? { task_id: taskId, input } : { task_id: taskId, input, message_key: messageKey };
 }

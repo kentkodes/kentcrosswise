@@ -34,6 +34,8 @@ Implement AR1 in three reviewable slices:
 
 ### Slice 1: database-to-SQS outbox
 
+Status: implemented in source (the AR2 slice 1 PR; migration `0011_orchestrator_outbox`, strict-migrated by the deploy after merge, so the gated step is the prod migration). Relay: claim and outbox insert in one statement, `202 queued` after a failed send or mark, `releaseDelivery` and `relay_rw`'s `DELETE` on `inbound_events` removed. Web: `createTask` and `decideApproval` insert their row in the same transaction; the resend actions are removed. Sweeper part `outbox` (every run, not spend-gated; backoff `min(15 min * 2^attempts, 6 h)`, per-group FIFO hold). Consumer receipts by logical key. Details in DESIGN section 4.3. Remaining: live acceptance after the migration is applied.
+
 Change relay `src/relay.ts`, `store.ts`, orchestrator `sweeper/{store,sweep,deliveries}.ts`, web `server/{console,orchestrator-queue}.ts` and the relevant actions. Add a narrowly granted outbox in the next append-only migration after refreshed main: unique logical message key, normalized payload, pending/sent state and retry timestamps. Commit webhook receipt or owner/task mutation with its outbox intent; send after commit and drain unfinished rows through the existing sweeper. Reserve migration numbers after fetching current main.
 
 Keep consumer receipts/effects keyed by the original logical message identity. A crash after SQS acceptance but before marking sent may resend beyond SQS's dedupe window; a new transport message ID is not a new logical event. Review `relay_rw`, `orch_rw` and `web_rw` grants independently.

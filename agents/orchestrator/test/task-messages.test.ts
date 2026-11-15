@@ -126,6 +126,24 @@ describe("parseTaskMessage", () => {
     expect(() => parse(body)).toThrow(InputError);
   });
 
+  it("carries the logical message key: relay delivery id, web message_key; sweep and reports have none", () => {
+    expect(parse(github({ type: "push" })).message_key).toBe("d1");
+    expect(parse({ type: "task.created", task_id: 7, message_key: "task-created-7" })).toEqual({
+      task_id: 7,
+      input: { kind: "start", message_id: "msg-1" },
+      message_key: "task-created-7",
+    });
+    expect(parse(decision({ approval_id: APPROVAL, decision: "approved" }, { message_key: `approval-${APPROVAL}` })).message_key).toBe(
+      `approval-${APPROVAL}`,
+    );
+    expect(parse({ type: "task.created", task_id: 7 })).not.toHaveProperty("message_key");
+    expect(parse({ type: "sweep", task_id: 7, thread_id: "task-7" })).not.toHaveProperty("message_key");
+    expect(parse({ task_id: 7, agent: "developer", event_type: "coding" })).not.toHaveProperty("message_key");
+    for (const bad of ["", "x".repeat(129), 7, null]) {
+      expect(() => parse({ type: "task.created", task_id: 7, message_key: bad })).toThrow(InputError);
+    }
+  });
+
   it("never quotes the input in errors", () => {
     const secret = "private-owner-text";
     for (const body of [decision({ approval_id: secret, decision: secret }), github({ type: secret })]) {

@@ -1,6 +1,7 @@
 // The sweeper's database reads, as orch_rw (DESIGN §3.4: tasks, system_flags, inbound_events).
 // Read-only: the sweeper never changes a task; the graph does when it processes the sweep message.
-// The one write is system_flags.agents_paused = true (the spend cap, spend.ts).
+// The one write is system_flags.agents_paused = true (the spend cap, spend.ts), plus the outbox
+// bookkeeping (orchestrator_outbox, migration 0011: mark sent, record a failed attempt).
 import type { SpendEvent, SpendPrice } from "./spend";
 
 interface SpendEventRow {
@@ -49,6 +50,22 @@ export interface SweepTask {
   id: number;
 }
 
+/** Upper bound of outbox rows per run. */
+export const MAX_OUTBOX_ROWS = 200;
+/** Rows younger than this are left to their writer (relay or web), which is still sending them. */
+export const OUTBOX_MIN_AGE_MINUTES = 2;
+/** Retry delay after a failed send: 15 minutes, doubling per earlier attempt, at most 6 hours. */
+export const OUTBOX_BACKOFF_MINUTES = 15;
+export const OUTBOX_BACKOFF_MAX_HOURS = 6;
+
+/** An unsent orchestrator_outbox row, as it is sent. */
+export interface OutboxRow {
+  id: number;
+  messageKey: string;
+  groupId: string;
+  body: string;
+}
+
 export interface SweeperStore {
   /** Tasks with a SWEEP_STATUSES status or a stale `planning` one, oldest first, at most `limit`. */
   listSweepTasks(limit: number): Promise<SweepTask[]>;
@@ -60,6 +77,11 @@ export interface SweeperStore {
   monthUsage(start: Date, end: Date): Promise<{ events: SpendEvent[]; prices: SpendPrice[] }>;
   /** The given delivery ids that are already in inbound_events (the relay enqueued them). */
   knownDeliveries(ids: readonly string[]): Promise<Set<string>>;
+  /** Unsent outbox rows that are due and old enough, by id, at most `limit`. */
+  listUnsentOutbox(limit: number): Promise<OutboxRow[]>;
+  markOutboxSent(id: number): Promise<void>;
+  /** Counts a failed send: attempts + 1, the error class, and the next attempt time (backoff). */
+  recordOutboxFailure(id: number, errorClass: string): Promise<void>;
 }
 
 export function sqlSweeperStore(db: SqlQuery): SweeperStore {
@@ -136,6 +158,35 @@ export function sqlSweeperStore(db: SqlQuery): SweeperStore {
         [[...ids]],
       );
       return new Set(rows.map((r) => r.delivery_id));
+    },
+
+    async listUnsentOutbox(limit) {
+      const { rows } = await db.query<{ id: string | number; message_key: string; group_id: string; body: string }>(
+        // A row waits while an earlier unsent row of its group is still backing off (FIFO order).
+        `SELECT o.id, o.message_key, o.group_id, o.body FROM orchestrator_outbox o
+          WHERE o.sent_at IS NULL AND o.next_attempt_at <= now() AND o.created_at <= now() - make_interval(mins => $2)
+            AND NOT EXISTS (SELECT 1 FROM orchestrator_outbox e
+                             WHERE e.group_id = o.group_id AND e.sent_at IS NULL AND e.id < o.id AND e.next_attempt_at > now())
+          ORDER BY o.id LIMIT $1`,
+        [limit, OUTBOX_MIN_AGE_MINUTES],
+      );
+      return rows.map((r) => ({ id: Number(r.id), messageKey: r.message_key, groupId: r.group_id, body: r.body }));
+    },
+
+    async markOutboxSent(id) {
+      await db.query("UPDATE orchestrator_outbox SET sent_at = now() WHERE id = $1 AND sent_at IS NULL", [id]);
+    },
+
+    async recordOutboxFailure(id, errorClass) {
+      // The exponent is capped so a long-failing row cannot overflow the interval; the cap wins anyway.
+      await db.query(
+        `UPDATE orchestrator_outbox
+            SET attempts = attempts + 1, last_error = $2,
+                next_attempt_at = now() + least(make_interval(mins => $3) * power(2, least(attempts, 10)),
+                                                make_interval(hours => $4))
+          WHERE id = $1`,
+        [id, errorClass, OUTBOX_BACKOFF_MINUTES, OUTBOX_BACKOFF_MAX_HOURS],
+      );
     },
   };
 }

@@ -48,15 +48,22 @@ export class FakeStore implements RelayStore {
     this.calls.push(name);
     if (this.failWith) throw this.failWith;
   }
-  async claimDelivery(id: string) {
+  /** orchestrator_outbox rows by id (message key = delivery id). */
+  readonly outbox: { id: number; key: string; group: string; body: string; sent: boolean }[] = [];
+  /** Makes markOutboxSent fail (the claim and outbox row are already stored). */
+  failMark: Error | undefined;
+  async claimAndEnqueue(id: string, _source: string, group: string, body: string) {
     this.#call("claim");
-    if (this.claimed.has(id)) return false;
+    if (this.claimed.has(id)) return null;
     this.claimed.add(id);
-    return true;
+    const row = { id: this.outbox.length + 1, key: id, group, body, sent: false };
+    this.outbox.push(row);
+    return row.id;
   }
-  async releaseDelivery(id: string) {
-    this.#call("release");
-    this.claimed.delete(id);
+  async markOutboxSent(outboxId: number) {
+    this.calls.push("mark");
+    if (this.failMark) throw this.failMark;
+    this.outbox.find((r) => r.id === outboxId)!.sent = true;
   }
   async findTaskByPr(n: number) {
     this.#call("byPr");

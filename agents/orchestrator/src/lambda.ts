@@ -20,7 +20,7 @@ import type pg from "pg";
 import { drainOfficePool } from "./office";
 import { checkpointerFromPool, createPool, setupCheckpointer } from "./checkpointer";
 import { githubClientFromSecret, type GitHubClient } from "./github";
-import { PgTaskStore, buildTaskGraph, handleTaskSqsEvent, type TaskGraph } from "./graph";
+import { PgReceiptStore, PgTaskStore, buildTaskGraph, handleTaskSqsEvent, type TaskGraph } from "./graph";
 import type { SqsBatchResponse, SqsEvent } from "./handler";
 import { ModelPlanner, trackPlannerUsage } from "./nodes";
 
@@ -158,7 +158,7 @@ export function createHandler(deps: LambdaDeps): (event: SqsEvent) => Promise<Sq
       log(`init failed (${err instanceof Error ? err.name : "error"}): ${records.length} message(s) returned to the queue`);
       return { batchItemFailures: records.map((r) => ({ itemIdentifier: r.messageId })) };
     }
-    const result = await handleTaskSqsEvent(event, { graph, log });
+    const result = await handleTaskSqsEvent(event, { graph, receipts: new PgReceiptStore(pool), log });
     await drainOfficePool(pool, log);
     return result;
   };

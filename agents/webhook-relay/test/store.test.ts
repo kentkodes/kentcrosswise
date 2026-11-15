@@ -41,19 +41,31 @@ describe("sqlRelayStore on PGlite (migrations applied, as a relay_rw member)", (
     await pg.close();
   });
 
-  it("claims a delivery once", async () => {
+  it("claims a delivery and its outbox row in one statement, once", async () => {
     const s = sqlRelayStore(db);
-    expect(await s.claimDelivery("d-1", GITHUB_SOURCE)).toBe(true);
-    expect(await s.claimDelivery("d-1", GITHUB_SOURCE)).toBe(false);
-    const rows = await asSuperuser<{ source: string }>("SELECT source FROM inbound_events WHERE delivery_id = 'd-1'");
-    expect(rows).toEqual([{ source: "github" }]);
+    const id = await s.claimAndEnqueue("d-1", GITHUB_SOURCE, "task-1", '{"a":1}');
+    expect(id).toEqual(expect.any(Number));
+    expect(await s.claimAndEnqueue("d-1", GITHUB_SOURCE, "task-1", '{"a":1}')).toBeNull();
+    expect(await asSuperuser<{ source: string }>("SELECT source FROM inbound_events WHERE delivery_id = 'd-1'")).toEqual([
+      { source: "github" },
+    ]);
+    const rows = await asSuperuser<{ id: number; message_key: string; group_id: string; body: string; sent_at: Date | null; attempts: number }>(
+      "SELECT id, message_key, group_id, body, sent_at, attempts FROM orchestrator_outbox",
+    );
+    expect(rows).toEqual([{ id: Number(id), message_key: "d-1", group_id: "task-1", body: '{"a":1}', sent_at: null, attempts: 0 }]);
   });
 
-  it("releases a claim", async () => {
+  it("marks an outbox row sent once", async () => {
     const s = sqlRelayStore(db);
-    expect(await s.claimDelivery("d-2", GITHUB_SOURCE)).toBe(true);
-    await s.releaseDelivery("d-2");
-    expect(await s.claimDelivery("d-2", GITHUB_SOURCE)).toBe(true);
+    const id = await s.claimAndEnqueue("d-2", GITHUB_SOURCE, "task-2", "{}");
+    await s.markOutboxSent(id!);
+    await s.markOutboxSent(id!); // already sent: no change
+    const rows = await asSuperuser<{ sent: boolean }>(`SELECT sent_at IS NOT NULL AS sent FROM orchestrator_outbox WHERE id = ${id}`);
+    expect(rows).toEqual([{ sent: true }]);
+  });
+
+  it("cannot release a claim any more (no DELETE on inbound_events)", async () => {
+    await expect(db.query("DELETE FROM inbound_events WHERE delivery_id = $1", ["d-2"])).rejects.toThrow(/permission denied/);
   });
 
   it("finds the newest task by PR number and by issue number", async () => {

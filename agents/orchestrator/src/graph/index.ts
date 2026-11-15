@@ -11,12 +11,14 @@ import { Annotation, Command, END, START, StateGraph, interrupt, type BaseCheckp
 import { handleRecords, threadConfig, type SqsBatchResponse, type SqsEvent } from "../handler";
 import { agentRunRole, runStep, type TaskGraphDeps } from "./machine";
 import { parseTaskMessage } from "./messages";
+import type { ReceiptStore } from "./receipts";
 import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskData, type TaskInput, type WaitingOn } from "./types";
 
 export * from "./types";
 export { DispatchLinkConflictError, PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
 export { runStep, type TaskGraphDeps } from "./machine";
 export { parseTaskMessage } from "./messages";
+export { PgReceiptStore, type ReceiptStore } from "./receipts";
 
 /** The interrupt value: what the thread waits for. */
 export interface TaskWait {
@@ -135,6 +137,12 @@ async function applyTaskInput(graph: TaskGraph, taskId: number, input: TaskInput
 
 export interface TaskHandlerDeps {
   graph: TaskGraph;
+  /**
+   * Receipts by logical message key (AR2 slice 1). Without them every message is applied as before.
+   * A keyed message with a receipt is acknowledged unprocessed (`duplicate`); the receipt is
+   * written after the message is processed, so a crash before it behaves as before (SQS redelivers).
+   */
+  receipts?: ReceiptStore;
   /** One line per message (and per notable step); never message bodies or task text. */
   log?: (line: string) => void;
 }
@@ -144,8 +152,12 @@ export async function handleTaskSqsEvent(event: SqsEvent, deps: TaskHandlerDeps)
   return handleRecords(
     event,
     async (record) => {
-      const { task_id, input } = parseTaskMessage(record.body, record.attributes?.MessageGroupId, record.messageId);
-      return processTaskInput(deps.graph, task_id, input);
+      const { task_id, input, message_key } = parseTaskMessage(record.body, record.attributes?.MessageGroupId, record.messageId);
+      const receipts = message_key === undefined ? undefined : deps.receipts;
+      if (receipts && (await receipts.has(message_key!))) return "duplicate";
+      const outcome = await processTaskInput(deps.graph, task_id, input);
+      await receipts?.record(message_key!);
+      return outcome;
     },
     deps.log,
   );

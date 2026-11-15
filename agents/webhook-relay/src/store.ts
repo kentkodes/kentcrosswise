@@ -16,10 +16,14 @@ export interface DispatchLink {
 const ROLES: readonly string[] = ["developer", "qa", "docs", "scraper"];
 
 export interface RelayStore {
-  /** Records a delivery in `inbound_events`. Returns false if it was already recorded (a duplicate). */
-  claimDelivery(deliveryId: string, source: string): Promise<boolean>;
-  /** Removes a claim after the queue send failed, so GitHub's redelivery is not dropped as a duplicate. */
-  releaseDelivery(deliveryId: string): Promise<void>;
+  /**
+   * Records a delivery in `inbound_events` and its message in `orchestrator_outbox` (key = delivery
+   * id) in ONE statement, so a crash can never leave a claimed delivery without its outbox row.
+   * Returns the outbox row id, or null if the delivery was already recorded (a duplicate).
+   */
+  claimAndEnqueue(deliveryId: string, source: string, groupId: string, body: string): Promise<number | null>;
+  /** Marks an outbox row sent after the queue accepted it. */
+  markOutboxSent(outboxId: number): Promise<void>;
   /** `tasks.id` of the task with this PR, or null. */
   findTaskByPr(prNumber: number): Promise<number | null>;
   /** `tasks.id` of the task with this GitHub issue, or null. */
@@ -48,15 +52,19 @@ async function newestTask(db: SqlQuery, column: "pr_number" | "github_issue", n:
 
 export function sqlRelayStore(db: SqlQuery): RelayStore {
   return {
-    async claimDelivery(deliveryId, source) {
-      const { rows } = await db.query(
-        "INSERT INTO inbound_events (delivery_id, source) VALUES ($1, $2) ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id",
-        [deliveryId, source],
+    async claimAndEnqueue(deliveryId, source, groupId, body) {
+      const { rows } = await db.query<{ id: string | number }>(
+        `WITH c AS (
+           INSERT INTO inbound_events (delivery_id, source) VALUES ($1, $2)
+           ON CONFLICT (delivery_id) DO NOTHING RETURNING delivery_id)
+         INSERT INTO orchestrator_outbox (message_key, group_id, body)
+         SELECT delivery_id, $3::text, $4::text FROM c RETURNING id`,
+        [deliveryId, source, groupId, body],
       );
-      return rows.length === 1;
+      return rows[0] ? Number(rows[0].id) : null; // bigint arrives as a string from node-postgres
     },
-    async releaseDelivery(deliveryId) {
-      await db.query("DELETE FROM inbound_events WHERE delivery_id = $1", [deliveryId]);
+    async markOutboxSent(outboxId) {
+      await db.query("UPDATE orchestrator_outbox SET sent_at = now() WHERE id = $1 AND sent_at IS NULL", [outboxId]);
     },
     findTaskByPr: (n) => newestTask(db, "pr_number", n),
     findTaskByIssue: (n) => newestTask(db, "github_issue", n),
