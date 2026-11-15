@@ -13,7 +13,11 @@ locals {
   partition  = data.aws_partition.current.partition
   region     = data.aws_region.current.region
 
-  sweeper_name   = "${var.name_prefix}-sweeper"
+  sweeper_name = "${var.name_prefix}-sweeper"
+  # Built from plan-time values: a policy document that reads aws_lambda_function.sweeper.arn is
+  # deferred to apply whenever the sweeper code changes, so every such plan showed this policy as an
+  # infrastructure update (a no-op at apply) and merge-rules sent the PR to the owner.
+  sweeper_arn    = "arn:${local.partition}:lambda:${local.region}:${local.account_id}:function:${local.sweeper_name}"
   scheduler_name = "${var.name_prefix}-sweeper-scheduler"
 
   zip_dir             = "${path.root}/.terraform/kcw-scheduler"
@@ -140,7 +144,7 @@ data "aws_iam_policy_document" "scheduler" {
   statement {
     sid       = "InvokeSweeper"
     actions   = ["lambda:InvokeFunction"]
-    resources = [aws_lambda_function.sweeper.arn, "${aws_lambda_function.sweeper.arn}:*"]
+    resources = [local.sweeper_arn, "${local.sweeper_arn}:*"]
   }
 }
 
