@@ -1,12 +1,14 @@
-// kcw-report (P2-03): the last step of every agent workflow (DESIGN §4.1 step 6) sends
-// {task_id, agent, event_type?, usage?} to the orchestrator's SQS FIFO queue. Without --event-type
-// the report is usage-only (DESIGN §11 Q14(5)): the orchestrator records usage and no event.
+// kcw-report (P2-03): the start and final report jobs of every agent workflow (DESIGN §4.1) send
+// {task_id, agent, run_id, run_attempt, job, op, event_type?, usage?} to the orchestrator's SQS FIFO
+// queue. Without an event type the report is usage-only (DESIGN §11 Q14(5)): the orchestrator records
+// usage and no event. The identity (AR2 slice 3) comes from trusted workflow context: the runner's
+// GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT, the sending job and the trusted context's op; it is the SQS
+// deduplication id and the orchestrator's receipt key, never a random value.
 // Everything here is injectable so tests run with a fake SQS client; cli.ts wires in the real one.
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
-import { parseAgentReport, threadIdOf, type AgentReport, type Usage } from "@kcw/core/events";
+import { REPORT_JOBS, parseAgentReport, reportKey, threadIdOf, type AgentReport, type ReportJob, type Usage } from "@kcw/core/events";
 
 /** Package name, used by the workspace smoke test. */
 export const PACKAGE_NAME = "@kcw/report";
@@ -22,13 +24,13 @@ export interface SqsLike {
 export interface SendOptions {
   sqs: SqsLike;
   queueUrl: string;
-  /** FIFO deduplication id; defaults to a random UUID (so two identical reports are both delivered). */
-  dedupeId?: string;
 }
 
 /**
  * Sends one validated report. MessageGroupId is the task's thread id (`task-<id>`), so reports
- * are processed in order with the other inputs of that thread (D5). Returns the SQS MessageId.
+ * are processed in order with the other inputs of that thread (D5); MessageDeduplicationId is the
+ * report's identity (`reportKey`), so a retried send inside SQS's window is delivered once.
+ * Returns the SQS MessageId.
  */
 export async function sendReport(report: AgentReport, opts: SendOptions): Promise<string | undefined> {
   const body = parseAgentReport(report);
@@ -37,7 +39,7 @@ export async function sendReport(report: AgentReport, opts: SendOptions): Promis
       QueueUrl: opts.queueUrl,
       MessageBody: JSON.stringify(body),
       MessageGroupId: threadIdOf(body.task_id),
-      MessageDeduplicationId: opts.dedupeId ?? randomUUID(),
+      MessageDeduplicationId: reportKey(body),
     }),
   )) as { MessageId?: string } | undefined;
   return out?.MessageId;
@@ -47,20 +49,66 @@ export class UsageError extends Error {
   override name = "UsageError";
 }
 
-export const HELP = `Usage: pnpm kcw-report --task-id <n> --agent <agent> [--event-type <type>] [options]
+/**
+ * The run id and attempt of the current workflow run, from the runner's own environment
+ * (GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT). Never from flags or candidate data. Never echoes a value.
+ */
+export function runFromEnv(env: Readonly<Record<string, string | undefined>>): { run_id: number; run_attempt: number } {
+  const id = env.GITHUB_RUN_ID ?? "";
+  const attempt = env.GITHUB_RUN_ATTEMPT ?? "";
+  if (!/^[1-9][0-9]{0,15}$/.test(id) || !/^[1-9][0-9]{0,9}$/.test(attempt)) {
+    throw new UsageError("GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT must be set by the workflow runner");
+  }
+  return { run_id: Number(id), run_attempt: Number(attempt) };
+}
 
-Sends {task_id, agent, event_type, usage} to the orchestrator queue (SQS FIFO). Without
---event-type the report is usage-only (no lifecycle event) and needs at least one usage line.
+export interface DeliverDeps {
+  env: Readonly<Record<string, string | undefined>>;
+  /** Defaults to a real SQSClient in the chosen region. */
+  sqs?: SqsLike;
+  stdout: (line: string) => void;
+  queueUrl?: string;
+  region?: string;
+}
+
+/** Sends a report to the queue from the environment (queue URL, region) and logs one line. */
+export async function deliverReport(report: AgentReport, deps: DeliverDeps): Promise<void> {
+  const queueUrl = deps.queueUrl ?? deps.env[QUEUE_URL_ENV];
+  if (!queueUrl) throw new UsageError(`no queue URL: pass --queue-url or set ${QUEUE_URL_ENV}`);
+  const sqs = deps.sqs ?? new SQSClient({ region: deps.region ?? deps.env.AWS_REGION ?? "us-east-1" });
+  let messageId: string | undefined;
+  try {
+    messageId = await sendReport(report, { sqs, queueUrl });
+  } catch (err) {
+    if (err instanceof Error && err.name === "ReportFormatError") throw err;
+    // Only the AWS error name: SDK messages can be long and are not needed in CI logs.
+    const name = err instanceof Error ? err.name : "unknown error";
+    throw new Error(`could not send the report to SQS (${name})`, { cause: err });
+  }
+  deps.stdout(
+    `kcw-report: sent ${report.event_type ?? "usage"} from ${report.agent} for ${threadIdOf(report.task_id)} as ${reportKey(report)}` +
+      (messageId ? ` (message ${messageId})` : ""),
+  );
+}
+
+export const HELP = `Usage: pnpm kcw-report --task-id <n> --agent <agent> --job <start|end> [--op <n>] [--event-type <type>] [options]
+
+Sends {task_id, agent, run_id, run_attempt, job, op, event_type, usage} to the orchestrator queue
+(SQS FIFO). run_id and run_attempt come from GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (set by the
+workflow runner); the report identity report:<run id>:<attempt>:<job> is the deduplication id.
+Without --event-type the report is usage-only (no lifecycle event) and needs at least one usage line.
 
 Options:
+  --job <start|end>                 the sending job (required)
+  --op <n>                          the dispatch operation id (omit for the undispatched scraper)
   --provider <p> --model <m> --input-tokens <n> --output-tokens <n>   model usage of this step
   --claude-execution-file <path>    model usage of a Claude Code Action run (its execution_file
                                     output), one usage line per model
   --minutes <x>                     GitHub Actions minutes of this job (agent workflows do not send
                                     it: the relay records Actions minutes, DESIGN §11 Q13)
+                                    Usage lines get the call identities work:0, work:1, ... in order.
   --queue-url <url>                 default: $${QUEUE_URL_ENV}
   --region <r>                      default: $AWS_REGION, then us-east-1
-  --dedupe-id <id>                  FIFO deduplication id (default: random)
   --dry-run                         print the message JSON and send nothing
   --help
 `;
@@ -68,6 +116,8 @@ Options:
 const OPTIONS = {
   "task-id": { type: "string" },
   agent: { type: "string" },
+  job: { type: "string" },
+  op: { type: "string" },
   "event-type": { type: "string" },
   provider: { type: "string" },
   model: { type: "string" },
@@ -77,7 +127,6 @@ const OPTIONS = {
   "claude-execution-file": { type: "string" },
   "queue-url": { type: "string" },
   region: { type: "string" },
-  "dedupe-id": { type: "string" },
   "dry-run": { type: "boolean" },
   help: { type: "boolean" },
 } as const;
@@ -89,14 +138,23 @@ function integer(flag: string, v: string | undefined): number | undefined {
 }
 
 /**
- * Builds the report from parsed flags plus usage read elsewhere (the execution file). Without
- * --event-type it is usage-only and needs at least one usage line. Errors never quote a flag value.
+ * Builds the report from parsed flags, the run identity (`runFromEnv`) and usage read elsewhere
+ * (the execution file). Without --event-type it is usage-only and needs at least one usage line.
+ * Errors never quote a flag value.
  */
-export function reportFromFlags(v: Record<string, string | boolean | undefined>, extraUsage: readonly Usage[] = []): AgentReport {
+export function reportFromFlags(
+  v: Record<string, string | boolean | undefined>,
+  run: { run_id: number; run_attempt: number },
+  extraUsage: readonly Usage[] = [],
+): AgentReport {
   const str = (k: string) => (typeof v[k] === "string" ? (v[k] as string) : undefined);
   if (str("task-id") === undefined || str("agent") === undefined) {
     throw new UsageError("--task-id and --agent are required");
   }
+  const job = str("job");
+  if (!(REPORT_JOBS as readonly (string | undefined)[]).includes(job)) throw new UsageError("--job must be start or end");
+  const op = str("op");
+  if (op !== undefined && !/^(?:0|[1-9][0-9]{0,8})$/.test(op)) throw new UsageError("--op must be a decimal integer of at most 9 digits");
   const usage: Usage[] = [];
   const modelFlags = ["provider", "model", "input-tokens", "output-tokens"].filter((k) => str(k) !== undefined);
   if (modelFlags.length > 0) {
@@ -123,8 +181,11 @@ export function reportFromFlags(v: Record<string, string | boolean | undefined>,
   return parseAgentReport({
     task_id: integer("task-id", str("task-id")),
     agent: str("agent"),
+    ...run,
+    job: job as ReportJob,
+    op: op === undefined ? null : Number(op),
     ...(str("event-type") !== undefined ? { event_type: str("event-type") } : {}),
-    ...(usage.length > 0 ? { usage } : {}),
+    ...(usage.length > 0 ? { usage: usage.map((u, index) => ({ ...u, call: { job: "work", index } })) } : {}),
   });
 }
 
@@ -200,26 +261,16 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<vo
     typeof execFile === "string" && execFile !== ""
       ? await readExecutionUsage(execFile, deps.readFile ?? ((p) => readFile(p, "utf8")))
       : [];
-  const report = reportFromFlags(values, extra);
+  const report = reportFromFlags(values, runFromEnv(deps.env), extra);
   if (values["dry-run"] === true) {
     deps.stdout(JSON.stringify(report, null, 2));
     return;
   }
-  const queueUrl = (values["queue-url"] as string | undefined) ?? deps.env[QUEUE_URL_ENV];
-  if (!queueUrl) throw new UsageError(`no queue URL: pass --queue-url or set ${QUEUE_URL_ENV}`);
-  const region = (values.region as string | undefined) ?? deps.env.AWS_REGION ?? "us-east-1";
-  const sqs = deps.sqs ?? new SQSClient({ region });
-  const dedupeId = values["dedupe-id"] as string | undefined;
-  let messageId: string | undefined;
-  try {
-    messageId = await sendReport(report, { sqs, queueUrl, ...(dedupeId ? { dedupeId } : {}) });
-  } catch (err) {
-    // Only the AWS error name: SDK messages can be long and are not needed in CI logs.
-    const name = err instanceof Error ? err.name : "unknown error";
-    throw new Error(`could not send the report to SQS (${name})`, { cause: err });
-  }
-  deps.stdout(
-    `kcw-report: sent ${report.event_type ?? "usage"} from ${report.agent} for ${threadIdOf(report.task_id)}` +
-      (messageId ? ` (message ${messageId})` : ""),
-  );
+  await deliverReport(report, {
+    env: deps.env,
+    stdout: deps.stdout,
+    ...(deps.sqs && { sqs: deps.sqs }),
+    ...(typeof values["queue-url"] === "string" && { queueUrl: values["queue-url"] }),
+    ...(typeof values.region === "string" && { region: values.region }),
+  });
 }

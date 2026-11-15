@@ -98,11 +98,24 @@ describe("task graph (P2-10)", () => {
 
   // ------------------------------------------------------------------ messages
 
+  /**
+   * A kcw-report body written here without its identity (AR2 slice 3) gets a fresh one: its own run,
+   * attempt 1, the end job, no op (never fenced), and work call ids for its usage lines. The report
+   * identity tests below write theirs explicitly.
+   */
+  let runSeq = 5000;
+  function identified(body: unknown): unknown {
+    const b = body as Record<string, unknown>;
+    if (typeof b !== "object" || b === null || "type" in b || "source" in b || "run_id" in b) return body;
+    const usage = Array.isArray(b.usage) ? (b.usage as object[]).map((u, index) => ({ ...u, call: { job: "work", index } })) : undefined;
+    return { ...b, run_id: ++runSeq, run_attempt: 1, job: "end", op: null, ...(usage && { usage }) };
+  }
+
   /** Sends one message through the SQS handler; returns its outcome (or "failed" if returned to the queue). */
   async function send(taskId: number, body: unknown, messageId = `m${++seq}`): Promise<string> {
     const lines: string[] = [];
     const res = await handleTaskSqsEvent(
-      { Records: [{ messageId, body: JSON.stringify(body), attributes: { MessageGroupId: `task-${taskId}` } }] },
+      { Records: [{ messageId, body: JSON.stringify(identified(body)), attributes: { MessageGroupId: `task-${taskId}` } }] },
       { graph, log: (l) => lines.push(l) },
     );
     if (res.batchItemFailures.length > 0) return "failed";

@@ -24,21 +24,27 @@ const github = (payload: unknown, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+const RID = { run_id: 900, run_attempt: 2, job: "start", op: 1 } as const;
+
 describe("parseTaskMessage", () => {
   it("task.created, sweep and agent reports", () => {
     expect(parse({ type: "task.created", task_id: 7 })).toEqual({ task_id: 7, input: { kind: "start", message_id: "msg-1" } });
     expect(parse({ type: "sweep", task_id: 7, thread_id: "task-7" })).toEqual({ task_id: 7, input: { kind: "sweep", message_id: "msg-1" } });
-    expect(parse({ task_id: 7, agent: "developer", event_type: "coding", extra: 1 })).toEqual({
+    expect(parse({ task_id: 7, agent: "developer", ...RID, event_type: "coding", extra: 1 })).toEqual({
       task_id: 7,
-      input: { kind: "report", report: { task_id: 7, agent: "developer", event_type: "coding" }, message_id: "msg-1" },
+      input: { kind: "report", report: { task_id: 7, agent: "developer", ...RID, event_type: "coding" }, message_id: "msg-1" },
+      message_key: "report:900:2:start",
     });
-    expect(() => parse({ task_id: 7, agent: "nobody", event_type: "coding" })).toThrow(ReportFormatError);
-    const usage = [{ kind: "actions_minutes", minutes: 1 }];
-    expect(parse({ task_id: 7, agent: "qa", usage })).toEqual({
+    expect(() => parse({ task_id: 7, agent: "nobody", ...RID, event_type: "coding" })).toThrow(ReportFormatError);
+    const usage = [{ kind: "actions_minutes", minutes: 1, call: { job: "work", index: 0 } }];
+    expect(parse({ task_id: 7, agent: "qa", ...RID, job: "end", usage })).toEqual({
       task_id: 7,
-      input: { kind: "report", report: { task_id: 7, agent: "qa", usage }, message_id: "msg-1" },
+      input: { kind: "report", report: { task_id: 7, agent: "qa", ...RID, job: "end", usage }, message_id: "msg-1" },
+      message_key: "report:900:2:end",
     });
-    expect(() => parse({ task_id: 7, agent: "qa" })).toThrow(ReportFormatError);
+    expect(() => parse({ task_id: 7, agent: "qa", ...RID })).toThrow(ReportFormatError);
+    // The format before AR2 slice 3 has no identity and is rejected (dropped by the handler).
+    expect(() => parse({ task_id: 7, agent: "developer", event_type: "coding" })).toThrow(ReportFormatError);
   });
 
   it("never lets a queue message start a docs task (the orchestrator builds that start itself)", () => {
@@ -126,7 +132,7 @@ describe("parseTaskMessage", () => {
     expect(() => parse(body)).toThrow(InputError);
   });
 
-  it("carries the logical message key: relay delivery id, web message_key; sweep and reports have none", () => {
+  it("carries the logical message key: relay delivery id, web message_key, report identity; sweep has none", () => {
     expect(parse(github({ type: "push" })).message_key).toBe("d1");
     expect(parse({ type: "task.created", task_id: 7, message_key: "task-created-7" })).toEqual({
       task_id: 7,
@@ -138,7 +144,8 @@ describe("parseTaskMessage", () => {
     );
     expect(parse({ type: "task.created", task_id: 7 })).not.toHaveProperty("message_key");
     expect(parse({ type: "sweep", task_id: 7, thread_id: "task-7" })).not.toHaveProperty("message_key");
-    expect(parse({ task_id: 7, agent: "developer", event_type: "coding" })).not.toHaveProperty("message_key");
+    expect(parse({ task_id: 7, agent: "developer", ...RID, event_type: "coding" }).message_key).toBe("report:900:2:start");
+    expect(parse({ task_id: 7, agent: "developer", ...RID, run_attempt: 3, event_type: "coding" }).message_key).toBe("report:900:3:start");
     for (const bad of ["", "x".repeat(129), 7, null]) {
       expect(() => parse({ type: "task.created", task_id: 7, message_key: bad })).toThrow(InputError);
     }

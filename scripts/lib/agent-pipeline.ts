@@ -1,6 +1,7 @@
 // Trusted workflow controller. Candidate artifacts are data, never executable source.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import type { AgentReport, ReportJob, ReportUsage } from "@kcw/core/events";
 import { ghGet, type GhOptions, type GhPull, type GhCheckRun } from "./agent-github";
 import { isWorkflowAgent, branchOf, type WorkflowAgent } from "./agents";
 
@@ -123,17 +124,30 @@ export function readAdvisoryUsage(dir: string, kind: "candidate" | "decision" = 
   } catch { return []; } // Advisory data cannot suppress a trusted lifecycle failure event.
 }
 
-export interface ReportMessage { event?: "coding" | "qa_reviewing" | "failed"; usage?: AdvisoryUsage }
 /**
- * The kcw-report messages of a start or final report (one usage line each). Start sends the
- * lifecycle event; a successful end sends usage only and nothing without usage (DESIGN §11 Q14(5));
- * any other end sends `failed` once, with or without usage.
+ * The one kcw-report message of a start or final report job (AR2 slice 3). Its identity comes only
+ * from trusted context: the runner's run id and attempt, the job and the prepare context's task,
+ * agent and op. Each usage line is identified by the job that produced it (the work artifact, QA's
+ * review artifact) and its index in that immutable artifact; the candidate's usage data supplies
+ * counts and model labels only. Start sends the lifecycle event; a successful end sends usage only
+ * and nothing without usage (DESIGN §11 Q14(5)); any other end sends `failed` once, with all usage.
  */
-export function reportMessages(agent: WorkflowAgent, phase: "start" | "end", publishResult: string | undefined, usage: readonly AdvisoryUsage[]): ReportMessage[] {
-  if (phase === "start") return [{ event: agent === "qa" ? "qa_reviewing" : "coding" }];
-  if (publishResult === "success") return usage.map((u) => ({ usage: u }));
-  if (usage.length === 0) return [{ event: "failed" }];
-  return usage.map((u, i) => (i === 0 ? { event: "failed", usage: u } : { usage: u }));
+export function buildReport(
+  c: TrustedContext,
+  run: { run_id: number; run_attempt: number },
+  phase: ReportJob,
+  publishResult: string | undefined,
+  usage: { work: readonly AdvisoryUsage[]; review: readonly AdvisoryUsage[] },
+): AgentReport | null {
+  const id = { task_id: c.taskId, agent: c.agent, ...run, job: phase, op: c.op };
+  if (phase === "start") return { ...id, event_type: c.agent === "qa" ? "qa_reviewing" : "coding" };
+  const lines: ReportUsage[] = [
+    ...usage.work.map((u, index) => ({ ...u, call: { job: "work" as const, index } })),
+    ...usage.review.map((u, index) => ({ ...u, call: { job: "review" as const, index } })),
+  ];
+  const withUsage = lines.length > 0 ? { usage: lines } : {};
+  if (publishResult === "success") return lines.length > 0 ? { ...id, ...withUsage } : null;
+  return { ...id, event_type: "failed", ...withUsage };
 }
 
 export async function requireArtifact(gh: GhOptions, id: string | undefined, name: string, runId: string): Promise<void> {

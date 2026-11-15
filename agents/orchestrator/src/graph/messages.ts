@@ -1,14 +1,16 @@
 // Queue messages for the task graph (D5: everything arrives on orchestrator-in). All are untrusted
 // and validated here; the FIFO group must be the task's thread id. Error messages never quote input.
 // A message may carry a logical `message_key` (the relay's delivery id, or the web outbox key); the
-// consumer's receipts (receipts.ts) apply a keyed message once. Sweep and report messages have none.
+// consumer's receipts (receipts.ts) apply a keyed message once. A report's key is its identity
+// (reportKey, AR2 slice 3); its receipt is written in the same transaction as its usage and event.
+// Sweep messages have none.
 //
 //   {type:"task.created", task_id, message_key?}                         console (§4.2 step 1)
 //   {type:"owner.decision", task_id, thread_id, message_key?, resume:{approval_id, decision}}   inbox (§4.3)
 //   {type:"sweep", task_id, thread_id}                                   sweeper (§4.3, P2-17)
 //   {source:"github", delivery_id, task_id, thread_id, resume:{event, head_sha, payload}}   relay (P2-05)
-//   {task_id, agent, event_type?, usage?} (event, usage, or both)       kcw-report (P2-03)
-import { parseAgentReport, threadIdOf } from "@kcw/core/events";
+//   {task_id, agent, run_id, run_attempt, job, op, event_type?, usage?}  kcw-report (P2-03, AR2 slice 3)
+import { parseAgentReport, reportKey, threadIdOf } from "@kcw/core/events";
 import { InputError } from "../handler";
 import type { GitHubInput, TaskInput } from "./types";
 
@@ -160,6 +162,7 @@ export function parseTaskMessage(
   } else if (x.type === undefined && x.source === undefined) {
     const report = parseAgentReport(x);
     taskId = report.task_id;
+    messageKey = reportKey(report);
     input = { kind: "report", report, message_id: messageId };
   } else {
     throw new InputError("unknown message type");

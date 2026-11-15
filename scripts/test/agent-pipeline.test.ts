@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { candidateBundle, parseTrustedContext, readAdvisoryUsage, reportMessages, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
+import { parseAgentReport } from "@kcw/core/events";
+import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
 const context = { version: 1, agent: "qa", repo: "owner/repo", taskId: 2, op: 0, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha };
@@ -12,18 +13,28 @@ const dir = () => { const p=mkdtempSync(path.join(tmpdir(),"kcw-boundary-")); di
 afterEach(() => { for(const p of dirs.splice(0)) rmSync(p,{recursive:true,force:true}); vi.unstubAllEnvs(); });
 const gh = (values: unknown[]) => ({ repo: "owner/repo", token: "synthetic", fetch: vi.fn(async () => Response.json(values.shift())) as unknown as typeof fetch });
 describe("report messages",()=>{
-  const u=(n:number)=>({kind:"model" as const,provider:"anthropic" as const,model:"claude-haiku-5-5",input_tokens:n,output_tokens:1});
-  it("starts with the lifecycle event and ends successfully with usage only (Q14(5))",()=>{
-    expect(reportMessages("developer","start","success",[u(1)])).toEqual([{event:"coding"}]);
-    expect(reportMessages("qa","start",undefined,[])).toEqual([{event:"qa_reviewing"}]);
-    expect(reportMessages("qa","end","success",[u(1),u(2)])).toEqual([{usage:u(1)},{usage:u(2)}]);
-    expect(reportMessages("developer","end","success",[])).toEqual([]);
+  const u=(n:number,model="claude-haiku-5-5")=>({kind:"model" as const,provider:"anthropic" as const,model,input_tokens:n,output_tokens:1});
+  const run={run_id:900,run_attempt:2};
+  const ctx=(agent:"developer"|"qa"|"docs"|"scraper")=>parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:4}));
+  const none={work:[],review:[]};
+  it("starts with the lifecycle event and ends successfully with usage only (Q14(5)), in one identified message",()=>{
+    expect(buildReport(ctx("developer"),run,"start","success",{work:[u(1)],review:[]})).toEqual({task_id:2,agent:"developer",run_id:900,run_attempt:2,job:"start",op:4,event_type:"coding"});
+    expect(buildReport(ctx("qa"),run,"start",undefined,none)).toMatchObject({job:"start",event_type:"qa_reviewing"});
+    expect(buildReport(ctx("qa"),run,"end","success",{work:[u(1)],review:[u(2),u(3,"claude-other")]})).toEqual({task_id:2,agent:"qa",...run,job:"end",op:4,usage:[
+      {...u(1),call:{job:"work",index:0}},{...u(2),call:{job:"review",index:0}},{...u(3,"claude-other"),call:{job:"review",index:1}}]});
+    expect(buildReport(ctx("developer"),run,"end","success",none)).toBeNull();
   });
   it("still reports failed once on any unsuccessful end, with or without usage",()=>{
     for(const result of ["failure","cancelled","skipped",undefined]) {
-      expect(reportMessages("docs","end",result,[])).toEqual([{event:"failed"}]);
-      expect(reportMessages("scraper","end",result,[u(1),u(2)])).toEqual([{event:"failed",usage:u(1)},{usage:u(2)}]);
+      expect(buildReport(ctx("docs"),run,"end",result,none)).toEqual({task_id:2,agent:"docs",...run,job:"end",op:4,event_type:"failed"});
+      expect(buildReport(ctx("scraper"),run,"end",result,{work:[u(1),u(2)],review:[]})).toEqual({task_id:2,agent:"scraper",...run,job:"end",op:null,event_type:"failed",
+        usage:[{...u(1),call:{job:"work",index:0}},{...u(2),call:{job:"work",index:1}}]});
     }
+  });
+  it("takes identity only from trusted context: identical candidate lines stay distinct calls, the model name is not part of it",()=>{
+    const r=buildReport(ctx("developer"),run,"end","success",{work:[u(5),u(5)],review:[]})!;
+    expect(r.usage!.map((x)=>x.call)).toEqual([{job:"work",index:0},{job:"work",index:1}]);
+    expect(parseAgentReport(r)).toEqual(r);
   });
 });
 describe("trusted authority",()=>{
