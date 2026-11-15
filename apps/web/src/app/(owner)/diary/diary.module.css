@@ -1,0 +1,59 @@
+/* Diary: a large editor and a reading column for one entry. Colours come from the global Paper tokens.
+   The shared Dense UI classes (owner.module.css) are reused read-only; only the diary specifics live here. */
+
+textarea.editor {
+  min-height: 240px;
+  padding: 12px;
+  font-size: 16px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* The long text of one entry: a readable measure, 17px, generous leading, line breaks kept. */
+.reading {
+  max-width: 68ch;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.scores > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scores dt {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.scores dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
