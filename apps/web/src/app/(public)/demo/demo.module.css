@@ -335,6 +335,7 @@
 .recCard,
 .essayCard {
   display: grid;
+  align-content: start;
   gap: 4px;
   min-width: 0;
   padding: 14px 16px;
