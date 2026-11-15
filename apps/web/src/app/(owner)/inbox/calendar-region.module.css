@@ -1,0 +1,18 @@
+/* Calendar suggestions region: only what the shared owner.module.css classes do not cover. */
+
+.title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.when {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.connect {
+  margin: 6px 0 0;
+  font-size: 13px;
+}

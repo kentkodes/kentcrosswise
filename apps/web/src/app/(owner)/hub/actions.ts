@@ -2,6 +2,7 @@
 // Hub actions. Each checks the owner first: server actions are POST endpoints of their own and are not covered
 // by the (owner) layout's check. Each ends in a redirect with a fixed notice code (never the entry text).
 import { redirect } from "next/navigation";
+import { validTimeZone } from "../../../server/calendar";
 import { parseCapture, saveEntry } from "@/server/capture";
 import { withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
@@ -16,7 +17,12 @@ export async function captureAction(formData: FormData): Promise<void> {
     notice = parsed.error === "empty" ? "capture-empty" : "capture-too-long";
   } else {
     try {
-      const id = await withDb("web_rw", (db) => saveEntry(db, parsed.text));
+      const zone = validTimeZone(formData.get("time_zone"));
+      const id = await withDb("web_rw", async (db) => {
+        const saved = await saveEntry(db, parsed.text);
+        if (zone) await db.query("UPDATE entries SET time_zone = $2 WHERE id = $1", [saved, zone]);
+        return saved;
+      });
       // Saved first; routing never fails the capture (routeNow does not throw).
       notice = capturedNotice(await routeNow(id));
     } catch (err) {

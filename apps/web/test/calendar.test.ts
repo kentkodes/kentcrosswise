@@ -17,7 +17,7 @@ import {
 } from "../src/server/calendar";
 import { saveEntry } from "../src/server/capture";
 import { runAs } from "../src/server/db";
-import type { DbRun } from "../src/server/router";
+import { routeEntry, routerFromEnv, type DbRun } from "../src/server/router";
 import { freshDb, pglitePool } from "./pglite";
 
 // Sunday 2026-11-15 10:00 in New York (EST).
@@ -275,6 +275,43 @@ describe("suggestions in the database", () => {
     await run((db) => db.query("DELETE FROM crm_notes WHERE id = $1", [id]));
     expect(await count("SELECT count(*) AS n FROM calendar_suggestions WHERE id = $1", [sid])).toBe(0);
     expect(await count("SELECT count(*) AS n FROM inbox_items WHERE ref_id = $1 AND status = 'done' AND resolved_at IS NOT NULL", [sid])).toBe(1);
+  });
+
+  describe("after a route", () => {
+    const routed = (complete: ConstructorParameters<typeof FakeProvider>[0] extends infer O ? (O extends { complete?: infer C } ? C : never) : never) =>
+      new FakeProvider({ classify: { label: "crm_note", confidence: 0.9 }, complete });
+    // routeEntry uses the real clock, so the date is relative to it (inside today + 365 days).
+    const soon = () => new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const suggestionsFor = (entryId: string) =>
+      count("SELECT count(*) AS n FROM calendar_suggestions c JOIN crm_notes n ON n.id = c.crm_note_id WHERE n.entry_id = $1", [entryId]);
+
+    it("routeEntry to a CRM note creates the suggestion after the commit, from the entry's zone", async () => {
+      const entryId = await run((db) => saveEntry(db, "Coffee with Sam someday"));
+      await q("UPDATE entries SET time_zone = $2 WHERE id = $1", [entryId, NY]);
+      const p = routed({ text: JSON.stringify({ plan: true, title: "Coffee", date: soon(), time: null, duration_minutes: null }) });
+      await expect(routeEntry(run, entryId, p)).resolves.toMatchObject({ code: "routed", kind: "crm_note" });
+      expect(await suggestionsFor(entryId)).toBe(1);
+    });
+
+    it("an entry without a zone is routed and gets no suggestion or model call", async () => {
+      const entryId = await run((db) => saveEntry(db, "Coffee with Sam"));
+      const p = routed({ text: "{}" });
+      await expect(routeEntry(run, entryId, p)).resolves.toMatchObject({ code: "routed", kind: "crm_note" });
+      expect(p.calls.filter((c) => c.op === "complete")).toHaveLength(0);
+      expect(await suggestionsFor(entryId)).toBe(0);
+    });
+
+    it("a failing extraction never changes the route result and makes no suggestion", async () => {
+      const entryId = await run((db) => saveEntry(db, "Coffee with Sam"));
+      await q("UPDATE entries SET time_zone = $2 WHERE id = $1", [entryId, NY]);
+      const p = routed(new Error("down"));
+      await expect(routeEntry(run, entryId, p)).resolves.toMatchObject({ code: "routed", kind: "crm_note" });
+      expect(await suggestionsFor(entryId)).toBe(0);
+    });
+
+    it("routing off (no models secret) has no provider, so nothing is suggested", async () => {
+      await expect(routerFromEnv({})).resolves.toBeUndefined();
+    });
   });
 
   describe("Add and Dismiss", () => {
