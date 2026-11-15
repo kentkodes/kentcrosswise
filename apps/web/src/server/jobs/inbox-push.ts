@@ -1,7 +1,7 @@
 // inbox-push: one generic notification per subscription when open inbox items have not been announced yet.
 // The text never carries inbox content (wave 2 design, section 5). Runs on the sweeper's quarter hours.
 // Import graph rule: no next, next-auth, `@/` alias or ../auth (this module is bundled into the OpenNext wrapper).
-import { type Queryable, withDb } from "../db";
+import { type JobQueryable, withWebRw } from "../push/job-db";
 import { loadVapidKeys } from "../push/keys";
 import { type PushPayload, type PushResult, type PushSubscriptionRecord, sendPush } from "../push/send";
 import type { VapidKeys } from "../push/vapid";
@@ -13,13 +13,13 @@ export class PushDeliveryError extends Error {
 }
 
 export interface InboxPushDeps {
-  run: <T>(fn: (db: Queryable) => Promise<T>) => Promise<T>;
+  run: <T>(fn: (db: JobQueryable) => Promise<T>) => Promise<T>;
   loadKeys: () => Promise<VapidKeys | null>;
   send: (sub: PushSubscriptionRecord, payload: PushPayload, keys: VapidKeys) => Promise<PushResult>;
 }
 
 const defaultDeps: InboxPushDeps = {
-  run: (fn) => withDb("web_rw", fn),
+  run: (fn) => withWebRw(fn),
   loadKeys: () => loadVapidKeys(),
   send: (sub, payload, keys) => sendPush(sub, payload, keys),
 };

@@ -29,7 +29,7 @@ async function addItem(role: "web_rw" | "orch_rw", title: string) {
   }
 }
 const deps = (result: (endpoint: string) => PushResult, keys: typeof KEYS | null = KEYS) => {
-  const send = vi.fn(async (sub: { endpoint: string }) => result(sub.endpoint));
+  const send = vi.fn(async (sub: { endpoint: string }, _payload: unknown, _keys: unknown) => result(sub.endpoint));
   const d: InboxPushDeps = { run: (fn) => runAs(pglitePool(pg), "web_rw", fn), loadKeys: async () => keys, send };
   return { d, send };
 };
