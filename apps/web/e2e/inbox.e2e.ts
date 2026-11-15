@@ -15,7 +15,7 @@ test.describe("routing as the preview owner", () => {
     await page.goto(path);
   }
 
-  test("a kind closes the routing item, and /hub shows the new label", async ({ page }) => {
+  test("a kind closes the routing item, and the entry leaves the hub Unresolved list", async ({ page }) => {
     await signIn(page, "/inbox");
     await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
     const routing = page.getByTestId("routing").locator("> li");
@@ -29,7 +29,6 @@ test.describe("routing as the preview owner", () => {
     await expect(routing.filter({ hasText: "e2e route seed one" })).toHaveCount(0);
 
     await page.goto("/hub");
-    const row = page.getByTestId("entries").locator("> li").filter({ hasText: "e2e route seed one" });
-    await expect(row.locator('[data-field="status"]')).toHaveText("Todo");
+    await expect(page.getByTestId("unresolved").locator("li").filter({ hasText: "e2e route seed one" })).toHaveCount(0);
   });
 });
