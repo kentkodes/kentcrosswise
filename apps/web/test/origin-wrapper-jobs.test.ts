@@ -73,8 +73,7 @@ describe("job events in the origin wrapper", () => {
 });
 
 describe("job registry", () => {
-  it("registers the two jobs", async () => {
+  it("has exactly the two jobs (each job has its own tests)", () => {
     expect(Object.keys(jobs).sort()).toEqual(["inbox-push", "social-daily"]);
-    for (const job of Object.values(jobs)) expect(typeof job).toBe("function"); // real jobs reach the database and secrets: not called here
   });
 });
