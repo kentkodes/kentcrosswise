@@ -6,6 +6,7 @@ import { listApprovals, type ApprovalRow } from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
 import { listRoutingInbox, type RoutingItem } from "@/server/router";
+import { ContactMatchRegion } from "../contacts/inbox-region";
 import { formatUtc } from "../format";
 import { OwnerFrame } from "../owner-frame";
 import { Dot, Notice, Region } from "../owner-ui";
@@ -107,6 +108,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
               ))}
             </ul>
           </Region>
+          <ContactMatchRegion />
           <Region id="pending" title={`Waiting on you (${data.pending.length})`}>
             {data.pending.length === 0 ? <p className={`${s.note} ${s.pad}`}>Nothing is waiting on you.</p> : null}
             <ul data-testid="pending" className={s.list}>

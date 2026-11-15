@@ -50,7 +50,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   return (
     <OwnerFrame
       title="Contacts"
-      current="/hub"
+      current="/contacts"
       actions={
         <Link className={`${s.button} ${s.primary}`} href="/contacts/new">
           Add contact

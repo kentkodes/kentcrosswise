@@ -15,6 +15,13 @@ import { EntryItem } from "./entry-row";
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
 
 const PAGES = [
+  { href: "/contacts", label: "Contacts", note: "People and the notes about them" },
+  { href: "/diary", label: "Diary", note: "Entries, scored for mood" },
+  { href: "/mood", label: "Mood", note: "Mood scores over time" },
+  { href: "/todos", label: "Todos", note: "Things to do" },
+  { href: "/ideas", label: "Ideas", note: "Ideas and project thoughts" },
+  { href: "/social", label: "Social", note: "Follower and post counts by source" },
+  { href: "/projects", label: "Projects", note: "One tab per project" },
   { href: "/console", label: "Boss console", note: "Create tasks, follow them, pause switches" },
   { href: "/inbox", label: "Inbox", note: "Approvals and routing waiting on you" },
   { href: "/console/usage", label: "Usage", note: "Model cost, spend cap, Actions minutes" },

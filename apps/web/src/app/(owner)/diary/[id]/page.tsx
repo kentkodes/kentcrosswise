@@ -48,7 +48,7 @@ export default async function DiaryEntryPage({
   return (
     <OwnerFrame
       title="Diary entry"
-      current="/hub"
+      current="/diary"
       actions={
         <Link className={s.button} href="/diary">
           All entries

@@ -60,7 +60,7 @@ export default async function ContactPage({
   return (
     <OwnerFrame
       title={contact ? contact.name : "Contact"}
-      current="/hub"
+      current="/contacts"
       actions={
         <Link className={s.button} href="/contacts">
           All contacts

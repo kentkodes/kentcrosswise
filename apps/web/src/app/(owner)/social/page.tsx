@@ -81,7 +81,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
   const showForms = problem === undefined;
 
   return (
-    <OwnerFrame title="Social" current="/hub">
+    <OwnerFrame title="Social" current="/social">
       {notice ? (
         <Notice role={ok ? "status" : "alert"} tone={ok ? "ok" : "warn"}>
           {notice}

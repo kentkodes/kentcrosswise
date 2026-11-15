@@ -33,7 +33,7 @@ export default async function MoodPage({ searchParams }: { searchParams: Promise
   return (
     <OwnerFrame
       title="Mood"
-      current="/hub"
+      current="/mood"
       actions={
         <Link className={s.button} href="/diary">
           Diary

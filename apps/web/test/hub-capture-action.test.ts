@@ -15,6 +15,7 @@ vi.mock("@/server/owner", () => ({ requireOwner: f.requireOwner }));
 vi.mock("@/server/db", async () => ({ ...(await import("../src/server/db")), withDb: f.withDb }));
 vi.mock("../src/server/db", async () => ({ ...(await import("../src/server/db")), withDb: f.withDb }));
 vi.mock("@/server/capture", async () => await import("../src/server/capture"));
+vi.mock("@/server/mood", async () => await import("../src/server/mood"));
 vi.mock("@/server/console", async () => await import("../src/server/console"));
 // Routing (H3) is off here (KCW_MODELS_SECRET unset), so the capture stays "Saved" with no model call.
 vi.mock("@/server/router", async () => await import("../src/server/router"));
