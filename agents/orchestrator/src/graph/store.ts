@@ -1,5 +1,6 @@
 // The task graph's database access, as orch_rw (DESIGN §3.2, §3.4): tasks, agent_events,
-// approvals (+ inbox items, migration 0003), usage_events, system_flags, contact names.
+// approvals (+ inbox items, migration 0003), usage_events, system_flags, contact names. Events and
+// approvals carry effect keys, and a report is written in one transaction (AR2 slice 3, 0013).
 import type { AgentName, EventType, Usage } from "@kcw/core/events";
 import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
 import type pg from "pg";
@@ -90,10 +91,25 @@ export interface TaskStore {
    */
   claimSlot(id: number, limit: number): Promise<boolean>;
   updateTask(id: number, fields: TaskUpdate): Promise<void>;
-  addEvent(taskId: number, agent: AgentName, type: EventType, detail?: Record<string, unknown>): Promise<void>;
+  /**
+   * Adds an event. With an `effectKey` (migration 0013) a second call with the same key writes
+   * nothing (a re-run step does not repeat its events).
+   */
+  addEvent(taskId: number, agent: AgentName, type: EventType, detail?: Record<string, unknown>, effectKey?: string): Promise<void>;
+  /**
+   * AR2 slice 3: one agent report in ONE transaction: its receipt (orchestrator_receipts, key = the
+   * report identity), every usage line (usage_events.dedupe_key) and its event, or nothing. False if
+   * the receipt already existed: the report was applied before and nothing is written.
+   */
+  recordReport(report: ReportWrite): Promise<boolean>;
+  /** Unkeyed usage rows: the planner's own model calls (lambda.ts; call identities are AR3). */
   addUsage(taskId: number, agent: AgentName, usage: readonly Usage[]): Promise<void>;
-  /** An approval plus its inbox item, in one transaction. Returns the approval id. */
-  createApproval(input: { taskId: number; kind: ApprovalKind; reasons: string[]; inboxTitle: string }): Promise<string>;
+  /**
+   * An approval plus its inbox item, in one transaction. Returns the approval id. With an
+   * `effectKey` (migration 0013) an approval already written under that key is returned instead and
+   * no second approval or inbox item is created.
+   */
+  createApproval(input: { taskId: number; kind: ApprovalKind; reasons: string[]; inboxTitle: string; effectKey?: string }): Promise<string>;
   getApproval(id: string): Promise<ApprovalRecord | null>;
   /** Closes a pending approval the thread no longer waits on (e.g. the PR head changed). */
   supersedeApproval(id: string, note: string): Promise<void>;
@@ -122,6 +138,16 @@ export interface TaskStore {
   updateOperation(effectKey: string, state: "intent" | "done", result: unknown): Promise<void>;
 }
 
+/** What `recordReport` writes: usage lines carry their `usage_events.dedupe_key`. */
+export interface ReportWrite {
+  receiptKey: string;
+  taskId: number;
+  agent: AgentName;
+  usage: readonly (Usage & { dedupeKey: string })[];
+  /** Null: the report has no lifecycle effect (usage-only, stale, or from an obsolete run). */
+  event: { type: EventType; detail: Record<string, unknown>; effectKey: string } | null;
+}
+
 /** Statuses that hold an in-flight slot (D20). */
 export const IN_FLIGHT_STATUSES: readonly TaskStatus[] = ["planning", "in_progress", "waiting"];
 
@@ -141,6 +167,17 @@ const UPDATABLE = [
 ] as const satisfies readonly (keyof TaskUpdate)[];
 
 const num = (v: string | number | null): number | null => (v === null ? null : Number(v));
+
+/** One agent_events row; a keyed row is written once (migration 0013). */
+async function insertEvent(
+  db: Pick<pg.Pool, "query">,
+  e: { taskId: number; agent: AgentName; type: EventType; detail: Record<string, unknown>; effectKey: string | null },
+): Promise<void> {
+  await db.query(
+    "INSERT INTO agent_events (task_id, agent, event_type, detail, effect_key) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (effect_key) DO NOTHING",
+    [e.taskId, e.agent, e.type, JSON.stringify(e.detail), e.effectKey],
+  );
+}
 
 export class PgTaskStore implements TaskStore {
   constructor(private readonly pool: pg.Pool) {}
@@ -246,13 +283,8 @@ export class PgTaskStore implements TaskStore {
     await this.pool.query(`UPDATE tasks SET ${sets.join(", ")}, updated_at = now() WHERE id = $1`, values);
   }
 
-  async addEvent(taskId: number, agent: AgentName, type: EventType, detail: Record<string, unknown> = {}): Promise<void> {
-    await this.pool.query("INSERT INTO agent_events (task_id, agent, event_type, detail) VALUES ($1, $2, $3, $4)", [
-      taskId,
-      agent,
-      type,
-      JSON.stringify(detail),
-    ]);
+  async addEvent(taskId: number, agent: AgentName, type: EventType, detail: Record<string, unknown> = {}, effectKey?: string): Promise<void> {
+    await insertEvent(this.pool, { taskId, agent, type, detail, effectKey: effectKey ?? null });
   }
 
   async addUsage(taskId: number, agent: AgentName, usage: readonly Usage[]): Promise<void> {
@@ -274,14 +306,59 @@ export class PgTaskStore implements TaskStore {
     }
   }
 
-  async createApproval(input: { taskId: number; kind: ApprovalKind; reasons: string[]; inboxTitle: string }): Promise<string> {
+  async recordReport(r: ReportWrite): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const receipt = await client.query(
+        "INSERT INTO orchestrator_receipts (message_key) VALUES ($1) ON CONFLICT (message_key) DO NOTHING RETURNING message_key",
+        [r.receiptKey],
+      );
+      if (receipt.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      // cost_usd stays null: the usage panel prices rows from model_prices (never hardcoded here).
+      for (const u of r.usage) {
+        if (u.kind === "model") {
+          await client.query(
+            `INSERT INTO usage_events (kind, agent, provider, model, input_tokens, output_tokens, task_id, dedupe_key)
+             VALUES ('model', $1, $2, $3, $4, $5, $6, $7) ON CONFLICT (dedupe_key) DO NOTHING`,
+            [r.agent, u.provider, u.model, u.input_tokens, u.output_tokens, r.taskId, u.dedupeKey],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO usage_events (kind, agent, minutes, task_id, dedupe_key)
+             VALUES ('actions_minutes', $1, $2, $3, $4) ON CONFLICT (dedupe_key) DO NOTHING`,
+            [r.agent, u.minutes, r.taskId, u.dedupeKey],
+          );
+        }
+      }
+      if (r.event) await insertEvent(client, { taskId: r.taskId, agent: r.agent, ...r.event });
+      await client.query("COMMIT");
+      return true;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createApproval(input: { taskId: number; kind: ApprovalKind; reasons: string[]; inboxTitle: string; effectKey?: string }): Promise<string> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const { rows } = await client.query<{ id: string }>(
-        "INSERT INTO approvals (task_id, kind, reasons) VALUES ($1, $2, $3) RETURNING id",
-        [input.taskId, input.kind, input.reasons],
+        "INSERT INTO approvals (task_id, kind, reasons, effect_key) VALUES ($1, $2, $3, $4) ON CONFLICT (effect_key) DO NOTHING RETURNING id",
+        [input.taskId, input.kind, input.reasons, input.effectKey ?? null],
       );
+      if (rows.length === 0) {
+        // Written by an earlier run of this step: reuse it (its inbox item is already there).
+        const existing = await client.query<{ id: string }>("SELECT id FROM approvals WHERE effect_key = $1", [input.effectKey]);
+        await client.query("COMMIT");
+        return existing.rows[0]!.id;
+      }
       const id = rows[0]!.id;
       await client.query(
         "INSERT INTO inbox_items (kind, ref_table, ref_id, title) VALUES ('approval', 'approvals', $1, $2)",

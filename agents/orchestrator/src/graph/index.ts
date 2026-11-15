@@ -15,7 +15,7 @@ import type { ReceiptStore } from "./receipts";
 import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskData, type TaskInput, type WaitingOn } from "./types";
 
 export * from "./types";
-export { DispatchLinkConflictError, PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
+export { DispatchLinkConflictError, PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type OperationRecord, type ReportWrite, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
 export { OperationConflictError, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
 export { runStep, type TaskGraphDeps } from "./machine";
 export { parseTaskMessage } from "./messages";

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { PACKAGE_NAME } from "../src/index";
 import { handleTaskSqsEvent, type TaskGraph } from "../src/graph";
 
-const report = { task_id: 7, agent: "developer", event_type: "pr_opened" };
+const report = { task_id: 7, agent: "developer", run_id: 900, run_attempt: 1, job: "end", op: 0, event_type: "pr_opened" };
 
 describe("@kcw/orchestrator", () => {
   it("is importable", () => {
@@ -28,6 +28,8 @@ describe("handleTaskSqsEvent (no database)", () => {
           record("m1", "{private"),
           record("m2", JSON.stringify(report), "task-9"),
           record("m3", JSON.stringify({ ...report, event_type: "private-text" })),
+          // The report format before AR2 slice 3 (no identity) cannot be applied once: dropped.
+          record("m4", JSON.stringify({ task_id: 7, agent: "developer", event_type: "pr_opened" })),
         ],
       },
       { graph, log: (l) => lines.push(l) },
@@ -37,6 +39,7 @@ describe("handleTaskSqsEvent (no database)", () => {
       "message m1: dropped (message body is not JSON)",
       "message m2: dropped (MessageGroupId does not match the task's thread id)",
       expect.stringMatching(/^message m3: dropped \(/),
+      "message m4: dropped (run_id and run_attempt must be positive integers)",
     ]);
     expect(lines.join("\n")).not.toContain("private-text");
   });
