@@ -5,15 +5,24 @@ on:
   workflow_dispatch:
     inputs:
       book_ids:
-        description: "Space-separated Gutenberg book ids (each must be an approved link)"
+        description: "Space-separated Gutenberg book ids (each must be an approved link); empty only with acceptance"
         type: string
-        required: true
+        required: false
+        default: ""
       categorize:
         description: "Also categorize the stored essays (paid model calls)"
         type: boolean
         default: false
+      hooks:
+        description: "Also write the one-line hooks of the stored essays (paid model calls); skipped together with categorize when reextract is set"
+        type: boolean
+        default: false
       reextract:
         description: "Re-extract already stored essays with the current extractor (keeps ids, ratings, categories)"
+        type: boolean
+        default: false
+      acceptance:
+        description: "Only run the read-only MVP acceptance report (no book ids, no fetch, no store)"
         type: boolean
         default: false
 
@@ -34,10 +43,23 @@ jobs:
       id-token: write
     env:
       BOOK_IDS: ${{ inputs.book_ids }}
+      ACCEPTANCE: ${{ inputs.acceptance }}
     steps:
+      - name: Require the role for acceptance
+        env:
+          ROLE_ARN: ${{ vars.AWS_ROLE_ESSAY_INGEST_ARN }}
+        run: |
+          set -eu
+          if [ "$ACCEPTANCE" = "true" ] && [ -z "$ROLE_ARN" ]; then
+            echo "acceptance needs the essay-ingest role variable"
+            exit 1
+          fi
       - name: Validate book ids
         run: |
           set -eu
+          if [ "$ACCEPTANCE" = "true" ]; then
+            exit 0
+          fi
           n=0
           for id in $BOOK_IDS; do
             if ! printf '%s' "$id" | grep -Eq '^[1-9][0-9]{0,6}$'; then
@@ -63,8 +85,10 @@ jobs:
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Ensure rsync
+        if: ${{ !inputs.acceptance }}
         run: command -v rsync >/dev/null || sudo apt-get install -y rsync
       - name: Fetch from the Gutenberg mirror
+        if: ${{ !inputs.acceptance }}
         run: pnpm essay-ingest --phase fetch --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg"
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         if: vars.AWS_ROLE_ESSAY_INGEST_ARN != ''
@@ -72,15 +96,21 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ESSAY_INGEST_ARN }}
           aws-region: us-east-1
       - name: Store
-        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && !inputs.reextract
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && !inputs.reextract && !inputs.acceptance
         env:
           KCW_BUCKET: kentcrosswise-pipelines-${{ vars.AWS_ACCOUNT_ID }}
         run: pnpm essay-ingest --phase store --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --bucket "$KCW_BUCKET" --secret kcw/prod/pipeline --confirm
       - name: Re-extract
-        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.reextract
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.reextract && !inputs.acceptance
         env:
           KCW_BUCKET: kentcrosswise-pipelines-${{ vars.AWS_ACCOUNT_ID }}
         run: pnpm essay-ingest --phase reextract --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --bucket "$KCW_BUCKET" --secret kcw/prod/pipeline --confirm
       - name: Categorize
-        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.categorize && !inputs.reextract
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.categorize && !inputs.reextract && !inputs.acceptance
         run: pnpm essay-ingest --phase categorize --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --secret kcw/prod/pipeline --confirm
+      - name: Hooks
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.hooks && !inputs.reextract && !inputs.acceptance
+        run: pnpm essay-ingest --phase hooks --ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --secret kcw/prod/pipeline --confirm
+      - name: Acceptance
+        if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.acceptance
+        run: pnpm essay-ingest --phase acceptance --secret kcw/prod/pipeline

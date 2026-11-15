@@ -2,6 +2,7 @@
 // /office body: the heading, the Board | Room tablist, and the two tab panels. Only the selected panel is
 // rendered, so the board poller and the room poller never run together. The selected tab is not in the URL.
 import { useRef, useState, type KeyboardEvent } from "react";
+import { Xray } from "../../_site/xray";
 import { BoardPanel } from "./board-panel";
 import { RoomPanel } from "./room-panel";
 import s from "./board.module.css";
@@ -60,10 +61,18 @@ export function OfficeBoard() {
         </div>
       </div>
       <div role="tabpanel" id="office-panel-board" aria-labelledby="office-tab-board" hidden={tab !== "board"}>
-        {tab === "board" && <BoardPanel />}
+        {tab === "board" && (
+          <Xray id="office-board">
+            <BoardPanel />
+          </Xray>
+        )}
       </div>
       <div role="tabpanel" id="office-panel-room" aria-labelledby="office-tab-room" hidden={tab !== "room"}>
-        {tab === "room" && <RoomPanel />}
+        {tab === "room" && (
+          <Xray id="office-room">
+            <RoomPanel />
+          </Xray>
+        )}
       </div>
     </>
   );

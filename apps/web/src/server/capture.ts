@@ -1,6 +1,5 @@
 // Hub capture box (H2): raw entries as typed, and their routing status. Runs as web_rw. Owner pages only:
-// entries hold private text and must never reach a public route. Routing itself is H3; until then every
-// entry shows "Waiting for router".
+// entries hold private text and must never reach a public route. Routing itself is in router.ts.
 import type { Tone } from "../app/(owner)/tones";
 import type { Queryable } from "./db";
 
@@ -31,18 +30,31 @@ export const ROUTE_LABELS = {
 
 export type RouteKind = keyof typeof ROUTE_LABELS;
 
+/** Fixed codes for why the last routing attempt failed (never a provider message or text). */
+export type RouteError = "provider_error" | "invalid_label" | "spend_cap";
+
 export interface EntryRow {
   id: string;
   createdAt: string;
   rawText: string;
   routeKind: RouteKind | null;
   status: "routed" | "needs_owner" | null;
+  routeError: RouteError | null;
+  routeAttempts: number;
 }
 
-/** The word and dot tone for an entry: "Needs you" (warn), a route label (ok) or "Waiting for router" (idle). */
-export function entryStatus(row: Pick<EntryRow, "routeKind" | "status">): { label: string; tone: Tone } {
+/**
+ * The word and dot tone for an entry: "Needs you" (warn), a route label (ok), "Routing failed" or
+ * "Routing paused: spend cap" (warn), or "Waiting for router" (idle).
+ */
+export function entryStatus(row: Pick<EntryRow, "routeKind" | "status"> & { routeError?: RouteError | null }): {
+  label: string;
+  tone: Tone;
+} {
   if (row.status === "needs_owner") return { label: "Needs you", tone: "warn" };
   if (row.routeKind !== null) return { label: ROUTE_LABELS[row.routeKind], tone: "ok" };
+  if (row.routeError === "spend_cap") return { label: "Routing paused: spend cap", tone: "warn" };
+  if (row.routeError) return { label: "Routing failed", tone: "warn" };
   return { label: "Waiting for router", tone: "idle" };
 }
 
@@ -52,20 +64,38 @@ export async function saveEntry(db: Queryable, text: string): Promise<string> {
   return rows[0]!.id;
 }
 
+interface DbEntry {
+  id: string;
+  created_at: Date | string;
+  raw_text: string;
+  route_kind: RouteKind | null;
+  status: "routed" | "needs_owner" | null;
+  route_error: RouteError | null;
+  route_attempts: number;
+}
+
+const ENTRY_COLUMNS = "id, created_at, raw_text, route_kind, status, route_error, route_attempts";
+
+const toEntryRow = (r: DbEntry): EntryRow => ({
+  id: r.id,
+  createdAt: new Date(r.created_at).toISOString(),
+  rawText: r.raw_text,
+  routeKind: r.route_kind,
+  status: r.status,
+  routeError: r.route_error,
+  routeAttempts: Number(r.route_attempts),
+});
+
 /** The newest entries first. */
 export async function listRecentEntries(db: Queryable, limit = 10): Promise<EntryRow[]> {
-  const { rows } = await db.query<{
-    id: string;
-    created_at: Date | string;
-    raw_text: string;
-    route_kind: RouteKind | null;
-    status: "routed" | "needs_owner" | null;
-  }>("SELECT id, created_at, raw_text, route_kind, status FROM entries ORDER BY created_at DESC, id DESC LIMIT $1", [limit]);
-  return rows.map((r) => ({
-    id: r.id,
-    createdAt: new Date(r.created_at).toISOString(),
-    rawText: r.raw_text,
-    routeKind: r.route_kind,
-    status: r.status,
-  }));
+  const { rows } = await db.query<DbEntry>(`SELECT ${ENTRY_COLUMNS} FROM entries ORDER BY created_at DESC, id DESC LIMIT $1`, [limit]);
+  return rows.map(toEntryRow);
+}
+
+/** Every entry that is still pending, failed, capped or waiting for the owner, oldest first (no limit). */
+export async function listUnresolvedEntries(db: Queryable): Promise<EntryRow[]> {
+  const { rows } = await db.query<DbEntry>(
+    `SELECT ${ENTRY_COLUMNS} FROM entries WHERE route_kind IS NULL OR status = 'needs_owner' ORDER BY created_at, id`,
+  );
+  return rows.map(toEntryRow);
 }

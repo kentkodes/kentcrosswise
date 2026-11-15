@@ -1,0 +1,135 @@
+/* Mood board. Colours are the global Paper tokens, so light and dark follow the OS. */
+
+.panels {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel {
+  min-width: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+}
+
+.heading {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+}
+
+.axis line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.axis text {
+  fill: var(--fg-muted);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.overall {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 2.5;
+}
+
+.overallDot {
+  fill: var(--fg);
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.toggle input {
+  accent-color: var(--fg);
+}
+
+.swatch {
+  flex: none;
+}
+
+.tableSummary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tableWrap {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table th:first-child {
+  text-align: left;
+}
+
+.table thead th {
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.table tbody th {
+  font-weight: 400;
+}
+
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}

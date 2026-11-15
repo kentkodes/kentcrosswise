@@ -1,0 +1,46 @@
+/* Contacts pages: only what the shared owner.module.css classes do not cover. */
+
+.meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteBody {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.filter > label {
+  flex: 1 1 200px;
+}
+
+.danger {
+  margin: 0;
+}
+
+.danger > summary {
+  cursor: pointer;
+  font-size: 13px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}

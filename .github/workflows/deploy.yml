@@ -1,5 +1,5 @@
-# Deploy main to prod (DESIGN §4.2 step 8; P1-16): migrate, prod build, Lambda bundles, terraform
-# apply infra/prod (which uploads the OpenNext build and the agent Lambda code), clear the CloudFront
+# Deploy main to prod (DESIGN §4.2 step 8; P1-16): prod build, Lambda bundles, then (only after both
+# succeed) migrate, terraform apply infra/prod (which uploads the OpenNext build and the agent Lambda code), clear the CloudFront
 # cache (O6), then smoke-check the live site against this build's id.
 # Runs in GitHub environment `prod`, so the OIDC subject is ...:environment:prod (kcw-gh-deploy).
 name: deploy
@@ -45,18 +45,8 @@ jobs:
         with:
           terraform: "true"
 
-      - name: AWS credentials (kcw-gh-deploy)
-        uses: aws-actions/configure-aws-credentials@v6.3.0
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
-          aws-region: us-east-1
-          role-duration-seconds: 3600
-
-      # Direct (non-pooled) URL of migrator_app in kcw/prod/migrator (docs/runbooks/prod-db.md).
-      # A missing or broken URL fails the deploy (DESIGN §11).
-      - name: Migrate prod
-        run: pnpm migrate --secret kcw/prod/migrator
-
+      # Builds come before anything that touches production (AR8a): a failed build leaves the
+      # production schema and infrastructure untouched. They need no AWS credentials.
       # Prod build; build-web also fails if the preview login is in the bundle.
       - name: Prod build
         run: pnpm build-web
@@ -66,6 +56,19 @@ jobs:
       # pipelines_deployed is false.
       - name: Lambda bundles
         run: pnpm build-lambdas
+
+      - name: AWS credentials (kcw-gh-deploy)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      # Direct (non-pooled) URL of migrator_app in kcw/prod/migrator (docs/runbooks/prod-db.md).
+      # A missing or broken URL fails the deploy (DESIGN §11). Migrations are expand-only
+      # (docs/runbooks/release-recovery.md), so the previous build keeps working if apply then fails.
+      - name: Migrate prod
+        run: pnpm migrate --secret kcw/prod/migrator
 
       - name: Terraform init infra/prod
         env:

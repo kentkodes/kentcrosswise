@@ -78,6 +78,42 @@ describe("drop/rename in SQL", () => {
   });
 });
 
+describe("migrations not compatible with the previously deployed build (AR8a)", () => {
+  const MIG = "packages/db/migrations/0003_x.sql";
+  const reason = (kind: string) => `SQL not compatible with the previously deployed build (${kind}): ${MIG}`;
+  const run = (...lines: string[]) => evaluate(withFile(MIG, sqlPatch(...lines), "added"));
+
+  it.each([
+    ["ALTER COLUMN ... TYPE", ["ALTER TABLE todos ALTER COLUMN done TYPE text;"], "alter column type"],
+    ["ALTER COLUMN ... SET DATA TYPE, multi-line", ["ALTER TABLE todos", "  ALTER done SET DATA TYPE bigint USING done::bigint;"], "alter column type"],
+    ["SET NOT NULL", ["ALTER TABLE todos ALTER COLUMN due SET NOT NULL;"], "SET NOT NULL on an existing column"],
+    ["ADD COLUMN NOT NULL without default", ["ALTER TABLE todos ADD COLUMN due date NOT NULL;"], "NOT NULL column without a default"],
+    [
+      "ADD COLUMN NOT NULL without default, second clause, multi-line",
+      ["ALTER TABLE todos", "  ADD COLUMN a int DEFAULT 0,", "  ADD COLUMN IF NOT EXISTS b numeric(10,2) NOT NULL;"],
+      "NOT NULL column without a default",
+    ],
+  ])("%s is critical", (_name, lines, kind) => {
+    expect(run(...lines)).toEqual({ critical: true, reasons: [reason(kind)] });
+  });
+
+  it("DROP and RENAME stay critical", () => {
+    expect(run("DROP TABLE todos;").critical).toBe(true);
+    expect(run("ALTER TABLE todos RENAME TO tasks;").critical).toBe(true);
+  });
+
+  it.each([
+    ["new table with NOT NULL columns", ["CREATE TABLE notes (id bigint PRIMARY KEY, body text NOT NULL);"]],
+    ["new nullable column", ["ALTER TABLE todos ADD COLUMN due date;"]],
+    ["new NOT NULL column with a default", ["ALTER TABLE todos ADD COLUMN IF NOT EXISTS due date NOT NULL DEFAULT now();"]],
+    ["new index", ["CREATE INDEX todos_due_idx ON todos (due);"]],
+    ["grants", ["GRANT SELECT, INSERT ON notes TO web_rw;", "GRANT USAGE ON SEQUENCE notes_id_seq TO web_rw;"]],
+    ["a comment that mentions the patterns", ["-- ALTER TABLE todos ALTER COLUMN due TYPE text; SET NOT NULL", "SELECT 1;"]],
+  ])("%s is not critical", (_name, lines) => {
+    expect(run(...lines)).toEqual({ critical: false, reasons: [] });
+  });
+});
+
 describe("existing migrations are append-only (Q7)", () => {
   const OLD = "packages/db/migrations/0001_hub_essays.sql";
 

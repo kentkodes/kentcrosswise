@@ -148,6 +148,51 @@ export function addedLines(patch: string): string[] {
     .map((l) => l.slice(1));
 }
 
+/** Splits on commas outside parentheses (clauses of one ALTER TABLE; `numeric(10,2)` and `now()` stay whole). */
+function topLevelClauses(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of s) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+const ADD_COLUMN_CLAUSE = /^\s*ADD\s+(?!(?:CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN|EXCLUDE)\b)/i;
+
+/**
+ * Schema changes that the build deployed before the migration cannot run against (expand-then-contract,
+ * docs/runbooks/release-recovery.md): altering a column type, SET NOT NULL on an existing column, and adding a
+ * NOT NULL column without a default. DROP and RENAME are reported by SQL_DESTRUCTIVE. Works per statement, so
+ * multi-line statements are covered; only the added lines of the diff are read.
+ */
+export function incompatibleSqlKinds(lines: readonly string[]): string[] {
+  const text = lines
+    .map((l) => l.replace(/--.*$/, ""))
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+  const kinds = new Set<string>();
+  for (const stmt of text.split(";")) {
+    if (!/^\s*ALTER\s+TABLE\b/i.test(stmt)) continue;
+    if (/\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|\w+)\s+(?:SET\s+DATA\s+)?TYPE\b/i.test(stmt)) kinds.add("alter column type");
+    if (/\bSET\s+NOT\s+NULL\b/i.test(stmt)) kinds.add("SET NOT NULL on an existing column");
+    for (const clause of topLevelClauses(stmt)) {
+      const c = clause.replace(/^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?(?:IF\s+EXISTS\s+)?(?:"[^"]+"|[\w.]+)\s*/i, "");
+      if (ADD_COLUMN_CLAUSE.test(c) && /\bNOT\s+NULL\b/i.test(c) && !/\b(DEFAULT|GENERATED)\b/i.test(c)) {
+        kinds.add("NOT NULL column without a default");
+      }
+    }
+  }
+  return [...kinds];
+}
+
 /** Added and removed lines (both change the resource set in Terraform). */
 function changedLines(patch: string): string[] {
   return patch
@@ -180,6 +225,9 @@ export function evaluate(input: MergeRulesInput): MergeRulesResult {
       } else {
         const hit = addedLines(patch).some((l) => SQL_DESTRUCTIVE.test(l.replace(/--.*$/, "")));
         if (hit) add(`SQL drops, renames or truncates: ${f.path}`);
+        for (const kind of incompatibleSqlKinds(addedLines(patch))) {
+          add(`SQL not compatible with the previously deployed build (${kind}): ${f.path}`);
+        }
       }
     }
 
