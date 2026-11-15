@@ -32,7 +32,7 @@ Unsettled implementation choices: preview isolation mechanism, unknown-price pol
 |---|---|
 | E5 | Further sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback. With the first non-Gutenberg extractor, add the navigation/ad-text and language checks of SPEC item 4. |
-| E8 | Categorize and `--phase hooks` (workflow input `hooks`) are built. Open: the live hooks run (Liaison, per-step approval) and AR3 usage rows for both phases. |
+| E8 | Categorize and `--phase hooks` (workflow input `hooks`) are built. The first live hooks run (2026-11-15, the eight stored books) wrote 3 hooks; 5 replies failed validation (`invalid_hook`) and stored nothing. Open: log a fixed reason code for a rejected hook and retry once, then rerun the five books; AR3 usage rows for both phases. |
 | E10 | Nightly source health and weekly quality report; open a GitHub issue for quarantined essays once the Scraper-builder runs. |
 | E11 | Public demo with a few public-domain essays. |
 | E12 | Run the acceptance phase after the hooks run and fix what it reports. The check is built (`--phase acceptance`, workflow input `acceptance`) and passed once on main `0defdc8` (300 approved seeds, 8 full, 292 link-only, none quarantined or duplicate). The preferences and ratings clause is covered by E3. |
@@ -55,7 +55,7 @@ Unsettled implementation choices: preview isolation mechanism, unknown-price pol
 
 ## Decisions made in the 2026-11-15 sprint
 
-- Bounded in-app model calls (mood scoring, hooks) use DeepSeek through the existing router secret and are recorded as agent `router` until AR3 adds a purpose.
+- Bounded model calls outside the agents use DeepSeek: mood scoring through the web server's existing router secret, recorded as agent `router` until AR3 adds a purpose; essay hooks through the pipeline's models secret, like categorize, with no usage rows until AR3.
 - Derived rows move on reassignment, and moving to an agent request discards edits to the derived body.
 - A same-kind save is a no-op.
 - A link-only essay passes acceptance with a title and author; the missing source URL is counted, and zero approved seeds fails.
