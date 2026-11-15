@@ -88,9 +88,41 @@ describe("essay-ingest workflow", () => {
     expect(yml.indexOf("--phase reextract")).toBeGreaterThan(yml.indexOf("--phase store"));
     expect(yml.indexOf("--phase reextract")).toBeGreaterThan(aws());
     expect(yml.indexOf("--phase reextract")).toBeLessThan(yml.indexOf("--phase categorize"));
-    expect(yml.split("inputs.reextract")).toHaveLength(4);
+    expect(yml.split("inputs.reextract")).toHaveLength(5);
     const cat = step("--phase categorize");
     expect(cat).toContain("&& inputs.categorize && !inputs.reextract");
+  });
+
+  it("writes hooks only when asked: opt-in input, after categorize, same role, command and gates", () => {
+    expect(yml).toMatch(/ {6}hooks:\n {8}description: [^\n]*\n {8}type: boolean\n {8}default: false\n/);
+    const hooks = step("--phase hooks");
+    expect(hooks).toContain("if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.hooks && !inputs.reextract && !inputs.acceptance");
+    expect(hooks).toContain('--ids "$BOOK_IDS" --dir "$RUNNER_TEMP/gutenberg" --secret kcw/prod/pipeline --confirm');
+    expect(hooks).not.toMatch(/--bucket|--models-secret|\$\{\{/);
+    expect(yml.split("--phase hooks")).toHaveLength(2);
+    expect(yml.split("inputs.hooks")).toHaveLength(2);
+    expect(yml.indexOf("--phase hooks")).toBeGreaterThan(yml.indexOf("--phase categorize"));
+    expect(yml.indexOf("--phase hooks")).toBeGreaterThan(aws());
+  });
+
+  it("runs the read-only acceptance report alone: no ids, no fetch, no store, same role and secret", () => {
+    expect(yml).toMatch(/ {6}acceptance:\n {8}description: [^\n]*\n {8}type: boolean\n {8}default: false\n/);
+    expect(yml).toMatch(/ {6}book_ids:\n(?: {8}.*\n)*? {8}required: false\n/);
+    expect(yml).toContain("ACCEPTANCE: ${{ inputs.acceptance }}");
+    const acc = step("--phase acceptance");
+    expect(acc).toContain("if: vars.AWS_ROLE_ESSAY_INGEST_ARN != '' && inputs.acceptance");
+    expect(acc).toContain("run: pnpm essay-ingest --phase acceptance --secret kcw/prod/pipeline");
+    expect(acc).not.toMatch(/--ids|--bucket|BOOK_IDS|\$\{\{/);
+    expect(yml.split("--phase acceptance")).toHaveLength(2);
+    expect(yml.indexOf("--phase acceptance")).toBeGreaterThan(aws());
+    // every other phase is off when acceptance is set; the id check is skipped only through the env value
+    for (const phase of ["fetch", "store", "reextract", "categorize", "hooks"]) {
+      const text = step(`--phase ${phase}`);
+      expect(text).toMatch(/!inputs.acceptance/);
+    }
+    expect(step("Ensure rsync")).toContain("!inputs.acceptance");
+    expect(step("Validate book ids")).toContain('if [ "$ACCEPTANCE" = "true" ]');
+    expect(yml.split("inputs.acceptance").length - 1).toBe(8);
   });
 
   it("passes no workflow input into a run script (inputs appear only in if and env values)", () => {
