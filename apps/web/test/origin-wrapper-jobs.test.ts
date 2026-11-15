@@ -73,8 +73,8 @@ describe("job events in the origin wrapper", () => {
 });
 
 describe("job registry", () => {
-  it("has the two stub jobs, off", async () => {
+  it("registers the two jobs", async () => {
     expect(Object.keys(jobs).sort()).toEqual(["inbox-push", "social-daily"]);
-    for (const job of Object.values(jobs)) expect(await job({ scheduledTime: undefined })).toEqual({ code: "off" });
+    for (const job of Object.values(jobs)) expect(typeof job).toBe("function"); // real jobs reach the database and secrets: not called here
   });
 });
