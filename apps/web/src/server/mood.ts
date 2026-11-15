@@ -1,12 +1,13 @@
 // Mood scoring (H6). DeepSeek (the router provider) scores one diary entry: eight metrics from 0 to 1 and an
-// overall sentiment from -1 to 1. Usage is recorded by the provider's own usage callback (agent "router").
+// overall sentiment from -1 to 1. Each call is recorded by the provider's call callback (agent "router", purpose
+// "mood", linked to the diary entry; AR3).
 // The model call never runs inside a transaction (the pool has one connection): read, call, write.
 // A reply is accepted only when it is one JSON object with exactly the nine numeric fields in range; nothing is
 // clamped or invented. Logs carry codes and error classes, never entry text, prompts or replies.
 import type { ModelProvider } from "@kcw/core/models";
 import { MOOD_KEYS, type MoodValues } from "./diary";
 import type { DbRun } from "./router";
-import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
+import { capReachedUsd, monthToDateRange, spendDecisionLine, usageSummary } from "./usage";
 
 export const MOOD_INSTRUCTIONS = [
   "You score the mood of a diary entry. Reply with one JSON object and nothing else (no code fence, no text).",
@@ -67,14 +68,22 @@ export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider
     const { rows } = await db.query<{ body: string }>("SELECT body FROM diary_entries WHERE id = $1", [diaryEntryId]);
     if (!rows[0]) return { state: "not-found" as const };
     const spent = await usageSummary(db, monthToDateRange());
-    if (capReachedUsd(spent.total.costUsd)) return { state: "cap" as const };
+    if (capReachedUsd(spent.total.costUsd)) {
+      console.error(`[mood] ${spendDecisionLine(spent)}`);
+      return { state: "cap" as const };
+    }
     return { state: "ready" as const, body: rows[0].body };
   });
   if (before.state !== "ready") return before.state;
 
   let reply: Awaited<ReturnType<ModelProvider["complete"]>>;
   try {
-    reply = await provider.complete({ system: MOOD_INSTRUCTIONS, prompt: before.body, maxTokens: MAX_TOKENS });
+    reply = await provider.complete({
+      system: MOOD_INSTRUCTIONS,
+      prompt: before.body,
+      maxTokens: MAX_TOKENS,
+      call: { purpose: "mood", subject: { kind: "diary_entry", id: diaryEntryId } },
+    });
   } catch (err) {
     console.error(`[mood] ${err instanceof Error ? err.name : "error"}`);
     return "failed";

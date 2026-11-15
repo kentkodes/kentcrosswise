@@ -3,9 +3,13 @@
 //
 // Cost of a model usage row, in this order:
 //   1. usage_events.cost_usd when it is set (a cost fixed when the row was written wins);
+//   1a. otherwise a call record (AR3, migration 0019) with outcome 'rejected' costs $0 (not billed),
+//       and one with outcome 'started' or 'unknown' has unknown usage: counted in "usage unknown",
+//       never as $0 (its tokens are NULL);
 //   2. otherwise tokens x the model_prices row of the same provider+model with the latest
 //      effective_from on or before the event's UTC day (prices are never hardcoded);
-//   3. otherwise no price: the row counts in "events without a price", never as $0.
+//   3. otherwise no price: the row counts in "events without a price", never as $0 (the soft
+//      unknown-price policy: unpriced and unknown rows add nothing to the cap total).
 // Actions minutes (kind 'actions_minutes') are summed separately and cost $0 (public repo,
 // standard runners). Days are UTC.
 import type { Queryable } from "./db";
@@ -54,6 +58,8 @@ export interface UsageGroup {
   costUsd: number | null;
   /** Events in the group that have neither cost_usd nor a matching model_prices row. */
   unpricedEvents: number;
+  /** Calls whose usage is unknown (outcome started or unknown, no stored cost; AR3). */
+  unknownEvents: number;
 }
 
 export interface UsageSummary {
@@ -62,6 +68,8 @@ export interface UsageSummary {
   byAgent: UsageGroup[];
   /** Key `provider/model`. */
   byModel: UsageGroup[];
+  /** Key = the call's purpose (plan, work, review, route, mood, categorize, hook, ...); `unrecorded` for rows without one. */
+  byPurpose: UsageGroup[];
   /** Key `YYYY-MM-DD` (UTC), days with usage only, oldest first. */
   byDay: UsageGroup[];
   actions: { minutes: number; runs: number };
@@ -71,7 +79,9 @@ type GroupRow = {
   agent_set: number;
   model_set: number;
   day_set: number;
+  purpose_set: number;
   agent: string | null;
+  purpose: string | null;
   provider: string | null;
   model: string | null;
   day: string | null;
@@ -80,6 +90,7 @@ type GroupRow = {
   output_tokens: string;
   cost_usd: string | null;
   unpriced: string;
+  unknown: string;
 };
 
 // $1, $2: start (inclusive) and end (exclusive) as timestamptz. GROUPING() is 0 when the column
@@ -87,9 +98,13 @@ type GroupRow = {
 const MODEL_USAGE_SQL = `
 WITH priced AS (
   SELECT u.agent, u.provider, u.model, u.input_tokens, u.output_tokens,
+         coalesce(u.purpose, 'unrecorded') AS purpose,
          to_char(u.ts AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+         (u.cost_usd IS NULL AND u.outcome IN ('started', 'unknown')) AS usage_unknown,
          CASE
            WHEN u.cost_usd IS NOT NULL THEN u.cost_usd
+           WHEN u.outcome = 'rejected' THEN 0
+           WHEN u.outcome IN ('started', 'unknown') THEN NULL
            WHEN p.usd_per_mtok_in IS NOT NULL THEN
              (coalesce(u.input_tokens, 0) * p.usd_per_mtok_in + coalesce(u.output_tokens, 0) * p.usd_per_mtok_out) / 1000000
          END AS cost
@@ -105,14 +120,16 @@ WITH priced AS (
    WHERE u.kind = 'model' AND u.ts >= $1::timestamptz AND u.ts < $2::timestamptz
 )
 SELECT GROUPING(agent) AS agent_set, GROUPING(provider, model) AS model_set, GROUPING(day) AS day_set,
-       agent, provider, model, day,
+       GROUPING(purpose) AS purpose_set,
+       agent, provider, model, day, purpose,
        count(*) AS events,
        coalesce(sum(input_tokens), 0) AS input_tokens,
        coalesce(sum(output_tokens), 0) AS output_tokens,
        sum(cost) AS cost_usd,
-       count(*) FILTER (WHERE cost IS NULL) AS unpriced
+       count(*) FILTER (WHERE cost IS NULL AND NOT usage_unknown) AS unpriced,
+       count(*) FILTER (WHERE usage_unknown) AS unknown
   FROM priced
- GROUP BY GROUPING SETS ((agent), (provider, model), (day), ())
+ GROUP BY GROUPING SETS ((agent), (provider, model), (day), (purpose), ())
 `;
 
 const ACTIONS_SQL = `
@@ -128,6 +145,7 @@ const emptyGroup = (key: string): UsageGroup => ({
   outputTokens: 0,
   costUsd: null,
   unpricedEvents: 0,
+  unknownEvents: 0,
 });
 
 function toGroup(key: string, r: GroupRow): UsageGroup {
@@ -138,6 +156,7 @@ function toGroup(key: string, r: GroupRow): UsageGroup {
     outputTokens: Number(r.output_tokens),
     costUsd: r.cost_usd === null ? null : Number(r.cost_usd),
     unpricedEvents: Number(r.unpriced),
+    unknownEvents: Number(r.unknown),
   };
 }
 
@@ -154,6 +173,7 @@ export async function usageSummary(db: Queryable, range: DayRange): Promise<Usag
     total: emptyGroup("total"),
     byAgent: [],
     byModel: [],
+    byPurpose: [],
     byDay: [],
     actions: { minutes: 0, runs: 0 },
   };
@@ -161,10 +181,12 @@ export async function usageSummary(db: Queryable, range: DayRange): Promise<Usag
     if (Number(r.agent_set) === 0) summary.byAgent.push(toGroup(r.agent!, r));
     else if (Number(r.model_set) === 0) summary.byModel.push(toGroup(`${r.provider}/${r.model}`, r));
     else if (Number(r.day_set) === 0) summary.byDay.push(toGroup(r.day!, r));
+    else if (Number(r.purpose_set) === 0) summary.byPurpose.push(toGroup(r.purpose!, r));
     else summary.total = toGroup("total", r);
   }
   summary.byAgent.sort(byCost);
   summary.byModel.sort(byCost);
+  summary.byPurpose.sort(byCost);
   summary.byDay.sort((a, b) => a.key.localeCompare(b.key));
 
   const actions = await db.query<{ minutes: string; runs: string }>(ACTIONS_SQL, [start, end]);
@@ -198,4 +220,9 @@ export function formatUsd(v: number | null): string {
   if (v === null) return "no price";
   const s = v.toFixed(2);
   return v > 0 && s === "0.00" ? "<$0.01" : `$${s}`;
+}
+
+/** The spending decision line of the router and mood scoring (codes and counts only). */
+export function spendDecisionLine(month: UsageSummary): string {
+  return `spend_cap spent=${roundMicroUsd(month.total.costUsd ?? 0).toFixed(2)} unpriced=${month.total.unpricedEvents} unknown=${month.total.unknownEvents}`;
 }
