@@ -89,7 +89,7 @@ export function excerpt(text: string, max: number = EXCERPT_WORDS): string {
 }
 
 /** A provider-returned model id is printed only if it is plain; anything else could inject workflow commands. */
-const safeModel = (m: string) => (/^[A-Za-z0-9._:/-]{1,80}$/.test(m) ? m : "unknown");
+export const safeModel = (m: string) => (/^[A-Za-z0-9._:/-]{1,80}$/.test(m) ? m : "unknown");
 
 async function categorizeBook(
   id: number, deps: CategorizeDeps, models: () => Promise<ModelProvider>,
