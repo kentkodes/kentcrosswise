@@ -2,6 +2,7 @@
 // a choice among the matching contacts or "No contact". Loads its own data; a failure shows one fixed line.
 import { listOpenContactMatches, type ContactMatch } from "@/server/contacts";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
+import { requireOwner } from "@/server/owner";
 import { formatUtc } from "../format";
 import { Notice, Region } from "../owner-ui";
 import s from "../owner.module.css";
@@ -9,6 +10,7 @@ import c from "./contacts.module.css";
 import { NotePicker } from "./note-picker";
 
 export async function ContactMatchRegion() {
+  await requireOwner();
   let rows: ContactMatch[] = [];
   let problem: string | undefined;
   try {

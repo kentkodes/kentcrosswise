@@ -20,6 +20,8 @@ test.describe("as the preview owner", () => {
     await page.goto(path);
   }
 
+  const fits = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
   const widths = [
     { label: "desktop", width: 1280, height: 900 },
     { label: "375px", width: 375, height: 800 },
@@ -37,6 +39,7 @@ test.describe("as the preview owner", () => {
       await expect(page.getByRole("heading", { level: 1, name: "Contacts" })).toBeVisible();
       await page.getByRole("link", { name: "Add contact" }).click();
       await expect(page.getByRole("heading", { level: 1, name: "Add contact" })).toBeVisible();
+      expect(await fits(page)).toBe(true);
 
       // Name is required: the server also refuses a whitespace-only name.
       await page.getByLabel("Name", { exact: true }).fill("   ");
@@ -57,6 +60,7 @@ test.describe("as the preview owner", () => {
       await expect(page.getByLabel("Aliases")).toHaveValue(`${alias}, other${stamp}`);
       await expect(page.getByLabel("Tags")).toHaveValue(`club${stamp}`);
       await expect(page.getByLabel("Birthday")).toHaveValue("1990-02-28");
+      expect(await fits(page)).toBe(true);
 
       // Edit.
       await page.getByLabel("Name", { exact: true }).fill(renamed);
@@ -79,7 +83,7 @@ test.describe("as the preview owner", () => {
       await expect(page).toHaveURL(new RegExp(`q=Zed${stamp}`));
       const row = page.getByTestId("contacts").locator("li").filter({ hasText: renamed });
       await expect(row).toHaveCount(1);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(await fits(page)).toBe(true);
 
       // Delete needs the confirmation step.
       await row.getByRole("link", { name: renamed }).click();

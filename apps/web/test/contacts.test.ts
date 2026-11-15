@@ -66,6 +66,19 @@ describe("containsWord", () => {
     expect(containsWord("Hi (A.T.) there", "A.T.")).toBe(true);
     expect(containsWord("text", "")).toBe(false);
   });
+
+  it("compares in NFC: a decomposed accent matches a composed one, either way", () => {
+    expect(containsWord("Met José today", "José")).toBe(true);
+    expect(containsWord("Met José today", "José")).toBe(true);
+    expect(containsWord("Met Josés today", "José")).toBe(false);
+  });
+
+  it("lets whitespace inside a name match any whitespace run", () => {
+    expect(containsWord("Ask Smith\nJohn about it", "Smith John")).toBe(true);
+    expect(containsWord("Ask Smith \t  John about it", "Smith John")).toBe(true);
+    expect(containsWord("Ask Smith John about it", "Smith  John")).toBe(true);
+    expect(containsWord("Ask SmithJohn about it", "Smith John")).toBe(false);
+  });
 });
 
 describe("contactMatchTitle", () => {
@@ -211,6 +224,64 @@ describe("contacts in the database as web_rw", () => {
     const rows = await asRw((db) => listCrmNotes(db));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: mine, linkStatus: "none", contactId: null, contactName: null });
+  });
+
+  it("a note saved before its contact existed links when the contact is created", async () => {
+    const id = await note("Coffee with Zoe tomorrow");
+    expect(await asRw((db) => linkCrmNote(db, id))).toBe("none");
+    const zoe = await asRw((db) => createContact(db, input({ name: "Zoe" })));
+    expect((await asRw((db) => listCrmNotes(db)))[0]).toMatchObject({ linkStatus: "linked", contactId: zoe });
+  });
+
+  it("a note that matches several contacts once one is created becomes ambiguous with one open item", async () => {
+    const id = await note("Ivy and Kai");
+    await pg.query("INSERT INTO contacts (name) VALUES ('Ivy'), ('Kai')"); // direct insert: no relinking
+    expect(await openItems(id)).toEqual([]);
+    await asRw((db) => createContact(db, input({ name: "Newcomer" })));
+    expect(await openItems(id)).toHaveLength(1);
+    expect((await asRw((db) => listCrmNotes(db)))[0]).toMatchObject({ linkStatus: "ambiguous", contactId: null });
+    await asRw((db) => createContact(db, input({ name: "Another" })));
+    expect(await openItems(id)).toHaveLength(1); // ambiguous notes are not re-checked
+  });
+
+  it("a renamed contact or a new alias picks up matching notes", async () => {
+    const c = await asRw((db) => createContact(db, input({ name: "Placeholder" })));
+    const a = await note("Dinner with Rowan");
+    const b = await note("Call Ro about it");
+    await asRw((db) => linkCrmNote(db, a));
+    await asRw((db) => linkCrmNote(db, b));
+    await asRw((db) => updateContact(db, c, input({ name: "Rowan" })));
+    await asRw((db) => updateContact(db, c, input({ name: "Rowan", aliases: ["Ro"] })));
+    const rows = await asRw((db) => listCrmNotes(db));
+    expect(rows.find((n) => n.id === a)).toMatchObject({ linkStatus: "linked", contactId: c });
+    expect(rows.find((n) => n.id === b)).toMatchObject({ linkStatus: "linked", contactId: c });
+  });
+
+  it("an edit that leaves name and aliases alone does not relink, and linked notes are never touched", async () => {
+    const owner = await asRw((db) => createContact(db, input({ name: "Quinn" })));
+    const mine = await note("Quinn and Zoe");
+    await asRw((db) => linkCrmNote(db, mine)); // ambiguous? only Quinn exists: linked to Quinn
+    const none = await note("Zoe only");
+    await asRw((db) => linkCrmNote(db, none));
+    await pg.query("INSERT INTO contacts (name) VALUES ('Zoe')");
+    await asRw((db) => updateContact(db, owner, input({ name: "Quinn", howKnown: "Work" })));
+    expect((await asRw((db) => listCrmNotes(db))).find((n) => n.id === none)?.linkStatus).toBe("none");
+    // A name change now relinks the unlinked note, but the one linked to Quinn keeps its contact.
+    await asRw((db) => updateContact(db, owner, input({ name: "Quinn Renamed", aliases: ["Quinn"] })));
+    const rows = await asRw((db) => listCrmNotes(db));
+    expect(rows.find((n) => n.id === none)?.linkStatus).toBe("linked");
+    expect(rows.find((n) => n.id === mine)).toMatchObject({ linkStatus: "linked", contactId: owner });
+  });
+
+  it("re-checks at most the newest 500 unlinked notes", async () => {
+    await pg.query(
+      "INSERT INTO crm_notes (body, created_at) SELECT 'Mention of Zed ' || g, '2020-01-01'::timestamptz + g * interval '1 minute' FROM generate_series(1, 501) g",
+    );
+    await asRw((db) => createContact(db, input({ name: "Zed" })));
+    const r = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM crm_notes WHERE link_status = 'linked'");
+    expect(r.rows[0]!.n).toBe(500);
+    const left = await pg.query<{ body: string }>("SELECT body FROM crm_notes WHERE link_status = 'none'");
+    expect(left.rows).toEqual([{ body: "Mention of Zed 1" }]);
   });
 
   it("lists one contact's notes newest first", async () => {

@@ -130,18 +130,23 @@ export async function createContact(db: Queryable, c: ContactInput): Promise<str
     "INSERT INTO contacts (name, aliases, how_known, birthday, notes, tags) VALUES ($1, $2::text[], $3, $4::date, $5, $6::text[]) RETURNING id",
     [c.name, c.aliases, c.howKnown, c.birthday, c.notes, c.tags],
   );
+  await relinkUnlinkedNotes(db);
   return rows[0]!.id;
 }
 
-/** Returns false when the contact does not exist. */
+/** Returns false when the contact does not exist. A changed name or alias relinks unlinked notes. */
 export async function updateContact(db: Queryable, id: string, c: ContactInput): Promise<boolean> {
+  const before = await db.query<{ name: string; aliases: string[] }>("SELECT name, aliases FROM contacts WHERE id = $1", [id]);
   const { rows } = await db.query(
     `UPDATE contacts SET name = $2, aliases = $3::text[], how_known = $4, birthday = $5::date, notes = $6, tags = $7::text[],
             updated_at = now()
       WHERE id = $1 RETURNING id`,
     [id, c.name, c.aliases, c.howKnown, c.birthday, c.notes, c.tags],
   );
-  return rows.length > 0;
+  if (rows.length === 0) return false;
+  const old = before.rows[0]!;
+  if (old.name !== c.name || old.aliases.join("\n") !== c.aliases.join("\n")) await relinkUnlinkedNotes(db);
+  return true;
 }
 
 /**
@@ -164,11 +169,15 @@ export interface MatchContact {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** True when `term` occurs in `body` as a whole word (letters, digits and underscore do not touch it), ignoring case. */
+/**
+ * True when `term` occurs in `body` as a whole word (letters, digits and underscore do not touch it), ignoring case.
+ * Both are compared in NFC, and whitespace inside `term` matches any whitespace run.
+ */
 export function containsWord(body: string, term: string): boolean {
-  const t = term.trim();
-  if (t === "") return false;
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(t)}(?![\\p{L}\\p{N}_])`, "iu").test(body);
+  const words = term.normalize("NFC").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+  const pattern = words.map(escapeRe).join("\\s+");
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${pattern}(?![\\p{L}\\p{N}_])`, "iu").test(body.normalize("NFC"));
 }
 
 /** The contacts whose name or an alias occurs in the body as a whole word, in the given order. */
@@ -198,9 +207,12 @@ const CLOSE_MATCH_ITEM =
 export async function linkCrmNote(db: Queryable, noteId: string): Promise<LinkOutcome> {
   const note = await db.query<{ body: string }>("SELECT body FROM crm_notes WHERE id = $1", [noteId]);
   if (!note.rows[0]) return "not-found";
-  const body = note.rows[0].body;
   const all = await db.query<MatchContact>("SELECT id, name, aliases FROM contacts");
-  const hits = matchContacts(body, all.rows);
+  return applyLink(db, noteId, note.rows[0].body, all.rows);
+}
+
+async function applyLink(db: Queryable, noteId: string, body: string, contacts: readonly MatchContact[]): Promise<LinkStatus> {
+  const hits = matchContacts(body, contacts);
 
   if (hits.length === 1) {
     await db.query("UPDATE crm_notes SET contact_id = $2, link_status = 'linked' WHERE id = $1", [noteId, hits[0]!.id]);
@@ -222,6 +234,25 @@ export async function linkCrmNote(db: Queryable, noteId: string): Promise<LinkOu
     [noteId, contactMatchTitle(body)],
   );
   return "ambiguous";
+}
+
+/** How many unlinked notes a contact change re-checks. */
+const RELINK_LIMIT = 500;
+
+/**
+ * Re-runs the name match for the newest notes whose link_status is 'none' (a note saved before its contact existed,
+ * or before a rename). Notes already linked or ambiguous are not touched. Runs in the caller's transaction.
+ */
+async function relinkUnlinkedNotes(db: Queryable): Promise<void> {
+  const notes = await db.query<{ id: string; body: string }>(
+    "SELECT id, body FROM crm_notes WHERE link_status = 'none' ORDER BY created_at DESC, id DESC LIMIT $1",
+    [RELINK_LIMIT],
+  );
+  if (notes.rows.length === 0) return;
+  const all = await db.query<MatchContact>("SELECT id, name, aliases FROM contacts");
+  for (const n of notes.rows) {
+    if (matchContacts(n.body, all.rows).length > 0) await applyLink(db, n.id, n.body, all.rows);
+  }
 }
 
 export type ResolveOutcome = "ok" | "note-not-found" | "contact-not-found";
