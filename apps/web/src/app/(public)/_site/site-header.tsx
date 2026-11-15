@@ -4,6 +4,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccountLink } from "./account-link";
+import { Xray } from "./xray";
+import { XrayToggle } from "./xray-toggle";
 import h from "./site-header.module.css";
 
 export type PublicPath = "/" | "/demo" | "/office" | "/bot";
@@ -32,6 +34,7 @@ export function SiteHeader({
         <Link className={h.wordmark} href="/">
           Kentcrosswise
         </Link>
+        <XrayToggle />
         <nav className={h.nav} aria-label="Main">
           <ul className={h.navList}>
             {LINKS.map((l) => (
@@ -42,7 +45,9 @@ export function SiteHeader({
               </li>
             ))}
             <li>
-              <AccountLink />
+              <Xray id="account-link" align="end" side="below">
+                <AccountLink />
+              </Xray>
             </li>
           </ul>
         </nav>

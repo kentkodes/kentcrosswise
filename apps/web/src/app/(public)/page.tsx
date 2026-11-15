@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ProductStill } from "./_home/product-still";
 import s from "./_home/home.module.css";
 import { PaperFrame } from "./_site/paper-frame";
+import { Xray } from "./_site/xray";
 
 // Hero copy, in one place. Default text from the home redesign spec; the owner may change it.
 export const HERO = {
@@ -30,19 +31,23 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <PaperFrame current="/">
-      <section className={s.hero}>
-        <h1 className={s.headline}>{HERO.headline}</h1>
-        <p className={s.subline}>{HERO.subline}</p>
-        <div className={s.ctas}>
-          <Link className={s.primary} href="/office">
-            Agent office
-          </Link>
-          <Link className={s.secondary} href="/demo">
-            Explore the demo
-          </Link>
-        </div>
-      </section>
-      <ProductStill />
+      <Xray id="fonts-theme">
+        <section className={s.hero}>
+          <h1 className={s.headline}>{HERO.headline}</h1>
+          <p className={s.subline}>{HERO.subline}</p>
+          <div className={s.ctas}>
+            <Link className={s.primary} href="/office">
+              Agent office
+            </Link>
+            <Link className={s.secondary} href="/demo">
+              Explore the demo
+            </Link>
+          </div>
+        </section>
+      </Xray>
+      <Xray id="product-still">
+        <ProductStill />
+      </Xray>
       <section className={s.features}>
         {FEATURES.map((f) => (
           <div key={f.title}>

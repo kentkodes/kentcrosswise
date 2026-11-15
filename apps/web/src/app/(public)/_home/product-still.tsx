@@ -1,6 +1,7 @@
 // The home page's product still: a framed, static picture of the hub, built from simulated data.
 // Only the live activity list (RecentActivity) is client-side. Sidebar is decorative and hidden on phones.
 import { getDemoData, type Platform } from "@kcw/demo-data";
+import { Xray } from "../_site/xray";
 import { sparkline, SPARK_H, SPARK_W } from "../_site/sparkline";
 import { RecentActivity } from "./recent-activity";
 import s from "./home.module.css";
@@ -61,7 +62,9 @@ export function ProductStill() {
             </div>
           ) : null}
         </div>
-        <RecentActivity />
+        <Xray id="activity-feed">
+          <RecentActivity />
+        </Xray>
       </div>
     </div>
   );

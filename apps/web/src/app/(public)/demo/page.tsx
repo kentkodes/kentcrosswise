@@ -2,6 +2,7 @@
 // the view model; the server builds it and the client component only holds the selected tab.
 import { getDemoData } from "@kcw/demo-data";
 import { PaperFrame } from "../_site/paper-frame";
+import { Xray } from "../_site/xray";
 import { DemoApp } from "./demo-app";
 import { buildDemoView } from "./demo-view";
 import d from "./demo.module.css";
@@ -16,9 +17,13 @@ export default function DemoPage() {
             <h1 className={d.title}>The hub, with made-up data</h1>
             <p className={d.sub}>Click around. Every person, note and number here is simulated; the real hub is private.</p>
           </div>
-          <span className={d.pill}>Simulated data</span>
+          <Xray id="demo-data" align="end">
+            <span className={d.pill}>Simulated data</span>
+          </Xray>
         </div>
-        <DemoApp view={view} />
+        <Xray id="demo-app">
+          <DemoApp view={view} />
+        </Xray>
         <p className={d.note}>
           The live agent activity on the home page is real; everything inside this frame is generated from a fixed seed.
         </p>

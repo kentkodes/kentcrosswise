@@ -41,6 +41,7 @@
 }
 
 .wordmark {
+  margin-right: auto;
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -52,6 +53,38 @@
 .nav {
   display: flex;
   align-items: center;
+}
+
+/* X-ray switch: a small outlined pill; pressed uses the accent. ::after widens the hit area to 44px. */
+.xray {
+  position: relative;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--header-line, var(--line));
+  border-radius: var(--radius-control, 8px);
+  background: transparent;
+  color: var(--header-muted, var(--fg-muted));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-hover, 150ms) var(--ease-out, ease-out);
+}
+
+.xray:hover {
+  color: var(--header-fg, var(--fg));
+}
+
+.xray[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--header-fg, var(--fg));
+}
+
+.xray::after {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
 }
 
 .navList {
@@ -129,6 +162,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .navLink,
+  .xray,
   .signIn {
     transition: none;
   }
@@ -146,8 +180,12 @@
   }
 
   .wordmark {
-    width: 100%;
+    flex: 1 1 0;
     padding-bottom: 8px;
+  }
+
+  .xray {
+    margin-bottom: 8px;
   }
 
   .nav {
