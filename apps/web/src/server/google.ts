@@ -2,7 +2,8 @@
 // (written at sign-in by auth/config.ts events.signIn); this module turns it into short-lived access tokens
 // and can disconnect. Never log tokens, the client secret or response bodies: only fixed codes and error classes.
 import { defaultSecretStore, SecretKeyMissingError, SecretNotFoundError } from "@kcw/secrets";
-import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/config";
+import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/google-consent";
+import { loadProdSettings } from "../auth/settings";
 
 export type GoogleScope = "calendar" | "youtube";
 
@@ -74,9 +75,12 @@ const defaultStore: NonNullable<GoogleDeps["store"]> = {
   },
 };
 
+// Reads the client settings without importing "../auth": the scheduled jobs bundle this module into the
+// OpenNext wrapper, and "../auth" would pull NextAuth and the preview-only login module into that prod bundle
+// (scripts/check-prod-bundle.ts). Previews have no Google client.
 async function defaultClient(): Promise<{ clientId: string; clientSecret: string } | null> {
-  const { getAuthSettings } = await import("../auth");
-  return (await getAuthSettings()).google ?? null;
+  if (process.env.KCW_ENV === "preview") return null;
+  return (await loadProdSettings(process.env, defaultSecretStore())).google ?? null;
 }
 
 function errorClass(err: unknown): string {
