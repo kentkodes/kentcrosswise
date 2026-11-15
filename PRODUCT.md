@@ -24,11 +24,15 @@ Visitors arrive on phones and desktop browsers. They come to understand the proj
 
 ## Capabilities and Constraints
 
-- Public routes: `/` (home), `/demo` (simulated hub in an app frame with Today, People, Mood, Following and Notes tabs), `/office` (team board and Room tab over the sanitized public event feed, with Live and Replay states) and `/bot` (essay bot information and contact).
-- Owner routes: capture and routing on the hub, Boss console with usage and a soft spend control, inbox, essay library, setup and reader. H3 assigns capture categories; downstream contact, diary and todo records are not created yet.
+- Public routes: `/` (home), `/demo` (simulated hub in an app frame with Today, People, Mood, Following and Notes tabs), `/office` (team board and Room tab over the sanitized public event feed, with Live and Replay states) and `/bot` (essay bot information and contact), `/terms` (terms of use) and `/privacy` (privacy notice). `/terms` and `/privacy` are static Paper reading pages linked from the footer. On `/`, `/demo`, `/office` and `/bot` a header toggle turns on the X-ray overlay, which labels the technology behind each part.
+- Owner routes: capture and routing on the hub, Boss console with usage and a soft spend control, inbox, essay library, setup and reader. Each routed capture creates one derived record (CRM note, diary entry, todo or idea); agent requests stay a category.
+- Contacts (`/contacts`): name, aliases, how known, birthday, notes and tags; filter by name, alias or tag. CRM notes link to contacts by name match; an ambiguous match waits for the owner's choice. Notes from captures are not linked automatically yet.
+- Diary and mood: `/diary` (write and list entries, mood summary per entry), `/diary/[id]` (read, edit, delete with confirmation, mood scores, Score again) and `/mood` (overall sentiment and eight metrics over the last 90 days or all, per-metric checkboxes, text summary and data table). Scoring runs only where the model router is configured.
+- Lists: `/todos`, `/ideas` and `/projects` (project tabs; the Essays tab summarises the library).
+- Social: `/social` shows followers and views for YouTube, Instagram and TikTok accounts: totals of each account's latest known numbers for a source filter, the change against the previous known value, a followers trend, and manual entry of daily numbers (API ingestion comes later).
 - Public pages use only `@kcw/demo-data` and the permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication or infrastructure from a page change.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behaviour are required.
-- Not built yet: the remaining private hub features (contacts, diary and mood, calendar, social stats) and the X-ray overlay. The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
+- Not built yet: the remaining private hub features (calendar, a unified inbox with web push) and API ingestion of social numbers. The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
 
 ## Brand Commitments
 
