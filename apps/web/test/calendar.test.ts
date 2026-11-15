@@ -79,8 +79,22 @@ describe("parseCalendarReply", () => {
 
   it("reads 'today' in the entry's zone, not UTC", () => {
     const lateNy = new Date("2026-11-16T03:00:00Z"); // still the 15th in New York
-    expect(parseCalendarReply(plan({ date: "2026-11-15" }), lateNy, NY).ok).toBe(true);
-    expect(parseCalendarReply(plan({ date: "2026-11-15" }), lateNy, "UTC")).toMatchObject({ ok: false, reason: "past" });
+    expect(parseCalendarReply(plan({ date: "2026-11-15", time: null }), lateNy, NY).ok).toBe(true);
+    expect(parseCalendarReply(plan({ date: "2026-11-15", time: null }), lateNy, "UTC")).toMatchObject({ ok: false, reason: "past" });
+  });
+
+  it("rejects a time that has already passed today, in the entry's zone", () => {
+    // NOW is 10:00 in New York.
+    expect(parseCalendarReply(plan({ date: "2026-11-15", time: "09:59" }), NOW, NY)).toMatchObject({ ok: false, reason: "past" });
+    expect(parseCalendarReply(plan({ date: "2026-11-15", time: "10:00" }), NOW, NY).ok).toBe(true);
+    expect(parseCalendarReply(plan({ date: "2026-11-15", time: null }), NOW, NY).ok).toBe(true);
+    expect(parseCalendarReply(plan({ date: "2026-11-16", time: "00:05" }), NOW, NY).ok).toBe(true);
+  });
+
+  it("turns control and format characters in the title into single spaces", () => {
+    const odd = parseCalendarReply(plan({ title: "Lunch" + String.fromCharCode(10, 0) + "with" + String.fromCharCode(0x202e) + "Sam" }), NOW, NY);
+    expect(odd.ok && odd.plan.title).toBe("Lunch with Sam");
+    expect(parseCalendarReply(plan({ title: String.fromCharCode(0x200b, 9) }), NOW, NY)).toMatchObject({ ok: false, reason: "title" });
   });
 
   const bad: [string, string, string][] = [

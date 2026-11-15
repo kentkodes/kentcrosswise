@@ -17,6 +17,7 @@ const MAX_TOKENS = 200;
  */
 export const SUGGEST_BOUND_MS = 6000;
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const GOOGLE_TIMEOUT_MS = 8000;
 const MAX_DAYS_AHEAD = 365;
 const DEFAULT_MINUTES = 60;
 
@@ -136,7 +137,7 @@ const FIELDS = ["plan", "title", "date", "time", "duration_minutes"];
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-/** Strict parse of a model reply in the note's zone. Only the first {...} of the reply is read; nothing is repaired. */
+/** Strict parse of a model reply in the note's zone. The text from the first { to the last } is read as one object; nothing is repaired. */
 export function parseCalendarReply(text: string, now: Date, zone: string): CalendarParse {
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
@@ -155,7 +156,8 @@ export function parseCalendarReply(text: string, now: Date, zone: string): Calen
   if (o.plan !== true) return { ok: false, reason: "fields" };
 
   if (typeof o.title !== "string") return { ok: false, reason: "title" };
-  const title = o.title.trim();
+  // Control and format characters (line breaks, NUL, direction overrides) never reach the stored title.
+  const title = o.title.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/g, " ").trim();
   if (title.length < 1 || [...title].length > 80) return { ok: false, reason: "title" };
 
   const dm = typeof o.date === "string" ? DATE.exec(o.date) : null;
@@ -171,6 +173,8 @@ export function parseCalendarReply(text: string, now: Date, zone: string): Calen
   if (o.time !== null) {
     if (typeof o.time !== "string" || !TIME.test(o.time)) return { ok: false, reason: "time" };
     time = o.time;
+    // A time that has already passed today is not a plan.
+    if (date === today && time < hm(localParts(now, zone))) return { ok: false, reason: "past" };
   }
   let minutes = DEFAULT_MINUTES;
   if (o.duration_minutes !== null) {
@@ -403,6 +407,8 @@ export async function addSuggestionToCalendar(run: DbRun, id: string, deps: AddD
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
+      // The owner waits on the tap; a repeated tap is safe (the event id is fixed, 409 counts as success).
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     status = res.status;
   } catch (err) {
