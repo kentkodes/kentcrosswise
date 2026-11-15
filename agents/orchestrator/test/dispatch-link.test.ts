@@ -80,6 +80,7 @@ describe("dispatch links (agent_dispatches)", () => {
     calls = [];
     lines = [];
     await sql("DELETE FROM agent_dispatches");
+    await sql("DELETE FROM github_operations"); // the steps below reuse task ids and start from checkpoint-free data
     await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
   });
 
@@ -186,10 +187,10 @@ describe("dispatch links (agent_dispatches)", () => {
     expect(await links()).toEqual([]);
   });
 
-  it("a step re-run for another failure after a failed link dispatches again and links the new run", async () => {
+  it("a step re-run for another failure after a failed link reuses the recorded run and links it", async () => {
     // A failed link alone never fails the step (above). If a later effect fails (here the event
-    // write), the message is retried and the step re-runs as a whole: a repeated dispatch is the
-    // accepted cost (machine.ts header), and the new run gets its link.
+    // write), the message is retried and the step re-runs as a whole: the operation record holds the
+    // run id (AR2 slice 2a), so nothing is dispatched twice, and the re-run stores the link.
     gh = new FakeGitHubClient({ firstRunId: 890001 });
     let linkFails = true;
     let eventFails = true;
@@ -215,9 +216,9 @@ describe("dispatch links (agent_dispatches)", () => {
     await expect(runStep(1, data, sweep, { ...deps(), store: flaky })).rejects.toThrow("synthetic event failure");
     const next = await runStep(1, data, sweep, { ...deps(), store: flaky });
     expect(next.redispatched).toBe(true);
-    expect(gh.dispatches.map((d) => d.runId)).toEqual([890001, 890002]);
+    expect(gh.dispatches.map((d) => d.runId)).toEqual([890001]);
     expect(lines).toEqual(["task-1: dispatch_link_failed role=developer reason=db"]);
-    expect(await links()).toEqual([{ run_id: 890002, task_id: 1, role: "developer" }]);
+    expect(await links()).toEqual([{ run_id: 890001, task_id: 1, role: "developer" }]);
   });
 
   it("stores the link as orch_rw, which can read and insert but not update or delete it", async () => {

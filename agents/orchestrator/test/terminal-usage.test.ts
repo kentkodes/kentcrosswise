@@ -28,6 +28,8 @@ describe("terminal task usage", () => {
       createSubtasks: async () => { throw new Error("unexpected split"); },
       getChildren: async () => [],
       createDocsTask: async () => 2, // the merge creates the docs child (its own thread)
+      beginOperation: async (i) => ({ record: { effectKey: i.effectKey, kind: i.kind, requestHash: i.requestHash, state: "intent", result: null, createdAt: i.createdAt }, created: true }),
+      updateOperation: async () => undefined,
     };
     const github = new FakeGitHubClient();
     github.prs.set(41, { headSha: head, author: "developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
@@ -80,6 +82,8 @@ function fixture(initialStatus: TaskStatus = "queued") {
     createSubtasks: async () => { throw new Error("unexpected split"); },
     getChildren: async () => [],
     createDocsTask: async () => { throw new Error("unexpected docs task"); },
+    beginOperation: async (i) => ({ record: { effectKey: i.effectKey, kind: i.kind, requestHash: i.requestHash, state: "intent", result: null, createdAt: i.createdAt }, created: true }),
+    updateOperation: async () => undefined,
   };
   const github = new FakeGitHubClient();
   const saver = new MemorySaver();

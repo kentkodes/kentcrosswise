@@ -84,11 +84,14 @@ describe("sweeps for stale planning tasks", () => {
 
   it("a failed start left in planning is completed by the next sweep, with one issue", async () => {
     const id = await newTask();
-    gh.failNext("dispatchWorkflow", 502);
+    gh.now = () => clock;
+    gh.registerRuns = true;
+    gh.failAfterNext("dispatchWorkflow"); // sent, the response was lost
     const created = JSON.stringify({ type: "task.created", task_id: id });
     expect(await send(id, { body: created }, "start-1")).toBe("failed");
     expect((await sql<{ status: string }>("SELECT status FROM tasks WHERE id = $1", [id]))[0]!.status).toBe("planning");
     expect(gh.issues).toHaveLength(1);
+    expect(gh.dispatches).toHaveLength(1);
 
     // Its message went to the DLQ; 16 minutes later the sweeper picks the task up.
     await sql("UPDATE tasks SET updated_at = now() - interval '16 minutes' WHERE id = $1", [id]);
@@ -99,6 +102,7 @@ describe("sweeps for stale planning tasks", () => {
     // The sweep completes the held start; the sweep itself is then a no-op in phase dev.
     expect(await send(id, sent[0]!, "sweep-1")).toBe("unchanged");
     expect(gh.issues).toHaveLength(1);
+    expect(gh.dispatches).toHaveLength(1);
     const [task] = await sql<{ status: string; waiting_on: string }>("SELECT status, waiting_on FROM tasks WHERE id = $1", [id]);
     expect(task).toEqual({ status: "waiting", waiting_on: "dev" });
   });

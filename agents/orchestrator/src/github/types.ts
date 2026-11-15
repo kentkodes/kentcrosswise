@@ -129,6 +129,25 @@ export interface WorkflowRunInfo {
   conclusion: string | null;
 }
 
+export interface ListRecentIssuesInput {
+  /** ISO time; only issues created at or after it count. */
+  createdAfter: string;
+}
+
+/** An issue created by a bot (the orchestrator App) with its body, for finding a marker (AR2 slice 2a). */
+export interface RecentIssue {
+  number: number;
+  body: string;
+  createdAt: string;
+}
+
+/** What a merge reconciliation reads from a PR. */
+export interface PrMergeState {
+  merged: boolean;
+  /** The squash commit SHA once merged. */
+  mergeCommitSha: string | null;
+}
+
 export interface GitHubClient {
   createIssue(input: CreateIssueInput): Promise<CreatedIssue>;
   /** Never fails because run details are missing (`runId` null); fails only when GitHub refuses the dispatch. */
@@ -145,6 +164,13 @@ export interface GitHubClient {
   getArtifact(input: GetArtifactInput): Promise<ArtifactResult>;
   /** The newest workflow_dispatch run of `workflow` with that display title created since `createdAfter`, or null. */
   findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null>;
+  /**
+   * Bot-created issues (state all, not PRs) created since `createdAfter`, newest first, from the
+   * consistent list endpoint (not search); at most the newest 100.
+   */
+  listRecentIssues(input: ListRecentIssuesInput): Promise<RecentIssue[]>;
+  /** Whether the PR is merged, and its merge commit SHA. */
+  getPrMergeState(pr: number): Promise<PrMergeState>;
 }
 
 /**

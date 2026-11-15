@@ -23,11 +23,14 @@ import {
   type FindWorkflowRunInput,
   type GetArtifactInput,
   type GitHubClient,
+  type ListRecentIssuesInput,
   type MergePrInput,
   type MergeResult,
   type PostCheckInput,
   type PostedCheck,
   type PrDiff,
+  type PrMergeState,
+  type RecentIssue,
   type WorkflowRunInfo,
 } from "./types";
 import { ZipFormatError, readZipEntry } from "./zip";
@@ -336,6 +339,31 @@ export class OctokitGitHubClient implements GitHubClient {
         .filter((r) => r.display_title === input.displayTitle && Date.parse(r.created_at) >= after)
         .sort(newestFirst)[0];
       return run ? { id: run.id, status: run.status ?? "unknown", conclusion: run.conclusion ?? null } : null;
+    });
+  }
+
+  async listRecentIssues(input: ListRecentIssuesInput): Promise<RecentIssue[]> {
+    return this.#call("listRecentIssues", async () => {
+      const { data } = await this.#octokit.rest.issues.listForRepo({
+        ...this.#r,
+        state: "all",
+        sort: "created",
+        direction: "desc",
+        since: input.createdAfter, // updated since: a superset of created since
+        per_page: 100,
+      });
+      const after = Date.parse(input.createdAfter);
+      // Pull requests are listed as issues too; only an App (bot) author counts, so a marker in a stranger's issue is ignored.
+      return data
+        .filter((i) => i.pull_request === undefined && i.user?.type === "Bot" && Date.parse(i.created_at) >= after)
+        .map((i) => ({ number: i.number, body: i.body ?? "", createdAt: i.created_at }));
+    });
+  }
+
+  async getPrMergeState(pr: number): Promise<PrMergeState> {
+    return this.#call("getPrMergeState", async () => {
+      const { data } = await this.#octokit.rest.pulls.get({ ...this.#r, pull_number: pr });
+      return { merged: data.merged, mergeCommitSha: data.merge_commit_sha ?? null };
     });
   }
 

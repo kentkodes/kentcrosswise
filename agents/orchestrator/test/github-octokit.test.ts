@@ -261,6 +261,40 @@ describe("REST calls", () => {
       status: 403,
     });
   });
+
+  it("listRecentIssues asks for all issues newest first and keeps only bot-created issues (not PRs) since the time", async () => {
+    const issue = (number: number, type: string, created: string, extra: Record<string, unknown> = {}) => ({
+      number,
+      body: number === 5 ? null : `body ${number}`,
+      created_at: created,
+      user: { login: "someone", type },
+      ...extra,
+    });
+    mock.on("GET", "/repos/o/r/issues", () =>
+      json(200, [
+        issue(6, "Bot", "2026-11-14T10:05:00Z"),
+        issue(5, "Bot", "2026-11-14T10:04:00Z"),
+        issue(4, "User", "2026-11-14T10:03:00Z"), // a stranger's issue never counts
+        issue(3, "Bot", "2026-11-14T10:02:00Z", { pull_request: { url: "u" } }), // a PR
+        issue(2, "Bot", "2026-11-14T09:00:00Z"), // before createdAfter
+      ]),
+    );
+    const found = await client.listRecentIssues({ createdAfter: "2026-11-14T10:00:00.000Z" });
+    expect(found).toEqual([
+      { number: 6, body: "body 6", createdAt: "2026-11-14T10:05:00Z" },
+      { number: 5, body: "", createdAt: "2026-11-14T10:04:00Z" },
+    ]);
+    const q = mock.api[0]!.url.searchParams;
+    expect([q.get("state"), q.get("sort"), q.get("direction"), q.get("per_page")]).toEqual(["all", "created", "desc", "100"]);
+    expect(q.get("since")).toBe("2026-11-14T10:00:00.000Z");
+  });
+
+  it("getPrMergeState reads merged and the merge commit SHA", async () => {
+    mock.on("GET", "/repos/o/r/pulls/7", () => json(200, { merged: true, merge_commit_sha: "abc123" }));
+    await expect(client.getPrMergeState(7)).resolves.toEqual({ merged: true, mergeCommitSha: "abc123" });
+    mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/pulls/7" ? json(200, { merged: false, merge_commit_sha: "def456" }) : undefined));
+    await expect(client.getPrMergeState(7)).resolves.toEqual({ merged: false, mergeCommitSha: "def456" });
+  });
 });
 
 describe("dispatchWorkflow run details (RUN-ID-MAPPING-SPEC §1)", () => {
