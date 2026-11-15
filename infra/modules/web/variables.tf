@@ -47,6 +47,18 @@ variable "secret_names" {
   default     = []
 }
 
+variable "writable_secret_names" {
+  description = "Secrets Manager secret names the server function may also write (PutSecretValue), e.g. rewritten OAuth tokens. Each is also readable. Previews: none."
+  type        = list(string)
+  default     = []
+}
+
+variable "scheduled_jobs" {
+  description = "Web-side jobs: job name to EventBridge Scheduler expression. Each schedule invokes the server function with {kcw_job, scheduled_time} (origin-wrapper job registry). Previews: none."
+  type        = map(string)
+  default     = {}
+}
+
 variable "ssm_parameter_names" {
   description = "SSM SecureString parameter names the server function may read, e.g. the preview DB URL (D21)."
   type        = list(string)
