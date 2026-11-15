@@ -12,7 +12,7 @@ import type { AgentName, AgentReport, EventType } from "@kcw/core/events";
 import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
-import { ArtifactFormatError, CI_WORKFLOW, type GitHubClient, type MergeResult } from "../github";
+import { ArtifactFormatError, CI_WORKFLOW, GitHubApiError, type GitHubClient, type MergeResult } from "../github";
 import { publicText } from "../nodes/public-title";
 import { OperationConflictError, agentRunName, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
 import { DispatchLinkConflictError, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
@@ -489,14 +489,29 @@ class Machine {
     const d = this.d;
     const role = agentRoleOfWorkflow(workflow);
     if (role === null || role === "scraper") throw new Error("dispatchAgent: not an agent workflow");
-    const begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
+    let begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
+    // A key whose dispatch GitHub refused created no run: this attempt (a re-run of the step) uses the next key.
+    while (begun !== null && begun.record.state === "done" && (begun.record.result as { dispatched?: boolean }).dispatched === false) {
+      this.bumpOp("dispatch");
+      begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
+    }
     if (begun === null) return false;
     let runId: number | null;
     if (begun.record.state === "done") {
       runId = (begun.record.result as { runId: number | null }).runId;
     } else {
       if (begun.created) {
-        runId = (await this.github.dispatchWorkflow({ workflow, inputs })).runId;
+        try {
+          runId = (await this.github.dispatchWorkflow({ workflow, inputs })).runId;
+        } catch (err) {
+          // A 4xx other than 408 and 429 is a refusal: no run exists. Everything else stays an ambiguous intent.
+          const status = err instanceof GitHubApiError ? err.status : undefined;
+          if (status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+            await this.store.updateOperation(begun.key, "done", { dispatched: false, status });
+            this.bumpOp("dispatch");
+          }
+          throw err;
+        }
       } else {
         const run = await this.github.findWorkflowRun({
           workflow,

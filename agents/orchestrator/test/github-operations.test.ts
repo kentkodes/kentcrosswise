@@ -294,7 +294,26 @@ describe("operation records (AR2 slice 2a)", () => {
       expect(lines).toContain(`task-${id}: dispatch_outcome_unknown role=developer`);
     });
 
-    it("a dispatch error before any effect is not retried blindly either: it waits like an unknown outcome", async () => {
+    it("a 422 refusal created no run: the retry uses a new key and dispatches once more", async () => {
+      const id = await newTask();
+      const data = initialTaskData();
+      gh.failNext("dispatchWorkflow", 422);
+      await expect(runStep(id, data, start(), deps())).rejects.toThrow(/dispatchWorkflow/);
+      expect(await op(`task-${id}/dispatch/0`)).toMatchObject({ state: "done", result: { dispatched: false, status: 422 } });
+      const next = await runStep(id, data, start(), deps());
+      expect(gh.dispatches).toHaveLength(1);
+      expect(next.phase).toBe("dev");
+      expect(await op(`task-${id}/dispatch/1`)).toMatchObject({ state: "done" });
+    });
+
+    it.each([408, 429])("a %i stays an ambiguous intent", async (status) => {
+      const id = await newTask();
+      gh.failNext("dispatchWorkflow", status);
+      await expect(runStep(id, initialTaskData(), start(), deps())).rejects.toThrow(/dispatchWorkflow/);
+      expect(await op(`task-${id}/dispatch/0`)).toMatchObject({ state: "intent" });
+    });
+
+    it("a 502 is not retried blindly: it waits like an unknown outcome", async () => {
       const id = await newTask();
       const data = initialTaskData();
       gh.failNext("dispatchWorkflow", 502);
