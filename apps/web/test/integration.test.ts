@@ -4,8 +4,11 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { FakeProvider } from "@kcw/core/models";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as ContactsModule from "../src/server/contacts";
 import { runAs } from "../src/server/db";
 import { freshDb, pglitePool } from "./pglite";
+
+type Contacts = typeof ContactsModule;
 
 const f = vi.hoisted(() => ({
   requireOwner: vi.fn(),
@@ -26,7 +29,7 @@ vi.mock("@/server/orchestrator-queue", async () => await import("../src/server/o
 vi.mock("@/server/outbox", async () => await import("../src/server/outbox"));
 vi.mock("@/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
 vi.mock("../src/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
-vi.mock("../src/server/contacts", async (orig) => ({ ...(await orig<typeof import("../src/server/contacts")>()), linkCrmNote: f.link }));
+vi.mock("../src/server/contacts", async (orig) => ({ ...(await orig<Contacts>()), linkCrmNote: f.link }));
 
 import { captureAction, reassignAction } from "../src/app/(owner)/hub/actions";
 import { scoreCreated, SCORE_BOUND_MS } from "../src/app/(owner)/routing";
@@ -53,7 +56,7 @@ describe("routing links notes and scores diary rows", () => {
   });
   beforeEach(async () => {
     vi.clearAllMocks();
-    f.link.mockImplementation((await vi.importActual<typeof import("../src/server/contacts")>("../src/server/contacts")).linkCrmNote);
+    f.link.mockImplementation((await vi.importActual<Contacts>("../src/server/contacts")).linkCrmNote);
     f.requireOwner.mockResolvedValue(undefined);
     f.withDb.mockImplementation((role: "web_rw" | "web_public", fn: never) => runAs(pglitePool(pg), role, fn));
   });
