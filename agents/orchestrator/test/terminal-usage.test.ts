@@ -1,17 +1,28 @@
 // Reproduce final QA usage arriving after its approval has already caused the task to merge.
 // The real graph/checkpointer seam runs entirely in memory: no DB, network or model calls.
+// AR2 slice 3: a report is one recordReport call (receipt, keyed usage and event in one transaction).
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it, vi } from "vitest";
 import { FakeGitHubClient } from "../src/github";
 import { buildTaskGraph, initialTaskData, processTaskInput, type TaskInput, type TaskStatus, type TaskStore, type TaskUpdate } from "../src/graph";
 import { threadConfig } from "../src/handler";
 
+const ID = { run_id: 900, run_attempt: 1, job: "end", op: 1 } as const;
+const line = { kind: "model" as const, provider: "anthropic", model: "synthetic-review-model", input_tokens: 100, output_tokens: 20 };
+const usage = [{ ...line, call: { job: "review" as const, index: 0 } }];
+/** What the machine hands to recordReport for the report above. */
+const write = (agent: "qa" | "developer", event: string | null, taskId = 1) => ({
+  receiptKey: "report:900:1:end", taskId, agent,
+  usage: [{ ...line, dedupeKey: "report:900:1:review:0" }],
+  event: event === null ? null : { type: event, detail: { source: "report" }, effectKey: "report:900:1:end/event" },
+});
+
 describe("terminal task usage", () => {
   it("records a final QA usage report after the approved task has merged", async () => {
     const taskId = 1;
     const head = "a".repeat(40);
     let status = "queued";
-    const addUsage = vi.fn<TaskStore["addUsage"]>().mockResolvedValue(undefined);
+    const recordReport = vi.fn<TaskStore["recordReport"]>().mockResolvedValue(true);
     const store: TaskStore = {
       recordRun: async () => undefined,
       recordDispatch: async () => undefined,
@@ -20,7 +31,8 @@ describe("terminal task usage", () => {
       claimSlot: async () => true,
       updateTask: async (id: number, fields: TaskUpdate) => { if (id === taskId && fields.status) status = fields.status; },
       addEvent: async () => undefined,
-      addUsage,
+      addUsage: async () => undefined,
+      recordReport,
       createApproval: async () => { throw new Error("unexpected owner approval"); },
       getApproval: async () => null,
       supersedeApproval: async () => undefined,
@@ -52,20 +64,19 @@ describe("terminal task usage", () => {
     expect(github.merges).toHaveLength(1);
     expect((await graph.getState(threadConfig(taskId))).next).toEqual([]);
 
-    const usage = [{ kind: "model" as const, provider: "anthropic", model: "synthetic-review-model", input_tokens: 100, output_tokens: 20 }];
-    await processTaskInput(graph, taskId, { kind: "report", message_id: "qa-final-report", report: { task_id: taskId, agent: "qa", event_type: "qa_reviewing", usage } });
-    expect(addUsage).toHaveBeenCalledExactlyOnceWith(taskId, "qa", usage);
+    await processTaskInput(graph, taskId, { kind: "report", message_id: "qa-final-report", report: { task_id: taskId, ...ID, agent: "qa", event_type: "qa_reviewing", usage } });
+    expect(recordReport).toHaveBeenCalledExactlyOnceWith(write("qa", null));
   });
 });
 
-const usage = [{ kind: "model" as const, provider: "anthropic", model: "synthetic-review-model", input_tokens: 100, output_tokens: 20 }];
 const finalReport = (messageId = "late-report"): Extract<TaskInput, { kind: "report" }> => ({
   kind: "report", message_id: messageId,
-  report: { task_id: 1, agent: "qa", event_type: "qa_reviewing", usage },
+  report: { task_id: 1, ...ID, agent: "qa", event_type: "qa_reviewing", usage },
 });
 
 function fixture(initialStatus: TaskStatus = "queued") {
   let status = initialStatus;
+  const receipts = new Set<string>();
   const store: TaskStore = {
     recordRun: async () => undefined,
     recordDispatch: async () => undefined,
@@ -75,6 +86,11 @@ function fixture(initialStatus: TaskStatus = "queued") {
     updateTask: vi.fn(async (_id: number, fields: TaskUpdate) => { if (fields.status) status = fields.status; }),
     addEvent: vi.fn<TaskStore["addEvent"]>().mockResolvedValue(undefined),
     addUsage: vi.fn<TaskStore["addUsage"]>().mockResolvedValue(undefined),
+    recordReport: vi.fn<TaskStore["recordReport"]>(async (w) => {
+      if (receipts.has(w.receiptKey)) return false;
+      receipts.add(w.receiptKey);
+      return true;
+    }),
     createApproval: async () => { throw new Error("unexpected owner approval"); },
     getApproval: async () => null,
     supersedeApproval: async () => undefined,
@@ -112,7 +128,7 @@ describe("reports on ended checkpoints", () => {
   it.each(["merged", "failed", "cancelled"] as const)("records late usage while preserving %s and END", async (status) => {
     const f = await terminal(status);
     expect(await processTaskInput(f.graph, 1, finalReport())).toBe("stale");
-    expect(f.store.addUsage).toHaveBeenCalledExactlyOnceWith(1, "qa", usage);
+    expect(f.store.recordReport).toHaveBeenCalledExactlyOnceWith(write("qa", null));
     const snapshot = await f.graph.getState(threadConfig(1));
     expect(snapshot.values.task.phase).toBe("done");
     expect(snapshot.next).toEqual([]);
@@ -129,7 +145,7 @@ describe("reports on ended checkpoints", () => {
     const { event_type: _omitted, ...usageOnly } = input.report;
     const staleBefore = (await f.graph.getState(threadConfig(1))).values.task.stale;
     expect(await processTaskInput(f.graph, 1, { ...input, report: usageOnly })).toBe("unchanged");
-    expect(f.store.addUsage).toHaveBeenCalledExactlyOnceWith(1, "qa", usage);
+    expect(f.store.recordReport).toHaveBeenCalledExactlyOnceWith(write("qa", null));
     const snapshot = await f.graph.getState(threadConfig(1));
     expect(snapshot.values.task.phase).toBe("done");
     expect(snapshot.values.task.stale).toBe(staleBefore);
@@ -144,18 +160,18 @@ describe("reports on ended checkpoints", () => {
     const f = await terminal();
     await processTaskInput(f.graph, 1, finalReport());
     expect(await processTaskInput(f.freshGraph(), 1, finalReport())).toBe("duplicate");
-    expect(f.store.addUsage).toHaveBeenCalledTimes(1);
+    expect(f.store.recordReport).toHaveBeenCalledTimes(1);
   });
 
   it("recovers a failed usage write through the pending checkpoint before deduplicating", async () => {
     const f = await terminal();
-    vi.mocked(f.store.addUsage).mockRejectedValueOnce(new Error("synthetic write failure"));
+    vi.mocked(f.store.recordReport).mockRejectedValueOnce(new Error("synthetic write failure"));
     await expect(processTaskInput(f.graph, 1, finalReport())).rejects.toThrow("synthetic write failure");
     expect((await f.graph.getState(threadConfig(1))).next).toEqual(["step"]);
     const restarted = f.freshGraph();
     expect(await processTaskInput(restarted, 1, finalReport())).toBe("recovered");
     expect(await processTaskInput(restarted, 1, finalReport())).toBe("duplicate");
-    expect(f.store.addUsage).toHaveBeenCalledTimes(2); // failed attempt, then successful write
+    expect(f.store.recordReport).toHaveBeenCalledTimes(2); // failed attempt, then successful write
     expect((await restarted.getState(threadConfig(1))).next).toEqual([]);
     expect(f.status()).toBe("merged");
     expect(f.store.updateTask).not.toHaveBeenCalled();
@@ -174,7 +190,7 @@ describe("reports on ended checkpoints", () => {
     for (const input of inputs) expect(await processTaskInput(f.graph, 1, input)).toBe("finished");
     expect(await processTaskInput(f.graph, 1, { kind: "start", message_id: "start-again" })).toBe("duplicate_start");
     expect(await processTaskInput(f.graph, 2, { ...finalReport(), report: { ...finalReport().report, task_id: 2 } })).toBe("no_thread");
-    expect(f.store.addUsage).not.toHaveBeenCalled();
+    expect(f.store.recordReport).not.toHaveBeenCalled();
     expect(f.store.addEvent).not.toHaveBeenCalled();
     expect(f.store.updateTask).not.toHaveBeenCalled();
     expect(f.github.calls).toEqual([]);
@@ -186,10 +202,10 @@ describe("reports on ended checkpoints", () => {
     vi.mocked(f.store.addEvent).mockClear();
     expect(await processTaskInput(f.graph, 1, {
       kind: "report", message_id: "developer-progress",
-      report: { task_id: 1, agent: "developer", event_type: "coding", usage },
+      report: { task_id: 1, ...ID, agent: "developer", event_type: "coding", usage },
     })).toBe("applied");
-    expect(f.store.addUsage).toHaveBeenCalledExactlyOnceWith(1, "developer", usage);
-    expect(f.store.addEvent).toHaveBeenCalledExactlyOnceWith(1, "developer", "coding", { source: "report" });
+    expect(f.store.recordReport).toHaveBeenCalledExactlyOnceWith(write("developer", "coding"));
+    expect(f.store.addEvent).not.toHaveBeenCalled(); // the report event is part of the report transaction
     const snapshot = await f.graph.getState(threadConfig(1));
     expect(snapshot.values.task.phase).toBe("dev");
     expect(snapshot.tasks.some((task) => task.interrupts.length > 0)).toBe(true);
