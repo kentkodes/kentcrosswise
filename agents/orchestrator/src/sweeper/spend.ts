@@ -5,9 +5,13 @@
 // The cost rule is the one in apps/web/src/server/usage.ts (MODEL_USAGE_SQL), mirrored here as a
 // pure function so the sweep can decide without the web app:
 //   1. usage_events.cost_usd when it is set (a cost fixed when the row was written wins);
+//   1a. otherwise a call record (AR3, migration 0019) with outcome 'rejected' costs $0 (not billed),
+//       and one with outcome 'started' or 'unknown' has unknown usage: counted in unknownEvents,
+//       adds $0 (its tokens are NULL, never 0);
 //   2. otherwise tokens x the model_prices row of the same provider+model with the latest
 //      effective_from on or before the event's UTC day (missing tokens count as 0);
-//   3. otherwise the row is unpriced: it is counted in unpricedEvents and adds $0.
+//   3. otherwise the row is unpriced: it is counted in unpricedEvents and adds $0 (the soft
+//      unknown-price policy, kept explicitly in AR3: no enforcement change).
 // test/spend-cap.test.ts pins this against the web SQL on the same rows.
 
 /** Hard monthly cap on model spend, USD (the owner's decision). The web panel pins the same value. */
@@ -21,7 +25,16 @@ export interface SpendEvent {
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
+  /** usage_events.outcome (0019); absent means `reported`. */
+  outcome?: CallOutcomeValue;
 }
+
+/** usage_events.outcome values (migration 0019). */
+export type CallOutcomeValue = "started" | "reported" | "unknown" | "rejected";
+
+/** The usage of a call that may be billed but reported none (or never ended). */
+export const isUsageUnknown = (e: Pick<SpendEvent, "outcome" | "costUsd">) =>
+  e.costUsd === null && (e.outcome === "started" || e.outcome === "unknown");
 
 /** A model_prices row. `effectiveFrom` is a UTC day, YYYY-MM-DD. Prices are per million tokens. */
 export interface SpendPrice {
@@ -43,6 +56,8 @@ export interface MonthSpend {
   spentUsd: number;
   /** Events with neither a stored cost nor a matching price. Counted, never shown as $0. */
   unpricedEvents: number;
+  /** Calls whose usage is unknown (outcome started or unknown, no stored cost). Counted, add $0. */
+  unknownEvents: number;
 }
 
 /** The UTC calendar month containing `now`. */
@@ -60,9 +75,11 @@ const utcDay = (ts: Date) => ts.toISOString().slice(0, 10);
 /** Micro-dollar rounding. Applied to the total before any comparison; apps/web/src/server/usage.ts uses the same. */
 export const roundMicroUsd = (usd: number) => Math.round(usd * 1_000_000) / 1_000_000;
 
-/** The cost of one event in USD, or null when it has no price. */
+/** The cost of one event in USD, or null when it has no price or its usage is unknown. */
 export function eventCostUsd(event: SpendEvent, prices: readonly SpendPrice[]): number | null {
   if (event.costUsd !== null) return event.costUsd;
+  if (event.outcome === "rejected") return 0;
+  if (isUsageUnknown(event)) return null;
   const day = utcDay(event.ts);
   let best: SpendPrice | undefined;
   for (const p of prices) {
@@ -79,12 +96,14 @@ export function monthToDateSpend(events: readonly SpendEvent[], prices: readonly
   let count = 0;
   let spent = 0;
   let unpriced = 0;
+  let unknown = 0;
   for (const e of events) {
     if (e.ts < start || e.ts >= end) continue;
     count += 1;
     const cost = eventCostUsd(e, prices);
-    if (cost === null) unpriced += 1;
-    else spent += cost;
+    if (cost !== null) spent += cost;
+    else if (isUsageUnknown(e)) unknown += 1;
+    else unpriced += 1;
   }
   return {
     month,
@@ -93,6 +112,7 @@ export function monthToDateSpend(events: readonly SpendEvent[], prices: readonly
     events: count,
     spentUsd: roundMicroUsd(spent),
     unpricedEvents: unpriced,
+    unknownEvents: unknown,
   };
 }
 
