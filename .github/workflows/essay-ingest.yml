@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
       hooks:
-        description: "Also write the one-line hooks of the stored essays (paid model calls)"
+        description: "Also write the one-line hooks of the stored essays (paid model calls); skipped together with categorize when reextract is set"
         type: boolean
         default: false
       reextract:
@@ -45,6 +45,15 @@ jobs:
       BOOK_IDS: ${{ inputs.book_ids }}
       ACCEPTANCE: ${{ inputs.acceptance }}
     steps:
+      - name: Require the role for acceptance
+        env:
+          ROLE_ARN: ${{ vars.AWS_ROLE_ESSAY_INGEST_ARN }}
+        run: |
+          set -eu
+          if [ "$ACCEPTANCE" = "true" ] && [ -z "$ROLE_ARN" ]; then
+            echo "acceptance needs the essay-ingest role variable"
+            exit 1
+          fi
       - name: Validate book ids
         run: |
           set -eu

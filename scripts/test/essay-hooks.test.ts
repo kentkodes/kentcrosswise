@@ -53,6 +53,39 @@ describe("validateHook", () => {
     expect(ok("What does it mean that studies serve for delight?")).not.toBeNull();
   });
 
+  it.each([
+    ["a straight pair", "\"Reading is good for you.\""],
+    ["curly double quotes", "“Reading is good for you.”"],
+    ["low-9 quotes", "„Reading is good for you.“"],
+    ["single curly quotes", "‘Reading is good for you.’"],
+    ["low-9 single quote", "‚Reading is good for you.‘"],
+    ["guillemets", "«Reading is good for you.»"],
+    ["reversed guillemets", "»Reading is good for you.«"],
+  ])("rejects a hook wrapped in %s", (_n, text) => {
+    expect(ok(text)).toBeNull();
+  });
+
+  it("the copied-run limit is 5 words: five consecutive essay words pass, six are rejected", () => {
+    expect(ok("Do studies serve for delight for real?")).not.toBeNull(); // 5-word run "studies serve for delight for"
+    expect(ok("Why studies serve for delight for ornament?")).toBeNull(); // 6-word run
+  });
+
+  it("rejects the author as a whole word, also as a possessive, and short name parts in their exact case", () => {
+    expect(ok("Bacon's case for reading is quiet.")).toBeNull();
+    expect(ok("Bacon’s case for reading is quiet.")).toBeNull();
+    expect(ok("The case of BACON for reading is quiet.")).toBeNull();
+    const lu = { title: "Plain Notes", author: "Lu Xun", text: "unrelated words" };
+    expect(validateHook({ text: "Lu notes how people read.", stop: "end" }, lu)).toBeNull();
+    expect(validateHook({ text: "How Xun saw people read.", stop: "end" }, lu)).toBeNull();
+    expect(validateHook({ text: "How people read, lu aside.", stop: "end" }, lu)).not.toBeNull();
+    // a short common word equal to a lower-cased name part passes
+    const an = { title: "Plain Notes", author: "An Wang", text: "unrelated words" };
+    expect(validateHook({ text: "Why an essay on reading still matters.", stop: "end" }, an)).not.toBeNull();
+    expect(validateHook({ text: "An essay on reading still matters.", stop: "end" }, an)).toBeNull();
+    // a longer word that merely contains a name part is fine
+    expect(ok("A baconian habit of mind, in short.")).not.toBeNull();
+  });
+
   it("rejects the author name and a multi-word title, case-insensitively", () => {
     expect(ok("What Bacon thought about the value of reading.")).toBeNull();
     expect(ok("Why francis would read at all.")).toBeNull();
@@ -116,6 +149,8 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
     }
     const res = await storePhase(stored, { db: fresh.db, putObject: async () => undefined, dir, log: () => undefined });
     expect(res.every((r) => r.code === "stored")).toBe(true);
+    // The store phase leaves essays pending_category; the hooks phase works on active ones.
+    await q("UPDATE essays SET status = 'active' WHERE kind = 'full'");
     rmSync(join(dir, String(IDS.noFile)), { recursive: true, force: true });
     await q("INSERT INTO essays (kind, title, author, source_url, status) VALUES ('link', 'Link Piece', 'Some Writer', $1, 'active')", [urlOf(IDS.link)]);
   });
@@ -194,6 +229,24 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
     expect(res.map((r) => r.code)).toEqual(["link_only", "not_stored", "no_files"]);
     expect(primary.calls).toHaveLength(0);
     expect(await hookOf(IDS.link)).toBeNull();
+  });
+
+  it("a row quarantined during the model call gets no hook (changed_concurrently)", async () => {
+    const primary = deepseek(async () => {
+      await q("UPDATE essays SET status = 'quarantined' WHERE source_url = $1", [urlOf(IDS.stop)]);
+      return { text: GOOD };
+    });
+    expect(await run([IDS.stop], async () => primary)).toEqual([{ id: IDS.stop, code: "changed_concurrently", model: DEFAULT_DEEPSEEK_MODEL }]);
+    expect(await hookOf(IDS.stop)).toBeNull();
+    expect(await run([IDS.stop], async () => deepseek({ text: GOOD }))).toEqual([{ id: IDS.stop, code: "quarantined" }]);
+  });
+
+  it("a pending_category essay is not_active: no provider call", async () => {
+    await q("UPDATE essays SET status = 'pending_category' WHERE source_url = $1", [urlOf(IDS.noFile)]);
+    const primary = deepseek({ text: GOOD });
+    expect(await run([IDS.noFile], async () => primary)).toEqual([{ id: IDS.noFile, code: "not_active" }]);
+    expect(primary.calls).toHaveLength(0);
+    await q("UPDATE essays SET status = 'active' WHERE source_url = $1", [urlOf(IDS.noFile)]);
   });
 
   it("does nothing while paused", async () => {

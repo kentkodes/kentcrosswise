@@ -122,6 +122,13 @@ describe("essay-ingest workflow", () => {
     }
     expect(step("Ensure rsync")).toContain("!inputs.acceptance");
     expect(step("Validate book ids")).toContain('if [ "$ACCEPTANCE" = "true" ]');
+    // acceptance without the role variable fails instead of finishing green with no report
+    const gate = step("Require the role for acceptance");
+    expect(gate).toContain("ROLE_ARN: ${{ vars.AWS_ROLE_ESSAY_INGEST_ARN }}");
+    expect(gate).toContain('[ "$ACCEPTANCE" = "true" ] && [ -z "$ROLE_ARN" ]');
+    expect(gate).toContain("exit 1");
+    expect(yml.indexOf("Require the role for acceptance")).toBeLessThan(yml.indexOf("Validate book ids"));
+    expect(yml).toMatch(/ {6}hooks:\n {8}description: "[^"\n]*skipped together with categorize when reextract is set"\n/);
     expect(yml.split("inputs.acceptance").length - 1).toBe(8);
   });
 

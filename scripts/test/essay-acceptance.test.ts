@@ -73,7 +73,7 @@ describe("acceptance phase on PGlite as a pipeline_rw member", () => {
     await seed("Draft Piece", "draft");
     await seed("Rejected Piece", "rejected");
     const full = await essay({ seedId: s1, title: "Violet Harbour", hook: "A hook." });
-    await essay({ seedId: s2, kind: "link", title: "Copper Lantern", sig: null });
+    await essay({ seedId: s2, kind: "link", title: "Copper Lantern", sig: null, url: null });
     await essay({ status: "pending_category", title: "Amber Meadow", sig: SIG_B });
     await essay({ status: "quarantined", title: "Silver Orchard", sig: SIG_A, hook: null });
     await q("INSERT INTO essay_categories (essay_id, type, confidence, model) VALUES ($1, 'travel', 1, 'seed-list')", [full]);
@@ -83,7 +83,7 @@ describe("acceptance phase on PGlite as a pipeline_rw member", () => {
     expect(r.check2).toEqual([]);
     expect(r.totals).toEqual({
       approved_seeds: 2, full: 2, link_only: 1, quarantined: 1, pending_category: 1, with_hook: 1, without_hook: 1,
-      categorized_by_model: 0, categorized_seed_list: 1, uncategorized: 3,
+      categorized_by_model: 0, categorized_seed_list: 1, uncategorized: 3, link_without_source_url: 1,
     });
     expect(logs).toContain("essay-acceptance: result=pass");
   });
@@ -126,11 +126,39 @@ describe("acceptance phase on PGlite as a pipeline_rw member", () => {
     }
   });
 
-  it("link_incomplete: a link-only essay without a source URL", async () => {
+  it("a link-only essay without a source URL passes (counted as a total); without a title or author it fails", async () => {
     const s = await seed("Violet Harbour");
-    const id = await essay({ seedId: s, kind: "link", url: null });
+    await essay({ seedId: s, kind: "link", url: null });
+    const ok = await run();
+    expect(ok.ok).toBe(true);
+    expect(ok.totals.link_without_source_url).toBe(1);
+    await q("DELETE FROM essays");
+    const id = await essay({ seedId: s, kind: "link", url: "https://example.com/x", title: " " });
+    const noTitle = await run();
+    expect(noTitle.check1).toEqual([{ code: "link_incomplete", ids: [id] }]);
+    await q("DELETE FROM essays");
+    const id2 = await essay({ seedId: s, kind: "link", author: "" });
+    expect((await run()).check1).toEqual([{ code: "link_incomplete", ids: [id2] }]);
+  });
+
+  it("no_approved_seeds: an empty library, or only draft seeds, fails", async () => {
+    const empty = await run();
+    expect(empty.ok).toBe(false);
+    expect(empty.check1).toEqual([{ code: "no_approved_seeds", ids: [] }]);
+    expect(logs).toContain("essay-acceptance: result=fail");
+    await seed("Draft Piece", "draft");
+    expect((await run()).check1).toEqual([{ code: "no_approved_seeds", ids: [] }]);
+  });
+
+  it("a seed with one active and one quarantined essay passes; with only a quarantined essay it has none", async () => {
+    const s = await seed("Violet Harbour");
+    await essay({ seedId: s, title: "Violet Harbour" });
+    await essay({ seedId: s, title: "Violet Harbour copy", status: "quarantined", sig: SIG_B });
     const r = await run();
-    expect(r.check1).toEqual([{ code: "link_incomplete", ids: [id] }]);
+    expect(r.check1).toEqual([]);
+    expect(r.ok).toBe(true);
+    await q("DELETE FROM essays WHERE status = 'active'");
+    expect((await run()).check1).toEqual([{ code: "seed_without_essay", ids: [s] }]);
   });
 
   it("repeated_text_hash: two active essays with one hash", async () => {
@@ -166,7 +194,6 @@ describe("acceptance phase on PGlite as a pipeline_rw member", () => {
     const id = await essay({ sig: null, title: "Violet Harbour" });
     const r = await run();
     expect(r.check2).toEqual([{ code: "minhash_missing", ids: [id] }]);
-    expect(codes(r)).toEqual(["minhash_missing"]);
   });
 
   it("prints only counts, codes and ids (no titles or authors)", async () => {
@@ -183,7 +210,7 @@ describe("CLI", () => {
   const tmp = mkdtempSync(join(tmpdir(), "kcw-acceptance-cli-"));
   afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
-  it("--phase acceptance needs no ids and exits 0 on an empty library, 1 with an uncovered approved seed", async () => {
+  it("--phase acceptance needs no ids and exits 1 on an empty library (no_approved_seeds), 0 with a covered seed, 1 with an uncovered one", async () => {
     const pglite = join(tmp, "db");
     const cli = () => spawnSync(process.execPath, ["--import", "tsx", "essay-ingest.ts", "--phase", "acceptance", "--pglite", pglite], {
       cwd: scriptsDir, encoding: "utf8", timeout: 120_000,
@@ -196,11 +223,18 @@ describe("CLI", () => {
     await lite.close();
     const empty = cli();
     expect(empty.stderr).toBe("");
-    expect(empty.status).toBe(0);
-    expect(empty.stdout).toContain("essay-acceptance: result=pass");
+    expect(empty.status).toBe(1);
+    expect(empty.stdout).toContain("code=no_approved_seeds");
     const again = new PGlite(pglite);
-    await again.exec("INSERT INTO seed_items (title, author, status) VALUES ('Violet Harbour', 'A B', 'approved')");
+    await again.exec(`INSERT INTO seed_items (id, title, author, status) VALUES ('00000000-0000-4000-8000-000000000001', 'Violet Harbour', 'A B', 'approved');
+      INSERT INTO essays (kind, title, author, seed_item_id) VALUES ('link', 'Violet Harbour', 'A B', '00000000-0000-4000-8000-000000000001')`);
     await again.close();
+    const covered = cli();
+    expect(covered.status).toBe(0);
+    expect(covered.stdout).toContain("essay-acceptance: result=pass");
+    const more = new PGlite(pglite);
+    await more.exec("INSERT INTO seed_items (title, author, status) VALUES ('Copper Lantern', 'C D', 'approved')");
+    await more.close();
     const failing = cli();
     expect(failing.status).toBe(1);
     expect(failing.stdout).toContain("code=seed_without_essay");

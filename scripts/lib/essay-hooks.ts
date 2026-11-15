@@ -26,7 +26,7 @@ export const HOOK_SYSTEM = [
 ].join(" ");
 
 export type HookCode =
-  | "hooked" | "already_processed" | "link_only" | "not_stored" | "quarantined" | "text_mismatch"
+  | "hooked" | "already_processed" | "link_only" | "not_stored" | "quarantined" | "not_active" | "changed_concurrently" | "text_mismatch"
   | "provider_error" | "invalid_hook" | "models_unavailable" | "no_files" | "no_usable_text";
 
 export const HOOK_OK: ReadonlySet<string> = new Set(["hooked", "already_processed", "link_only"]);
@@ -38,20 +38,23 @@ export interface HookContext {
   text: string;
 }
 
+const QUOTE_EDGE = /^["'“”‘’„‚«»]|["'“”‘’„‚«»]$/u;
+const letterWords = (s: string): string[] => s.split(/[^\p{L}]+/u).filter(Boolean);
+
 const words = (s: string): string[] => normalizeForHash(s).split(" ").filter(Boolean);
 
 /**
  * The hook to store, or null when the reply is not acceptable: the reply must have ended normally, be one
  * non-empty plain line of at most HOOK_MAX_CHARS characters, repeat no more than HOOK_MAX_QUOTED_WORDS
- * consecutive words of the essay, and name neither the author (any name part of 4+ letters) nor the title
- * (when it has two or more words).
+ * consecutive words of the essay, and name neither the author (any name part of 2+ letters as a whole word)
+ * nor the title (when it has two or more words).
  */
 export function validateHook(reply: { text: string; stop: string }, ctx: HookContext): string | null {
   if (reply.stop !== "end") return null;
   const hook = reply.text.trim();
   if (hook.length === 0 || hook.length > HOOK_MAX_CHARS) return null;
   if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(hook)) return null; // also rejects any line break
-  if (/[*_`#<>[\]|\\]/.test(hook) || /^\s*[-+>]\s/.test(hook) || /^["'“‘]|["'”’]$/.test(hook)) return null;
+  if (/[*_`#<>[\]|\\]/.test(hook) || /^\s*[-+>]\s/.test(hook) || QUOTE_EDGE.test(hook)) return null;
 
   const hw = words(hook);
   if (hw.length === 0) return null;
@@ -63,7 +66,16 @@ export function validateHook(reply: { text: string; stop: string }, ctx: HookCon
     for (let i = 0; i + n <= hw.length; i++) if (seen.has(hw.slice(i, i + n).join(" "))) return null;
   }
   const padded = ` ${hw.join(" ")} `;
-  if (words(ctx.author).some((w) => w.length >= 4 && padded.includes(` ${w} `))) return null;
+  // Author: whole words split on any non-letter (so a possessive counts). Parts of 4+ letters match in any case;
+  // parts of 2-3 letters only in the exact case, so a name part such as "An" does not reject the common word "an".
+  const hookLetters = letterWords(hook);
+  for (const part of letterWords(ctx.author)) {
+    if (part.length < 2) continue;
+    const hit = part.length >= 4
+      ? hookLetters.some((w) => w.toLowerCase() === part.toLowerCase())
+      : hookLetters.includes(part);
+    if (hit) return null;
+  }
   const tw = words(ctx.title);
   if (tw.length >= 2 && padded.includes(` ${tw.join(" ")} `)) return null;
   return hook;
@@ -104,6 +116,7 @@ async function hookBook(id: number, deps: HooksDeps, models: () => Promise<Model
   if (!row) return { id, code: "not_stored" };
   if (row.kind !== "full") return { id, code: "link_only" };
   if (row.status === "quarantined") return { id, code: "quarantined" };
+  if (row.status !== "active") return { id, code: "not_active" };
   if (row.hook !== null) return { id, code: "already_processed" };
 
   const a = await analyzeBook(deps.dir, id);
@@ -128,8 +141,12 @@ async function hookBook(id: number, deps: HooksDeps, models: () => Promise<Model
   const hook = validateHook(reply, { title: row.title, author: row.author, text });
   if (hook === null) return { id, code: "invalid_hook", model };
 
-  const updated = await db.query("UPDATE essays SET hook = $1 WHERE id = $2 AND hook IS NULL RETURNING id", [hook, row.id]);
-  return { id, code: updated.rows.length > 0 ? "hooked" : "already_processed", model };
+  // Active full text only: a row quarantined or changed during the model call gets no hook.
+  const updated = await db.query(
+    "UPDATE essays SET hook = $1 WHERE id = $2 AND hook IS NULL AND status = 'active' AND kind = 'full' RETURNING id",
+    [hook, row.id],
+  );
+  return { id, code: updated.rows.length > 0 ? "hooked" : "changed_concurrently", model };
 }
 
 /** Per id, sequentially. Stops with `pipelines_paused` (nothing done) when the pause flag is set. */
