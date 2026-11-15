@@ -10,7 +10,7 @@ import { registerGutenbergSource } from "../../packages/essays/src/registry/boot
 import { syntheticBook } from "../../packages/essays/test/synthetic-book";
 import { storePhase } from "../lib/essay-ingest";
 import {
-  HOOK_EXCERPT_WORDS, HOOK_MAX_CHARS, HOOK_SYSTEM, hooksPhase, validateHook, type HooksDeps,
+  HOOK_CORRECTIONS, HOOK_EXCERPT_WORDS, HOOK_MAX_CHARS, HOOK_PROMPT_CHARS, HOOK_SYSTEM, hooksPhase, validateHook, type HooksDeps,
 } from "../lib/essay-hooks";
 
 const FIXTURES = fileURLToPath(new URL("../../packages/essays/test/fixtures/gutenberg-text/", import.meta.url));
@@ -21,7 +21,42 @@ const GOOD = "A quiet case for reading with a purpose instead of for show.";
 
 describe("validateHook", () => {
   const ctx = { title: "Of Studies", author: "Francis Bacon", text: ESSAY };
-  const ok = (text: string, stop = "end") => validateHook({ text, stop }, ctx);
+  const run1 = (text: string, stop = "end", c = ctx) => validateHook({ text, stop }, c);
+  /** The accepted hook, or null. */
+  const ok = (text: string, stop = "end", c = ctx) => {
+    const v = run1(text, stop, c);
+    return "hook" in v ? v.hook : null;
+  };
+  const why = (text: string, stop = "end", c = ctx) => {
+    const v = run1(text, stop, c);
+    return "reason" in v ? v.reason : null;
+  };
+
+  it.each([
+    ["stop", "A fine hook for reading.", "max_tokens", "stop"],
+    ["stop", "A fine hook for reading.", "refusal", "stop"],
+    ["empty", " \n ", "end", "empty"],
+    ["too_long", "x".repeat(HOOK_MAX_CHARS + 1), "end", "too_long"],
+    ["control_char", "First line.\nSecond line.", "end", "control_char"],
+    ["control_char", "One\tline.", "end", "control_char"],
+    ["markdown", "A **bold** claim about reading.", "end", "markdown"],
+    ["markdown", "- reading is good for you.", "end", "markdown"],
+    ["quote_edge", "“Reading is good for you.”", "end", "quote_edge"],
+    ["copied_run", "Why studies serve for delight for ornament?", "end", "copied_run"],
+    ["author_name", "What Bacon thought about reading.", "end", "author_name"],
+    ["title", "A reflection on of studies and their use.", "end", "title"],
+  ])("reason code %s for %j", (_n, text, stop, reason) => {
+    expect(why(text, stop)).toBe(reason);
+  });
+
+  it("every correction sentence is fixed, one per retryable reason", () => {
+    expect(Object.keys(HOOK_CORRECTIONS).sort()).toEqual(
+      ["author_name", "control_char", "copied_run", "empty", "markdown", "quote_edge", "title", "too_long"]);
+    expect(HOOK_CORRECTIONS.too_long).toContain("at most 120 characters");
+    expect(HOOK_CORRECTIONS.author_name).toBe("Do not name the author.");
+    expect(HOOK_CORRECTIONS.title).toBe("Do not repeat the title.");
+    expect(HOOK_CORRECTIONS.copied_run).toBe("Use your own words; do not quote the essay.");
+  });
 
   it("accepts one plain sentence and trims it", () => {
     expect(ok(`  ${GOOD}\n`)).toBe(GOOD);
@@ -75,13 +110,13 @@ describe("validateHook", () => {
     expect(ok("Bacon’s case for reading is quiet.")).toBeNull();
     expect(ok("The case of BACON for reading is quiet.")).toBeNull();
     const lu = { title: "Plain Notes", author: "Lu Xun", text: "unrelated words" };
-    expect(validateHook({ text: "Lu notes how people read.", stop: "end" }, lu)).toBeNull();
-    expect(validateHook({ text: "How Xun saw people read.", stop: "end" }, lu)).toBeNull();
-    expect(validateHook({ text: "How people read, lu aside.", stop: "end" }, lu)).not.toBeNull();
+    expect(ok("Lu notes how people read.", "end", lu)).toBeNull();
+    expect(ok("How Xun saw people read.", "end", lu)).toBeNull();
+    expect(ok("How people read, lu aside.", "end", lu)).not.toBeNull();
     // a short common word equal to a lower-cased name part passes
     const an = { title: "Plain Notes", author: "An Wang", text: "unrelated words" };
-    expect(validateHook({ text: "Why an essay on reading still matters.", stop: "end" }, an)).not.toBeNull();
-    expect(validateHook({ text: "An essay on reading still matters.", stop: "end" }, an)).toBeNull();
+    expect(ok("Why an essay on reading still matters.", "end", an)).not.toBeNull();
+    expect(ok("An essay on reading still matters.", "end", an)).toBeNull();
     // a longer word that merely contains a name part is fine
     expect(ok("A baconian habit of mind, in short.")).not.toBeNull();
   });
@@ -90,7 +125,7 @@ describe("validateHook", () => {
     expect(ok("What Bacon thought about the value of reading.")).toBeNull();
     expect(ok("Why francis would read at all.")).toBeNull();
     expect(ok("A reflection on of studies and their use.")).toBeNull();
-    expect(validateHook({ text: "A short word about walking.", stop: "end" }, { ...ctx, title: "Walking" })).not.toBeNull();
+    expect(ok("A short word about walking.", "end", { ...ctx, title: "Walking" })).not.toBeNull();
   });
 });
 
@@ -105,6 +140,7 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
   let fresh: Awaited<ReturnType<typeof freshDb>>;
   let dir: string;
   const logs: string[] = [];
+  const everything: string[] = [];
 
   const q = async <T>(sql: string, params: unknown[] = []) => (await fresh.db.query<T>(sql, params)).rows;
   const urlOf = (id: number) => `https://www.gutenberg.org/ebooks/${id}`;
@@ -117,7 +153,7 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
   const run = async (ids: number[], getModels: HooksDeps["getModels"]) => {
     await fresh.db.exec(`SET ROLE ${LOGIN}`);
     try {
-      return await hooksPhase(ids, { db: fresh.db, dir, getModels, log: (l) => logs.push(l) });
+      return await hooksPhase(ids, { db: fresh.db, dir, getModels, log: (l) => { logs.push(l); everything.push(l); } });
     } finally {
       await fresh.db.exec("RESET ROLE");
     }
@@ -162,12 +198,12 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
   it("stores one validated hook and reports the returned model id", async () => {
     const primary = deepseek({ text: `${GOOD}\n` });
     const res = await run([IDS.ok], async () => primary);
-    expect(res).toEqual([{ id: IDS.ok, code: "hooked", model: DEFAULT_DEEPSEEK_MODEL }]);
+    expect(res).toEqual([{ id: IDS.ok, code: "hooked", model: DEFAULT_DEEPSEEK_MODEL, calls: 1 }]);
     expect(await hookOf(IDS.ok)).toBe(GOOD);
     expect(primary.calls).toHaveLength(1);
     expect(primary.calls[0]?.op).toBe("complete");
-    expect(logs).toContain(`essay-ingest: id=${IDS.ok} code=hooked model=${DEFAULT_DEEPSEEK_MODEL}`);
-    expect(HOOK_SYSTEM).toContain(String(HOOK_MAX_CHARS));
+    expect(logs).toContain(`essay-ingest: id=${IDS.ok} code=hooked model=${DEFAULT_DEEPSEEK_MODEL} calls=1`);
+    expect(HOOK_SYSTEM).toContain(String(HOOK_PROMPT_CHARS));
   });
 
   it("is idempotent: an essay with a hook is already_processed and calls no provider", async () => {
@@ -177,25 +213,87 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
     expect(await hookOf(IDS.ok)).toBe(GOOD);
   });
 
-  it("an invalid reply is invalid_hook and stores nothing (empty, long, multi-line, author, cut off)", async () => {
-    const replies = [
-      { text: "" },
-      { text: "x".repeat(HOOK_MAX_CHARS + 1) },
-      { text: "Line one.\nLine two." },
-      { text: "What Bacon wanted readers to notice." },
-      { text: GOOD, stop: "max_tokens" as const },
-      { text: GOOD, stop: "refusal" as const },
+  it("an invalid reply is retried once; a second invalid reply is invalid_hook with the second reason and stores nothing", async () => {
+    const cases = [
+      { text: "", reason: "empty" },
+      { text: "x".repeat(HOOK_MAX_CHARS + 1), reason: "too_long" },
+      { text: "Line one.\nLine two.", reason: "control_char" },
+      { text: "A **bold** claim.", reason: "markdown" },
+      { text: "“Quoted hook.”", reason: "quote_edge" },
+      { text: "What Bacon wanted readers to notice.", reason: "author_name" },
     ];
-    for (const reply of replies) {
-      const res = await run([IDS.invalid], async () => deepseek(reply));
-      expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", model: DEFAULT_DEEPSEEK_MODEL }]);
+    for (const c of cases) {
+      logs.length = 0;
+      const primary = deepseek({ text: c.text });
+      const res = await run([IDS.invalid], async () => primary);
+      expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: c.reason, model: DEFAULT_DEEPSEEK_MODEL, calls: 2 }]);
+      expect(primary.calls).toHaveLength(2);
+      expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=invalid_hook reason=${c.reason} model=${DEFAULT_DEEPSEEK_MODEL} calls=2`]);
       expect(await hookOf(IDS.invalid)).toBeNull();
+    }
+  });
+
+  it("the retry adds one fixed sentence for the first reason, keeps the excerpt, and stores a valid second reply", async () => {
+    const systems: string[] = [];
+    const replies = ["What Bacon wanted readers to notice.", GOOD];
+    const primary = deepseek((req) => {
+      systems.push(req.system ?? "");
+      return { text: replies[systems.length - 1] ?? "" };
+    });
+    logs.length = 0;
+    const res = await run([IDS.invalid], async () => primary);
+    expect(res).toEqual([{ id: IDS.invalid, code: "hooked", model: DEFAULT_DEEPSEEK_MODEL, calls: 2 }]);
+    expect(await hookOf(IDS.invalid)).toBe(GOOD);
+    expect(primary.calls).toHaveLength(2);
+    expect(primary.calls[1]?.input).toBe(primary.calls[0]?.input);
+    expect(systems[0]).toBe(HOOK_SYSTEM);
+    expect(systems[1]).toBe(`${HOOK_SYSTEM} ${HOOK_CORRECTIONS.author_name}`);
+    expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=hooked model=${DEFAULT_DEEPSEEK_MODEL} calls=2`]);
+    await q("UPDATE essays SET hook = NULL WHERE source_url = $1", [urlOf(IDS.invalid)]);
+  });
+
+  it("the second invalid reply's reason is the one reported", async () => {
+    const replies = [{ text: "x".repeat(HOOK_MAX_CHARS + 1) }, { text: "What Bacon wanted readers to notice." }];
+    let n = 0;
+    const res = await run([IDS.invalid], async () => deepseek(() => replies[n++] ?? { text: "" }));
+    expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: "author_name", model: DEFAULT_DEEPSEEK_MODEL, calls: 2 }]);
+    expect(await hookOf(IDS.invalid)).toBeNull();
+  });
+
+  it("a reply that did not end (stop) is not retried", async () => {
+    for (const stop of ["max_tokens", "refusal"] as const) {
+      const primary = deepseek({ text: GOOD, stop });
+      logs.length = 0;
+      const res = await run([IDS.invalid], async () => primary);
+      expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: "stop", model: DEFAULT_DEEPSEEK_MODEL, calls: 1 }]);
+      expect(primary.calls).toHaveLength(1);
+      expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=invalid_hook reason=stop model=${DEFAULT_DEEPSEEK_MODEL} calls=1`]);
+    }
+    expect(await hookOf(IDS.invalid)).toBeNull();
+  });
+
+  it("a provider error on the retry is provider_error with calls=2 and stores nothing", async () => {
+    let n = 0;
+    const primary = deepseek(() => (n++ === 0 ? { text: "" } : new Error("RESPONSEBODY KEYMATERIAL")));
+    logs.length = 0;
+    const res = await run([IDS.invalid], async () => primary);
+    expect(res).toEqual([{ id: IDS.invalid, code: "provider_error", calls: 2, model: DEFAULT_DEEPSEEK_MODEL }]);
+    expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=provider_error model=${DEFAULT_DEEPSEEK_MODEL} calls=2`]);
+    expect(await hookOf(IDS.invalid)).toBeNull();
+  });
+
+  it("the system prompt asks for less than the validator accepts and states the rules", () => {
+    expect(HOOK_PROMPT_CHARS).toBeLessThan(HOOK_MAX_CHARS);
+    expect(HOOK_SYSTEM).toContain(`at most ${HOOK_PROMPT_CHARS} characters`);
+    expect(HOOK_SYSTEM).not.toContain(String(HOOK_MAX_CHARS));
+    for (const rule of ["one", "plain-text sentence", "own words", "do not name the author", "do not repeat the title", "no markdown"]) {
+      expect(HOOK_SYSTEM.toLowerCase()).toContain(rule);
     }
   });
 
   it("a provider error is provider_error, leaks nothing and stores nothing", async () => {
     const res = await run([IDS.perr], async () => deepseek(new Error("RESPONSEBODY Studies serve for delight KEYMATERIAL")));
-    expect(res).toEqual([{ id: IDS.perr, code: "provider_error" }]);
+    expect(res).toEqual([{ id: IDS.perr, code: "provider_error", calls: 1 }]);
     expect(await hookOf(IDS.perr)).toBeNull();
   });
 
@@ -236,7 +334,7 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
       await q("UPDATE essays SET status = 'quarantined' WHERE source_url = $1", [urlOf(IDS.stop)]);
       return { text: GOOD };
     });
-    expect(await run([IDS.stop], async () => primary)).toEqual([{ id: IDS.stop, code: "changed_concurrently", model: DEFAULT_DEEPSEEK_MODEL }]);
+    expect(await run([IDS.stop], async () => primary)).toEqual([{ id: IDS.stop, code: "changed_concurrently", model: DEFAULT_DEEPSEEK_MODEL, calls: 1 }]);
     expect(await hookOf(IDS.stop)).toBeNull();
     expect(await run([IDS.stop], async () => deepseek({ text: GOOD }))).toEqual([{ id: IDS.stop, code: "quarantined" }]);
   });
@@ -260,7 +358,7 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
   });
 
   it("never prints essay text, the prompt, the hook, responses or keys", () => {
-    const all = logs.join("\n");
+    const all = everything.join("\n");
     expect(all).toMatch(/id=401 code=hooked/);
     for (const l of LEAKS) expect(all).not.toContain(l);
   });
