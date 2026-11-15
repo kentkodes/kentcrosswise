@@ -1,0 +1,128 @@
+/*
+ * X-ray overlay. Off: the wrapper has no box at all, so layout, tab order and the accessibility tree are those of
+ * the children alone. On: a dashed outline and a label row in normal flow at the top of the block, so a chip
+ * never covers content. The card is fixed and placed by script. Tokens only; accent stays for the focus ring.
+ */
+
+.off {
+  display: contents;
+}
+
+.on {
+  display: block;
+  outline: 1px dashed var(--fg-muted);
+  outline-offset: 3px;
+  border-radius: var(--radius-control, 8px);
+}
+
+/* The strip under the header holds the chips of site-wide entries; it scrolls with the page. */
+.strip {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 8px 24px 0;
+}
+
+@media (max-width: 639px) {
+  .strip {
+    padding: 8px 16px 0;
+  }
+}
+
+.chip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  width: max-content;
+  max-width: 100%;
+  min-height: 28px;
+  margin: 0 0 6px;
+  padding: 4px 10px;
+  box-sizing: border-box;
+  align-items: center;
+  border: 1px solid var(--fg-muted);
+  border-radius: var(--radius-control, 8px);
+  background: var(--bg-soft);
+  color: var(--fg);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: help;
+}
+
+.strip .chip {
+  margin: 0;
+}
+
+@media (pointer: coarse) {
+  .chip {
+    min-height: 44px;
+  }
+}
+
+.chipLabel {
+  font-weight: 600;
+}
+
+.chipTech {
+  color: var(--fg-muted);
+}
+
+/* Normal focus ring (accent), the only place accent is used here. */
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card {
+  position: fixed;
+  z-index: 50;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 16px));
+  padding: 12px 14px;
+  border: 1px solid var(--fg-muted);
+  border-radius: var(--radius-card, 10px);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.cardTitle {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.cardTech {
+  display: block;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
+.cardText {
+  margin: 0 0 6px;
+}
+
+.cardText:last-child {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: xray-in var(--dur-hover, 150ms) var(--ease-out, ease-out);
+  }
+
+  @keyframes xray-in {
+    from {
+      opacity: 0;
+    }
+  }
+}

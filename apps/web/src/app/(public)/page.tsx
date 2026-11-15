@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ProductStill } from "./_home/product-still";
 import s from "./_home/home.module.css";
 import { PaperFrame } from "./_site/paper-frame";
+import { Xray } from "./_site/xray";
 
 // Hero copy, in one place. Default text from the home redesign spec; the owner may change it.
 export const HERO = {
@@ -42,7 +43,9 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
-      <ProductStill />
+      <Xray id="product-still">
+        <ProductStill />
+      </Xray>
       <section className={s.features}>
         {FEATURES.map((f) => (
           <div key={f.title}>
