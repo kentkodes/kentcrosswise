@@ -73,8 +73,7 @@ describe("job events in the origin wrapper", () => {
 });
 
 describe("job registry", () => {
-  it("has the two stub jobs, off", async () => {
+  it("has exactly the two jobs (each job has its own tests)", () => {
     expect(Object.keys(jobs).sort()).toEqual(["inbox-push", "social-daily"]);
-    for (const job of Object.values(jobs)) expect(await job({ scheduledTime: undefined })).toEqual({ code: "off" });
   });
 });
