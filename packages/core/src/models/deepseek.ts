@@ -1,8 +1,12 @@
 import { ProviderError, isRetryableStatus } from "./errors";
+import { checkCallTag } from "./ledger";
 import { withRetries, type RetryOptions } from "./retry";
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_DEEPSEEK_MODEL,
+  type CallCallback,
+  type CallEnd,
+  type CallTag,
   type ClassifyOptions,
   type ClassifyResult,
   type CompleteRequest,
@@ -24,7 +28,10 @@ export interface DeepseekProviderOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   retry?: RetryOptions;
+  /** Legacy: successful responses only, missing counts as 0. Prefer `onCall`. */
   onUsage?: UsageCallback;
+  /** Every request (each retry attempt): a start before it is sent, an end after it (AR3 call records). */
+  onCall?: CallCallback;
 }
 
 const PROVIDER = "deepseek";
@@ -69,7 +76,7 @@ export class DeepseekProvider implements ModelProvider {
       },
       required: ["label", "confidence"],
     };
-    const { message, model, finish } = await this.#chat("classify", {
+    const { message, model, finish } = await this.#chat("classify", opts.call, {
       max_tokens: this.#opts.maxTokens ?? 256,
       messages: [
         { role: "system", content: system },
@@ -92,7 +99,7 @@ export class DeepseekProvider implements ModelProvider {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const { message, model, finish } = await this.#chat("complete", {
+    const { message, model, finish } = await this.#chat("complete", req.call, {
       max_tokens: req.maxTokens ?? this.#opts.maxTokens ?? 1024,
       messages: [
         ...(req.system !== undefined ? [{ role: "system", content: req.system }] : []),
@@ -105,9 +112,11 @@ export class DeepseekProvider implements ModelProvider {
 
   async #chat(
     operation: UsageRecord["operation"],
+    tag: CallTag | undefined,
     body: Record<string, unknown>,
   ): Promise<{ message: ChatMessage; model: string; finish: "max_tokens" | "refusal" | "end" }> {
-    const json = await withRetries(() => this.#post({ model: this.model, ...body }), this.#opts.retry);
+    checkCallTag(tag);
+    const json = await withRetries(() => this.#post(operation, tag, { model: this.model, ...body }), this.#opts.retry);
     const model = typeof json.model === "string" && json.model.length > 0 ? json.model : this.model;
     const count = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
     await this.#opts.onUsage?.({
@@ -123,10 +132,18 @@ export class DeepseekProvider implements ModelProvider {
     return { message: json.choices?.[0]?.message ?? {}, model, finish };
   }
 
-  async #post(body: Record<string, unknown>): Promise<ChatResponse> {
+  /** One HTTP request, recorded as one call: start before sending, end with usage, unknown or rejected. */
+  async #post(operation: UsageRecord["operation"], tag: CallTag | undefined, body: Record<string, unknown>): Promise<ChatResponse> {
     const key = typeof this.#opts.apiKey === "string" ? this.#opts.apiKey : await this.#opts.apiKey();
     const doFetch = this.#opts.fetch ?? fetch;
     const url = `${(this.#opts.baseUrl ?? DEFAULT_DEEPSEEK_BASE_URL).replace(/\/+$/, "")}/chat/completions`;
+    const onCall = this.#opts.onCall;
+    const base = { callId: globalThis.crypto.randomUUID(), provider: PROVIDER, operation, ...(tag && { tag }) };
+    const end = async (e: Pick<CallEnd, "outcome" | "model" | "inputTokens" | "outputTokens">) => {
+      await onCall?.({ ...base, phase: "end", ...e });
+    };
+    const noUsage = (outcome: "unknown" | "rejected") => end({ outcome, model: this.model, inputTokens: null, outputTokens: null });
+    await onCall?.({ ...base, phase: "start", model: this.model });
     let res: Response;
     try {
       res = await doFetch(url, {
@@ -136,9 +153,12 @@ export class DeepseekProvider implements ModelProvider {
         signal: AbortSignal.timeout(this.#opts.timeoutMs ?? 60_000),
       });
     } catch (err) {
+      await noUsage("unknown");
       throw new ProviderError("DeepSeek request failed (network or timeout)", { provider: PROVIDER, retryable: true, cause: err });
     }
     if (!res.ok) {
+      // A 4xx was refused before any work (not billed); a 5xx may have been processed.
+      await noUsage(res.status < 500 ? "rejected" : "unknown");
       const retryAfter = Number(res.headers.get("retry-after"));
       throw new ProviderError(`DeepSeek returned HTTP ${res.status}`, {
         provider: PROVIDER,
@@ -147,13 +167,25 @@ export class DeepseekProvider implements ModelProvider {
         ...(Number.isFinite(retryAfter) && retryAfter > 0 && { retryAfterSeconds: retryAfter }),
       });
     }
+    let parsed: ChatResponse;
     try {
-      const parsed: unknown = await res.json();
-      if (typeof parsed !== "object" || parsed === null) throw new Error("not an object");
-      return parsed as ChatResponse;
+      const v: unknown = await res.json();
+      if (typeof v !== "object" || v === null) throw new Error("not an object");
+      parsed = v as ChatResponse;
     } catch (err) {
+      await noUsage("unknown");
       throw new ProviderError("DeepSeek returned invalid JSON", { provider: PROVIDER, retryable: false, cause: err });
     }
+    const tokens = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
+    const inputTokens = tokens(parsed.usage?.prompt_tokens);
+    const outputTokens = tokens(parsed.usage?.completion_tokens);
+    await end({
+      outcome: inputTokens !== null && outputTokens !== null ? "reported" : "unknown",
+      model: typeof parsed.model === "string" && parsed.model.length > 0 ? parsed.model : this.model,
+      inputTokens,
+      outputTokens,
+    });
+    return parsed;
   }
 }
 

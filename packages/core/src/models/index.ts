@@ -5,3 +5,4 @@ export { DeepseekProvider, type DeepseekProviderOptions } from "./deepseek";
 export { AnthropicProvider, type AnthropicLike, type AnthropicProviderOptions } from "./anthropic";
 export { FakeProvider, type FakeProviderOptions } from "./fake";
 export { withFallback, type FallbackOptions } from "./fallback";
+export { callKey, callEventStatement, checkCallTag, recordCallsWith, type CallQuery, type SqlStatement } from "./ledger";
