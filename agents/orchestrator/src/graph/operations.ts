@@ -10,8 +10,8 @@ export const effectKey = (taskId: number, kind: OperationKind, n: number): strin
 /** The content-free line that lets a re-run find the issue it already created (no private data). */
 export const issueMarker = (key: string): string => `<!-- kcw-op: ${key} -->`;
 
-/** The `run-name` of a developer, QA or docs workflow run (`<role> task <task_id>`). */
-export const agentRunName = (role: "developer" | "qa" | "docs", taskId: number): string => `${role} task ${taskId}`;
+/** The `run-name` of a developer, QA or docs workflow run (`<role> task <task_id> op <n>`, n = the dispatch counter of the key). */
+export const agentRunName = (role: "developer" | "qa" | "docs", taskId: number, op: number): string => `${role} task ${taskId} op ${op}`;
 
 const canonical = (v: unknown): unknown =>
   Array.isArray(v)

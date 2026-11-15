@@ -1,11 +1,15 @@
 name: agent-docs
-run-name: docs task ${{ inputs.task_id }}
+run-name: docs task ${{ inputs.task_id }} op ${{ inputs.op }}
 
 on:
   workflow_dispatch:
     inputs:
       task_id:
         description: "tasks.id of the docs task (branch kcw/task-<task_id>)"
+        type: string
+        required: true
+      op:
+        description: "Dispatch number n of the orchestrator key task-<task_id>/dispatch/<n>"
         type: string
         required: true
       pr:
@@ -25,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
@@ -36,6 +41,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       KCW_TASK_ID: ${{ inputs.task_id }}
+      KCW_OP: ${{ inputs.op }}
       KCW_PR: ${{ inputs.pr }}
     steps:
       - uses: actions/checkout@v7
@@ -291,6 +297,7 @@ jobs:
       - name: Publish validated data using pinned trusted source
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          KCW_RUN_TOKEN: ${{ github.token }}
         run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command publish --agent docs
   report:
     needs: [prepare, work, publish]

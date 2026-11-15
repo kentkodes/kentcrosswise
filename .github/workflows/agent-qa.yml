@@ -1,11 +1,15 @@
 name: agent-qa
-run-name: qa task ${{ inputs.task_id }}
+run-name: qa task ${{ inputs.task_id }} op ${{ inputs.op }}
 
 on:
   workflow_dispatch:
     inputs:
       task_id:
         description: "tasks.id"
+        type: string
+        required: true
+      op:
+        description: "Dispatch number n of the orchestrator key task-<task_id>/dispatch/<n>"
         type: string
         required: true
       pr:
@@ -25,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
@@ -36,6 +41,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       KCW_TASK_ID: ${{ inputs.task_id }}
+      KCW_OP: ${{ inputs.op }}
       KCW_PR: ${{ inputs.pr }}
     steps:
       - uses: actions/checkout@v7
@@ -380,6 +386,7 @@ jobs:
       - name: Publish validated data using pinned trusted source
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          KCW_RUN_TOKEN: ${{ github.token }}
         run: pnpm exec tsx --tsconfig scripts/tsconfig.json scripts/agent-pipeline.ts --command publish --agent qa
   report:
     needs: [prepare, work, review, publish]

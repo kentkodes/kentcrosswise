@@ -4,7 +4,7 @@ Status: owner-approved 2026-10-28; implemented locally on `docs/run-id-mapping-s
 
 ## Problem
 
-The relay links an agent workflow run to its task through the run title `developer task N` (`agents/webhook-relay/src/normalize.ts`). GitHub sends `workflow_run.requested` before it evaluates `run-name`. The task 3 delivery `60c99360-d217-11f1-9b86-3796395aa21c` (run 40526955264, attempt 1) arrived 2 s after dispatch with `display_title` and `name` set to `agent-developer`. Every other field passed the guards: path, `workflow_dispatch`, `main`, same repository and allowed sender. The relay answered `202 ignored (no_task)`, so `agent_runs.requested_at` stayed NULL and the office never showed `starting`. The later `completed` delivery carried the evaluated title and mapped correctly.
+The relay links an agent workflow run to its task through the run title `developer task N`, or `developer task N op M` since AR2 slice 2b (`agents/webhook-relay/src/normalize.ts` accepts both; the task id mapping is the same and `M`, the dispatch counter, is never forwarded). GitHub sends `workflow_run.requested` before it evaluates `run-name`. The task 3 delivery `60c99360-d217-11f1-9b86-3796395aa21c` (run 40526955264, attempt 1) arrived 2 s after dispatch with `display_title` and `name` set to `agent-developer`. Every other field passed the guards: path, `workflow_dispatch`, `main`, same repository and allowed sender. The relay answered `202 ignored (no_task)`, so `agent_runs.requested_at` stayed NULL and the office never showed `starting`. The later `completed` delivery carried the evaluated title and mapped correctly.
 
 The orchestrator dispatches with `createWorkflowDispatch` and discards the response. It never learns the run ID.
 

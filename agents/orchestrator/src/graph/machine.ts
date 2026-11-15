@@ -30,7 +30,6 @@ import {
   WAIT_LIMIT_MINUTES,
   agentRoleOfWorkflow,
   branchOf,
-  docsRunName,
   waitingOnOf,
   type DevMode,
   type GitHubInput,
@@ -485,14 +484,18 @@ class Machine {
    * DISPATCH_UNKNOWN_MINUTES after the intent the task goes to the owner. False: the caller must stop
    * (pending, or the owner has the task); true: the run exists.
    */
-  async dispatchAgent(workflow: string, inputs: Record<string, string>, pending: PendingDispatch): Promise<boolean> {
+  async dispatchAgent(workflow: string, baseInputs: Record<string, string>, pending: PendingDispatch): Promise<boolean> {
     const d = this.d;
+    // `op` is the dispatch counter of the key: the run carries the identity of its operation (the workflow's run-name and admission).
+    const opInputs = () => ({ ...baseInputs, op: String(d.ops?.dispatch ?? 0) });
+    let inputs = opInputs();
     const role = agentRoleOfWorkflow(workflow);
     if (role === null || role === "scraper") throw new Error("dispatchAgent: not an agent workflow");
     let begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
     // A key whose dispatch GitHub refused created no run: this attempt (a re-run of the step) uses the next key.
     while (begun !== null && begun.record.state === "done" && (begun.record.result as { dispatched?: boolean }).dispatched === false) {
       this.bumpOp("dispatch");
+      inputs = opInputs();
       begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
     }
     if (begun === null) return false;
@@ -515,7 +518,7 @@ class Machine {
       } else {
         const run = await this.github.findWorkflowRun({
           workflow,
-          displayTitle: agentRunName(role, this.id),
+          displayTitle: agentRunName(role, this.id, Number(inputs.op)),
           createdAfter: new Date(Date.parse(begun.record.createdAt) - CLOCK_SLACK_MS).toISOString(),
         });
         if (run === null) {
@@ -964,7 +967,8 @@ class Machine {
     const since = Date.parse(d.waiting_since ?? this.now().toISOString()) - CLOCK_SLACK_MS;
     const run = await this.github.findWorkflowRun({
       workflow: DOCS_WORKFLOW,
-      displayTitle: docsRunName(this.id),
+      // The last dispatch's op: the counter moves when a dispatch completes.
+      displayTitle: agentRunName("docs", this.id, Math.max(0, (d.ops?.dispatch ?? 1) - 1)),
       createdAfter: new Date(since).toISOString(),
     });
     if (run === null) {

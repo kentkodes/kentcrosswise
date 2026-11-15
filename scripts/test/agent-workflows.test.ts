@@ -129,11 +129,24 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(modelStep).toContain("ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic");
     expect(modelStep).not.toMatch(/AWS_ROLE|role-to-assume/);
   });
+  it.skipIf(agent === "scraper")("carries the dispatch operation id into the run-name, prepare and the publisher fence (AR2 slice 2b)", () => {
+    expect(yml).toContain(`run-name: ${agent} task \${{ inputs.task_id }} op \${{ inputs.op }}`);
+    expect(/^ {6}op:\n((?: {8}[^\n]+\n)*)/m.exec(yml)?.[1]).toMatch(/type: string\n {8}required: true\n/);
+    expect(job.prepare).toContain("KCW_OP: ${{ inputs.op }}");
+    expect(job.publish).toContain("KCW_RUN_TOKEN: ${{ github.token }}");
+    expect(job.publish).toContain(`--command publish --agent ${agent}`);
+    for (const name of ["start", "work", "publish", "report"]) expect(job[name]).toContain("needs.prepare.outputs.skip != 'true'");
+    for (const name of Object.keys(job).filter((n) => n !== "prepare")) expect(job[name]).not.toContain("KCW_OP");
+  });
+  it.skipIf(agent !== "scraper")("leaves the undispatched scraper without an operation id", () => {
+    expect(yml).not.toMatch(/inputs\.op|KCW_OP/);
+    expect(yml).toContain("run-name: scraper task ${{ inputs.task_id }}\n");
+  });
   it("retains exact job permissions while explaining the command shapes", () => {
     const common = { actions: "read", contents: "read", "id-token": "write" };
     for (const [name, content] of Object.entries(job)) {
       expect(permissions(content)).toEqual(name === "prepare"
-        ? { contents: "read", issues: "read", "pull-requests": "read", checks: "read" }
+        ? { ...(agent === "scraper" ? {} : { actions: "read" }), contents: "read", issues: "read", "pull-requests": "read", checks: "read" }
         : name === "publish" || name === "review" ? { ...common, "pull-requests": "read", checks: "read" } : common);
     }
   });
@@ -153,8 +166,8 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(workPrompt).toContain("Read may access trusted root guidance/context and payload data");
     expect(workPrompt).toContain("status has no flags");
   });
-  if(agent==='docs') it("names each run after its docs task (the orchestrator's docs sweep finds runs by it)",()=>{
-    expect(yml).toMatch(/^name: agent-docs\nrun-name: docs task \$\{\{ inputs\.task_id \}\}\n/);
+  if(agent==='docs') it("names each run after its docs task and operation (the orchestrator's docs sweep finds runs by it)",()=>{
+    expect(yml).toMatch(/^name: agent-docs\nrun-name: docs task \$\{\{ inputs\.task_id \}\} op \$\{\{ inputs\.op \}\}\n/);
   });
   if(agent==='docs') it("checks the edited payload documentation instead of the trusted root",()=>{
     expect(job.work).toContain('Bash(node payload/scripts/check-agent-docs.mjs)');
