@@ -33,8 +33,8 @@ describe("validateHook", () => {
   };
 
   it.each([
-    ["stop", "A fine hook for reading.", "max_tokens", "stop"],
-    ["stop", "A fine hook for reading.", "refusal", "stop"],
+    ["max_tokens", "A fine hook for reading.", "max_tokens", "max_tokens"],
+    ["refusal", "A fine hook for reading.", "refusal", "refusal"],
     ["empty", " \n ", "end", "empty"],
     ["too_long", "x".repeat(HOOK_MAX_CHARS + 1), "end", "too_long"],
     ["control_char", "First line.\nSecond line.", "end", "control_char"],
@@ -51,7 +51,7 @@ describe("validateHook", () => {
 
   it("every correction sentence is fixed, one per retryable reason", () => {
     expect(Object.keys(HOOK_CORRECTIONS).sort()).toEqual(
-      ["author_name", "control_char", "copied_run", "empty", "markdown", "quote_edge", "title", "too_long"]);
+      ["author_name", "control_char", "copied_run", "empty", "markdown", "max_tokens", "quote_edge", "title", "too_long"]);
     expect(HOOK_CORRECTIONS.too_long).toContain("at most 120 characters");
     expect(HOOK_CORRECTIONS.author_name).toBe("Do not name the author.");
     expect(HOOK_CORRECTIONS.title).toBe("Do not repeat the title.");
@@ -260,16 +260,40 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
     expect(await hookOf(IDS.invalid)).toBeNull();
   });
 
-  it("a reply that did not end (stop) is not retried", async () => {
-    for (const stop of ["max_tokens", "refusal"] as const) {
-      const primary = deepseek({ text: GOOD, stop });
-      logs.length = 0;
-      const res = await run([IDS.invalid], async () => primary);
-      expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: "stop", model: DEFAULT_DEEPSEEK_MODEL, calls: 1 }]);
-      expect(primary.calls).toHaveLength(1);
-      expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=invalid_hook reason=stop model=${DEFAULT_DEEPSEEK_MODEL} calls=1`]);
-    }
+  it("a refusal is not retried and is logged as refusal", async () => {
+    const primary = deepseek({ text: GOOD, stop: "refusal" });
+    logs.length = 0;
+    const res = await run([IDS.invalid], async () => primary);
+    expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: "refusal", model: DEFAULT_DEEPSEEK_MODEL, calls: 1 }]);
+    expect(primary.calls).toHaveLength(1);
+    expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=invalid_hook reason=refusal model=${DEFAULT_DEEPSEEK_MODEL} calls=1`]);
     expect(await hookOf(IDS.invalid)).toBeNull();
+  });
+
+  it("a reply cut off at the token limit is retried once with twice the room; a second cut-off stores nothing", async () => {
+    const seen: { system: string; maxTokens: number | undefined }[] = [];
+    const primary = deepseek((req) => {
+      seen.push({ system: req.system ?? "", maxTokens: req.maxTokens });
+      return { text: GOOD, stop: "max_tokens" };
+    });
+    logs.length = 0;
+    const res = await run([IDS.invalid], async () => primary);
+    expect(res).toEqual([{ id: IDS.invalid, code: "invalid_hook", reason: "max_tokens", model: DEFAULT_DEEPSEEK_MODEL, calls: 2 }]);
+    expect(seen).toHaveLength(2);
+    expect(seen[0]!.system).toBe(HOOK_SYSTEM);
+    expect(seen[1]!.system).toBe(`${HOOK_SYSTEM} ${HOOK_CORRECTIONS.max_tokens}`);
+    expect(seen[1]!.maxTokens).toBe((seen[0]!.maxTokens ?? 0) * 2);
+    expect(logs).toEqual([`essay-ingest: id=${IDS.invalid} code=invalid_hook reason=max_tokens model=${DEFAULT_DEEPSEEK_MODEL} calls=2`]);
+    expect(await hookOf(IDS.invalid)).toBeNull();
+  });
+
+  it("a cut-off reply followed by a complete one stores the hook", async () => {
+    let n = 0;
+    const primary = deepseek(() => (n++ === 0 ? { text: GOOD, stop: "max_tokens" } : { text: GOOD }));
+    const res = await run([IDS.invalid], async () => primary);
+    expect(res).toEqual([{ id: IDS.invalid, code: "hooked", model: DEFAULT_DEEPSEEK_MODEL, calls: 2 }]);
+    expect(await hookOf(IDS.invalid)).toBe(GOOD);
+    await q("UPDATE essays SET hook = NULL WHERE source_url = $1", [urlOf(IDS.invalid)]);
   });
 
   it("a provider error on the retry is provider_error with calls=2 and stores nothing", async () => {

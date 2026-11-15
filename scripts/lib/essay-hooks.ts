@@ -31,10 +31,11 @@ export const HOOK_SYSTEM = [
 
 /** Why a reply was rejected (fixed codes; never any text of the reply). */
 export type HookReason =
-  | "stop" | "empty" | "too_long" | "control_char" | "markdown" | "quote_edge" | "copied_run" | "author_name" | "title";
+  | "max_tokens" | "refusal" | "empty" | "too_long" | "control_char" | "markdown" | "quote_edge" | "copied_run" | "author_name" | "title";
 
-/** The one sentence added to the system prompt on the corrective retry, per reason. `stop` is never retried. */
-export const HOOK_CORRECTIONS: Readonly<Record<Exclude<HookReason, "stop">, string>> = {
+/** The one sentence added to the system prompt on the corrective retry, per reason. A refusal is never retried. */
+export const HOOK_CORRECTIONS: Readonly<Record<Exclude<HookReason, "refusal">, string>> = {
+  max_tokens: `Your last answer was cut off. Reply with one short sentence of at most ${HOOK_PROMPT_CHARS} characters and nothing else.`,
   empty: "Your last answer was empty. Reply with one sentence.",
   too_long: `Your last answer was too long. Use at most ${HOOK_PROMPT_CHARS} characters.`,
   control_char: "Reply with a single line and no special characters.",
@@ -72,7 +73,8 @@ const words = (s: string): string[] => normalizeForHash(s).split(" ").filter(Boo
 export type HookVerdict = { hook: string } | { reason: HookReason };
 
 export function validateHook(reply: { text: string; stop: string }, ctx: HookContext): HookVerdict {
-  if (reply.stop !== "end") return { reason: "stop" };
+  if (reply.stop === "refusal") return { reason: "refusal" };
+  if (reply.stop !== "end") return { reason: "max_tokens" };
   const hook = reply.text.trim();
   if (hook.length === 0) return { reason: "empty" };
   if (hook.length > HOOK_MAX_CHARS) return { reason: "too_long" };
@@ -170,14 +172,17 @@ async function hookBook(id: number, deps: HooksDeps, models: () => Promise<Model
     let reply;
     try {
       reply = await m.complete({
-        system: correction ? `${HOOK_SYSTEM} ${correction}` : HOOK_SYSTEM, prompt, maxTokens: HOOK_MAX_TOKENS,
+        system: correction ? `${HOOK_SYSTEM} ${correction}` : HOOK_SYSTEM,
+        prompt,
+        // A reply cut off at the limit gets twice the room on its one retry.
+        maxTokens: "reason" in verdict && verdict.reason === "max_tokens" && calls === 2 ? HOOK_MAX_TOKENS * 2 : HOOK_MAX_TOKENS,
       });
     } catch {
       return { id, code: "provider_error", calls, ...(model ? { model } : {}) };
     }
     model = safeModel(reply.model);
     verdict = validateHook(reply, ctx);
-    if ("hook" in verdict || verdict.reason === "stop") break;
+    if ("hook" in verdict || verdict.reason === "refusal") break;
     correction = HOOK_CORRECTIONS[verdict.reason];
   }
   if (!("hook" in verdict)) return { id, code: "invalid_hook", reason: verdict.reason, model, calls };
