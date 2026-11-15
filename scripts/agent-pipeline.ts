@@ -5,11 +5,11 @@ import { admit, fence, parseOp } from "./lib/agent-admission";
 import { gatherContext, linkedIssue, parseInputs } from "./lib/agent-context";
 import { ghGet, type GhPull } from "./lib/agent-github";
 import { AGENT_CONFIGS, isWorkflowAgent } from "./lib/agents";
-import { candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, reportMessages, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
+import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
 import { ensurePull, parseReviewDecision, pullText, pushCommits, runGit, submitReview } from "./lib/agent-publish";
 import { parseArgs } from "./lib/args";
 import { runMain } from "./lib/main";
-import { runCli, usageFromExecution } from "../agents/report/src/index";
+import { deliverReport, runFromEnv, usageFromExecution } from "../agents/report/src/index";
 
 const args = parseArgs(process.argv.slice(2));
 // The Developer, Scraper-builder and Docs-keeper work jobs pass --provider deepseek (DeepSeek's
@@ -126,12 +126,11 @@ await runMain(async () => {
   }
   if (command === "report") {
     const phase = args.phase === "start" ? "start" : "end";
-    const usage = phase === "start" ? [] : [...readAdvisoryUsage("candidate"), ...readAdvisoryUsage("decision", "decision")];
-    for (const [i,{ event, usage: u }] of reportMessages(c.agent, phase, process.env.KCW_PUBLISH_RESULT, usage).entries()) await runCli([
-      "--task-id", String(c.taskId), "--agent", c.agent, ...(event ? ["--event-type", event] : []),
-      "--dedupe-id", `run-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${phase}-${i}`,
-      ...(u ? ["--provider", u.provider, "--model", u.model, "--input-tokens", String(u.input_tokens), "--output-tokens", String(u.output_tokens)] : []),
-    ], { env: process.env, stdout: console.log });
+    // One message per report job (AR2 slice 3): its identity is the run, attempt and job from the
+    // runner and the trusted context's op, and it is the SQS deduplication id.
+    const usage = phase === "start" ? { work: [], review: [] } : { work: readAdvisoryUsage("candidate"), review: readAdvisoryUsage("decision", "decision") };
+    const report = buildReport(c, runFromEnv(process.env), phase, process.env.KCW_PUBLISH_RESULT, usage);
+    if (report) await deliverReport(report, { env: process.env, stdout: console.log });
     return;
   }
   if (command !== "publish") throw new Error("unknown pipeline command");

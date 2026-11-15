@@ -1,13 +1,16 @@
 // Queue messages for the task graph (D5: everything arrives on orchestrator-in). All are untrusted
 // and validated here; the FIFO group must be the task's thread id. Error messages never quote input.
 // A message may carry a logical `message_key` (the relay's delivery id, or the web outbox key); the
-// consumer's receipts (receipts.ts) apply a keyed message once. Sweep and report messages have none.
+// consumer's receipts (receipts.ts) apply a keyed message once; the key is also copied into the
+// input, where it names the input's effect keys (machine.ts). Reports are not keyed here: their
+// receipt (reportKey, AR2 slice 3) is written in the same transaction as their usage and event, and
+// the report step itself recognises a report it already applied. Sweep messages have none.
 //
 //   {type:"task.created", task_id, message_key?}                         console (§4.2 step 1)
 //   {type:"owner.decision", task_id, thread_id, message_key?, resume:{approval_id, decision}}   inbox (§4.3)
 //   {type:"sweep", task_id, thread_id}                                   sweeper (§4.3, P2-17)
 //   {source:"github", delivery_id, task_id, thread_id, resume:{event, head_sha, payload}}   relay (P2-05)
-//   {task_id, agent, event_type?, usage?} (event, usage, or both)       kcw-report (P2-03)
+//   {task_id, agent, run_id, run_attempt, job, op, event_type?, usage?}  kcw-report (P2-03, AR2 slice 3)
 import { parseAgentReport, threadIdOf } from "@kcw/core/events";
 import { InputError } from "../handler";
 import type { GitHubInput, TaskInput } from "./types";
@@ -166,5 +169,7 @@ export function parseTaskMessage(
   }
 
   if (groupId !== threadIdOf(taskId)) throw new InputError("MessageGroupId does not match the task's thread id");
-  return messageKey === undefined ? { task_id: taskId, input } : { task_id: taskId, input, message_key: messageKey };
+  return messageKey === undefined
+    ? { task_id: taskId, input }
+    : { task_id: taskId, input: { ...input, message_key: messageKey }, message_key: messageKey };
 }

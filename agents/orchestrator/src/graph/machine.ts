@@ -7,8 +7,9 @@
 // issue, a dispatch and a merge each have an operation record (github_operations, DESIGN §4.0): the
 // intent is written before the effect and the result after it, under a key computed from the
 // checkpointed data, so the re-run reads the record or asks GitHub instead of repeating the effect.
-// A repeated event row is the accepted cost.
-import type { AgentName, AgentReport, EventType } from "@kcw/core/events";
+// Events and approvals carry an effect key (task, input, effect and its count in the step; AR2 slice 3),
+// so a re-run step writes neither twice. A report is applied in one transaction with its receipt.
+import { reportKey, threadIdOf, usageKey, type AgentName, type AgentReport, type EventType } from "@kcw/core/events";
 import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
@@ -70,6 +71,9 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   no_artifact: "the trusted preview run has no merge-rules-input artifact",
 };
 
+/** How many applied report identities a thread remembers (a task has a few reports per run). */
+const APPLIED_REPORTS_KEPT = 200;
+
 /** Allowance for clock skew between the orchestrator and GitHub when looking up a run or an issue. */
 const CLOCK_SLACK_MS = 2 * 60_000;
 
@@ -99,11 +103,34 @@ export async function runStep(taskId: number, data: TaskData, input: TaskInput, 
 }
 
 class Machine {
+  /** The identity of the input being applied, and the effects counted for it (effect keys). */
+  private inputId = "";
+  private seq = new Map<string, number>();
+
   constructor(
     readonly id: number,
     readonly d: TaskData,
     readonly deps: TaskGraphDeps,
   ) {}
+
+  /**
+   * Starts counting the effects of one input. Its identity is the logical message key when the
+   * message has one (stable when the outbox resends it under a new SQS id), else the SQS message id.
+   */
+  applying(input: TaskInput): void {
+    this.inputId = input.message_key ?? input.message_id;
+    this.seq = new Map();
+  }
+
+  /**
+   * The effect key of the next event or approval of this kind for the input being applied:
+   * `task-<id>/<message key or id>/<what>/<n>`. A step that is re-run with the same input computes the same keys.
+   */
+  nextEffectKey(what: string): string {
+    const n = this.seq.get(what) ?? 0;
+    this.seq.set(what, n + 1);
+    return `${threadIdOf(this.id)}/${this.inputId}/${what}/${n}`;
+  }
 
   get store(): TaskStore {
     return this.deps.store;
@@ -134,6 +161,7 @@ class Machine {
   async run(input: TaskInput): Promise<void> {
     const d = this.d;
     d.last_message_id = input.message_id;
+    this.applying(input);
 
     // The docs kind comes only from the orchestrator's own start input (index.ts startDocsTask),
     // captured before the pause check so a start deferred while paused still takes the docs path.
@@ -173,7 +201,10 @@ class Machine {
     const queue = [...d.deferred, input];
     d.deferred = [];
     let outcome: StepOutcome = "unchanged";
-    for (const next of queue) outcome = await this.apply(next);
+    for (const next of queue) {
+      this.applying(next);
+      outcome = await this.apply(next);
+    }
     // A dispatch still waiting for its run is not progress: a sweep checks it again.
     d.last_outcome = outcome === "applied" && d.pending_dispatch != null ? "unchanged" : outcome;
   }
@@ -283,7 +314,7 @@ class Machine {
   }
 
   async event(type: EventType, agent: AgentName, detail: Record<string, unknown> = {}): Promise<void> {
-    await this.store.addEvent(this.id, agent, type, detail);
+    await this.store.addEvent(this.id, agent, type, detail, this.nextEffectKey(`event/${type}`));
   }
 
   /** Moves to a phase: writes tasks.status / waiting_on and restarts the wait clock. */
@@ -309,22 +340,58 @@ class Machine {
     await this.store.updateTask(this.id, { status, waiting_on: waitingOnOf(phase), agent });
   }
 
+  /**
+   * AR2 slice 3: a report is applied once, all or nothing. Its receipt (key = the report identity),
+   * every usage line (dedupe key = the call identity) and its event are written in one transaction;
+   * a report whose receipt exists writes nothing, and one already in `applied_reports` changes
+   * nothing at all (`duplicate`). Usage is always recorded, also after
+   * the task ended; the event only when the report is the expected agent's in the current phase and
+   * its run is not superseded: a report whose op is lower than the agent's latest dispatch comes from
+   * an obsolete run and has no lifecycle effect. Reports never cause transitions or approvals.
+   */
   async report(r: AgentReport): Promise<StepOutcome> {
-    if (r.usage && r.usage.length > 0) await this.store.addUsage(this.id, r.agent, r.usage);
-    // A usage-only report (DESIGN §11 Q14(5)) has no lifecycle meaning: no event, no status change.
-    if (r.event_type === undefined) return "unchanged";
-    const expected: AgentName | null =
-      this.d.phase === "dev" ? (this.isDocs ? "docs" : "developer") : this.d.phase === "qa" ? "qa" : null;
-    if (r.agent !== expected) {
-      this.d.stale += 1;
-      this.log(`stale report from ${r.agent} in phase ${this.d.phase}`);
-      return "stale";
+    const key = reportKey(r);
+    // Applied and checkpointed before: a no-op (no state change, no write).
+    if (this.d.applied_reports?.includes(key)) {
+      this.log(`report_duplicate job=${r.job}`);
+      return "duplicate";
     }
-    // Bookkeeping only (the docs sweep tells a no-change run from one that never ran); reports
-    // still never drive the loop.
-    if (this.isDocs && r.event_type === "coding") this.d.docs_started = true;
-    await this.event(r.event_type, r.agent, { source: "report" });
-    return "applied";
+    // From here the step's state updates always apply, also when the database write below finds the
+    // receipt (a crash after the report transaction and before the checkpoint): the checkpoint then
+    // reaches the state the first run would have left, and nothing is written twice.
+    this.d.applied_reports = [...(this.d.applied_reports ?? []), key].slice(-APPLIED_REPORTS_KEPT);
+    let outcome: StepOutcome = "unchanged";
+    let event: EventType | null = null;
+    // A usage-only report (DESIGN §11 Q14(5)) has no lifecycle meaning: no event, no status change.
+    if (r.event_type !== undefined) {
+      const current = r.agent === "developer" || r.agent === "qa" || r.agent === "docs" ? this.d.dispatch_ops?.[r.agent] : undefined;
+      const expected: AgentName | null =
+        this.d.phase === "dev" ? (this.isDocs ? "docs" : "developer") : this.d.phase === "qa" ? "qa" : null;
+      if (r.op !== null && current !== undefined && r.op < current) {
+        this.d.stale += 1;
+        this.log(`report_fenced agent=${r.agent} op=${r.op} current=${current}`);
+        outcome = "stale";
+      } else if (r.agent !== expected) {
+        this.d.stale += 1;
+        this.log(`stale report from ${r.agent} in phase ${this.d.phase}`);
+        outcome = "stale";
+      } else {
+        // Bookkeeping only (the docs sweep tells a no-change run from one that never ran); reports
+        // still never drive the loop.
+        if (this.isDocs && r.event_type === "coding") this.d.docs_started = true;
+        event = r.event_type;
+        outcome = "applied";
+      }
+    }
+    const written = await this.store.recordReport({
+      receiptKey: key,
+      taskId: this.id,
+      agent: r.agent,
+      usage: (r.usage ?? []).map(({ call, ...u }) => ({ ...u, dedupeKey: usageKey(r, call) })),
+      event: event === null ? null : { type: event, detail: { source: "report" }, effectKey: `${key}/event` },
+    });
+    if (!written) this.log(`report_recorded_before job=${r.job}`);
+    return outcome;
   }
 
   // ------------------------------------------------------------------ start (§4.2 step 2)
@@ -499,6 +566,8 @@ class Machine {
       begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
     }
     if (begun === null) return false;
+    // From the intent on, reports of this role with a lower op come from superseded runs (AR2 slice 3).
+    d.dispatch_ops = { ...d.dispatch_ops, [role]: Number(inputs.op) };
     let runId: number | null;
     if (begun.record.state === "done") {
       runId = (begun.record.result as { runId: number | null }).runId;
@@ -850,7 +919,7 @@ class Machine {
     reasons: string[],
     inboxTitle: string,
   ): Promise<void> {
-    const id = await this.store.createApproval({ taskId: this.id, kind, reasons, inboxTitle });
+    const id = await this.store.createApproval({ taskId: this.id, kind, reasons, inboxTitle, effectKey: this.nextEffectKey(`approval/${kind}`) });
     await this.event("waiting_on_owner", "orchestrator", { approval_id: id, kind, pr: this.d.pr_number });
     await this.enter("owner");
     this.d.owner_wait = wait;

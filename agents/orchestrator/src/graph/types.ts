@@ -137,7 +137,11 @@ export type TaskInput = (
   | GitHubInput
   | { kind: "decision"; approval_id: string; decision: Decision }
   | { kind: "sweep" }
-) & { message_id: string };
+) & {
+  message_id: string;
+  /** The logical message key (relay delivery id, web outbox key) when the message has one: stable across SQS resends. */
+  message_key?: string;
+};
 
 /** What processing one input did (logged by the handler; never message content). */
 export type StepOutcome =
@@ -146,7 +150,8 @@ export type StepOutcome =
   | "unchanged" // a sweep with nothing to do, or a usage-only report
   | "deferred" // agents_paused: kept and processed on unpause
   | "paused" // a sweep while agents_paused
-  | "queued"; // not started yet (paused or in-flight limit)
+  | "queued" // not started yet (paused or in-flight limit)
+  | "duplicate"; // a report whose identity was already applied (AR2 slice 3): nothing written
 
 /** The part of the thread state the state machine owns (checkpointed in schema lg; private). */
 export interface TaskData {
@@ -194,6 +199,18 @@ export interface TaskData {
    */
   ops?: Partial<Record<OperationKind, number>>;
   pending_dispatch?: PendingDispatch | null;
+  /**
+   * AR2 slice 3: per agent, the op of its latest dispatch (written with the dispatch intent). A
+   * report with a lower op comes from a superseded run: its usage is recorded, its event is not.
+   * Absent in older checkpoints: no report is fenced.
+   */
+  dispatch_ops?: Partial<Record<"developer" | "qa" | "docs", number>>;
+  /**
+   * AR2 slice 3: the identities (reportKey) of the reports this thread applied, newest last (bounded).
+   * A redelivered report found here is a no-op; one whose database write already happened but is
+   * missing here (a crash before the checkpoint) still gets its state updates.
+   */
+  applied_reports?: string[];
 }
 
 /** A dispatch waiting for its run to become visible (see DISPATCH_UNKNOWN_MINUTES); a sweep resumes it. */
