@@ -98,3 +98,22 @@ jobs:
         env:
           BASE_URL: ${{ steps.url.outputs.url }}
         run: pnpm smoke-check --url "$BASE_URL" --attempts 20 --delay 15 --build-file apps/web/.open-next/kcw-build.json
+
+      # Failure alerts (AR8b, docs/runbooks/alerts.md): publish to the kcw-prod-alerts SNS topic. Credentials
+      # are fetched again so that a failure in the credential-free build steps is reported too. If the
+      # role cannot be assumed at all, nothing is published (GitHub's failed-run email is the fallback).
+      - name: AWS credentials for the failure alert (kcw-gh-deploy)
+        if: failure()
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
+          aws-region: us-east-1
+
+      - name: Publish deploy failure alert
+        if: failure()
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          aws sns publish --topic-arn "arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:kcw-prod-alerts" --subject "kcw deploy failed" --message "deploy failed: run ${RUN_ID} sha ${SHA}"

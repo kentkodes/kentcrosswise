@@ -18,7 +18,7 @@ import {
   type SecretStore,
 } from "@kcw/secrets";
 import pg from "pg";
-import type { EnvLike } from "@/auth/settings";
+import type { EnvLike } from "../auth/settings";
 
 export type DbRole = "web_rw" | "web_public";
 

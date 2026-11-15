@@ -1,6 +1,7 @@
 // Shape of .github/workflows/deploy.yml (AR8a): builds run before the production migration, so a failed
-// build leaves the production schema untouched; the rest of the deploy keeps its guards.
-import { readFileSync } from "node:fs";
+// build leaves the production schema untouched; the rest of the deploy keeps its guards. AR8b: the last two
+// steps publish a failure alert, and no Terraform file may hold the alert email subscription.
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -52,5 +53,45 @@ describe("deploy.yml order", () => {
     expect(yml).toContain("if: github.ref == 'refs/heads/main'");
     expect(yml).toContain("--build-file apps/web/.open-next/kcw-build.json");
     expect(yml).toMatch(/^permissions: \{\}$/m);
+  });
+});
+
+describe("deploy failure alert (AR8b)", () => {
+  const last = steps.slice(-2);
+
+  it("ends with a credentials step and a publish step, both only on failure", () => {
+    expect(last[0]!.body).toContain("uses: aws-actions/configure-aws-credentials@");
+    expect(last[0]!.body).toContain("role-to-assume: ${{ vars.AWS_ROLE_DEPLOY_ARN }}");
+    expect(last[1]!.body).toContain("aws sns publish");
+    for (const s of last) expect(s.body).toMatch(/^ {8}if: failure\(\)$/m);
+    expect(steps.filter((s) => /if: failure\(\)/.test(s.body))).toHaveLength(2);
+  });
+
+  it("passes values to the publish step only through env, with no expression in run", () => {
+    const body = last[1]!.body;
+    const run = /^ {8}run: \|\n([\s\S]+)$/m.exec(body)?.[1] ?? "";
+    expect(run).toContain("aws sns publish");
+    expect(run).not.toContain("${{");
+    expect(run).toContain('--topic-arn "arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:kcw-prod-alerts"');
+    expect(body).toContain("AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}");
+    expect(body).toContain("RUN_ID: ${{ github.run_id }}");
+    expect(body).toContain("SHA: ${{ github.sha }}");
+  });
+
+  it("keeps the alert email out of Terraform and the metric filter on the wrapper's fixed log line", () => {
+    const tf: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === ".terraform" || name === "node_modules") continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (name.endsWith(".tf")) tf.push(readFileSync(full, "utf8"));
+      }
+    };
+    walk(path.join(root, "infra"));
+    expect(tf.length).toBeGreaterThan(0);
+    for (const src of tf) expect(src).not.toContain("aws_sns_topic_subscription");
+    expect(readFileSync(path.join(root, "apps/web/src/server/origin-wrapper.ts"), "utf8")).toContain("[job] ${job} failed ");
+    expect(readFileSync(path.join(root, "infra/modules/alerts/main.tf"), "utf8")).toContain('pattern        = "\\"[job]\\" \\"failed\\""');
   });
 });
