@@ -9,7 +9,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Repository and refs
 
-- Default branch `main` at `1fe2ab0` (PR #111).
+- Default branch `main` at `c75c5b7` (PR #112).
 - Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge. This is the normal workflow.
 
 ## PRs and checks
