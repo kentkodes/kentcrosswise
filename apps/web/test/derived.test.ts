@@ -212,8 +212,8 @@ describe("derived records and capture recovery (web_rw on PGlite)", () => {
     expect(await run((db) => listRecentEntries(db))).toHaveLength(10);
 
     // Retry one failed and the never-attempted one; the third is corrected by the owner.
-    await expect(routeEntry(run, ids[0]!, good("idea"))).resolves.toEqual({ code: "routed", kind: "idea" });
-    await expect(routeEntry(run, never, good("todo"))).resolves.toEqual({ code: "routed", kind: "todo" });
+    await expect(routeEntry(run, ids[0]!, good("idea"))).resolves.toMatchObject({ code: "routed", kind: "idea" });
+    await expect(routeEntry(run, never, good("todo"))).resolves.toMatchObject({ code: "routed", kind: "todo" });
     await run((db) => reassignEntry(db, ids[1]!, "diary"));
     const after = (await run((db) => listUnresolvedEntries(db))).map((e) => e.id);
     expect(after).not.toContain(ids[0]);

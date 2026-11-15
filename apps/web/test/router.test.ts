@@ -101,7 +101,7 @@ describe("routeEntry (web_rw on PGlite)", () => {
   it("confidence 0.6 is routed: the route is stored and no inbox item is added", async () => {
     const id = await newEntry("Ideas for a new essay series");
     const provider = new FakeProvider({ classify: { label: "idea", confidence: ROUTE_THRESHOLD } });
-    await expect(routeEntry(run, id, provider)).resolves.toEqual({ code: "routed", kind: "idea" });
+    await expect(routeEntry(run, id, provider)).resolves.toMatchObject({ code: "routed", kind: "idea" });
     const { rows } = await q<{ status: string; route_confidence: number }>(
       "SELECT status, route_confidence FROM entries WHERE id = $1",
       [id],
@@ -203,7 +203,7 @@ describe("routeEntry (web_rw on PGlite)", () => {
       classify: { label: "todo", confidence: 0.9, model: "deepseek-flash-2026" },
       onUsage: (u) => run((db) => recordRouterUsage(db, u)),
     });
-    await expect(routeEntry(run, id, provider)).resolves.toEqual({ code: "routed", kind: "todo" });
+    await expect(routeEntry(run, id, provider)).resolves.toMatchObject({ code: "routed", kind: "todo" });
     const { rows } = await q<{ kind: string; agent: string; provider: string; model: string }>(
       "SELECT kind, agent, provider, model FROM usage_events WHERE agent = 'router'",
     );

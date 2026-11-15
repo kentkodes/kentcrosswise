@@ -21,6 +21,7 @@ vi.mock("@/server/owner", () => ({ requireOwner: f.requireOwner }));
 vi.mock("@/server/db", async () => ({ ...(await import("../src/server/db")), withDb: f.withDb }));
 vi.mock("../src/server/db", async () => ({ ...(await import("../src/server/db")), withDb: f.withDb }));
 vi.mock("@/server/capture", async () => await import("../src/server/capture"));
+vi.mock("@/server/mood", async () => await import("../src/server/mood"));
 vi.mock("@/server/console", async () => await import("../src/server/console"));
 vi.mock("@/server/orchestrator-queue", async () => await import("../src/server/orchestrator-queue"));
 vi.mock("@/server/outbox", async () => await import("../src/server/outbox"));
@@ -74,12 +75,12 @@ describe("reassign and route again: bad input never reaches the DB", () => {
   });
 
   it("reassigns through web_rw and redirects with the routed notice, or not-found for an unknown entry", async () => {
-    f.withDb.mockResolvedValueOnce("ok");
+    f.withDb.mockResolvedValueOnce({ result: "ok", derived: null });
     await reassignAction(form({ entry_id: ENTRY_ID, to: "todo" }));
     expect(f.withDb).toHaveBeenCalledExactlyOnceWith("web_rw", expect.any(Function));
     expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=routed-todo");
 
-    f.withDb.mockResolvedValueOnce("not-found");
+    f.withDb.mockResolvedValueOnce({ result: "not-found", derived: null });
     await reassignRoutingAction(form({ entry_id: ENTRY_ID, to: "idea" }));
     expect(f.redirect).toHaveBeenLastCalledWith("/inbox?n=entry-not-found");
   });
