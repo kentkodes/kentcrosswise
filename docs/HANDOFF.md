@@ -9,7 +9,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Repository and refs
 
-- Default branch `main` at `a64edf6` (PR #110).
+- Default branch `main` at `1fe2ab0` (PR #111).
 - Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge. This is the normal workflow.
 
 ## PRs and checks
@@ -47,5 +47,5 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 
 ## Remaining work and next action
 
-1. AR1 done (#106-#109); the trusted prod-plan job first ran live on #110 and passed. AR2 slice 1 (database-to-SQS outbox and consumer receipts) merged in #110; its deploy applied migration 0011 on prod. Not verified: a live outbox delivery (agents paused). The scheduler policy no longer appears as a false prod-plan infrastructure change when sweeper code changes (its Lambda ARN is built from plan-time values). Next: AR2 slices 2-3, then the remaining AR3-AR9 sequence per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md). Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
+1. AR1 done (#106-#109); the trusted prod-plan job first ran live on #110 and passed. AR2 slice 1 (database-to-SQS outbox and consumer receipts) merged in #110; its deploy applied migration 0011 on prod. Not verified: a live outbox delivery (agents paused). The scheduler policy no longer appears as a false prod-plan infrastructure change when sweeper code changes (its Lambda ARN is built from plan-time values). AR2 slice 2a (orchestrator-side GitHub operation records and reconciliation) is in its PR; its migration 0012 is a gated prod migration that the deploy applies after merge. Next: AR2 slice 2b (workflow operation input, run admission, publisher fencing) and slice 3, then the remaining AR3-AR9 sequence per [RELIABILITY-PLAN.md](RELIABILITY-PLAN.md). Existing H3 production capture and essay acceptance checks remain pending, not the next expansion step.
 2. Implementation decisions still needed: preview isolation technique, unknown-price policy, worker/WIP/time limits, alert destination/recovery targets and the scoped live acceptance task. No new budget or live enablement was approved. Public copy overclaims remain deferred under R1; worker context cost is now AR5 (former R3).

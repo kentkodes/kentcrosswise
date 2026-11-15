@@ -3,17 +3,22 @@
 // The LangGraph graph (index.ts) checkpoints the data and interrupts between inputs.
 //
 // Effects come before the data is checkpointed, so a step that fails half-way (GitHub or DB error)
-// is re-run as a whole with the same input when the message is redelivered. Issue creation is
-// guarded by tasks.github_issue; a repeated dispatch or event row is the accepted cost.
+// is re-run as a whole with the same input when the message is redelivered. The planner result, the
+// issue, a dispatch and a merge each have an operation record (github_operations, DESIGN §4.0): the
+// intent is written before the effect and the result after it, under a key computed from the
+// checkpointed data, so the re-run reads the record or asks GitHub instead of repeating the effect.
+// A repeated event row is the accepted cost.
 import type { AgentName, AgentReport, EventType } from "@kcw/core/events";
 import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
-import { ArtifactFormatError, CI_WORKFLOW, type GitHubClient } from "../github";
+import { ArtifactFormatError, CI_WORKFLOW, type GitHubClient, type MergeResult } from "../github";
 import { publicText } from "../nodes/public-title";
-import { DispatchLinkConflictError, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
+import { OperationConflictError, agentRunName, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
+import { DispatchLinkConflictError, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
 import {
   DEV_WORKFLOW,
+  DISPATCH_UNKNOWN_MINUTES,
   DOCS_NO_RUN_MINUTES,
   DOCS_WAIT_LIMIT_MINUTES,
   DOCS_WORKFLOW,
@@ -30,6 +35,7 @@ import {
   type DevMode,
   type GitHubInput,
   type IncompleteReason,
+  type PendingDispatch,
   type Phase,
   type Plan,
   type Planner,
@@ -65,8 +71,11 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   no_artifact: "the trusted preview run has no merge-rules-input artifact",
 };
 
-/** Allowance for clock skew between the orchestrator and GitHub when looking up a docs run. */
-const DOCS_RUN_CLOCK_SLACK_MS = 2 * 60_000;
+/** Allowance for clock skew between the orchestrator and GitHub when looking up a run or an issue. */
+const CLOCK_SLACK_MS = 2 * 60_000;
+
+/** `RetryTarget` of a pending dispatch's role (what approving a failed dispatch restarts). */
+const RETRY_OF_ROLE = { dev: "dev", qa: "qa", docs: "docs" } as const satisfies Record<PendingDispatch["role"], RetryTarget>;
 
 const isCiRun = (i: Extract<GitHubInput, { event: "workflow_run" }>) =>
   i.action === "completed" &&
@@ -166,7 +175,8 @@ class Machine {
     d.deferred = [];
     let outcome: StepOutcome = "unchanged";
     for (const next of queue) outcome = await this.apply(next);
-    d.last_outcome = outcome;
+    // A dispatch still waiting for its run is not progress: a sweep checks it again.
+    d.last_outcome = outcome === "applied" && d.pending_dispatch != null ? "unchanged" : outcome;
   }
 
   async apply(input: TaskInput): Promise<StepOutcome> {
@@ -178,8 +188,12 @@ class Machine {
         d.phase !== "done" && d.pr_number !== null && input.pr_number === d.pr_number) {
       return this.onPrClosed(input.merged);
     }
+    // A dispatch whose run is not visible yet (see dispatchAgent): only a sweep resumes it, and an
+    // owner decision cannot apply to a step that has not finished.
+    if (d.pending_dispatch != null && input.kind === "sweep") return this.resumeDispatch(d.pending_dispatch);
     let out: StepOutcome | undefined;
-    switch (d.phase) {
+    if (d.pending_dispatch != null && input.kind === "decision") out = undefined;
+    else switch (d.phase) {
       case "queued":
         if (input.kind === "start" || input.kind === "sweep") out = await this.start();
         break;
@@ -232,6 +246,43 @@ class Machine {
 
   // ------------------------------------------------------------------ bookkeeping
 
+  /** The effect key of this task's current operation of that kind (graph/operations.ts). */
+  opKey(kind: OperationKind): string {
+    return effectKey(this.id, kind, this.d.ops?.[kind] ?? 0);
+  }
+
+  /** The current operation of that kind is finished or abandoned: the next one gets a new key. */
+  bumpOp(kind: OperationKind): void {
+    this.d.ops = { ...this.d.ops, [kind]: (this.d.ops?.[kind] ?? 0) + 1 };
+  }
+
+  /**
+   * Writes the intent of the current operation of that kind, or finds the record that is already
+   * there (a step that is re-run). The same key with another request is a contradiction: nothing is
+   * sent, the key is abandoned and the task goes to the owner (null).
+   */
+  async beginOp(kind: OperationKind, request: unknown, retry: RetryTarget): Promise<{ key: string; record: OperationRecord; created: boolean } | null> {
+    const key = this.opKey(kind);
+    try {
+      const begun = await this.store.beginOperation({
+        effectKey: key,
+        taskId: this.id,
+        kind,
+        requestHash: requestHash(request),
+        createdAt: this.now().toISOString(),
+      });
+      return { key, ...begun };
+    } catch (err) {
+      if (!(err instanceof OperationConflictError)) throw err;
+      this.log(`operation_conflict kind=${kind}`);
+      this.d.pending_dispatch = null;
+      this.bumpOp(kind);
+      if (kind === "plan") this.bumpOp("issue"); // a new plan means a new issue operation
+      await this.toOwnerFailure(`A ${kind} request contradicts the one already recorded under ${key}; nothing was sent.`, retry);
+      return null;
+    }
+  }
+
   async event(type: EventType, agent: AgentName, detail: Record<string, unknown> = {}): Promise<void> {
     await this.store.addEvent(this.id, agent, type, detail);
   }
@@ -239,6 +290,11 @@ class Machine {
   /** Moves to a phase: writes tasks.status / waiting_on and restarts the wait clock. */
   async enter(phase: Phase, finalStatus?: TaskStatus): Promise<void> {
     const d = this.d;
+    // Leaving the wait for a dispatch's run abandons it; its next dispatch is a new operation.
+    if (d.pending_dispatch != null) {
+      d.pending_dispatch = null;
+      this.bumpOp("dispatch");
+    }
     d.phase = phase;
     d.waiting_since = this.now().toISOString();
     d.redispatched = false;
@@ -309,12 +365,26 @@ class Machine {
    */
   async plan(task: TaskRecord): Promise<StepOutcome> {
     const req = { task_id: this.id, owner_text: task.owner_text, is_private: task.is_private };
+    // The planner's answers are recorded before any external effect (private text, database only),
+    // so a re-run of this step reuses them instead of calling the model again.
+    const begun = await this.beginOp("plan", { owner_text: task.owner_text, is_private: task.is_private, subtask: task.parent_id !== null }, "plan");
+    if (begun === null) return "applied";
+    const stored = (begun.record.result ?? {}) as { subtasks?: string[]; plan?: Plan };
     let plan: Plan;
     try {
-      // A subtask was planned by its parent: it is never split again.
-      const subtasks = task.parent_id === null ? await this.deps.planner.split(req) : [task.owner_text];
+      let subtasks = stored.subtasks;
+      if (subtasks === undefined) {
+        // A subtask was planned by its parent: it is never split again.
+        subtasks = task.parent_id === null ? await this.deps.planner.split(req) : [task.owner_text];
+        if (task.parent_id === null) await this.store.updateOperation(begun.key, subtasks.length > 1 ? "done" : "intent", { subtasks });
+      }
       if (subtasks.length > 1) return await this.split(subtasks);
-      plan = await this.deps.planner.plan({ ...req, owner_text: subtasks[0] ?? task.owner_text });
+      if (stored.plan !== undefined) {
+        plan = stored.plan;
+      } else {
+        plan = await this.deps.planner.plan({ ...req, owner_text: subtasks[0] ?? task.owner_text });
+        await this.store.updateOperation(begun.key, "done", { subtasks, plan });
+      }
     } catch (err) {
       if (!(err instanceof PlannerOutputError)) throw err;
       this.log(`planning failed: ${err.message}`);
@@ -340,8 +410,7 @@ class Machine {
       ], `Task ${this.id}: issue text needs review`);
       return "applied";
     }
-    await this.publishIssue(text.issue);
-    await this.dispatchDev("implement");
+    if (await this.publishIssue(text.issue)) await this.dispatchDev("implement");
     return "applied";
   }
 
@@ -364,67 +433,161 @@ class Machine {
     return this.finish("failed", "a subtask failed or was cancelled");
   }
 
-  async publishIssue(issue: { title: string; body: string }): Promise<void> {
-    // A retried step must not open a second issue: the number is stored as soon as it exists.
+  /**
+   * Opens the task's issue once. False: the request contradicted its record and the task went to the
+   * owner. The intent comes before `createIssue`; the body carries a marker line with the effect key,
+   * so a re-run that finds an intent but no result looks for that marker in the recent issues before
+   * it creates anything. The number is stored in tasks.github_issue as soon as it is known.
+   */
+  async publishIssue(issue: { title: string; body: string }): Promise<boolean> {
     let number = (await this.store.getTask(this.id))?.github_issue ?? null;
     if (number === null) {
-      const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.`;
-      number = (await this.github.createIssue({ title: issue.title, body: issue.body + footer })).number;
+      const begun = await this.beginOp("issue", { title: issue.title, body: issue.body }, "plan");
+      if (begun === null) return false;
+      if (begun.record.state === "done") {
+        number = (begun.record.result as { number: number }).number;
+      } else {
+        if (!begun.created) number = await this.findIssue(begun.key, begun.record.createdAt);
+        if (number === null) {
+          const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.\n${issueMarker(begun.key)}`;
+          number = (await this.github.createIssue({ title: issue.title, body: issue.body + footer })).number;
+        }
+        await this.store.updateOperation(begun.key, "done", { number });
+      }
       await this.store.updateTask(this.id, { github_issue: number });
     }
     this.d.issue_number = number;
     this.d.issue_title = issue.title;
     this.d.pending_issue = null;
+    return true;
+  }
+
+  /** The number of the issue that carries this key's marker, among the bot issues created since the intent. */
+  async findIssue(key: string, intentAt: string): Promise<number | null> {
+    const issues = await this.github.listRecentIssues({ createdAfter: new Date(Date.parse(intentAt) - CLOCK_SLACK_MS).toISOString() });
+    const marker = issueMarker(key);
+    return issues.find((i) => i.body.includes(marker))?.number ?? null;
   }
 
   // ------------------------------------------------------------------ dispatches
 
   /**
-   * Dispatches an agent workflow and links the returned run id to this task (agent_dispatches,
+   * Dispatches an agent workflow once and links the returned run id to this task (agent_dispatches,
    * RUN-ID-MAPPING-SPEC §2) before the caller writes its event or phase. A null run id (204 or
    * invalid run details, logged by the client) stores nothing: the relay then maps by run title.
    * The link is advisory: if storing it fails (a conflicting link or a database error), the run
-   * already exists, so the step logs the fixed code `dispatch_link_failed` and continues rather
-   * than failing and re-dispatching on the message retry.
+   * already exists, so the step logs the fixed code `dispatch_link_failed` and continues.
+   *
+   * The intent is written before `dispatchWorkflow` and the run id after it. A step that is re-run
+   * reuses a recorded run id; with an intent but no result it looks for the run by its run-name
+   * (created since the intent) and never dispatches again: if the run is not visible yet the
+   * dispatch stays pending (`d.pending_dispatch`, a sweep checks again), and
+   * DISPATCH_UNKNOWN_MINUTES after the intent the task goes to the owner. False: the caller must stop
+   * (pending, or the owner has the task); true: the run exists.
    */
-  async dispatchAgent(workflow: string, inputs: Record<string, string>): Promise<void> {
+  async dispatchAgent(workflow: string, inputs: Record<string, string>, pending: PendingDispatch): Promise<boolean> {
+    const d = this.d;
     const role = agentRoleOfWorkflow(workflow);
-    if (role === null) throw new Error("dispatchAgent: not an agent workflow");
-    const { runId } = await this.github.dispatchWorkflow({ workflow, inputs });
-    if (runId === null) return;
-    try {
-      await this.store.recordDispatch(runId, this.id, role);
-    } catch (err) {
-      const reason = err instanceof DispatchLinkConflictError ? "conflict" : "db";
-      this.log(`dispatch_link_failed role=${role} reason=${reason}`);
+    if (role === null || role === "scraper") throw new Error("dispatchAgent: not an agent workflow");
+    const begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
+    if (begun === null) return false;
+    let runId: number | null;
+    if (begun.record.state === "done") {
+      runId = (begun.record.result as { runId: number | null }).runId;
+    } else {
+      if (begun.created) {
+        runId = (await this.github.dispatchWorkflow({ workflow, inputs })).runId;
+      } else {
+        const run = await this.github.findWorkflowRun({
+          workflow,
+          displayTitle: agentRunName(role, this.id),
+          createdAfter: new Date(Date.parse(begun.record.createdAt) - CLOCK_SLACK_MS).toISOString(),
+        });
+        if (run === null) {
+          if (this.minutesSince(begun.record.createdAt) >= DISPATCH_UNKNOWN_MINUTES) {
+            this.log(`dispatch_outcome_unknown role=${role}`);
+            await this.toOwnerFailure(
+              `The ${role} dispatch outcome is unknown: no run appeared ${DISPATCH_UNKNOWN_MINUTES} minutes after it was requested, and it is not repeated automatically.`,
+              RETRY_OF_ROLE[pending.role],
+            );
+          } else {
+            d.pending_dispatch = pending;
+            this.log(`dispatch pending role=${role}`);
+          }
+          return false;
+        }
+        runId = run.id;
+      }
+      await this.store.updateOperation(begun.key, "done", { runId });
     }
+    d.pending_dispatch = null;
+    this.bumpOp("dispatch");
+    if (runId !== null) {
+      try {
+        await this.store.recordDispatch(runId, this.id, role);
+      } catch (err) {
+        const reason = err instanceof DispatchLinkConflictError ? "conflict" : "db";
+        this.log(`dispatch_link_failed role=${role} reason=${reason}`);
+      }
+    }
+    return true;
   }
 
-  async dispatchDev(mode: DevMode, reason?: string): Promise<void> {
+  /** A sweep on a pending dispatch: look for its run again (the same operation, the same key). */
+  async resumeDispatch(p: PendingDispatch): Promise<StepOutcome> {
+    if (p.role === "dev") await this.dispatchDev(p.mode ?? "implement", p.reason, p.redispatched);
+    else if (p.role === "qa") await this.dispatchQa(p.reason, p.redispatched);
+    else await this.dispatchDocs(p.reason, p.redispatched);
+    return this.d.pending_dispatch != null ? "unchanged" : "applied";
+  }
+
+  /** `redispatched`: this is the timeout's one redispatch (§4.3); the flag is set once the run exists. */
+  async dispatchDev(mode: DevMode, reason?: string, redispatched = false): Promise<boolean> {
     const d = this.d;
-    await this.dispatchAgent(DEV_WORKFLOW, {
-      task_id: String(this.id),
-      issue: d.issue_number === null ? "" : String(d.issue_number),
-      mode,
-      pr: d.pr_number === null ? "" : String(d.pr_number),
-    });
+    const sent = await this.dispatchAgent(
+      DEV_WORKFLOW,
+      {
+        task_id: String(this.id),
+        issue: d.issue_number === null ? "" : String(d.issue_number),
+        mode,
+        pr: d.pr_number === null ? "" : String(d.pr_number),
+      },
+      { role: "dev", mode, ...(reason !== undefined && { reason }), redispatched },
+    );
+    if (!sent) return false;
     d.dev_mode = mode;
     await this.event("task_assigned", "developer", { mode, attempts: d.attempts, ...(reason && { reason }) });
     await this.enter("dev");
+    if (redispatched) d.redispatched = true;
+    return true;
   }
 
-  async dispatchDocs(reason?: string): Promise<void> {
+  async dispatchDocs(reason?: string, redispatched = false): Promise<boolean> {
     const d = this.d;
-    await this.dispatchAgent(DOCS_WORKFLOW, { task_id: String(this.id), pr: String(d.docs_pr) });
+    const sent = await this.dispatchAgent(
+      DOCS_WORKFLOW,
+      { task_id: String(this.id), pr: String(d.docs_pr) },
+      { role: "docs", ...(reason !== undefined && { reason }), redispatched },
+    );
+    if (!sent) return false;
     d.docs_started = false; // this run's start report sets it
     await this.event("task_assigned", "docs", { pr: d.docs_pr, attempts: d.attempts, ...(reason && { reason }) });
     await this.enter("dev");
+    if (redispatched) d.redispatched = true;
+    return true;
   }
 
-  async dispatchQa(reason?: string): Promise<void> {
-    await this.dispatchAgent(QA_WORKFLOW, { task_id: String(this.id), pr: String(this.d.pr_number) });
+  async dispatchQa(reason?: string, redispatched = false): Promise<boolean> {
+    const sent = await this.dispatchAgent(
+      QA_WORKFLOW,
+      { task_id: String(this.id), pr: String(this.d.pr_number) },
+      { role: "qa", ...(reason !== undefined && { reason }), redispatched },
+    );
+    if (!sent) return false;
     await this.event("qa_reviewing", "qa", { pr: this.d.pr_number, ...(reason && { reason }) });
     await this.enter("qa");
+    if (redispatched) this.d.redispatched = true;
+    return true;
   }
 
   // ------------------------------------------------------------------ Developer and CI (steps 3-5)
@@ -620,8 +783,25 @@ class Machine {
     const d = this.d;
     const pr = d.pr_number!;
     const headSha = d.head_sha!;
+    // A check run of this name on this head supersedes the earlier one (the ruleset reads the
+    // latest), so a repeated post needs no operation record.
     await this.github.postCheck({ headSha, state: "success", title: checkTitle, summary: checkSummary });
-    const res = await this.github.merge({ pr, headSha, title: `${d.issue_title ?? PRIVATE_TITLE} (#${pr})` });
+    const title = `${d.issue_title ?? PRIVATE_TITLE} (#${pr})`;
+    const begun = await this.beginOp("merge", { pr, headSha, title }, this.devRetry);
+    if (begun === null) return;
+    let res: MergeResult | undefined;
+    if (begun.record.state === "done") {
+      res = begun.record.result as MergeResult;
+    } else {
+      // An intent without a result: the merge may have happened without its answer reaching us.
+      if (!begun.created) {
+        const state = await this.github.getPrMergeState(pr);
+        if (state.merged) res = { merged: true, sha: state.mergeCommitSha ?? "unknown" };
+      }
+      res ??= await this.github.merge({ pr, headSha, title });
+      await this.store.updateOperation(begun.key, "done", res);
+    }
+    this.bumpOp("merge");
     if (res.merged) {
       await this.event("merged", "orchestrator", { pr, sha: res.sha });
       // §4.2 step 8: Docs-keeper follows every merged work PR, never a docs PR (no loop).
@@ -687,8 +867,7 @@ class Machine {
 
     if (wait === "issue_text") {
       if (decision === "rejected") return this.finish("cancelled", "issue text rejected by the owner");
-      await this.publishIssue(d.pending_issue!);
-      await this.dispatchDev("implement");
+      if (await this.publishIssue(d.pending_issue!)) await this.dispatchDev("implement");
       return "applied";
     }
     if (wait === "critical") {
@@ -710,6 +889,9 @@ class Machine {
     if (d.retry === "plan") {
       const task = await this.store.getTask(this.id);
       if (!task) return this.finish("failed", "the task row is gone");
+      // A deliberate replan: new planner and issue operations (new keys).
+      this.bumpOp("plan");
+      this.bumpOp("issue");
       return this.plan(task);
     }
     if (d.retry === "qa") {
@@ -746,9 +928,8 @@ class Machine {
       await this.toOwnerFailure(`CI did not finish within ${limit} minutes.`, this.devRetry);
     } else if (!d.redispatched) {
       // Redispatch once (§4.3).
-      if (phase === "dev") await this.dispatchDev(d.dev_mode, reason);
-      else await this.dispatchQa(reason);
-      d.redispatched = true;
+      if (phase === "dev") await this.dispatchDev(d.dev_mode, reason, true);
+      else await this.dispatchQa(reason, true);
     } else {
       await this.toOwnerFailure(
         `${phase === "dev" ? "The Developer" : "QA"} did not finish within ${limit} minutes, twice.`,
@@ -765,7 +946,7 @@ class Machine {
   async docsSweep(): Promise<StepOutcome> {
     const d = this.d;
     const waited = this.minutesSince(d.waiting_since);
-    const since = Date.parse(d.waiting_since ?? this.now().toISOString()) - DOCS_RUN_CLOCK_SLACK_MS;
+    const since = Date.parse(d.waiting_since ?? this.now().toISOString()) - CLOCK_SLACK_MS;
     const run = await this.github.findWorkflowRun({
       workflow: DOCS_WORKFLOW,
       displayTitle: docsRunName(this.id),
@@ -802,8 +983,7 @@ class Machine {
       await this.toOwnerFailure(`${reason}, after one redispatch.`, "docs");
       return "applied";
     }
-    await this.dispatchDocs(reason);
-    this.d.redispatched = true;
+    await this.dispatchDocs(reason, true);
     return "applied";
   }
 }

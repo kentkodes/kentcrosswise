@@ -3,6 +3,7 @@
 import type { AgentName, EventType, Usage } from "@kcw/core/events";
 import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
 import type pg from "pg";
+import { OperationConflictError, type OperationKind } from "./operations";
 import type { AgentRunRole, Decision, WaitingOn } from "./types";
 
 export type TaskStatus = "queued" | "planning" | "in_progress" | "waiting" | "merged" | "done" | "failed" | "cancelled";
@@ -59,6 +60,17 @@ export class DispatchLinkConflictError extends Error {
   }
 }
 
+/** One github_operations row (migration 0012). `result` is private plan text for kind `plan`. */
+export interface OperationRecord {
+  effectKey: string;
+  kind: OperationKind;
+  requestHash: string;
+  state: "intent" | "done";
+  result: unknown;
+  /** ISO time the intent was written (from the machine clock). */
+  createdAt: string;
+}
+
 export interface TaskStore {
   recordRun(run: RunObservation): Promise<void>;
   /**
@@ -100,6 +112,14 @@ export interface TaskStore {
    * existing child is the docs task of a retried step and is returned instead.
    */
   createDocsTask(mergedId: number, pr: number, publicTitle: string | null): Promise<number>;
+  /**
+   * AR2 slice 2a: writes the operation's intent (state `intent`) unless the key already has a record,
+   * and returns the record that is there. `created` is true only for the call that wrote it. An
+   * existing record with another request hash throws OperationConflictError.
+   */
+  beginOperation(input: { effectKey: string; taskId: number; kind: OperationKind; requestHash: string; createdAt: string }): Promise<{ record: OperationRecord; created: boolean }>;
+  /** Stores the operation's result (state `done`), or a partial result while it stays `intent`. */
+  updateOperation(effectKey: string, state: "intent" | "done", result: unknown): Promise<void>;
 }
 
 /** Statuses that hold an in-flight slot (D20). */
@@ -357,6 +377,33 @@ export class PgTaskStore implements TaskStore {
       [parentId],
     );
     return rows.map((r) => ({ id: Number(r.id), status: r.status }));
+  }
+
+  async beginOperation(input: { effectKey: string; taskId: number; kind: OperationKind; requestHash: string; createdAt: string }): Promise<{ record: OperationRecord; created: boolean }> {
+    const ins = await this.pool.query<{ effect_key: string }>(
+      `INSERT INTO github_operations (effect_key, task_id, kind, request_hash, state, created_at)
+       VALUES ($1, $2, $3, $4, 'intent', $5) ON CONFLICT (effect_key) DO NOTHING RETURNING effect_key`,
+      [input.effectKey, input.taskId, input.kind, input.requestHash, input.createdAt],
+    );
+    const { rows } = await this.pool.query<{ effect_key: string; kind: OperationKind; request_hash: string; state: "intent" | "done"; result: unknown; created_at: Date | string }>(
+      "SELECT effect_key, kind, request_hash, state, result, created_at FROM github_operations WHERE effect_key = $1",
+      [input.effectKey],
+    );
+    const r = rows[0];
+    if (!r) throw new Error("operation record missing after insert");
+    if (r.request_hash !== input.requestHash || r.kind !== input.kind) throw new OperationConflictError(input.effectKey);
+    return {
+      record: { effectKey: r.effect_key, kind: r.kind, requestHash: r.request_hash, state: r.state, result: r.result, createdAt: new Date(r.created_at).toISOString() },
+      created: ins.rows.length === 1,
+    };
+  }
+
+  async updateOperation(effectKey: string, state: "intent" | "done", result: unknown): Promise<void> {
+    await this.pool.query("UPDATE github_operations SET state = $2, result = $3, updated_at = now() WHERE effect_key = $1", [
+      effectKey,
+      state,
+      JSON.stringify(result),
+    ]);
   }
 
   loadContacts(): Promise<ContactNames[]> {

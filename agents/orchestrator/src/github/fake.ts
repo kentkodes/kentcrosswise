@@ -16,11 +16,14 @@ import {
   type FindWorkflowRunInput,
   type GetArtifactInput,
   type GitHubClient,
+  type ListRecentIssuesInput,
   type MergePrInput,
   type MergeResult,
   type PostCheckInput,
   type PostedCheck,
   type PrDiff,
+  type PrMergeState,
+  type RecentIssue,
   type WorkflowRunInfo,
 } from "./types";
 
@@ -36,6 +39,8 @@ export interface FakePr {
   /** getDiff's `complete` (defaults to true; false = GitHub listed only part of the files). */
   complete?: boolean;
   merged?: boolean;
+  /** Set by the fake's merge. */
+  mergeSha?: string;
 }
 
 export interface FakeCheck {
@@ -67,7 +72,7 @@ export interface FakeGitHubOptions {
 
 export class FakeGitHubClient implements GitHubClient {
   readonly calls: { method: FakeMethod; args: unknown }[] = [];
-  readonly issues: (CreateIssueInput & CreatedIssue)[] = [];
+  readonly issues: (CreateIssueInput & CreatedIssue & { createdAt: string })[] = [];
   readonly dispatches: (DispatchWorkflowInput & { ref: string; runId: number | null })[] = [];
   /**
    * `sequential`: every dispatch returns this fake's next run id (deterministic, see
@@ -87,7 +92,16 @@ export class FakeGitHubClient implements GitHubClient {
   readonly runningRuns = new Set<number>();
   /** Workflow runs findWorkflowRun searches; tests add and update them. */
   readonly workflowRuns: (WorkflowRunInfo & { workflow: string; displayTitle: string; createdAt: string })[] = [];
+  /**
+   * The fake's clock (issue and run creation times); tests that use a fixed clock set it to theirs.
+   */
+  now: () => Date = () => new Date();
+  /** Dispatches also add a workflow run (display title `<role> task <task_id>`) that findWorkflowRun sees. Off by default. */
+  registerRuns = false;
+  /** While true, findWorkflowRun does not see registered runs (GitHub's delayed run visibility). */
+  hideRuns = false;
   #failures = new Map<FakeMethod, GitHubApiError>();
+  #afterFailures = new Set<FakeMethod>();
   #nextId = 1;
   #nextRunId: number;
 
@@ -99,6 +113,18 @@ export class FakeGitHubClient implements GitHubClient {
   /** The next call of `method` throws a GitHubApiError with this status. */
   failNext(method: FakeMethod, status = 500): void {
     this.#failures.set(method, new GitHubApiError(method, status));
+  }
+
+  /**
+   * The next call of `method` (createIssue, dispatchWorkflow or merge) takes effect and then throws
+   * a GitHubApiError without status: the response was lost (a socket error).
+   */
+  failAfterNext(method: "createIssue" | "dispatchWorkflow" | "merge"): void {
+    this.#afterFailures.add(method);
+  }
+
+  #lostResponse(method: FakeMethod): void {
+    if (this.#afterFailures.delete(method)) throw new GitHubApiError(method, undefined);
   }
 
   #record(method: FakeMethod, args: unknown): void {
@@ -119,7 +145,8 @@ export class FakeGitHubClient implements GitHubClient {
     this.#record("createIssue", input);
     const number = this.#nextId++;
     const issue = { number, url: `https://github.invalid/issues/${number}` };
-    this.issues.push({ ...input, ...issue });
+    this.issues.push({ ...input, ...issue, createdAt: this.now().toISOString() });
+    this.#lostResponse("createIssue");
     return issue;
   }
 
@@ -127,6 +154,18 @@ export class FakeGitHubClient implements GitHubClient {
     this.#record("dispatchWorkflow", input);
     const runId = this.runIdMode === "null" ? null : this.#nextRunId++;
     this.dispatches.push({ ...input, inputs: { ...input.inputs }, ref: input.ref ?? "main", runId });
+    if (this.registerRuns) {
+      const role = /^agent-([a-z]+)\.yml$/.exec(input.workflow)?.[1] ?? "agent";
+      this.workflowRuns.push({
+        id: runId ?? 900_000_000 + this.#nextId++,
+        status: "queued",
+        conclusion: null,
+        workflow: input.workflow,
+        displayTitle: `${role} task ${input.inputs.task_id}`,
+        createdAt: this.now().toISOString(),
+      });
+    }
+    this.#lostResponse("dispatchWorkflow");
     return { runId };
   }
 
@@ -138,7 +177,9 @@ export class FakeGitHubClient implements GitHubClient {
     if (pr.merged || pr.mergeable === false) return { merged: false, reason: "not_mergeable" };
     pr.merged = true;
     const sha = `squash-${input.pr}-${input.headSha}`;
+    pr.mergeSha = sha;
     this.merges.push({ pr: input.pr, sha });
+    this.#lostResponse("merge");
     return { merged: true, sha };
   }
 
@@ -188,9 +229,25 @@ export class FakeGitHubClient implements GitHubClient {
 
   async findWorkflowRun(input: FindWorkflowRunInput): Promise<WorkflowRunInfo | null> {
     this.#record("findWorkflowRun", input);
+    if (this.hideRuns) return null;
     const run = this.workflowRuns
       .filter((r) => r.workflow === input.workflow && r.displayTitle === input.displayTitle && Date.parse(r.createdAt) >= Date.parse(input.createdAfter))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id)[0];
     return run ? { id: run.id, status: run.status, conclusion: run.conclusion } : null;
+  }
+
+  async listRecentIssues(input: ListRecentIssuesInput): Promise<RecentIssue[]> {
+    this.#record("listRecentIssues", input);
+    return this.issues
+      .filter((i) => Date.parse(i.createdAt) >= Date.parse(input.createdAfter))
+      .map((i) => ({ number: i.number, body: i.body, createdAt: i.createdAt }))
+      .reverse();
+  }
+
+  async getPrMergeState(pr: number): Promise<PrMergeState> {
+    this.#record("getPrMergeState", pr);
+    const p = this.prs.get(pr);
+    if (!p) throw new GitHubApiError("getPrMergeState", 404);
+    return { merged: p.merged === true, mergeCommitSha: p.merged === true ? (p.mergeSha ?? null) : null };
   }
 }

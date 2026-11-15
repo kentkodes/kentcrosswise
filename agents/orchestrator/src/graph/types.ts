@@ -1,5 +1,6 @@
 // Task graph types and limits (P2-10, DESIGN §4.2-§4.3, D20, §11 Q11).
 import type { AgentReport } from "@kcw/core/events";
+import type { OperationKind } from "./operations";
 
 /** Agent workflows the orchestrator dispatches (§4.1). */
 export const DEV_WORKFLOW = "agent-developer.yml";
@@ -48,6 +49,13 @@ export const WAIT_LIMIT_MINUTES = { dev: 60, ci: 90, qa: 60 } as const;
  * output, so it gets the CI wait's limit.
  */
 export const INCOMPLETE_INPUT_TIMEOUT_MINUTES = 90;
+
+/**
+ * AR2 slice 2a: a dispatch whose outcome is not known (an intent exists, its run is not visible
+ * yet) waits this long, counted from the intent, before the task goes to the owner. It is never
+ * redispatched blindly.
+ */
+export const DISPATCH_UNKNOWN_MINUTES = 10;
 
 /** The Developer's branch for a task (Developer playbook; the relay resolves tasks from it). */
 export const branchOf = (taskId: number): string => `kcw/task-${taskId}`;
@@ -185,6 +193,22 @@ export interface TaskData {
   docs_task?: number | null;
   /** Docs task: the current agent-docs.yml run sent its start report (`coding`). */
   docs_started?: boolean;
+  /**
+   * AR2 slice 2a: per kind, the number n of the next effect key `task-<id>/<kind>/<n>`
+   * (graph/operations.ts). It moves only when an operation finishes or is abandoned, so a step that
+   * is re-run from the previous checkpoint computes the same key. Absent in older checkpoints (0).
+   */
+  ops?: Partial<Record<OperationKind, number>>;
+  pending_dispatch?: PendingDispatch | null;
+}
+
+/** A dispatch waiting for its run to become visible (see DISPATCH_UNKNOWN_MINUTES); a sweep resumes it. */
+export interface PendingDispatch {
+  role: "dev" | "qa" | "docs";
+  mode?: DevMode;
+  reason?: string;
+  /** The timeout redispatch: set `redispatched` once the run is found. */
+  redispatched?: boolean;
 }
 
 export function initialTaskData(): TaskData {

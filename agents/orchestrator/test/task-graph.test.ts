@@ -86,6 +86,7 @@ describe("task graph (P2-10)", () => {
     gh = new FakeGitHubClient();
     deps.github = gh;
     clock = new Date("2026-10-23T10:00:00Z");
+    gh.now = () => clock;
     // Earlier tests leave tasks in flight; finish them so each test starts with free slots.
     await sql("UPDATE tasks SET status = 'done' WHERE status IN ('planning', 'in_progress', 'waiting')");
     await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
@@ -874,30 +875,33 @@ describe("task graph (P2-10)", () => {
       const id = await newTask();
       const head = sha(`${id}-1`);
       await toQa(id, 61, head);
-      gh.failNext("dispatchWorkflow", 502); // the docs dispatch
+      gh.registerRuns = true;
+      gh.failAfterNext("dispatchWorkflow"); // the docs dispatch: sent, the response lost
       expect(await send(id, reviewEvent(id, 61, head, "approved"), "approve-61")).toBe("failed");
       expect((await task(id)).status).toBe("merged");
       const docs = await docsTaskOf(id);
-      expect(docsDispatches()).toEqual([]);
+      expect(docsDispatches()).toHaveLength(1);
 
       expect(await send(id, reviewEvent(id, 61, head, "approved"), "approve-61")).toBe("finished");
-      expect(docsDispatches()).toHaveLength(1);
+      expect(docsDispatches()).toHaveLength(1); // found, not dispatched again
       expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
       expect(gh.merges).toHaveLength(1);
     });
 
-    it("paused before the docs start: deferred, then the sweep after unpause dispatches Docs-keeper", async () => {
+    it("paused after a lost dispatch response: the deferred docs start reuses the dispatch after unpause", async () => {
       const id = await newTask();
       const head = sha(`${id}-1`);
       await toQa(id, 62, head);
-      gh.failNext("dispatchWorkflow", 502);
+      gh.registerRuns = true;
+      gh.failAfterNext("dispatchWorkflow");
       expect(await send(id, reviewEvent(id, 62, head, "approved"), "approve-62")).toBe("failed");
       const docs = await docsTaskOf(id);
+      expect(docsDispatches()).toHaveLength(1);
 
       await sql("UPDATE system_flags SET value = 'true' WHERE key = 'agents_paused'");
       expect(await send(id, reviewEvent(id, 62, head, "approved"), "approve-62")).toBe("finished");
       expect(await waits(docs)).toEqual([{ phase: "queued", waiting_on: null }]);
-      expect(docsDispatches()).toEqual([]);
+      expect(docsDispatches()).toHaveLength(1);
       expect(await send(docs, sweep(docs))).toBe("paused");
 
       await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
@@ -1139,12 +1143,14 @@ describe("task graph (P2-10)", () => {
 
   it("a GitHub error returns the message to the queue; the redelivery completes the step without a second issue", async () => {
     const id = await newTask();
-    gh.failNext("dispatchWorkflow", 502);
+    gh.registerRuns = true;
+    gh.failAfterNext("dispatchWorkflow"); // GitHub dispatched, the response was lost
     expect(await send(id, { type: "task.created", task_id: id }, "start-x")).toBe("failed");
     expect(gh.issues).toHaveLength(1);
+    expect(devDispatches()).toHaveLength(1);
     expect(await send(id, { type: "task.created", task_id: id }, "start-x")).toBe("recovered");
     expect(gh.issues).toHaveLength(1);
-    expect(devDispatches()).toHaveLength(1);
+    expect(devDispatches()).toHaveLength(1); // the redelivery found the run instead of dispatching again
     expect((await task(id)).waiting_on).toBe("dev");
   });
 
