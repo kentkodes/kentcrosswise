@@ -18,9 +18,16 @@ describe("parseMoodReply", () => {
     expect(r.ok && r.values.sentiment).toBe(-1);
   });
 
+  it("accepts one surrounding code fence, with or without json", () => {
+    expect(parseMoodReply("```json\n" + reply() + "\n```").ok).toBe(true);
+    expect(parseMoodReply("\n```\n" + reply() + "\n```  \n").ok).toBe(true);
+  });
+
   const bad: [string, string][] = [
     ["prose", "The mood is happy."],
-    ["a code fence", "```json\n" + reply() + "\n```"],
+    ["prose before a fence", "Here you go:\n```json\n" + reply() + "\n```"],
+    ["prose after a fence", "```json\n" + reply() + "\n```\nHope that helps."],
+    ["a fence around prose", "```\nhappy\n```"],
     ["an array", "[1,2]"],
     ["null", "null"],
     ["a missing field", JSON.stringify({ ...GOOD, gratitude: undefined })],
@@ -92,6 +99,7 @@ describe("scoreDiaryEntry (web_rw on PGlite)", () => {
     ["a missing field", { text: JSON.stringify({ energy: 0.5 }) }],
     ["a truncated reply", { text: reply().slice(0, 30), stop: "max_tokens" as const }],
     ["a complete-looking reply cut off by max_tokens", { text: reply(), stop: "max_tokens" as const }],
+    ["a value just above one in an otherwise valid reply", { text: reply({ anxiety: 1.0000001 }) }],
     ["a refusal", { text: reply(), stop: "refusal" as const }],
   ])("%s is a failed score: nothing is stored and nothing is clamped", async (_name, answer) => {
     const id = await newEntry();
@@ -136,7 +144,7 @@ describe("scoreDiaryEntry (web_rw on PGlite)", () => {
     expect(provider.calls).toHaveLength(0);
   });
 
-  it("drops the score when the body changed during the call (and when the entry was deleted)", async () => {
+  it("drops the score when the body changed during the call, and a deleted entry is gone", async () => {
     const id = await newEntry("before");
     const edit = new FakeProvider({
       complete: async () => {
@@ -153,7 +161,7 @@ describe("scoreDiaryEntry (web_rw on PGlite)", () => {
         return { text: reply() };
       },
     });
-    await expect(scoreDiaryEntry(run, id, gone)).resolves.toBe("changed");
+    await expect(scoreDiaryEntry(run, id, gone)).resolves.toBe("gone");
     expect(await scoreCount(id)).toBe("0");
   });
 

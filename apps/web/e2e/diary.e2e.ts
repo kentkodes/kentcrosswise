@@ -85,6 +85,8 @@ test.describe("as the preview owner", () => {
       await page.getByRole("link", { name: "Show all" }).click();
       await expect(page).toHaveURL(/range=all/);
       await expect(page.getByTestId("range-note")).toContainText("All scored entries");
+      // The synthetic seed has scored entries, so the chart draws points (never assert how many).
+      await expect(page.getByTestId("panel-sentiment").locator("svg circle").first()).toBeVisible();
       await page.getByText("Data table").click();
       await expect(page.getByRole("columnheader", { name: "Sentiment" })).toBeVisible();
       expect(await noSideScroll(page)).toBe(true);

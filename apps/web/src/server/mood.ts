@@ -19,16 +19,26 @@ export const MOOD_INSTRUCTIONS = [
 const MAX_TOKENS = 400;
 
 /** scored: saved. cap: monthly spend cap reached. failed: provider error or a reply that did not validate.
- *  changed: the body was edited during the call, so the score was dropped. not-found: no such entry. */
-export type ScoreOutcome = "scored" | "cap" | "failed" | "changed" | "not-found";
+ *  changed: the body was edited during the call, so the score was dropped. gone: the entry was deleted during the
+ *  call. not-found: no such entry before the call. */
+export type ScoreOutcome = "scored" | "cap" | "failed" | "changed" | "gone" | "not-found";
 
 export type MoodParse = { ok: true; values: MoodValues } | { ok: false; reason: string };
 
-/** Strict parse of a model reply. The reason is a fixed code, never a piece of the reply. */
+const FENCE = /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n?```$/;
+
+/** Strips one surrounding Markdown code fence (and whitespace). Anything else around the object stays and fails. */
+function unfence(text: string): string {
+  const t = text.trim();
+  const m = FENCE.exec(t);
+  return m ? m[1]!.trim() : t;
+}
+
+/** Strict parse of a model reply (one code fence around it is allowed). The reason is a fixed code, never a piece of the reply. */
 export function parseMoodReply(text: string): MoodParse {
   let data: unknown;
   try {
-    data = JSON.parse(text.trim());
+    data = JSON.parse(unfence(text));
   } catch {
     return { ok: false, reason: "not-json" };
   }
@@ -50,7 +60,7 @@ export function parseMoodReply(text: string): MoodParse {
 
 /**
  * Scores one diary entry and stores the result (one mood_scores row per entry; a new score replaces the old one).
- * The write only applies while the body is the one that was scored.
+ * The write locks the entry row and only applies while the body is the one that was scored.
  */
 export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider: ModelProvider): Promise<ScoreOutcome> {
   const before = await run(async (db) => {
@@ -80,19 +90,21 @@ export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider
   }
   const v = parsed.values;
 
-  const written = await run(async (db) => {
-    const { rows } = await db.query<{ diary_entry_id: string }>(
+  // The row lock makes an edit either wait for this write or win: the body is compared under the lock.
+  return await run(async (db): Promise<ScoreOutcome> => {
+    const { rows } = await db.query<{ body: string }>("SELECT body FROM diary_entries WHERE id = $1 FOR UPDATE", [diaryEntryId]);
+    if (!rows[0]) return "gone";
+    if (rows[0].body !== before.body) return "changed";
+    await db.query(
       `INSERT INTO mood_scores (diary_entry_id, energy, stress, happiness, satisfaction, sadness, anger, anxiety, gratitude, sentiment, model)
-       SELECT id, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12 FROM diary_entries WHERE id = $1 AND body = $2
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (diary_entry_id) DO UPDATE SET
          energy = EXCLUDED.energy, stress = EXCLUDED.stress, happiness = EXCLUDED.happiness,
          satisfaction = EXCLUDED.satisfaction, sadness = EXCLUDED.sadness, anger = EXCLUDED.anger,
          anxiety = EXCLUDED.anxiety, gratitude = EXCLUDED.gratitude, sentiment = EXCLUDED.sentiment,
-         model = EXCLUDED.model, scored_at = now()
-       RETURNING diary_entry_id`,
-      [diaryEntryId, before.body, v.energy, v.stress, v.happiness, v.satisfaction, v.sadness, v.anger, v.anxiety, v.gratitude, v.sentiment, reply.model],
+         model = EXCLUDED.model, scored_at = now()`,
+      [diaryEntryId, v.energy, v.stress, v.happiness, v.satisfaction, v.sadness, v.anger, v.anxiety, v.gratitude, v.sentiment, reply.model],
     );
-    return rows.length > 0;
+    return "scored";
   });
-  return written ? "scored" : "changed";
 }

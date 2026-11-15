@@ -1,7 +1,7 @@
 // Mood board geometry and summaries: points, paths, scales, text.
 import { describe, expect, it } from "vitest";
 import type { MoodPoint } from "../src/server/diary";
-import { BOX, METRIC_DOMAIN, SENTIMENT_DOMAIN, dayLabel, metricsSummary, sentimentSummary, seriesGeometry, timeRange, xOf, yOf } from "../src/app/(owner)/mood/chart";
+import { BOX, METRIC_DOMAIN, SENTIMENT_DOMAIN, dayLabel, metricsSummary, rangeStart, sentimentSummary, seriesGeometry, timeRange, xOf, yOf } from "../src/app/(owner)/mood/chart";
 
 const point = (id: string, at: string, o: Partial<MoodPoint> = {}): MoodPoint => ({
   id,
@@ -97,5 +97,13 @@ describe("text", () => {
     const names = { energy: "Energy", stress: "Stress", happiness: "Happiness", satisfaction: "Satisfaction", sadness: "Sadness", anger: "Anger", anxiety: "Anxiety", gratitude: "Gratitude" };
     expect(metricsSummary([A, C], ["energy", "stress"], names)).toBe("Latest values from 0 to 1: Energy 1.00, Stress 0.50.");
     expect(metricsSummary([], ["energy"], names)).toBe("No scored entries in this range.");
+  });
+});
+
+describe("rangeStart", () => {
+  it("is 00:00 UTC of the day 89 days back, the same for any time of the day", () => {
+    expect(rangeStart(new Date("2026-03-31T00:00:00Z"), 90)).toBe("2026-01-01T00:00:00.000Z");
+    expect(rangeStart(new Date("2026-03-31T23:59:59.999Z"), 90)).toBe("2026-01-01T00:00:00.000Z");
+    expect(rangeStart(new Date("2026-04-01T00:00:00Z"), 90)).toBe("2026-01-02T00:00:00.000Z");
   });
 });

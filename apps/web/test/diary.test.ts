@@ -37,10 +37,11 @@ describe("notices", () => {
     for (const r of ["scored", "cap", "failed", "changed", "not-found", "off", "none"] as const) {
       expect(Object.hasOwn(DIARY_NOTICES, savedNotice(r))).toBe(true);
     }
-    for (const r of ["scored", "cap", "failed", "changed", "not-found", "off"] as const) {
+    for (const r of ["scored", "cap", "failed", "changed", "gone", "not-found", "off"] as const) {
       expect(Object.hasOwn(DIARY_NOTICES, scoreNotice(r))).toBe(true);
     }
     expect(savedNotice("off")).toBe("saved-score-off");
+    expect(scoreNotice("gone")).toBe("not-found");
     expect(diaryNoticeText("<script>")).toBeUndefined();
     expect(diaryNoticeText("__proto__")).toBeUndefined();
   });
@@ -120,7 +121,14 @@ describe("diary store (web_rw on PGlite)", () => {
     const all = (await run((db) => listMoodPoints(db))).filter((p) => p.at.startsWith("2031"));
     expect(all.map((p) => p.id)).toEqual([a, b]);
     expect(all[1]).toMatchObject({ sentiment: 0.9, energy: 0.5, gratitude: 1 });
+    // The default range starts at 00:00 UTC: an entry one second before the boundary is out, at the boundary it is in.
+    const before = await run((db) => createDiaryEntry(db, "just before"));
+    const at = await run((db) => createDiaryEntry(db, "at boundary"));
+    await score(before, 0.2, "2031-04-09T23:59:59Z");
+    await score(at, 0.3, "2031-04-10T00:00:00Z");
+    const cut = await run((db) => listMoodPoints(db, "2031-04-10T00:00:00.000Z"));
+    expect(cut.map((p) => p.id)).toEqual([at]);
     const since = await run((db) => listMoodPoints(db, "2031-03-03T00:00:00Z"));
-    expect(since.map((p) => p.id)).toEqual([b]);
+    expect(since.map((p) => p.id).filter((id) => id === a || id === b)).toEqual([b]);
   });
 });

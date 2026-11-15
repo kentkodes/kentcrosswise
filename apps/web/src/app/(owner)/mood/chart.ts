@@ -90,3 +90,9 @@ export function metricsSummary(points: readonly MoodPoint[], keys: readonly Mood
   if (!last) return "No scored entries in this range.";
   return `Latest values from 0 to 1: ${keys.map((k) => `${names[k]} ${last[k].toFixed(2)}`).join(", ")}.`;
 }
+
+/** The start of the default range: 00:00 UTC of the day `days - 1` before today, so the range is `days` UTC days including today. */
+export function rangeStart(now: Date, days: number): string {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(today - (days - 1) * 86_400_000).toISOString();
+}

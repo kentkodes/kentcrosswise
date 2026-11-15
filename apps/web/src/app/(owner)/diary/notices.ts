@@ -61,6 +61,7 @@ export function scoreNotice(r: ScoreResult): DiaryNoticeCode {
     case "changed":
       return "score-changed";
     case "not-found":
+    case "gone":
       return "not-found";
     default:
       return "score-failed";

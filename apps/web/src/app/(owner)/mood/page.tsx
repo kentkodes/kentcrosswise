@@ -6,6 +6,7 @@ import { requireOwner } from "@/server/owner";
 import { OwnerFrame } from "../owner-frame";
 import { Notice } from "../owner-ui";
 import s from "../owner.module.css";
+import { rangeStart } from "./chart";
 import { MoodChart } from "./mood-chart";
 import m from "./mood.module.css";
 
@@ -26,7 +27,7 @@ async function load(since: string | undefined): Promise<{ points?: MoodPoint[]; 
 export default async function MoodPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireOwner();
   const all = (await searchParams).range === "all";
-  const since = all ? undefined : new Date(Date.now() - DEFAULT_DAYS * 86_400_000).toISOString();
+  const since = all ? undefined : rangeStart(new Date(), DEFAULT_DAYS);
   const { points, problem } = await load(since);
 
   return (

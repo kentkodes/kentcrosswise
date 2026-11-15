@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
-import { listDiary, MAX_DIARY_CHARS, moodSummaryLine, type DiaryRow } from "@/server/diary";
+import { LIST_LIMIT, listDiary, MAX_DIARY_CHARS, moodSummaryLine, type DiaryRow } from "@/server/diary";
 import { requireOwner } from "@/server/owner";
 import { routingEnabled } from "@/server/router";
 import { formatUtc } from "../format";
@@ -89,6 +89,7 @@ export default async function DiaryPage({ searchParams }: { searchParams: Promis
             ))}
           </ol>
         ) : null}
+        {rows && rows.length >= LIST_LIMIT ? <p className={`${s.note} ${s.pad}`}>Showing the newest {LIST_LIMIT} entries.</p> : null}
       </Region>
     </OwnerFrame>
   );
