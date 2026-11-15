@@ -3,7 +3,7 @@
 // TikTok stays manual. Logs one line per platform with fixed codes and error classes only: never tokens,
 // handles, account ids or response bodies.
 import { withDb, type Queryable } from "../db";
-import { googleAccessToken } from "../google";
+import { googleAccessToken, googleConnection } from "../google";
 import {
   defaultInstagramStore,
   fetchInstagramFollowers,
@@ -28,9 +28,19 @@ export interface SocialDailyDeps {
   run?: <T>(fn: (db: Queryable) => Promise<T>) => Promise<T>;
   fetch?: typeof fetch;
   googleToken?: () => Promise<string | null>;
+  /** Asked only when there is no token: tells "never connected" from a rejected consent and a failed refresh. */
+  googleState?: () => Promise<GoogleState>;
   instagram?: InstagramStore;
   now?: () => number;
   log?: (line: string) => void;
+}
+
+export type GoogleState = "connected" | "expired" | "not_connected";
+
+async function defaultGoogleState(): Promise<GoogleState> {
+  const c = await googleConnection();
+  if (c.expired) return "expired";
+  return c.connected && c.scopes.includes("youtube") ? "connected" : "not_connected";
 }
 
 interface Result {
@@ -70,7 +80,13 @@ export async function runSocialDaily(ctx: JobContext, deps: SocialDailyDeps = {}
 
   const youtube = async (accountId: string): Promise<Result> => {
     const token = await (deps.googleToken ?? (() => googleAccessToken("youtube")))();
-    if (!token) return { code: "not_connected" };
+    if (!token) {
+      // No token covers three cases; only "never connected" is a skip. A consent Google rejected and a token
+      // refresh that failed are failures, so the job's alarm reports them.
+      const state = await (deps.googleState ?? defaultGoogleState)();
+      if (state === "not_connected") return { code: "not_connected" };
+      return { code: state === "expired" ? "unauthorized" : "http", note: "token" };
+    }
     const stats = await fetchYoutubeStats(token, fetchImpl);
     await write(accountId, stats.followers, stats.views, false);
     return { code: "ok" };
@@ -82,6 +98,7 @@ export async function runSocialDaily(ctx: JobContext, deps: SocialDailyDeps = {}
     if (!stored) return { code: "not_connected" };
     let token = stored.token;
     let note: string | undefined;
+    let tokenNotSaved = false;
     if (refreshDue(stored.refreshedAt, now())) {
       try {
         token = await refreshInstagramToken(token, fetchImpl);
@@ -90,6 +107,7 @@ export async function runSocialDaily(ctx: JobContext, deps: SocialDailyDeps = {}
           note = "refresh=ok";
         } catch (err) {
           note = `refresh=store_failed ${err instanceof Error ? err.name : "Error"}`;
+          tokenNotSaved = true;
         }
       } catch (err) {
         note = `refresh=${err instanceof PlatformError ? err.code : "failed"}`;
@@ -97,7 +115,8 @@ export async function runSocialDaily(ctx: JobContext, deps: SocialDailyDeps = {}
     }
     const followers = await fetchInstagramFollowers(token, fetchImpl);
     await write(accountId, followers, null, true);
-    return { code: "ok", note };
+    // The snapshot is stored, but a refreshed token that could not be saved is a failure: the stored one expires.
+    return { code: tokenNotSaved ? "store" : "ok", note };
   };
 
   const platforms = [
