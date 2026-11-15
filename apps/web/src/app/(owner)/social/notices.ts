@@ -8,10 +8,11 @@ export const NOTICES = {
   "account-deleted": "Account deleted, with its snapshots.",
   "snapshot-saved": "Numbers saved for that day.",
   platform: "Choose YouTube, Instagram or TikTok.",
-  handle: "A handle is letters, digits, dots, dashes or underscores, up to 64 characters. A leading @ is removed.",
+  handle:
+    "A handle is 1 to 64 letters, digits, dots, dashes or underscores (no spaces or accents). A leading @ is removed, and case does not matter.",
   duplicate: "That account is already on the dashboard.",
   account: "That account is no longer here.",
-  day: "Choose a day that exists and is not in the future (UTC).",
+  day: "Choose a real day from 2000 onwards that is not in the future (UTC).",
   followers: "Followers must be a whole number, zero or more, or left empty.",
   views: "Views must be a whole number, zero or more, or left empty.",
   empty: "Enter followers or views, or both, for that day.",

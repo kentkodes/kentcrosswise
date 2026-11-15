@@ -9,6 +9,7 @@ import {
   parseDay,
   parsePlatform,
   parseSource,
+  shortDay,
   snapshotFromForm,
   SocialInputError,
   toCount,
@@ -68,8 +69,16 @@ describe("normalizeHandle", () => {
     expect(normalizeHandle("plain")).toBe("plain");
   });
 
-  it("keeps the case as typed", () => {
-    expect(normalizeHandle("@MixedCase")).toBe("MixedCase");
+  it("stores the handle lower-cased, so case never makes a second account", () => {
+    expect(normalizeHandle("@MixedCase")).toBe("mixedcase");
+    expect(normalizeHandle("Probe_Case")).toBe(normalizeHandle("probe_case"));
+  });
+
+  it("allows only ASCII letters, digits, dots, underscores and dashes", () => {
+    expect(normalizeHandle("a-b.c_9")).toBe("a-b.c_9");
+    expect(codeOf(() => normalizeHandle("ünïcode"))).toBe("handle");
+    expect(codeOf(() => normalizeHandle("namé"))).toBe("handle");
+    expect(codeOf(() => normalizeHandle("emoji\u{1F600}"))).toBe("handle");
   });
 
   it("rejects empty, too long, and handles with spaces or symbols", () => {
@@ -112,9 +121,20 @@ describe("parseCount", () => {
 });
 
 describe("parseDay", () => {
-  it("accepts today and past days in YYYY-MM-DD", () => {
+  it("accepts today and past days in YYYY-MM-DD, from 2000-01-01 on", () => {
     expect(parseDay("2026-11-14", TODAY)).toBe("2026-11-14");
     expect(parseDay("2024-02-29", TODAY)).toBe("2024-02-29");
+    expect(parseDay("2000-01-01", TODAY)).toBe("2000-01-01");
+  });
+
+  it("rejects days before 2000 (year 0000 would otherwise reach Postgres and fail there)", () => {
+    expect(codeOf(() => parseDay("0000-01-01", TODAY))).toBe("day");
+    expect(codeOf(() => parseDay("1999-12-31", TODAY))).toBe("day");
+  });
+
+  it("shows a day as day and month in plain text", () => {
+    expect(shortDay("2026-11-12")).toBe("12 Nov");
+    expect(shortDay("2026-01-05")).toBe("5 Jan");
   });
 
   it("rejects future days, impossible dates and other shapes", () => {
@@ -226,7 +246,9 @@ function row(p: Partial<AccountRow> & Pick<AccountRow, "platform">): AccountRow 
     handle: "x",
     ingest: "manual",
     snapshots: 0,
-    latest: null,
+    day: null,
+    followers: null,
+    views: null,
     change: { followers: null, views: null },
     trend: [],
     ...p,
@@ -237,13 +259,17 @@ describe("inSource and totalsFor", () => {
   const rows: AccountRow[] = [
     row({
       platform: "youtube",
-      latest: { day: "2026-11-13", followers: 100, views: 1000, followersExact: true },
+      day: "2026-11-13",
+      followers: { value: 100, day: "2026-11-13", exact: true },
+      views: { value: 1000, day: "2026-11-13" },
     }),
     row({
       platform: "instagram",
-      latest: { day: "2026-11-13", followers: 40, views: null, followersExact: false },
+      day: "2026-11-13",
+      followers: { value: 40, day: "2026-11-13", exact: false },
+      views: null,
     }),
-    row({ platform: "tiktok", latest: null }),
+    row({ platform: "tiktok" }),
   ];
 
   it("keeps the rows of one source, or all of them", () => {
@@ -257,5 +283,15 @@ describe("inSource and totalsFor", () => {
     expect(totalsFor(inSource(rows, "instagram"))).toEqual({ accounts: 1, followers: 40, views: null });
     expect(totalsFor(inSource(rows, "tiktok"))).toEqual({ accounts: 1, followers: null, views: null });
     expect(totalsFor([])).toEqual({ accounts: 0, followers: null, views: null });
+  });
+
+  it("counts the latest known value of each metric, even when it was entered for an older day", () => {
+    const stale = row({
+      platform: "tiktok",
+      day: "2026-11-13",
+      followers: { value: 7, day: "2026-11-10", exact: true },
+      views: null,
+    });
+    expect(totalsFor([...rows, stale])).toEqual({ accounts: 4, followers: 147, views: 1000 });
   });
 });

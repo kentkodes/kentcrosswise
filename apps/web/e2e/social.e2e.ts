@@ -14,10 +14,22 @@ function uniqueHandle(): string {
 /** The accounts-table row for this handle (rows are found by handle only). */
 const rowFor = (page: Page, handle: string): Locator => page.getByTestId("account-table").locator("tr", { hasText: handle });
 
-/** The followers total as a number, or null when the page says "no numbers yet". */
-async function followersTotal(page: Page): Promise<number | null> {
-  const text = (await page.getByTestId("totals").locator('[data-field="total-followers"]').innerText()).trim();
-  return text === "no numbers yet" ? null : Number(text.replace(/,/g, ""));
+/** The number at the start of a followers cell ("1,250", "500 (12 Nov)", "300 rounded"), or null for "none". */
+function cellNumber(text: string): number | null {
+  const m = text.trim().match(/^[\d,]+/);
+  return m ? Number(m[0].replace(/,/g, "")) : null;
+}
+
+/**
+ * The total shown equals the sum of the follower cells rendered on the same page. Other writers in the shared
+ * database can change the rows between two reads, so the caller polls this until it holds on one render.
+ */
+async function totalMatchesRows(page: Page): Promise<boolean> {
+  const totalText = (await page.getByTestId("totals").locator('[data-field="total-followers"]').innerText()).trim();
+  const cells = await page.getByTestId("account-table").locator('[data-field="followers"]').allInnerTexts();
+  const values = cells.map(cellNumber).filter((n): n is number => n !== null);
+  if (totalText === "no numbers yet") return values.length === 0;
+  return Number(totalText.replace(/,/g, "")) === values.reduce((sum, n) => sum + n, 0);
 }
 
 test("social redirects to sign-in when logged out", async ({ page }) => {
@@ -47,7 +59,6 @@ test.describe("as the preview owner", () => {
 
     await signIn(page, "/social?source=instagram");
     await expect(page.getByRole("heading", { level: 1, name: "Social" })).toBeVisible();
-    const before = await followersTotal(page);
 
     // Add the account (ingest is manual; the row says so once numbers exist).
     // A label that wraps a select is named with the selected option too ("Platform YouTube"), so match the start.
@@ -66,9 +77,10 @@ test.describe("as the preview owner", () => {
     await snapshot.getByLabel("Views", { exact: true }).fill("1000");
     await snapshot.getByRole("button", { name: "Save numbers" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Numbers saved" })).toHaveCount(1);
-    // The first day alone: the total moves by its followers, and the row shows no change yet.
-    await expect.poll(() => followersTotal(page)).toBe((before ?? 0) + 100);
+    // The first day alone: our row shows its numbers, with no change yet; the total matches the rows on this page.
+    await expect(rowFor(page, handle).locator('[data-field="followers"]')).toContainText("100");
     await expect(rowFor(page, handle).locator('[data-field="followers-change"]')).toHaveText("—");
+    await expect.poll(() => totalMatchesRows(page)).toBe(true);
 
     await pick();
     await snapshot.getByLabel("Day (UTC)").fill(day2);
@@ -83,8 +95,8 @@ test.describe("as the preview owner", () => {
     await expect(row.locator('[data-field="views-change"]')).toHaveText("+500");
     await expect(row.locator('[data-field="day"]')).toHaveText(day2);
     await expect(row.locator('[data-field="ingest"]')).toHaveText("Manual");
-    // The total moved by the latest followers (130), not by both days.
-    await expect.poll(() => followersTotal(page)).toBe((before ?? 0) + 130);
+    // The total is the sum of the rows shown here (our 130 included), whoever else is writing.
+    await expect.poll(() => totalMatchesRows(page)).toBe(true);
 
     // Source filter: the account is not under YouTube, and is under Instagram.
     await page.getByRole("navigation", { name: "Source" }).getByRole("link", { name: "YouTube" }).click();
@@ -100,7 +112,7 @@ test.describe("as the preview owner", () => {
     await confirm.getByRole("button", { name: "Delete account" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Account deleted" })).toHaveCount(1);
     await expect(rowFor(page, handle)).toHaveCount(0);
-    if (before !== null) await expect.poll(() => followersTotal(page)).toBe(before);
+    await expect.poll(() => totalMatchesRows(page)).toBe(true);
   }
 
   test("adds an account, enters two days, sees totals and change, filters and deletes it (desktop)", async ({ page }) => {

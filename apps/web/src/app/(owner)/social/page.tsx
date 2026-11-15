@@ -10,9 +10,11 @@ import {
   inSource,
   listAccounts,
   parseSource,
+  shortDay,
   todayUtc,
   totalsFor,
   type AccountRow,
+  type Known,
   type Platform,
   type Source,
 } from "@/server/social";
@@ -31,8 +33,12 @@ const SOURCE_LABEL: Record<Source, string> = { all: "All", ...PLATFORM_LABEL };
 
 const int = (n: number) => n.toLocaleString("en-US");
 
-/** A number, or "none" when the snapshot has none. */
-const cell = (n: number | null) => (n === null ? "none" : int(n));
+/**
+ * A metric's latest known value. When it was entered for an older day than the row (the newest snapshot
+ * left it empty), the day is shown in plain text next to it: "500 (12 Nov)".
+ */
+const metricCell = (k: Known | null, rowDay: string | null) =>
+  k === null ? "none" : k.day === rowDay ? int(k.value) : `${int(k.value)} (${shortDay(k.day)})`;
 
 /** A change as a plain signed number; "—" when there is nothing to compare with. */
 function signed(n: number | null): string {
@@ -71,6 +77,8 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
   const totals = totalsFor(shown);
   const today = todayUtc();
   const pending = deleteId ? all.find((a) => a.id === deleteId) : undefined;
+  // The forms need a working database: when the read failed, the notice above says so and the forms are hidden.
+  const showForms = problem === undefined;
 
   return (
     <OwnerFrame title="Social" current="/hub">
@@ -114,7 +122,8 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
             </div>
           </div>
           <p className={s.note}>
-            Each account counts its latest day. Rounded follower counts are added as entered. Days are UTC.
+            Each account counts its latest known followers and views, whichever day they were entered for. Rounded follower
+            counts are added as entered. Days are UTC.
           </p>
         </div>
       </Region>
@@ -156,8 +165,8 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
                       <td>{PLATFORM_LABEL[a.platform]}</td>
                       <th scope="row">{a.handle}</th>
                       <td className={s.num} data-field="followers">
-                        {cell(a.latest?.followers ?? null)}
-                        {a.latest && a.latest.followers !== null && !a.latest.followersExact ? (
+                        {metricCell(a.followers, a.day)}
+                        {a.followers && !a.followers.exact ? (
                           <span className={c.tag}>rounded</span>
                         ) : null}
                       </td>
@@ -165,13 +174,13 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
                         {signed(a.change.followers)}
                       </td>
                       <td className={s.num} data-field="views">
-                        {cell(a.latest?.views ?? null)}
+                        {metricCell(a.views, a.day)}
                       </td>
                       <td className={s.num} data-field="views-change">
                         {signed(a.change.views)}
                       </td>
                       <td className={s.mono} data-field="day">
-                        {a.latest?.day ?? "none"}
+                        {a.day ?? "none"}
                       </td>
                       <td data-field="ingest">{a.ingest === "manual" ? "Manual" : "API"}</td>
                       <td>
@@ -215,6 +224,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
         </Region>
       ) : null}
 
+      {showForms ? (
       <Region id="add-account" title="Add account" testId="add-account">
         <form action={addAccountAction} className={`${s.pad} ${s.stack}`}>
           <input type="hidden" name="source" value={source} />
@@ -250,7 +260,9 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
           </div>
         </form>
       </Region>
+      ) : null}
 
+      {showForms ? (
       <Region id="snapshot" title="Enter numbers for a day" testId="snapshot">
         {all.length === 0 ? (
           <p className={`${s.note} ${s.pad}`}>Add an account first, then enter its numbers here.</p>
@@ -297,6 +309,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
           </form>
         )}
       </Region>
+      ) : null}
     </OwnerFrame>
   );
 }

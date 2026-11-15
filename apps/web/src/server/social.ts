@@ -1,7 +1,7 @@
 // Social dashboard (H11, hub SPEC feature 5): accounts, daily snapshots of followers and views, totals,
-// change against the previous snapshot and the followers trend. Runs as web_rw through withDb; owner pages
-// only. Manual entry is the only writer in this PR. API ingestion (YouTube, Instagram, TikTok) writes the
-// same tables: accounts with ingest 'api' and snapshots through upsertSnapshot.
+// change against the previous known value and the followers trend. Runs as web_rw through withDb; owner
+// pages only. Manual entry is the only writer in this PR. API ingestion (YouTube, Instagram, TikTok) writes
+// the same tables: accounts with ingest 'api' and snapshots through upsertSnapshot.
 //
 // Never log handles or numbers: callers log error codes and classes only.
 import type { Queryable } from "./db";
@@ -15,11 +15,15 @@ export type Ingest = "api" | "manual";
 export const MAX_HANDLE_CHARS = 64;
 /** Snapshots per account that feed the followers trend (the newest days). */
 export const TREND_POINTS = 30;
+/** The earliest day a snapshot may carry (earlier years are typos; Postgres would also reject year 0000). */
+export const MIN_DAY = "2000-01-01";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DIGITS = /^\d+$/;
-const HANDLE = /^[\p{L}\p{N}._-]+$/u;
+/** ASCII only, 1 to MAX_HANDLE_CHARS characters (checked with the length below). */
+const HANDLE = /^[A-Za-z0-9._-]+$/;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 /** Input problems, as fixed codes (the page shows text for each code; the message is never shown or logged). */
 export type SocialErrorCode = "platform" | "handle" | "duplicate" | "account" | "day" | "followers" | "views" | "empty";
@@ -38,6 +42,12 @@ export function todayUtc(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+/** A day for display, in plain text: "2026-11-12" becomes "12 Nov". */
+export function shortDay(day: string): string {
+  const [, month, date] = day.split("-");
+  return `${Number(date)} ${MONTHS[Number(month) - 1]}`;
+}
+
 // ---------------------------------------------------------------- parsing (form and API input)
 
 /** The source filter from a query string. Anything unknown means all sources. */
@@ -50,10 +60,14 @@ export function parsePlatform(raw: unknown): Platform {
   return raw as Platform;
 }
 
-/** Trims, drops leading "@" signs, then checks the characters and length. The result is what is stored. */
+/**
+ * Trims, drops leading "@" signs, lower-cases, then checks the characters (ASCII letters, digits, ".", "_",
+ * "-") and the length. The result is what is stored: platforms treat handles case-insensitively, and the
+ * unique constraint is case-sensitive, so the stored form is the lower-case one.
+ */
 export function normalizeHandle(raw: unknown): string {
   if (typeof raw !== "string") throw new SocialInputError("handle");
-  const handle = raw.trim().replace(/^@+/, "").trim();
+  const handle = raw.trim().replace(/^@+/, "").trim().toLowerCase();
   if (handle.length === 0 || handle.length > MAX_HANDLE_CHARS || !HANDLE.test(handle)) throw new SocialInputError("handle");
   return handle;
 }
@@ -70,13 +84,13 @@ export function parseCount(raw: unknown, field: "followers" | "views"): number |
   return n;
 }
 
-/** A YYYY-MM-DD day that exists and is not after `today` (UTC). */
+/** A YYYY-MM-DD day that exists, is not before MIN_DAY and is not after `today` (UTC). */
 export function parseDay(raw: unknown, today: string = todayUtc()): string {
   if (typeof raw !== "string" || !DAY.test(raw)) throw new SocialInputError("day");
   const ms = Date.parse(`${raw}T00:00:00Z`);
   // Date.parse rolls 2026-02-30 over to March; require a round trip.
   if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 10) !== raw) throw new SocialInputError("day");
-  if (raw > today) throw new SocialInputError("day");
+  if (raw < MIN_DAY || raw > today) throw new SocialInputError("day");
   return raw;
 }
 
@@ -154,7 +168,7 @@ export function toCount(v: unknown): number | null {
 
 /**
  * Inserts the account (ingest manual) and returns its id. A platform and handle that is already on the
- * dashboard throws "duplicate".
+ * dashboard throws "duplicate" (handles are stored lower-case, so case does not make a second account).
  */
 export async function addAccount(db: Queryable, input: { platform: Platform; handle: string }): Promise<string> {
   const platform = parsePlatform(input.platform);
@@ -201,11 +215,15 @@ export async function upsertSnapshot(db: Queryable, input: SnapshotInput): Promi
   }
 }
 
-export interface Latest {
+/** One metric's latest known value, and the day it was entered for. */
+export interface Known {
+  value: number;
   day: string;
-  followers: number | null;
-  views: number | null;
-  followersExact: boolean;
+}
+
+export interface FollowersKnown extends Known {
+  /** False when the platform gave a rounded count for that day. */
+  exact: boolean;
 }
 
 export interface AccountRow {
@@ -215,8 +233,16 @@ export interface AccountRow {
   ingest: Ingest;
   /** All snapshots of the account (for the delete confirmation). */
   snapshots: number;
-  latest: Latest | null;
-  /** Latest minus the previous snapshot's number; null when either is missing (no earlier day, or no number). */
+  /** Day of the newest snapshot (any metric), or null when the account has none. */
+  day: string | null;
+  /** Latest followers that were entered (the newest day with a followers number), or null. */
+  followers: FollowersKnown | null;
+  /** Latest views that were entered (the newest day with a views number), or null. */
+  views: Known | null;
+  /**
+   * Latest known value minus the previous known value of the same metric (the day before it that has one).
+   * Null when there is no earlier known value.
+   */
   change: { followers: number | null; views: number | null };
   /** Followers of the newest TREND_POINTS days that have a followers number, oldest first. */
   trend: number[];
@@ -229,33 +255,56 @@ interface RawAccount {
   ingest: Ingest;
   snapshots: unknown;
   day: string | null;
+  followers_day: string | null;
   followers: unknown;
-  views: unknown;
   followers_exact: boolean | null;
   prev_followers: unknown;
+  views_day: string | null;
+  views: unknown;
   prev_views: unknown;
 }
 
+// Each metric has its own lateral lookup: the newest snapshot with a number for that metric, and the
+// newest one before it. A newer day with the metric left empty therefore does not hide the older number.
 const LIST_SQL = `
   SELECT a.id, a.platform, a.handle, a.ingest,
          (SELECT count(*)::int FROM social_snapshots c WHERE c.account_id = a.id) AS snapshots,
-         l.day::text AS day, l.followers, l.views, l.followers_exact,
-         p.followers AS prev_followers, p.views AS prev_views
+         n.day::text AS day,
+         f.day::text AS followers_day, f.followers, f.followers_exact,
+         pf.followers AS prev_followers,
+         v.day::text AS views_day, v.views,
+         pv.views AS prev_views
     FROM social_accounts a
     LEFT JOIN LATERAL (
-      SELECT s.day, s.followers, s.views, s.followers_exact
-        FROM social_snapshots s
+      SELECT s.day FROM social_snapshots s
        WHERE s.account_id = a.id
        ORDER BY s.day DESC
        LIMIT 1
-    ) l ON true
+    ) n ON true
     LEFT JOIN LATERAL (
-      SELECT s.followers, s.views
-        FROM social_snapshots s
-       WHERE s.account_id = a.id AND l.day IS NOT NULL AND s.day < l.day
+      SELECT s.day, s.followers, s.followers_exact FROM social_snapshots s
+       WHERE s.account_id = a.id AND s.followers IS NOT NULL
        ORDER BY s.day DESC
        LIMIT 1
-    ) p ON true
+    ) f ON true
+    LEFT JOIN LATERAL (
+      SELECT s.followers FROM social_snapshots s
+       WHERE s.account_id = a.id AND s.followers IS NOT NULL AND f.day IS NOT NULL AND s.day < f.day
+       ORDER BY s.day DESC
+       LIMIT 1
+    ) pf ON true
+    LEFT JOIN LATERAL (
+      SELECT s.day, s.views FROM social_snapshots s
+       WHERE s.account_id = a.id AND s.views IS NOT NULL
+       ORDER BY s.day DESC
+       LIMIT 1
+    ) v ON true
+    LEFT JOIN LATERAL (
+      SELECT s.views FROM social_snapshots s
+       WHERE s.account_id = a.id AND s.views IS NOT NULL AND v.day IS NOT NULL AND s.day < v.day
+       ORDER BY s.day DESC
+       LIMIT 1
+    ) pv ON true
    ORDER BY a.platform, a.handle`;
 
 const TREND_SQL = `
@@ -269,7 +318,10 @@ const TREND_SQL = `
    WHERE rn <= $1
    ORDER BY account_id, day`;
 
-/** Every account with its latest snapshot, change and followers trend. Newest data comes from the latest day per account. */
+/**
+ * Every account with its latest known followers and views (each with its own day), the change of each
+ * against its previous known value, and the followers trend.
+ */
 export async function listAccounts(db: Queryable): Promise<AccountRow[]> {
   const { rows } = await db.query<RawAccount>(LIST_SQL);
   const trend = await db.query<{ account_id: string; followers: unknown }>(TREND_SQL, [TREND_POINTS]);
@@ -284,8 +336,6 @@ export async function listAccounts(db: Queryable): Promise<AccountRow[]> {
   return rows.map((r) => {
     const followers = toCount(r.followers);
     const views = toCount(r.views);
-    const latest: Latest | null =
-      r.day === null ? null : { day: r.day, followers, views, followersExact: r.followers_exact !== false };
     const prevFollowers = toCount(r.prev_followers);
     const prevViews = toCount(r.prev_views);
     return {
@@ -294,7 +344,12 @@ export async function listAccounts(db: Queryable): Promise<AccountRow[]> {
       handle: r.handle,
       ingest: r.ingest,
       snapshots: toCount(r.snapshots) ?? 0,
-      latest,
+      day: r.day,
+      followers:
+        r.followers_day !== null && followers !== null
+          ? { value: followers, day: r.followers_day, exact: r.followers_exact !== false }
+          : null,
+      views: r.views_day !== null && views !== null ? { value: views, day: r.views_day } : null,
       change: {
         followers: followers !== null && prevFollowers !== null ? followers - prevFollowers : null,
         views: views !== null && prevViews !== null ? views - prevViews : null,
@@ -314,13 +369,13 @@ export function inSource(rows: AccountRow[], source: Source): AccountRow[] {
 export interface Totals {
   /** Accounts in the list. */
   accounts: number;
-  /** Sum of the latest followers over the accounts that have a number; null when none has one. */
+  /** Sum of the latest known followers over the accounts that have one; null when none has one. */
   followers: number | null;
-  /** Sum of the latest views over the accounts that have a number; null when none has one. */
+  /** Sum of the latest known views over the accounts that have one; null when none has one. */
   views: number | null;
 }
 
-/** Totals over the latest snapshot of each account in `rows`. */
+/** Totals over the latest known value of each metric per account in `rows`. */
 export function totalsFor(rows: AccountRow[]): Totals {
   const sum = (pick: (r: AccountRow) => number | null): number | null => {
     let total: number | null = null;
@@ -332,7 +387,7 @@ export function totalsFor(rows: AccountRow[]): Totals {
   };
   return {
     accounts: rows.length,
-    followers: sum((r) => r.latest?.followers ?? null),
-    views: sum((r) => r.latest?.views ?? null),
+    followers: sum((r) => r.followers?.value ?? null),
+    views: sum((r) => r.views?.value ?? null),
   };
 }

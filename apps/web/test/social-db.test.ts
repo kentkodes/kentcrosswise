@@ -39,6 +39,18 @@ describe("social tables as web_rw (PGlite)", () => {
     expect(rows).toEqual([{ handle: "test_yt_channel", ingest: "manual" }]);
   });
 
+  it("treats handles that differ only by case as the same account", async () => {
+    await asRw((db) => addAccount(db, { platform: "tiktok", handle: "Probe_Case" }));
+    const { rows } = await pg.query<{ handle: string }>("SELECT handle FROM social_accounts WHERE platform = 'tiktok' AND handle = 'probe_case'");
+    expect(rows).toEqual([{ handle: "probe_case" }]);
+    await expect(asRw((db) => addAccount(db, { platform: "tiktok", handle: "probe_case" }))).rejects.toMatchObject({
+      code: "duplicate",
+    });
+    await expect(asRw((db) => addAccount(db, { platform: "tiktok", handle: "@PROBE_case" }))).rejects.toMatchObject({
+      code: "duplicate",
+    });
+  });
+
   it("rejects the same platform and handle twice, and an invalid platform", async () => {
     await expect(asRw((db) => addAccount(db, { platform: "youtube", handle: "test_yt_channel" }))).rejects.toMatchObject({
       code: "duplicate",
@@ -103,11 +115,17 @@ describe("social tables as web_rw (PGlite)", () => {
     const ig = idOf(rows, "test.ig.account");
     const tt = idOf(rows, "test_tt_profile");
 
-    expect(yt.latest).toEqual({ day: DAYS.d2, followers: 1250, views: 9000, followersExact: true });
+    expect(yt.day).toBe(DAYS.d2);
+    expect(yt.followers).toEqual({ value: 1250, day: DAYS.d2, exact: true });
+    expect(yt.views).toEqual({ value: 9000, day: DAYS.d2 });
     expect(yt.change).toEqual({ followers: 150, views: null }); // d1 had no views, so no views change
-    expect(ig.latest).toEqual({ day: DAYS.d3, followers: 300, views: null, followersExact: false });
+    expect(ig.day).toBe(DAYS.d3);
+    expect(ig.followers).toEqual({ value: 300, day: DAYS.d3, exact: false });
+    expect(ig.views).toBeNull();
     expect(ig.change).toEqual({ followers: null, views: null });
-    expect(tt.latest).toEqual({ day: DAYS.d4, followers: 45, views: 700, followersExact: true });
+    expect(tt.day).toBe(DAYS.d4);
+    expect(tt.followers).toEqual({ value: 45, day: DAYS.d4, exact: true });
+    expect(tt.views).toEqual({ value: 700, day: DAYS.d4 });
     expect(tt.change).toEqual({ followers: -5, views: 300 });
 
     const mine = [yt, ig, tt];
@@ -149,7 +167,14 @@ describe("social tables as web_rw (PGlite)", () => {
   it("an account API ingestion will write (ingest api) reads back as api, and an account with no snapshots has no latest", async () => {
     await pg.query("INSERT INTO social_accounts (platform, handle, ingest) VALUES ('tiktok', 'test_api_feed', 'api')");
     const rows = await asRw((db) => listAccounts(db));
-    expect(idOf(rows, "test_api_feed")).toMatchObject({ ingest: "api", latest: null, trend: [], snapshots: 0 });
+    expect(idOf(rows, "test_api_feed")).toMatchObject({
+      ingest: "api",
+      day: null,
+      followers: null,
+      views: null,
+      trend: [],
+      snapshots: 0,
+    });
   });
 
   it("deleting an account removes its snapshots through the foreign key, and leaves other accounts alone", async () => {
@@ -164,6 +189,30 @@ describe("social tables as web_rw (PGlite)", () => {
 
     expect(await asRw((db) => deleteAccount(db, ids.tt))).toBe(false);
     await expect(asRw((db) => deleteAccount(db, "not-a-uuid"))).rejects.toMatchObject({ code: "account" });
+  });
+
+  it("uses the latest known value of each metric: an empty newer day keeps the older number and its day", async () => {
+    const id = await asRw((db) => addAccount(db, { platform: "instagram", handle: "test_gap_metric" }));
+    // Day 1: followers 500 and views 10. Day 2: followers left empty, views 20.
+    await asRw((db) => upsertSnapshot(db, { accountId: id, day: DAYS.d1, followers: 500, views: 10, followersExact: true }));
+    await asRw((db) => upsertSnapshot(db, { accountId: id, day: DAYS.d2, followers: null, views: 20, followersExact: true }));
+
+    const first = idOf(await asRw((db) => listAccounts(db)), "test_gap_metric");
+    expect(first.day).toBe(DAYS.d2); // the row's day is the newest snapshot
+    expect(first.followers).toEqual({ value: 500, day: DAYS.d1, exact: true }); // older day, still the latest followers
+    expect(first.views).toEqual({ value: 20, day: DAYS.d2 });
+    expect(first.change).toEqual({ followers: null, views: 10 }); // one known followers value: no change yet
+
+    // The totals count the 500 from day 1 (its account is the only one in this source's rows here).
+    expect(totalsFor([first])).toEqual({ accounts: 1, followers: 500, views: 20 });
+
+    // Day 3 brings 520 followers: the change compares it with the last two known followers values (500).
+    await asRw((db) => upsertSnapshot(db, { accountId: id, day: "2026-11-14", followers: 520, views: null, followersExact: false }));
+    const third = idOf(await asRw((db) => listAccounts(db)), "test_gap_metric");
+    expect(third.followers).toEqual({ value: 520, day: "2026-11-14", exact: false });
+    expect(third.change.followers).toBe(20);
+    expect(third.views).toEqual({ value: 20, day: DAYS.d2 });
+    expect(third.change.views).toBe(10);
   });
 });
 
@@ -204,7 +253,9 @@ describe("bigint columns from node-postgres (strings) read the same as PGlite (n
     const asStrings = await listAccounts(stringy);
 
     expect(asStrings).toEqual(asNumbers);
-    expect(idOf(asStrings, "test_string_driver").latest).toEqual({ day: DAYS.d2, followers: 80, views: 12400, followersExact: true });
+    const row = idOf(asStrings, "test_string_driver");
+    expect(row.followers).toEqual({ value: 80, day: DAYS.d2, exact: true });
+    expect(row.views).toEqual({ value: 12400, day: DAYS.d2 });
     expect(idOf(asStrings, "test_string_driver").change).toEqual({ followers: 3, views: 55 });
   });
 });
