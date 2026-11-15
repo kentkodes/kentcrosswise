@@ -26,7 +26,8 @@ describe("seedDemo on PGlite", () => {
       diary_entries: 20,
       mood_scores: 20,
       social_snapshots: 60,
-      projects: 1,
+      // Migration 0016 already inserted the Essays project, so the seed adds none.
+      projects: 0,
       essay_prefs: 1,
       tasks: 3,
       agent_events: 13,
