@@ -194,7 +194,7 @@ describe("orchestrator Lambda on Postgres", () => {
     const out = await b.handler({
       Records: [
         created("r2", id), // a second task.created
-        msg("r3", { task_id: id, agent: "developer", event_type: "coding" }, id), // kcw-report
+        msg("r3", { task_id: id, agent: "developer", run_id: 900, run_attempt: 1, job: "start", op: null, event_type: "coding" }, id), // kcw-report
         msg("r4", { type: "sweep", task_id: id, thread_id: thread }, id), // within the dev limit
         msg(
           "r5",
@@ -347,7 +347,7 @@ describe("orchestrator Lambda on Postgres", () => {
   it("an empty or missing db_url returns the batch to the queue, then recovers once filled", async () => {
     const id = await newTask("Add a favicon");
     const p = newProcess({ secrets: { [ORCH]: { db_url: "" } } });
-    const batch = { Records: [created("d1", id), msg("d2", { task_id: id, agent: "developer", event_type: "coding" }, id)] };
+    const batch = { Records: [created("d1", id), msg("d2", { task_id: id, agent: "developer", run_id: 900, run_attempt: 1, job: "start", op: null, event_type: "coding" }, id)] };
     const failed = { batchItemFailures: [{ itemIdentifier: "d1" }, { itemIdentifier: "d2" }] };
     expect(await p.handler(batch)).toEqual(failed);
 
