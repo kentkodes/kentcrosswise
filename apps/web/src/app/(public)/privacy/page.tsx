@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Privacy</h1>
-        <p className={s.updated}>Last updated: 14 November 2026</p>
+        <p className={s.updated}>Last updated: 15 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project with one account. This page says what the site does with
           data, and marks what is only planned.
@@ -89,18 +89,22 @@ export default function PrivacyPage() {
             </li>
           </ul>
           <p className={s.text}>
-            Planned, not built yet. Each would read only the owner&apos;s own data and own account
-            statistics, never visitors&apos; data:
+            The owner can connect Google Calendar and YouTube to the owner&apos;s own Google account.
+            The connection asks Google for access to the owner&apos;s own calendar events and channel
+            statistics, stores a refresh token in the site&apos;s secret store, and can be disconnected
+            at any time, which revokes the token at Google. It reads only the owner&apos;s own data,
+            never visitors&apos; data. Calendar suggestions and the daily YouTube snapshot are still
+            planned and not built yet. YouTube is accessed through YouTube API Services. By using it you
+            are also bound by the{" "}
+            <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
+            data under the{" "}
+            <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
+          </p>
+          <p className={s.text}>
+            Planned, not built yet. Each would read only the owner&apos;s own account statistics, never
+            visitors&apos; data:
           </p>
           <ul className={s.list}>
-            <li>Google Calendar, to suggest and create the owner&apos;s own events.</li>
-            <li>
-              YouTube: the hub will read the owner&apos;s own channel statistics through YouTube API
-              Services. By using it you are also bound by the{" "}
-              <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
-              data under the{" "}
-              <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
-            </li>
             <li>Instagram, the owner&apos;s own account statistics only.</li>
             <li>TikTok, the owner&apos;s own account statistics only.</li>
           </ul>
