@@ -13,7 +13,7 @@ export default function TermsPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Terms</h1>
-        <p className={s.updated}>Last updated: 14 November 2026</p>
+        <p className={s.updated}>Last updated: 15 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project. By using this website you agree to these short terms.
         </p>
