@@ -77,13 +77,13 @@ export default async function TodosPage({ searchParams }: { searchParams: Promis
                   <form action={setTodoDoneAction}>
                     <input type="hidden" name="id" value={t.id} />
                     <input type="hidden" name="done" value={t.done ? "false" : "true"} />
-                    <button className={s.button} type="submit">
+                    <button className={s.button} type="submit" aria-label={`${t.done ? "Undo" : "Mark done"}: ${t.body}`}>
                       {t.done ? "Undo" : "Mark done"}
                     </button>
                   </form>
                   <form action={deleteTodoAction}>
                     <input type="hidden" name="id" value={t.id} />
-                    <button className={s.button} type="submit">
+                    <button className={s.button} type="submit" aria-label={`Delete todo: ${t.body}`}>
                       Delete
                     </button>
                   </form>

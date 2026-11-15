@@ -7,6 +7,7 @@ import {
   ESSAYS_SLUG,
   listProjects,
   moveProject,
+  isValidSlug,
   parseProjectTitle,
   PROJECT_TITLE_MAX,
   renameProject,
@@ -150,5 +151,33 @@ describe("projects as web_rw", () => {
     await pg.query("INSERT INTO ratings (essay_id, stars) VALUES ($1, 4)", [rows[0]!.id]);
     await pg.query("INSERT INTO ratings (essay_id, stars) VALUES ($1, 2)", [rows[2]!.id]);
     expect(await asRw((db) => essaySummary(db))).toEqual({ essays: 2, rated: 1 });
+  });
+});
+
+describe("slug validation before any SQL", () => {
+  it("accepts lower case letters, digits and hyphens up to 80 characters", () => {
+    expect(isValidSlug("essays")).toBe(true);
+    expect(isValidSlug("garden-log-2")).toBe(true);
+    expect(isValidSlug("a".repeat(80))).toBe(true);
+    expect(isValidSlug("a".repeat(81))).toBe(false);
+    for (const bad of ["", "Essays", "a_b", "a b", "a/b", "a'; DROP TABLE projects; --", "a.b", "é", 3, undefined, null]) {
+      expect(isValidSlug(bad)).toBe(false);
+    }
+  });
+
+  it("a forged slug is refused before the database is touched", async () => {
+    const calls: string[] = [];
+    const fake: Queryable = {
+      query: async (sql: string) => {
+        calls.push(sql);
+        return { rows: [] };
+      },
+    };
+    const forged = "x'; DROP TABLE projects; --";
+    await expect(renameProject(fake, forged, "Title")).rejects.toMatchObject({ code: "invalid-slug" });
+    await expect(moveProject(fake, forged, "up")).rejects.toMatchObject({ code: "invalid-slug" });
+    await expect(deleteProject(fake, forged)).rejects.toMatchObject({ code: "invalid-slug" });
+    await expect(deleteProject(fake, "a".repeat(81))).rejects.toMatchObject({ code: "invalid-slug" });
+    expect(calls).toEqual([]);
   });
 });

@@ -88,3 +88,26 @@ describe("project actions", () => {
     expect(log).toHaveBeenCalledExactlyOnceWith("[projects] Error 42501");
   });
 });
+
+describe("slug checks in the actions", () => {
+  it("a forged slug redirects with invalid and never reaches the database", async () => {
+    for (const action of [renameProjectAction, moveProjectAction, deleteProjectAction]) {
+      f.redirect.mockClear();
+      await action(form({ slug: "x'; DROP TABLE projects; --", title: "T", direction: "up", tab: "essays" }));
+      expect(f.redirect).toHaveBeenLastCalledWith("/projects?tab=essays&n=invalid");
+    }
+    expect(f.withDb).not.toHaveBeenCalled();
+  });
+
+  it("a missing slug is refused the same way", async () => {
+    await deleteProjectAction(form({ tab: "essays" }));
+    expect(f.redirect).toHaveBeenCalledExactlyOnceWith("/projects?tab=essays&n=invalid");
+    expect(f.withDb).not.toHaveBeenCalled();
+  });
+
+  it("a forged tab is dropped from the redirect, not echoed", async () => {
+    f.withDb.mockResolvedValueOnce(undefined);
+    await renameProjectAction(form({ slug: "garden-log", title: "Journal", tab: "x y<>" }));
+    expect(f.redirect).toHaveBeenCalledExactlyOnceWith("/projects?n=project-renamed");
+  });
+});

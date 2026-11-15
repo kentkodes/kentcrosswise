@@ -35,6 +35,7 @@ const CODE_NOTICE: Record<string, NoticeCode> = {
   protected: "project-protected",
   "not-found": "project-not-found",
   "invalid-direction": "invalid",
+  "invalid-slug": "invalid",
 };
 
 /** The notice for a failed call in a project action. Logs only the error class and SQLSTATE, never the title. */

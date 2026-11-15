@@ -2,7 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
-import { type EssaySummary, essaySummary, ESSAYS_SLUG, listProjects, PROJECT_TITLE_MAX, type ProjectRow } from "@/server/projects";
+import {
+  type EssaySummary,
+  essaySummary,
+  ESSAYS_SLUG,
+  isValidSlug,
+  listProjects,
+  PROJECT_TITLE_MAX,
+  type ProjectRow,
+} from "@/server/projects";
 import { isSuccessNotice, noticeText } from "./notices";
 import { OwnerFrame } from "../owner-frame";
 import { Notice, Region } from "../owner-ui";
@@ -37,7 +45,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const notice = noticeText(params.n);
   const ok = isSuccessNotice(params.n);
-  const asked = typeof params.tab === "string" ? params.tab : undefined;
+  // A ?tab= that is not a slug is ignored, like an unknown one: the page shows the first project.
+  const asked = isValidSlug(params.tab) ? params.tab : undefined;
   const { projects, summary, problem } = await load();
   // Unknown or missing ?tab= falls back to the first project.
   const selected = projects?.find((p) => p.slug === asked) ?? projects?.[0];
@@ -119,7 +128,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                           Rename
                           <input className={s.field} name="title" type="text" defaultValue={p.title} maxLength={PROJECT_TITLE_MAX} required />
                         </label>
-                        <button className={s.button} type="submit">
+                        <button className={s.button} type="submit" aria-label={`Rename project ${p.title}`}>
                           Rename
                         </button>
                       </form>
@@ -128,14 +137,28 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                       <form action={moveProjectAction} className={s.formRow}>
                         <input type="hidden" name="tab" value={tabSlug} />
                         <input type="hidden" name="slug" value={p.slug} />
-                        <button className={s.button} type="submit" name="direction" value="up" disabled={i === 0}>
+                        <button
+                          className={s.button}
+                          type="submit"
+                          name="direction"
+                          value="up"
+                          disabled={i === 0}
+                          aria-label={`Move up project ${p.title}`}
+                        >
                           Move up
                         </button>
-                        <button className={s.button} type="submit" name="direction" value="down" disabled={i === projects.length - 1}>
+                        <button
+                          className={s.button}
+                          type="submit"
+                          name="direction"
+                          value="down"
+                          disabled={i === projects.length - 1}
+                          aria-label={`Move down project ${p.title}`}
+                        >
                           Move down
                         </button>
                         {protectedProject ? null : (
-                          <button className={s.button} type="submit" formAction={deleteProjectAction}>
+                          <button className={s.button} type="submit" formAction={deleteProjectAction} aria-label={`Delete project ${p.title}`}>
                             Delete
                           </button>
                         )}

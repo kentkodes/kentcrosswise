@@ -4,8 +4,10 @@
 // this file's own projects).
 import { expect as baseExpect, test, type Locator, type Page } from "@playwright/test";
 
-// `next dev` compiles each route and action on its first hit, so the first round trips can be slow.
-const expect = baseExpect.configure({ timeout: 20_000 });
+// Against the local dev server, `next dev` compiles each route and action on its first hit, so the first round
+// trips can be slow: longer timeouts there only. A deployed preview keeps the Playwright defaults.
+const local = !process.env.BASE_URL;
+const expect = local ? baseExpect.configure({ timeout: 20_000 }) : baseExpect;
 const token = process.env.KCW_E2E_LOGIN;
 
 function marker(): string {
@@ -13,7 +15,7 @@ function marker(): string {
 }
 
 test("the lists redirect to sign-in when logged out", async ({ page }) => {
-  test.setTimeout(120_000);
+  if (local) test.setTimeout(120_000);
   for (const path of ["/todos", "/ideas", "/projects"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/api\/auth\/signin/);
@@ -23,7 +25,7 @@ test("the lists redirect to sign-in when logged out", async ({ page }) => {
 
 test.describe("as the preview owner", () => {
   // Each test here creates its own rows; serial keeps this file's own rows from interleaving.
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+  test.describe.configure({ mode: "serial", ...(local ? { timeout: 180_000 } : {}) });
   test.skip(!token, "KCW_E2E_LOGIN is not set (prod targets have no preview login)");
 
   async function signIn(page: Page, path: string): Promise<void> {
@@ -74,11 +76,11 @@ test.describe("as the preview owner", () => {
     await expect(page.getByRole("status").filter({ hasText: "Idea added." })).toHaveCount(1);
     await expect(ideaRow(page, text).locator('[data-field="status"]')).toHaveText("Open");
 
-    await ideaRow(page, text).getByRole("button", { name: "Done", exact: true }).click();
+    await ideaRow(page, text).getByRole("button", { name: `Done: ${text}` }).click();
     await expect(page.getByRole("status").filter({ hasText: "Status changed." })).toHaveCount(1);
     await expect(ideaRow(page, text).locator('[data-field="status"]')).toHaveText("Done");
 
-    await ideaRow(page, text).getByRole("button", { name: "Dropped", exact: true }).click();
+    await ideaRow(page, text).getByRole("button", { name: `Dropped: ${text}` }).click();
     await expect(ideaRow(page, text).locator('[data-field="status"]')).toHaveText("Dropped");
 
     await ideaRow(page, text).getByRole("button", { name: "Delete" }).click();
@@ -119,11 +121,11 @@ test.describe("as the preview owner", () => {
 
     // The Essays row is built in: no rename field and no delete button.
     await expect(projectRow(page, "essays").getByRole("button", { name: "Delete" })).toHaveCount(0);
-    await expect(projectRow(page, "essays").getByLabel("Rename")).toHaveCount(0);
+    await expect(projectRow(page, "essays").getByLabel("Rename", { exact: true })).toHaveCount(0);
 
     // Rename A, then delete both.
-    await projectRow(page, slugA).getByLabel("Rename").fill(`${titleA} renamed`);
-    await projectRow(page, slugA).getByRole("button", { name: "Rename", exact: true }).click();
+    await projectRow(page, slugA).getByLabel("Rename", { exact: true }).fill(`${titleA} renamed`);
+    await projectRow(page, slugA).getByRole("button", { name: `Rename project ${titleA}` }).click();
     await expect(page.getByRole("status").filter({ hasText: "Project renamed." })).toHaveCount(1);
     await expect(projectRow(page, slugA)).toContainText(`${titleA} renamed`);
 

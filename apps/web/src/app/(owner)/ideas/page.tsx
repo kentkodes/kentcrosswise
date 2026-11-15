@@ -85,8 +85,8 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
                         type="submit"
                         name="status"
                         value={status}
-                        disabled={idea.status === status}
                         aria-pressed={idea.status === status}
+                        aria-label={`${STATUS_LABEL[status]}: ${idea.body}`}
                       >
                         {STATUS_LABEL[status]}
                       </button>
@@ -94,7 +94,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
                   </form>
                   <form action={deleteIdeaAction}>
                     <input type="hidden" name="id" value={idea.id} />
-                    <button className={s.button} type="submit">
+                    <button className={s.button} type="submit" aria-label={`Delete idea: ${idea.body}`}>
                       Delete
                     </button>
                   </form>

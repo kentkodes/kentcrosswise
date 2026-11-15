@@ -6,7 +6,28 @@ export const PROJECT_TITLE_MAX = 80;
 /** The Essays tab: built in (migration 0016). It cannot be renamed or deleted. */
 export const ESSAYS_SLUG = "essays";
 
-export type ProjectErrorCode = "empty" | "too-long" | "no-slug" | "slug-taken" | "protected" | "not-found" | "invalid-direction";
+export type ProjectErrorCode =
+  | "empty"
+  | "too-long"
+  | "no-slug"
+  | "slug-taken"
+  | "protected"
+  | "not-found"
+  | "invalid-direction"
+  | "invalid-slug";
+
+export const SLUG_MAX = 80;
+const SLUG_SHAPE = /^[a-z0-9-]+$/;
+
+/** A slug from a form or a URL: lower case letters, digits and hyphens, at most 80 characters. Checked before any SQL. */
+export function isValidSlug(value: unknown): value is string {
+  return typeof value === "string" && value.length <= SLUG_MAX && SLUG_SHAPE.test(value);
+}
+
+function checkSlug(slug: unknown): string {
+  if (!isValidSlug(slug)) throw new ProjectInputError("invalid-slug");
+  return slug;
+}
 
 export class ProjectInputError extends Error {
   override name = "ProjectInputError";
@@ -71,7 +92,8 @@ export async function addProject(db: Queryable, rawTitle: unknown): Promise<stri
 }
 
 /** Renames a project's title. The slug does not change, so ?tab= links stay valid. Essays cannot be renamed. */
-export async function renameProject(db: Queryable, slug: string, rawTitle: unknown): Promise<void> {
+export async function renameProject(db: Queryable, rawSlug: unknown, rawTitle: unknown): Promise<void> {
+  const slug = checkSlug(rawSlug);
   if (slug === ESSAYS_SLUG) throw new ProjectInputError("protected");
   const title = parseProjectTitle(rawTitle);
   const { rows } = await db.query<{ slug: string }>("UPDATE projects SET title = $2 WHERE slug = $1 RETURNING slug", [slug, title]);
@@ -79,7 +101,8 @@ export async function renameProject(db: Queryable, slug: string, rawTitle: unkno
 }
 
 /** Deletes a project. Essays cannot be deleted. */
-export async function deleteProject(db: Queryable, slug: string): Promise<void> {
+export async function deleteProject(db: Queryable, rawSlug: unknown): Promise<void> {
+  const slug = checkSlug(rawSlug);
   if (slug === ESSAYS_SLUG) throw new ProjectInputError("protected");
   const { rows } = await db.query<{ slug: string }>("DELETE FROM projects WHERE slug = $1 RETURNING slug", [slug]);
   if (rows.length === 0) throw new ProjectInputError("not-found");
@@ -89,7 +112,8 @@ export async function deleteProject(db: Queryable, slug: string): Promise<void> 
  * Moves a project one place up or down the tab order. The whole order is rewritten as 0..n-1, so equal or
  * gapped sort values are repaired by the move. Moving the first project up (or the last down) changes nothing.
  */
-export async function moveProject(db: Queryable, slug: string, direction: unknown): Promise<void> {
+export async function moveProject(db: Queryable, rawSlug: unknown, direction: unknown): Promise<void> {
+  const slug = checkSlug(rawSlug);
   if (direction !== "up" && direction !== "down") throw new ProjectInputError("invalid-direction");
   const { rows } = await db.query<{ slug: string }>("SELECT slug FROM projects ORDER BY sort, title, slug");
   const order = rows.map((r) => r.slug);
