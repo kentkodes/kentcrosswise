@@ -1,6 +1,6 @@
 # Kentcrosswise open points
 
-Current backlog, 2026-11-14 UTC. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction: autonomous development is the primary outcome; the hub is its demonstration workload. Complete the reliability sequence below before further hub, essay or office expansion.
+Current backlog, 2026-11-15 UTC. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction: autonomous development is the primary outcome; the hub is its demonstration workload. Complete the reliability sequence below before further hub, essay or office expansion.
 
 ## Autonomous development reliability (accepted priority, implementation pending)
 
@@ -9,13 +9,13 @@ The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. For impl
 | ID | Work and completion evidence |
 |---|---|
 | AR1 | Isolate candidate CI from production authority. Prove the preview role cannot retag/mutate prod CloudFront resources or shared policies, and candidate builds cannot obtain production write authority. Narrow the web router's model-secret access to its consumer need. Choose the IAM/provisioning technique after fresh source and policy review; bootstrap/workflow/live changes remain separately gated. Slice 1 (PR-scoped preview boundary, prod CloudFront deny, shared preview policies, router-only secret) is in #106 and waits for the owner's bootstrap cutover ([bootstrap runbook](runbooks/bootstrap.md#ar1-slice-1-cutover-authority-and-secret-split)); slice 2 is split: PR A (#107, trusted `preview-trusted.yml` plus credential-free `candidate-build`) added the path; PR B (cutover: old `preview` job removed, `kcw-gh-ci` loses its `pull_request` subject, PR-closed GC on `pull_request_target`) waits for its merge and the owner's bootstrap apply ([runbook](runbooks/bootstrap.md#ar1-slice-2-cutover)); slice 3 (trusted merge-rules input from `preview-trusted.yml` `prod-plan`, PR infra/workflow paths owner-reviewed as uncovered, orchestrator reads it only from the verified trusted run) is implemented in source and waits for its merge, the owner's bootstrap apply and the `prod-plan` environment ([runbook](runbooks/bootstrap.md#ar1-slice-3-trusted-merge-rules-input)). |
-| AR2 | Slice 1 (database-to-SQS outbox and consumer receipts, migration 0011) merged in #110; slice 2a (orchestrator-side GitHub operation records and reconciliation, migration 0012) merged in #112, slice 2b (workflow operation input, run admission, publisher fencing; gated `.github/**`) is in its PR, and slice 3 (atomic reports and accounting identities) remain. Make relay-to-SQS handoff recoverable and GitHub effects reconcilable. Fault tests cover crash after delivery claim, after issue/dispatch success and before checkpoint save; retries neither lose accepted work nor create duplicate logical effects. Deduplicate partial/late usage writes with stable operation identities. Depends on AR1 before live acceptance. |
-| AR3 | Account for every model caller, including essay categorization; test missing, late and duplicate reports and price lookup failure. Reconcile totals across usage and spending decisions. The existing $50 control stays soft; choose the unknown-price policy and any enforcement change explicitly before implementation. Depends on AR2's accounting identities. |
+| AR2 | Slice 1 (database-to-SQS outbox and consumer receipts, migration 0011, #110), slice 2a (orchestrator-side GitHub operation records and reconciliation, migration 0012, #112) and slice 2b (workflow operation input, run admission, publisher fencing; gated `.github/**`, #113) are merged. Slice 3 (atomic reports and accounting identities) is in review. Make relay-to-SQS handoff recoverable and GitHub effects reconcilable. Fault tests cover crash after delivery claim, after issue/dispatch success and before checkpoint save; retries neither lose accepted work nor create duplicate logical effects. Deduplicate partial/late usage writes with stable operation identities. Not verified live: an outbox delivery (agents paused). Depends on AR1 before live acceptance. |
+| AR3 | Account for every model caller, including essay categorization and hooks (neither records usage rows yet) and the in-app router and mood calls (recorded as agent `router` until a purpose is added); test missing, late and duplicate reports and price lookup failure. Reconcile totals across usage and spending decisions. The existing $50 control stays soft: unpriced model rows do not count toward the cap until this item. Choose the unknown-price policy and any enforcement change explicitly before implementation. Depends on AR2's accounting identities. |
 | AR4 | Enforce subtask prerequisites. Start sequentially by default and verify a schema-then-consumer task uses the accepted predecessor revision; permit parallel work only when independence is explicit. Enqueue child starts without bundling their model work into one parent invocation. Depends on AR2. |
 | AR5 | Supply bounded, revision-pinned task contracts and on-demand context; record attempts, supersession, result validity and verification evidence per DESIGN 4.0. Test retry and replanning without losing task identity or reusing incompatible results/QA. Measure accepted-task input/output usage against the recorded ~1.1M-input-token one-line canary (former R3), not a token target invented here. Depends on AR3-AR4. |
 | AR6 | Separate active execution capacity from parked-work/PR limits. Verify four owner waits do not silently masquerade as four running workers; choose numeric limits and demonstrate deliberate backpressure. Depends on AR5's execution model. |
-| AR7 | Keep every unresolved saved capture retrievable, with failed/capped/pending states and retry or owner correction. Test more than ten captures during provider failure. Preserve raw entries and edits; downstream move semantics are implemented with H4/H6/H7, not claimed delivered by H3. |
-| AR8 | Add actionable failure visibility and release recovery: DLQ/oldest-message and sweeper/deploy failures, build before production migration, compatible schema rollout, rollback/restore procedure and a restore rehearsal. Report merged, deployed and verified outcomes separately (former A16). Exact alert delivery and recovery targets remain implementation decisions. |
+| AR7 | Delivered and deployed (migration 0014): `/hub` Unresolved region, stored outcome and per-entry retry, derived rows that move on reassignment. Not verified live: a real capture routed by DeepSeek or recovered after a provider failure. Not wired: `linkCrmNote` (contact linking) and `scoreDiaryEntry` (mood scoring) are not called for rows created from captures. |
+| AR8 | AR8a is done (#120): build before production migration, a pinned workflow-shape test, incompatible-schema rules in merge-rules, `pnpm restore-rehearsal` and [release-recovery.md](runbooks/release-recovery.md). AR8b is open: DLQ, sweeper and deploy failure alerts (destination and recovery targets undecided), and recording merged, deployed and verified separately in the orchestrator. Not verified live: a restore rehearsal against a real restored branch, and a manual prior-build apply (the runbook's Neon steps say "verify at execution time"). |
 | AR9 | Demonstrate one representative dependent task through implementation, CI, independent head-bound QA, merge, deploy and verification, with restart/duplicate/failure recovery. Define the acceptance task, cost allowance and live steps before running; use offline fault tests wherever external behavior is not the question. Depends on AR1-AR8. Record elapsed time, usage, human interventions and unresolved gaps. |
 
 Unsettled implementation choices: preview isolation mechanism, unknown-price policy, worker/WIP/time limits, alert destination and recovery targets, and the exact paid/live acceptance scope. The accepted priority and lifecycle defaults do not approve those privileged steps.
@@ -24,7 +24,7 @@ Unsettled implementation choices: preview isolation mechanism, unknown-price pol
 
 | ID | Open point |
 |---|---|
-| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private hub's contacts and mood are not built). Its "Simulated data" frame also shows real agent rows. |
+| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private contacts and mood pages exist but are not yet in the owner navigation). Its "Simulated data" frame also shows real agent rows. |
 
 ## Essays (Phase 5)
 
@@ -32,32 +32,38 @@ Unsettled implementation choices: preview isolation mechanism, unknown-price pol
 |---|---|
 | E5 | Further sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback. With the first non-Gutenberg extractor, add the navigation/ad-text and language checks of SPEC item 4. |
-| E8 | DeepSeek categorization in production and hook writing. |
+| E8 | Categorize and `--phase hooks` (workflow input `hooks`) are built. The first live hooks run (2026-11-15, the eight stored books) wrote 3 hooks; 5 replies failed validation (`invalid_hook`) and stored nothing. Open: log a fixed reason code for a rejected hook and retry once, then rerun the five books; AR3 usage rows for both phases. |
 | E10 | Nightly source health and weekly quality report; open a GitHub issue for quarantined essays once the Scraper-builder runs. |
 | E11 | Public demo with a few public-domain essays. |
-| E12 | MVP acceptance: every approved seed is validated full text or link-only, no duplicates, preferences and ratings visibly change recommendations. |
+| E12 | Run the acceptance phase after the hooks run and fix what it reports. The check is built (`--phase acceptance`, workflow input `acceptance`) and passed once on main `0defdc8` (300 approved seeds, 8 full, 292 link-only, none quarantined or duplicate). The preferences and ratings clause is covered by E3. |
 
 ## Hub MVP (Phase 3)
 
 | ID | Open work |
 |---|---|
-| H1 | Public `/terms` and `/privacy` pages and the provider/domain configuration they need. |
-| H4 | Contacts: CRUD, aliases, tags, birthday, context, linking notes with owner resolution of ambiguous matches. |
-| H5 | Calendar OAuth with incremental consent, suggestion extraction, one-tap event creation. |
-| H6 | Diary editor, eight 0-1 mood metrics plus overall sentiment, chart history with metric toggles. |
-| H7 | Todos and ideas lists; project tabs including Essays. |
-| H8 | Daily YouTube statistics and stored snapshots; rounded versus exact follower labels. |
-| H9 | Instagram Login integration and long-lived token refresh. |
-| H10 | TikTok sandbox stats spike, refresh-token rotation, manual-entry fallback. |
-| H11 | Social dashboard totals, source filter, manual-entry provenance. |
-| H12 | Unified owner inbox (routing, contact matches, calendar, agent requests); web push and iPhone Home Screen check. |
+| H5 | Calendar OAuth with incremental consent, suggestion extraction, one-tap event creation. Design accepted in the sprint; open. |
+| H8 | Daily YouTube statistics and stored snapshots; rounded versus exact follower labels. Writes through `upsertSnapshot` in `apps/web/src/server/social.ts`. Design accepted in the sprint; open. |
+| H9 | Instagram Login integration and long-lived token refresh. Design accepted in the sprint; open. |
+| H10 | TikTok sandbox stats spike and refresh-token rotation, optional later. The manual-entry fallback is done (`/social`, ingest `manual`). |
+| H12 | Unified owner inbox. Inbox regions exist per feature (routing; contact matches in `ContactMatchRegion`, not yet shown on `/inbox`), the unified wiring is open, and the owner nav lacks entries for the new pages. Web push and the iPhone Home Screen check are open. |
 
 ## Office and X-ray (Phase 4)
 
 | ID | Open work |
 |---|---|
-| X1 | X-ray component registry and public overlay (the package is a stub). |
 | X3 | Execution-observation rollout per the owner sign-off in [HANDOFF.md](HANDOFF.md) (controlled signed-run check first). Contract: [LIVE-CONTRACT.md](office/LIVE-CONTRACT.md). |
+
+## Decisions made in the 2026-11-15 sprint
+
+- Bounded model calls outside the agents use DeepSeek: mood scoring through the web server's existing router secret, recorded as agent `router` until AR3 adds a purpose; essay hooks through the pipeline's models secret, like categorize, with no usage rows until AR3.
+- Derived rows move on reassignment, and moving to an agent request discards edits to the derived body.
+- A same-kind save is a no-op.
+- A link-only essay passes acceptance with a title and author; the missing source URL is counted, and zero approved seeds fails.
+- TikTok is manual entry for the MVP.
+- No new dependencies were added; charts are hand-written SVG.
+- The X-ray overlay uses no accent colour and keeps its state per browser tab.
+- Mood scoring strips one code fence and is otherwise strict.
+- Open risk carried over: unpriced model rows do not count toward the spend cap until AR3.
 
 ## Runtime cases not yet exercised
 
@@ -78,6 +84,7 @@ Use these cases in AR9's acceptance matrix; each live case needs its own scoped,
 - U7 Neon project-scoped keys and URL masking.
 - U9 Google consent screen and refresh-token longevity after incremental consent.
 - U10 Instagram development mode without App Review; TikTok sandbox stats.
+- Owner console step (H1): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen (privacy and terms links, needed for verification once Calendar and YouTube scopes are requested), the Meta for Developers app settings (Instagram) and the TikTok for Developers app.
 - U12 Current AWS pricing and free-tier state.
 - U2 QA on Claude Haiku 5.5 through Anthropic federation has not run live since #88 (the canary's QA ran on DeepSeek); federation usage reporting is unexercised.
 

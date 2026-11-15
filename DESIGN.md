@@ -287,7 +287,8 @@ Shared header in `apps/web/src/app/(public)/_site/site-header.module.css`.
 - Wordmark on the left. Links on the right: Home, Demo, Agent office, then the account button.
 - Background `--bg` at 80% with a 12px backdrop blur. A 1px `--line` bottom border always shows.
 - Links are 14px `--fg-muted`. Hover and the current page (`aria-current`) use `--fg`. The current link is weight 500. There is no underline bar.
-- Phone (under 640px): two rows. The wordmark sits on its own row. The four links take the full width below it, space-between with at least 16px between them, 14px text, 44px tap targets. One row does not fit at 320px.
+- Phone (under 640px): two rows. The wordmark sits on its own row. The four links take the full width below it, space-between with at least 16px between them, 14px text, 44px tap targets. One row does not fit at 320px. The wordmark row also carries the X-ray toggle at its end.
+- X-ray toggle: a small pill between the wordmark and the links, kept per browser tab (sessionStorage), off by default. Pressed, it is an inverted `--fg` on `--bg` pill. While X-ray is on, an in-flow strip under the header shows the site-wide chips (sign-in link, type and theme), and each annotated block reserves a label row at its top for its chip; with X-ray off nothing is added. The overlay uses no accent colour except the normal focus ring.
 
 Colours come from local variables: `--header-fg`, `--header-muted`, `--header-line` and `--header-bg`. Each reads its global token as a fallback.
 
