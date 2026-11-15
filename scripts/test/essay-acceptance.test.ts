@@ -51,7 +51,6 @@ describe("acceptance phase on PGlite as a pipeline_rw member", () => {
       await fresh.db.exec("RESET ROLE");
     }
   };
-  const codes = (r: AcceptanceReport) => [...r.check1, ...r.check2].map((f) => f.code).sort();
 
   beforeAll(async () => {
     fresh = await freshDb();
