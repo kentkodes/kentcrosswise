@@ -25,6 +25,7 @@
     "plan-summary": "pnpm --filter @kcw/scripts plan-summary",
     "merge-input": "pnpm --filter @kcw/scripts merge-input",
     "smoke-check": "pnpm --filter @kcw/scripts smoke-check",
+    "restore-rehearsal": "pnpm --filter @kcw/scripts exec tsx restore-rehearsal.ts",
     "preview-gc": "pnpm --filter @kcw/scripts preview-gc",
     "check-repo-settings": "pnpm --filter @kcw/scripts check-repo-settings",
     "apply-repo-settings": "pnpm --filter @kcw/scripts apply-repo-settings",
