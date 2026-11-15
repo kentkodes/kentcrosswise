@@ -1,8 +1,8 @@
 // Consumer receipts (AR2 slice 1, migration 0011): the logical keys of messages the graph finished,
 // as orch_rw. A message that carries a key (a relay delivery id, a console or inbox `message_key`)
 // is applied once even when the outbox sends it again after SQS's 5-minute deduplication window.
-// A kcw-report message is keyed by its identity; its receipt is written by the report transaction
-// (store.ts recordReport) and again, harmlessly, here. Sweep messages have no key and are not recorded.
+// kcw-report receipts are written by the report transaction itself (store.ts recordReport), keyed
+// by the report identity, not here. Sweep messages have no key and are not recorded.
 import type pg from "pg";
 
 export interface ReceiptStore {

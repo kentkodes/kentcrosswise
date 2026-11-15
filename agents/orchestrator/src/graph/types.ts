@@ -137,7 +137,11 @@ export type TaskInput = (
   | GitHubInput
   | { kind: "decision"; approval_id: string; decision: Decision }
   | { kind: "sweep" }
-) & { message_id: string };
+) & {
+  message_id: string;
+  /** The logical message key (relay delivery id, web outbox key) when the message has one: stable across SQS resends. */
+  message_key?: string;
+};
 
 /** What processing one input did (logged by the handler; never message content). */
 export type StepOutcome =
@@ -201,6 +205,12 @@ export interface TaskData {
    * Absent in older checkpoints: no report is fenced.
    */
   dispatch_ops?: Partial<Record<"developer" | "qa" | "docs", number>>;
+  /**
+   * AR2 slice 3: the identities (reportKey) of the reports this thread applied, newest last (bounded).
+   * A redelivered report found here is a no-op; one whose database write already happened but is
+   * missing here (a crash before the checkpoint) still gets its state updates.
+   */
+  applied_reports?: string[];
 }
 
 /** A dispatch waiting for its run to become visible (see DISPATCH_UNKNOWN_MINUTES); a sweep resumes it. */

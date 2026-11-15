@@ -71,6 +71,9 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   no_artifact: "the trusted preview run has no merge-rules-input artifact",
 };
 
+/** How many applied report identities a thread remembers (a task has a few reports per run). */
+const APPLIED_REPORTS_KEPT = 200;
+
 /** Allowance for clock skew between the orchestrator and GitHub when looking up a run or an issue. */
 const CLOCK_SLACK_MS = 2 * 60_000;
 
@@ -100,7 +103,7 @@ export async function runStep(taskId: number, data: TaskData, input: TaskInput, 
 }
 
 class Machine {
-  /** The message id of the input being applied, and the effects counted for it (effect keys). */
+  /** The identity of the input being applied, and the effects counted for it (effect keys). */
   private inputId = "";
   private seq = new Map<string, number>();
 
@@ -110,15 +113,18 @@ class Machine {
     readonly deps: TaskGraphDeps,
   ) {}
 
-  /** Starts counting the effects of one input. */
-  applying(messageId: string): void {
-    this.inputId = messageId;
+  /**
+   * Starts counting the effects of one input. Its identity is the logical message key when the
+   * message has one (stable when the outbox resends it under a new SQS id), else the SQS message id.
+   */
+  applying(input: TaskInput): void {
+    this.inputId = input.message_key ?? input.message_id;
     this.seq = new Map();
   }
 
   /**
    * The effect key of the next event or approval of this kind for the input being applied:
-   * `task-<id>/<message id>/<what>/<n>`. A step that is re-run with the same input computes the same keys.
+   * `task-<id>/<message key or id>/<what>/<n>`. A step that is re-run with the same input computes the same keys.
    */
   nextEffectKey(what: string): string {
     const n = this.seq.get(what) ?? 0;
@@ -155,7 +161,7 @@ class Machine {
   async run(input: TaskInput): Promise<void> {
     const d = this.d;
     d.last_message_id = input.message_id;
-    this.applying(input.message_id);
+    this.applying(input);
 
     // The docs kind comes only from the orchestrator's own start input (index.ts startDocsTask),
     // captured before the pause check so a start deferred while paused still takes the docs path.
@@ -196,7 +202,7 @@ class Machine {
     d.deferred = [];
     let outcome: StepOutcome = "unchanged";
     for (const next of queue) {
-      this.applying(next.message_id);
+      this.applying(next);
       outcome = await this.apply(next);
     }
     // A dispatch still waiting for its run is not progress: a sweep checks it again.
@@ -337,13 +343,23 @@ class Machine {
   /**
    * AR2 slice 3: a report is applied once, all or nothing. Its receipt (key = the report identity),
    * every usage line (dedupe key = the call identity) and its event are written in one transaction;
-   * a report whose receipt exists writes nothing (`duplicate`). Usage is always recorded, also after
+   * a report whose receipt exists writes nothing, and one already in `applied_reports` changes
+   * nothing at all (`duplicate`). Usage is always recorded, also after
    * the task ended; the event only when the report is the expected agent's in the current phase and
    * its run is not superseded: a report whose op is lower than the agent's latest dispatch comes from
    * an obsolete run and has no lifecycle effect. Reports never cause transitions or approvals.
    */
   async report(r: AgentReport): Promise<StepOutcome> {
     const key = reportKey(r);
+    // Applied and checkpointed before: a no-op (no state change, no write).
+    if (this.d.applied_reports?.includes(key)) {
+      this.log(`report_duplicate job=${r.job}`);
+      return "duplicate";
+    }
+    // From here the step's state updates always apply, also when the database write below finds the
+    // receipt (a crash after the report transaction and before the checkpoint): the checkpoint then
+    // reaches the state the first run would have left, and nothing is written twice.
+    this.d.applied_reports = [...(this.d.applied_reports ?? []), key].slice(-APPLIED_REPORTS_KEPT);
     let outcome: StepOutcome = "unchanged";
     let event: EventType | null = null;
     // A usage-only report (DESIGN §11 Q14(5)) has no lifecycle meaning: no event, no status change.
@@ -374,10 +390,7 @@ class Machine {
       usage: (r.usage ?? []).map(({ call, ...u }) => ({ ...u, dedupeKey: usageKey(r, call) })),
       event: event === null ? null : { type: event, detail: { source: "report" }, effectKey: `${key}/event` },
     });
-    if (!written) {
-      this.log(`report_duplicate job=${r.job}`);
-      return "duplicate";
-    }
+    if (!written) this.log(`report_recorded_before job=${r.job}`);
     return outcome;
   }
 

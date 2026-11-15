@@ -13,6 +13,8 @@ import {
   buildTaskGraph,
   handleTaskSqsEvent,
   initialTaskData,
+  processTaskInput,
+  runStep,
   type TaskGraph,
   type TaskGraphDeps,
 } from "../src/graph";
@@ -31,6 +33,8 @@ describe("agent reports (AR2 slice 3)", () => {
   let clock: Date;
   /** The next statement matching this pattern throws once (through pool.query or a client). */
   let failOn: RegExp | null = null;
+  /** After the next statement matching this pattern succeeds, throw once (a crash after a commit). */
+  let failAfter: RegExp | null = null;
   let plan = PLAN;
   let seq = 0;
   let runSeq = 7000;
@@ -72,9 +76,14 @@ describe("agent reports (AR2 slice 3)", () => {
       connect: async () => {
         const client = await pool.connect();
         return {
-          query: (text: string, params?: unknown[]) => {
+          query: async (text: string, params?: unknown[]) => {
             maybeFail(text);
-            return client.query(text, params);
+            const out = await client.query(text, params);
+            if (failAfter !== null && failAfter.test(text)) {
+              failAfter = null;
+              throw new Error("synthetic crash after commit");
+            }
+            return out;
           },
           release: () => client.release(),
         };
@@ -96,6 +105,7 @@ describe("agent reports (AR2 slice 3)", () => {
     clock = new Date("2026-11-14T10:00:00Z");
     gh.now = () => clock;
     failOn = null;
+    failAfter = null;
     plan = PLAN;
     await sql("UPDATE tasks SET status = 'done' WHERE status IN ('planning', 'in_progress', 'waiting')");
   });
@@ -225,5 +235,61 @@ describe("agent reports (AR2 slice 3)", () => {
     expect(await events(id, "waiting_on_owner")).toBe(1);
     const task = (await graph.getState(threadConfig(id))).values.task;
     expect(task).toMatchObject({ phase: "owner", approval_id: approvals[0]!.id });
+  });
+
+  const state = async (id: number) => (await graph.getState(threadConfig(id))).values.task;
+
+  it("a docs start report whose transaction committed before the checkpoint was lost still sets docs_started", async () => {
+    const id = await newTask();
+    expect(await processTaskInput(graph, id, { kind: "start", docs: { pr: 41 }, message_id: "docs-start" })).toBe("started");
+    expect(await state(id)).toMatchObject({ phase: "dev", docs_started: false });
+    const start = report(id, { agent: "docs", job: "start", op: 0, event_type: "coding" });
+    failAfter = /^COMMIT/; // the report transaction commits, then the step dies before its checkpoint
+    expect(await send(id, start, "ds-1")).toBe("failed");
+    expect(await events(id, "coding")).toBe(1);
+    expect((await state(id)).docs_started).toBe(false);
+    expect(await send(id, start, "ds-1")).toBe("recovered"); // SQS redelivers it
+    expect(await state(id)).toMatchObject({ phase: "dev", docs_started: true });
+    expect(await events(id, "coding")).toBe(1);
+    // The run succeeded without a PR: the sweep ends the task done, not "Docs-keeper did not run".
+    gh.workflowRuns.push({ id: ++seq, workflow: "agent-docs.yml", displayTitle: `docs task ${id} op 0`, createdAt: clock.toISOString(), status: "completed", conclusion: "success" });
+    await send(id, { type: "sweep", task_id: id, thread_id: `task-${id}` });
+    expect(await sql("SELECT status FROM tasks WHERE id = $1", [id])).toEqual([{ status: "done" }]);
+  });
+
+  it("a stale report replayed after a lost checkpoint counts once; a fully processed one changes nothing", async () => {
+    const id = await inDev();
+    const qa = report(id, { agent: "qa", event_type: "approved", usage: [{ ...line("model-q", 4), call: { job: "review", index: 0 } }] });
+    const before = (await state(id)).stale;
+    failAfter = /^COMMIT/;
+    expect(await send(id, qa, "q-1")).toBe("failed");
+    // Resent under a new SQS id: the handler has no receipt short-cut for reports, so the pending
+    // step of q-1 completes first (stale, counted once) and q-2 is then a duplicate.
+    expect(await send(id, qa, "q-2")).toBe("duplicate");
+    const after = await state(id);
+    expect(after.stale).toBe(before + 1);
+    expect(await usageRows(id)).toHaveLength(1);
+    expect(await send(id, qa, "q-3")).toBe("duplicate");
+    expect(await state(id)).toEqual({ ...after, last_message_id: "q-3", last_outcome: "duplicate" });
+    expect(await usageRows(id)).toHaveLength(1);
+    expect(await events(id, "approved")).toBe(0);
+  });
+
+  it("the same logical message under two SQS ids writes one event and one approval", async () => {
+    plan = { title: "Healthz", body: "Ask Jane Doe about the route." }; // issue_text approval
+    const id = await newTask();
+    const data = initialTaskData();
+    // The same checkpoint applied twice: a resend of the outbox message after a crash.
+    failOn = /UPDATE tasks SET status = \$/; // crash after the approval and its event, before the checkpoint
+    await expect(runStep(id, data, { kind: "start", message_id: "sqs-a", message_key: `task-created-${id}` }, deps)).rejects.toThrow(/synthetic/);
+    const second = await runStep(id, data, { kind: "start", message_id: "sqs-b", message_key: `task-created-${id}` }, deps);
+    const approvals = await sql<{ id: string }>("SELECT id FROM approvals WHERE task_id = $1", [id]);
+    expect(approvals).toHaveLength(1);
+    expect(second.approval_id).toBe(approvals[0]!.id);
+    expect(await events(id, "waiting_on_owner")).toBe(1);
+    // Without a logical key the SQS id names the effects, so a different message writes its own.
+    await sql("UPDATE tasks SET status = 'planning' WHERE id = $1", [id]);
+    await runStep(id, data, { kind: "start", message_id: "sqs-c" }, deps);
+    expect(await sql("SELECT id FROM approvals WHERE task_id = $1", [id])).toHaveLength(2);
   });
 });
