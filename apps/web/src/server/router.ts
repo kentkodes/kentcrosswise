@@ -190,6 +190,8 @@ export async function reassignEntry(db: Queryable, entryId: string, to: RouteKin
   );
   const row = rows[0];
   if (!row) return "not-found";
+  // Saving the unchanged kind of a routed entry changes nothing (a derived row the owner deleted stays deleted).
+  if (row.status === "routed" && row.route_kind === to) return "ok";
   await db.query(
     "UPDATE entries SET route_kind = $2, routed_by = 'owner', status = 'routed', route_error = NULL WHERE id = $1",
     [entryId, to],

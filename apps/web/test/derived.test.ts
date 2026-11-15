@@ -88,6 +88,35 @@ describe("derived records and capture recovery (web_rw on PGlite)", () => {
     expect(await derivedRows(id)).toEqual(["diary_entries"]);
   });
 
+  it("Save with the unchanged kind of a routed entry is a no-op: a deleted derived row stays deleted", async () => {
+    const id = await newEntry("Finished todo");
+    await routeEntry(run, id, good("todo"));
+    await q("DELETE FROM todos WHERE entry_id = $1", [id]);
+    await run((db) => reassignEntry(db, id, "todo"));
+    expect(await derivedRows(id)).toEqual([]);
+    const { rows } = await q<{ routed_by: string }>("SELECT routed_by FROM entries WHERE id = $1", [id]);
+    expect(rows).toEqual([{ routed_by: "model" }]);
+    expect((await q("SELECT 1 FROM route_corrections WHERE entry_id = $1", [id])).rows).toHaveLength(0);
+  });
+
+  it("confirming the guessed kind of a needs-you entry still creates its row and marks the owner route", async () => {
+    const id = await newEntry("Guess confirmed");
+    await routeEntry(run, id, good("idea", 0.3));
+    await run((db) => reassignEntry(db, id, "idea"));
+    expect(await derivedRows(id)).toEqual(["ideas"]);
+    const { rows } = await q<{ routed_by: string; status: string }>("SELECT routed_by, status FROM entries WHERE id = $1", [id]);
+    expect(rows).toEqual([{ routed_by: "owner", status: "routed" }]);
+  });
+
+  it("moving an edited todo to agent_request discards the row (edits included) and keeps raw_text", async () => {
+    const id = await newEntry("Raw todo text");
+    await routeEntry(run, id, good("todo"));
+    await q("UPDATE todos SET body = 'edited body' WHERE entry_id = $1", [id]);
+    await run((db) => reassignEntry(db, id, "agent_request"));
+    expect(await derivedRows(id)).toEqual([]);
+    expect((await q<{ raw_text: string }>("SELECT raw_text FROM entries WHERE id = $1", [id])).rows[0]!.raw_text).toBe("Raw todo text");
+  });
+
   it("a retry never duplicates: applyRoute twice and the unique index", async () => {
     const id = await newEntry("Twice");
     const first = await run((db) => applyRoute(db, id, null, "todo"));

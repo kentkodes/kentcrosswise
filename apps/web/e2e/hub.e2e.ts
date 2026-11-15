@@ -64,6 +64,25 @@ test.describe("as the preview owner", () => {
     expect((await captureSave(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   });
 
+  test("the Unresolved region fits a 375px phone and its route picker is usable", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await signIn(page, "/hub");
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const text = `e2e phone ${stamp}`;
+    await page.getByLabel("Capture", { exact: true }).fill(text);
+    await captureSave(page).click();
+    await expect(page.getByRole("status")).toHaveText("Saved");
+    const row = page.getByTestId("unresolved").locator("li").filter({ hasText: text });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole("combobox")).toBeVisible();
+    await expect(row.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await row.getByRole("combobox").selectOption({ label: "Todo" });
+    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Routed to Todo.");
+    await expect(page.getByTestId("unresolved").locator("li").filter({ hasText: text })).toHaveCount(0);
+  });
+
   test("a pending entry is routed by hand: the row shows the new label, and no Route again while routing is off", async ({ page }) => {
     await signIn(page, "/hub");
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

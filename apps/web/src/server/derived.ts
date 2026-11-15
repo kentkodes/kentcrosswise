@@ -35,6 +35,8 @@ export async function applyRoute(
     const old = await db.query<{ body: string }>(`DELETE FROM ${table} WHERE entry_id = $1 RETURNING body`, [entryId]);
     moved = old.rows[0]?.body ?? null;
   }
+  // Deliberate: moving to agent_request discards the old row, including owner edits to its body, because
+  // agent requests have no destination table until their approval flow exists (after MVP). The raw capture stays.
   if (!hasTable(to)) return null;
 
   const table = TABLES[to];
