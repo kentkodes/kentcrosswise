@@ -12,6 +12,14 @@ data "aws_iam_policy_document" "lambda_assume" {
 
 # ---------- server ----------
 
+locals {
+  # Written secrets (OAuth tokens the web app rewrites) are also readable.
+  writable_secret_arns = [
+    for n in var.writable_secret_names : "arn:${local.partition}:secretsmanager:${local.region}:${local.account_id}:secret:${n}-??????"
+  ]
+  server_read_secret_arns = distinct(concat(local.secret_arns, local.writable_secret_arns))
+}
+
 data "archive_file" "server" {
   type             = "zip"
   output_file_mode = "0644"
@@ -81,11 +89,21 @@ data "aws_iam_policy_document" "server" {
   }
 
   dynamic "statement" {
-    for_each = length(local.secret_arns) > 0 ? [1] : []
+    for_each = length(local.server_read_secret_arns) > 0 ? [1] : []
     content {
       sid       = "ReadSecrets"
       actions   = ["secretsmanager:GetSecretValue"]
-      resources = local.secret_arns
+      resources = local.server_read_secret_arns
+    }
+  }
+
+  # Scheduled jobs rewrite rotating tokens (Instagram refresh, Google): exactly the listed secrets.
+  dynamic "statement" {
+    for_each = length(local.writable_secret_arns) > 0 ? [1] : []
+    content {
+      sid       = "WriteSecrets"
+      actions   = ["secretsmanager:PutSecretValue"]
+      resources = local.writable_secret_arns
     }
   }
 
@@ -134,6 +152,14 @@ resource "aws_lambda_function" "server" {
   }
 
   depends_on = [aws_iam_role_policy.server, terraform_data.build_matches_env]
+}
+
+# Only the job scheduler invokes the server function asynchronously (HTTP goes through the Function
+# URL): no Lambda-side retries, the schedule's own retry policy and the next run cover failures.
+resource "aws_lambda_function_event_invoke_config" "server" {
+  function_name                = aws_lambda_function.server.function_name
+  maximum_retry_attempts       = 0
+  maximum_event_age_in_seconds = 600
 }
 
 # D25: public Function URL (AuthType NONE). CloudFront OAC cannot be used here because it signs

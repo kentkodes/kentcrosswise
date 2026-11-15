@@ -111,7 +111,13 @@ data "aws_secretsmanager_secret_version" "origin_verify" {
 # orchestrator's models secret (AR1). The web server reads it through KCW_MODELS_SECRET (name kept).
 module "web_secrets" {
   source = "../modules/secrets"
-  names  = ["kcw/prod/web", "kcw/prod/router"]
+  names = [
+    "kcw/prod/web",
+    "kcw/prod/router",
+    # Scheduled web jobs (wave 2): the web server reads and rewrites these two (writable_secret_names).
+    "kcw/prod/google-owner-token",
+    "kcw/prod/social/instagram",
+  ]
 }
 
 # Essay text (E5 ingest) lives in the owner-created pipelines bucket (infra/bootstrap/pipelines.tf).
@@ -133,6 +139,16 @@ module "web" {
   route53_zone_id     = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
   secret_names        = module.web_secrets.names
 
+  # Rewritten by the web app: the Google refresh token at consent, the Instagram token on refresh.
+  writable_secret_names = ["kcw/prod/google-owner-token", "kcw/prod/social/instagram"]
+
+  # Web-side jobs (apps/web/src/server/jobs): social-daily at 06:15 UTC, inbox-push on the sweeper's
+  # quarter hours so both share its database wake-up.
+  scheduled_jobs = {
+    "social-daily" = "cron(15 6 * * ? *)"
+    "inbox-push"   = "cron(0/15 * * * ? *)"
+  }
+
   origin_verify_value       = jsondecode(data.aws_secretsmanager_secret_version.origin_verify.secret_string)["origin_verify"]
   origin_verify_secret_name = local.origin_verify_secret
   origin_verify_secret_key  = "origin_verify"
@@ -148,6 +164,8 @@ module "web" {
     KCW_MODELS_SECRET          = "kcw/prod/router"
     KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
     ESSAY_TEXT_BUCKET          = local.essay_text_bucket
+    KCW_GOOGLE_TOKEN_SECRET    = "kcw/prod/google-owner-token"
+    KCW_INSTAGRAM_SECRET       = "kcw/prod/social/instagram"
   }
 }
 
