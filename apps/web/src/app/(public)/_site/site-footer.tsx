@@ -28,6 +28,16 @@ export function SiteFooter() {
                 Bot
               </Link>
             </li>
+            <li>
+              <Link className={f.navLink} href="/terms">
+                Terms
+              </Link>
+            </li>
+            <li>
+              <Link className={f.navLink} href="/privacy">
+                Privacy
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>
