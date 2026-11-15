@@ -182,9 +182,9 @@ test("demo Essays tab: feed, recommended line, reader panel and local rating", a
   );
   const save = reader.getByRole("button", { name: "Save rating" });
   await expect(save).toBeDisabled();
-  await reader.getByText("4", { exact: true }).click();
-  await reader.getByText("Humor", { exact: true }).click();
-  await reader.getByText("Right", { exact: true }).click();
+  await reader.getByLabel("4", { exact: true }).check();
+  await reader.getByLabel("Humor", { exact: true }).check();
+  await reader.getByLabel("Right", { exact: true }).check();
   await save.click();
   await expect(reader.getByRole("status")).toContainText("Saved on this page");
   await page.reload();
