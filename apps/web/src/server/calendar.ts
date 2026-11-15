@@ -11,8 +11,11 @@ import type { DbRun } from "./router";
 import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
 
 const MAX_TOKENS = 200;
-/** The owner waits on the capture: the whole suggestion step (model call included) gives up after this. */
-export const SUGGEST_BOUND_MS = 10000;
+/**
+ * The owner waits on the capture: the whole suggestion step (model call included) gives up after this. With the
+ * route call before it (8 s timeout, one retry) the request stays under the server function's 25 s timeout.
+ */
+export const SUGGEST_BOUND_MS = 6000;
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const MAX_DAYS_AHEAD = 365;
 const DEFAULT_MINUTES = 60;
