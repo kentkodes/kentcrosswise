@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createFakeSecrets, setDefaultSecretStore } from "@kcw/secrets";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAuthConfig,
@@ -233,5 +234,54 @@ describe("ConnectionView states", () => {
 
   it("expired: asks to connect again", () => {
     expect(html({ expired: true, connectedAt: stored.connectedAt })).toContain("Reconnect Google");
+  });
+});
+
+describe("a secret container with no value yet", () => {
+  const NAME = "kcw/test/google-empty";
+  afterEach(() => {
+    setDefaultSecretStore(undefined);
+    delete process.env.KCW_GOOGLE_TOKEN_SECRET;
+  });
+
+  it("first consent creates the value; a later one merges into it", async () => {
+    const { store, aws } = createFakeSecrets();
+    setDefaultSecretStore(store);
+    const cfg = buildAuthConfig(SETTINGS, [], undefined, { secretName: NAME, now: () => new Date("2026-11-15T10:00:00Z") });
+    const account = { provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH };
+    await (cfg.events!.signIn as (m: unknown) => Promise<void>)({ account });
+    expect(JSON.parse(aws.values.get(NAME)!)).toEqual({
+      refresh_token: SECRET_TOKEN,
+      scope: BOTH,
+      connected_at: "2026-11-15T10:00:00.000Z",
+    });
+    await (cfg.events!.signIn as (m: unknown) => Promise<void>)({ account: { ...account, refresh_token: "second" } });
+    expect(JSON.parse(aws.values.get(NAME)!).refresh_token).toBe("second");
+  });
+
+  it("another error class is only logged by class and nothing is created", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { store, aws } = createFakeSecrets();
+    setDefaultSecretStore(store);
+    aws.failNextWith = "AccessDeniedException";
+    const cfg = buildAuthConfig(SETTINGS, [], undefined, { secretName: NAME });
+    await (cfg.events!.signIn as (m: unknown) => Promise<void>)({
+      account: { provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH },
+    });
+    expect(log.mock.calls).toEqual([["[google] store failed SecretAccessError"]]);
+    expect(aws.values.has(NAME)).toBe(false);
+    log.mockRestore();
+  });
+
+  it("reading it reports not connected, not an error", async () => {
+    const { store } = createFakeSecrets();
+    setDefaultSecretStore(store);
+    process.env.KCW_GOOGLE_TOKEN_SECRET = NAME;
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const conn = await googleConnection({ client });
+    expect(conn).toEqual({ configured: true, connected: false, scopes: [], connectedAt: null, expired: false });
+    expect(await googleAccessToken("calendar", { client })).toBeNull();
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
   });
 });

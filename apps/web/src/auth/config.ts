@@ -1,4 +1,4 @@
-import { defaultSecretStore } from "@kcw/secrets";
+import { defaultSecretStore, SecretNotFoundError, type SecretStore } from "@kcw/secrets";
 import type { NextAuthConfig } from "next-auth";
 import type { Provider } from "next-auth/providers";
 import Google from "next-auth/providers/google";
@@ -16,6 +16,23 @@ export const GOOGLE_CONNECT_SCOPES = `${GOOGLE_SIGN_IN_SCOPES} ${GOOGLE_CALENDAR
 export const GOOGLE_TOKEN_SECRET_ENV = "KCW_GOOGLE_TOKEN_SECRET";
 
 type PatchSecret = (name: string, patch: Readonly<Record<string, string>>) => Promise<void>;
+
+/**
+ * Patches the keys of a JSON secret. A secret container with no value yet (bootstrap creates none) is created
+ * with the new object instead; any other error is rethrown unchanged.
+ */
+export async function patchOrCreateSecret(
+  name: string,
+  patch: Readonly<Record<string, string>>,
+  store: Pick<SecretStore, "patch" | "put"> = defaultSecretStore(),
+): Promise<void> {
+  try {
+    await store.patch(name, patch);
+  } catch (err) {
+    if (!(err instanceof SecretNotFoundError)) throw err;
+    await store.put(name, patch);
+  }
+}
 
 export function googleProvider(settings: AuthSettings): Provider {
   if (!settings.google) throw new Error("Google client settings are missing");
@@ -76,7 +93,7 @@ export function buildAuthConfig(
         const name = google.secretName ?? process.env[GOOGLE_TOKEN_SECRET_ENV];
         if (!name) return;
         try {
-          const patch = google.patch ?? ((n, p) => defaultSecretStore().patch(n, p));
+          const patch = google.patch ?? patchOrCreateSecret;
           await patch(name, {
             refresh_token: account.refresh_token,
             scope: account.scope ?? "",
