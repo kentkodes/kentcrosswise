@@ -12,9 +12,15 @@ function files(dir: string): string[] {
   });
 }
 
-const used = files(ROOT).flatMap((path) =>
-  [...readFileSync(path, "utf8").matchAll(/<Xray\s+id="([^"]+)"/g)].map((m) => m[1]!),
-);
+// `<Xray ... id="x">` (the tag may span lines) and `<XrayStrip ids={["x", "y"]} />`.
+const used = files(ROOT).flatMap((path) => {
+  const src = readFileSync(path, "utf8");
+  const tags = [...src.matchAll(/<Xray\b[^>]*?\bid="([^"]+)"/g)].map((m) => m[1]!);
+  const strips = [...src.matchAll(/<XrayStrip\b[^>]*?\bids=\{\[([^\]]*)\]\}/g)].flatMap((m) =>
+    [...m[1]!.matchAll(/"([^"]+)"/g)].map((s) => s[1]!),
+  );
+  return [...tags, ...strips];
+});
 
 describe("X-ray annotations on the public pages", () => {
   it("annotates the site", () => {

@@ -31,20 +31,18 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <PaperFrame current="/">
-      <Xray id="fonts-theme">
-        <section className={s.hero}>
-          <h1 className={s.headline}>{HERO.headline}</h1>
-          <p className={s.subline}>{HERO.subline}</p>
-          <div className={s.ctas}>
-            <Link className={s.primary} href="/office">
-              Agent office
-            </Link>
-            <Link className={s.secondary} href="/demo">
-              Explore the demo
-            </Link>
-          </div>
-        </section>
-      </Xray>
+      <section className={s.hero}>
+        <h1 className={s.headline}>{HERO.headline}</h1>
+        <p className={s.subline}>{HERO.subline}</p>
+        <div className={s.ctas}>
+          <Link className={s.primary} href="/office">
+            Agent office
+          </Link>
+          <Link className={s.secondary} href="/demo">
+            Explore the demo
+          </Link>
+        </div>
+      </section>
       <Xray id="product-still">
         <ProductStill />
       </Xray>

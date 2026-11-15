@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function BotPage() {
   return (
     <PaperFrame current="/bot">
-      <Xray id="bot-page" side="below">
+      <Xray id="bot-page">
         <div className={s.column}>
           <h1 className={s.title}>KentcrosswiseBot</h1>
           <p className={s.intro}>KentcrosswiseBot discovers essays for a personal reading library.</p>

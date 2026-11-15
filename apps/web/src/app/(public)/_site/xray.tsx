@@ -1,8 +1,10 @@
 "use client";
 // <Xray id="activity-feed">...</Xray>: marks a component for the X-ray overlay. Off, the wrapper is a
 // `display: contents` div: no box, no tab stop, no role, and the same element in both states so the children
-// never remount. On, it draws an outline and a chip (label and tech); hover, focus or a tap on the chip shows a
-// card (what and why). Escape or a tap elsewhere closes it. The card is not focusable, so nothing traps focus.
+// never remount. On, it draws an outline and reserves a label row at its top (in normal flow, so a chip never
+// covers anything) holding the chip (label and tech). Hover, focus or a tap on the chip shows a card (what and
+// why); Escape or a tap elsewhere closes it. The card is not focusable, so nothing traps focus.
+// <XrayChip id> is the same chip on its own, for site-wide entries shown in the strip under the header.
 import { XRAY, type XrayId } from "@kcw/xray";
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -12,19 +14,16 @@ import x from "./xray.module.css";
 const MARGIN = 8;
 const GAP = 6;
 
-export function Xray({ id, align = "start", side = "above", children }: { id: XrayId; align?: "start" | "end"; side?: "above" | "below"; children: ReactNode }) {
-  const on = useSyncExternalStore(subscribeXray, getXray, getXrayServer);
+export function XrayChip({ id }: { id: XrayId }) {
   const entry = XRAY[id];
   const cardId = useId();
-  const wrapper = useRef<HTMLDivElement>(null);
   const chip = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const shown = on && open;
 
   // Place the card under the chip (above if there is no room), kept inside the viewport.
   useLayoutEffect(() => {
-    if (!shown) return;
+    if (!open) return;
     const place = () => {
       const c = chip.current;
       const el = card.current;
@@ -48,15 +47,15 @@ export function Xray({ id, align = "start", side = "above", children }: { id: Xr
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [shown]);
+  }, [open]);
 
   useEffect(() => {
-    if (!shown) return;
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
     const onPointer = (event: PointerEvent) => {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+      if (!chip.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
@@ -64,33 +63,30 @@ export function Xray({ id, align = "start", side = "above", children }: { id: Xr
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [shown]);
+  }, [open]);
 
   // Inside the page frame (not the sticky header, whose blur would trap a fixed card); body as a fallback.
-  const host = shown ? (wrapper.current?.closest("header, main")?.parentElement ?? document.body) : null;
+  const host = open ? (chip.current?.closest("header, main, [data-xray-strip]")?.parentElement ?? document.body) : null;
 
   return (
-    <div ref={wrapper} className={on ? x.on : x.off} data-xray={on ? id : undefined}>
-      {on && (
-        <button
-          ref={chip}
-          type="button"
-          className={[x.chip, align === "end" ? x.end : "", side === "below" ? x.below : ""].filter(Boolean).join(" ")}
-          aria-expanded={shown}
-          aria-describedby={shown ? cardId : undefined}
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => {
-            if (document.activeElement !== chip.current) setOpen(false);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
-          onClick={() => setOpen(true)}
-        >
-          <span className={x.chipLabel}>{entry.label}</span>
-          <span className={x.chipTech}>{entry.tech}</span>
-        </button>
-      )}
-      {children}
+    <>
+      <button
+        ref={chip}
+        type="button"
+        className={x.chip}
+        data-xray-chip={id}
+        aria-describedby={open ? cardId : undefined}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => {
+          if (document.activeElement !== chip.current) setOpen(false);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen(true)}
+      >
+        <span className={x.chipLabel}>{entry.label}</span>
+        <span className={x.chipTech}>{entry.tech}</span>
+      </button>
       {host &&
         createPortal(
           <div ref={card} id={cardId} role="tooltip" className={x.card}>
@@ -106,6 +102,29 @@ export function Xray({ id, align = "start", side = "above", children }: { id: Xr
           </div>,
           host,
         )}
+    </>
+  );
+}
+
+export function Xray({ id, children }: { id: XrayId; children: ReactNode }) {
+  const on = useSyncExternalStore(subscribeXray, getXray, getXrayServer);
+  return (
+    <div className={on ? x.on : x.off} data-xray={on ? id : undefined}>
+      {on && <XrayChip id={id} />}
+      {children}
+    </div>
+  );
+}
+
+/** In-flow strip under the sticky header with the chips of site-wide entries. Nothing is rendered when X-ray is off. */
+export function XrayStrip({ ids }: { ids: readonly XrayId[] }) {
+  const on = useSyncExternalStore(subscribeXray, getXray, getXrayServer);
+  if (!on) return null;
+  return (
+    <div className={x.strip} data-xray-strip>
+      {ids.map((id) => (
+        <XrayChip key={id} id={id} />
+      ))}
     </div>
   );
 }

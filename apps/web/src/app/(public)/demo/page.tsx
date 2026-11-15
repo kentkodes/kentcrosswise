@@ -12,15 +12,15 @@ export default function DemoPage() {
   return (
     <PaperFrame current="/demo">
       <div className={d.page}>
-        <div className={d.head}>
-          <div>
-            <h1 className={d.title}>The hub, with made-up data</h1>
-            <p className={d.sub}>Click around. Every person, note and number here is simulated; the real hub is private.</p>
-          </div>
-          <Xray id="demo-data" align="end">
+        <Xray id="demo-data">
+          <div className={d.head}>
+            <div>
+              <h1 className={d.title}>The hub, with made-up data</h1>
+              <p className={d.sub}>Click around. Every person, note and number here is simulated; the real hub is private.</p>
+            </div>
             <span className={d.pill}>Simulated data</span>
-          </Xray>
-        </div>
+          </div>
+        </Xray>
         <Xray id="demo-app">
           <DemoApp view={view} />
         </Xray>

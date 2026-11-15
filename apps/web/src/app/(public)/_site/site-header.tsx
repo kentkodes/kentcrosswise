@@ -4,7 +4,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccountLink } from "./account-link";
-import { Xray } from "./xray";
+import { XrayStrip } from "./xray";
 import { XrayToggle } from "./xray-toggle";
 import h from "./site-header.module.css";
 
@@ -29,30 +29,31 @@ export function SiteHeader({
   below?: ReactNode;
 }) {
   return (
-    <header className={[h.header, className ?? ""].filter(Boolean).join(" ")}>
-      <div className={h.inner}>
-        <Link className={h.wordmark} href="/">
-          Kentcrosswise
-        </Link>
-        <XrayToggle />
-        <nav className={h.nav} aria-label="Main">
-          <ul className={h.navList}>
-            {LINKS.map((l) => (
-              <li key={l.href}>
-                <Link className={h.navLink} href={l.href} aria-current={l.href === current ? "page" : undefined}>
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-            <li>
-              <Xray id="account-link" align="end" side="below">
+    <>
+      <header className={[h.header, className ?? ""].filter(Boolean).join(" ")}>
+        <div className={h.inner}>
+          <Link className={h.wordmark} href="/">
+            Kentcrosswise
+          </Link>
+          <XrayToggle />
+          <nav className={h.nav} aria-label="Main">
+            <ul className={h.navList}>
+              {LINKS.map((l) => (
+                <li key={l.href}>
+                  <Link className={h.navLink} href={l.href} aria-current={l.href === current ? "page" : undefined}>
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
                 <AccountLink />
-              </Xray>
-            </li>
-          </ul>
-        </nav>
-      </div>
-      {below}
-    </header>
+              </li>
+            </ul>
+          </nav>
+        </div>
+        {below}
+      </header>
+      <XrayStrip ids={["account-link", "fonts-theme"]} />
+    </>
   );
 }

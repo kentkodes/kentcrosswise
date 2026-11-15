@@ -71,14 +71,14 @@
   transition: color var(--dur-hover, 150ms) var(--ease-out, ease-out);
 }
 
-.xray:hover {
+.xray:hover:not([aria-pressed="true"]) {
   color: var(--header-fg, var(--fg));
 }
 
 .xray[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--header-fg, var(--fg));
+  border-color: var(--header-fg, var(--fg));
+  background: var(--header-fg, var(--fg));
+  color: var(--header-bg, var(--bg));
 }
 
 .xray::after {

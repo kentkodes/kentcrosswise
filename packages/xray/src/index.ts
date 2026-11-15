@@ -19,20 +19,20 @@ export const XRAY = {
   "account-link": {
     label: "Sign-in link",
     tech: "Auth.js, Google",
-    what: "A plain link to sign in. Your browser asks the session endpoint and the link becomes Your hub for the signed-in owner.",
+    what: "A plain link to sign in. Your browser asks the session endpoint and the link becomes Your hub when a session exists.",
     why: "The page stays static and never reads the session on the server. Only the allowlisted owner can sign in.",
   },
   "fonts-theme": {
     label: "Type and theme",
     tech: "Geist, CSS variables",
     what: "Text is set in Geist, with Geist Mono for small technical text. Colours are shared variables that follow your light or dark setting.",
-    why: "Fonts are self-hosted at build time, so visiting sends no request to Google. One set of colours keeps every page consistent.",
+    why: "Fonts are self-hosted at build time, so visiting sends no request to Google. Every page uses the same colour tokens.",
   },
   "product-still": {
     label: "Hub preview",
     tech: "React server component, @kcw/demo-data",
     what: "A still picture of the private hub, drawn from simulated people, mood and follower numbers.",
-    why: "Visitors see what the hub looks like while no private data can reach a public page.",
+    why: "Public pages may import only the demo data, so private data cannot reach them by accident.",
   },
   "activity-feed": {
     label: "Agent activity",
@@ -50,7 +50,7 @@ export const XRAY = {
     label: "Demo hub",
     tech: "React, server-built view model",
     what: "Tabs for Today, People, Mood, Following and Notes. The server prepares the numbers and the browser only tracks the selected tab.",
-    why: "Every figure comes from the demo data through one view model, and the client code stays small.",
+    why: "The server builds the view from the demo data, and the browser only holds the selected tab.",
   },
   "office-board": {
     label: "Office board",
@@ -62,13 +62,13 @@ export const XRAY = {
     label: "Office room",
     tech: "Canvas 2D",
     what: "Each robot is an agent at its station. Events from the feed play back as movement, and picking an agent shows its task.",
-    why: "Plain canvas drawing needs no game engine or extra dependency, and the room reads the same feed as the board.",
+    why: "It draws on a plain canvas and reads the same public feed as the board.",
   },
   "bot-page": {
     label: "Bot notes",
     tech: "Next.js server page",
     what: "Says what KentcrosswiseBot is for, how it will identify itself and where to report a problem. Automated discovery is not enabled yet.",
-    why: "The essay crawl must obey robots.txt and rate-limit every site. A public page lets site owners see who is asking.",
+    why: "The essay crawl must obey robots.txt and rate-limit every site. The planned User-Agent links back to this page, which also gives a way to report a problem.",
   },
 } as const satisfies Record<string, XrayEntry>;
 
