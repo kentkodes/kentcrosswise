@@ -171,6 +171,7 @@ async function hookBook(id: number, deps: HooksDeps, models: () => Promise<Model
     try {
       reply = await m.complete({
         system: correction ? `${HOOK_SYSTEM} ${correction}` : HOOK_SYSTEM, prompt, maxTokens: HOOK_MAX_TOKENS,
+        call: { purpose: "hook", subject: { kind: "essay", id: row.id } },
       });
     } catch {
       return { id, code: "provider_error", calls, ...(model ? { model } : {}) };

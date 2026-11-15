@@ -12,6 +12,7 @@ import { storePhase } from "../lib/essay-ingest";
 import {
   HOOK_CORRECTIONS, HOOK_EXCERPT_WORDS, HOOK_MAX_CHARS, HOOK_PROMPT_CHARS, HOOK_SYSTEM, hooksPhase, validateHook, type HooksDeps,
 } from "../lib/essay-hooks";
+import { recordPipelineCalls } from "../lib/essay-categorize";
 
 const FIXTURES = fileURLToPath(new URL("../../packages/essays/test/fixtures/gutenberg-text/", import.meta.url));
 const ESSAY = readFileSync(join(FIXTURES, "essay.txt"), "utf8");
@@ -148,7 +149,13 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
   const allHooks = async () => q<{ source_url: string; hook: string | null }>("SELECT source_url, hook FROM essays ORDER BY source_url");
   const setPaused = (v: boolean) =>
     q("INSERT INTO system_flags (key, value) VALUES ('pipelines_paused', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [String(v)]);
-  const deepseek = (complete: FakeProviderOptions["complete"]) => new FakeProvider({ name: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, complete });
+  // AR3: every fake call is recorded as the pipeline does it (recordPipelineCalls, as the pipeline_rw member during run()).
+  const deepseek = (complete: FakeProviderOptions["complete"]) =>
+    new FakeProvider({ name: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, complete, onCall: recordPipelineCalls(fresh.db) });
+  const callRows = async () => q<{ agent: string; purpose: string; subject_kind: string; subject_id: string; outcome: string; input_tokens: number | null; source_url: string }>(
+    `SELECT u.agent, u.purpose, u.subject_kind, u.subject_id, u.outcome, u.input_tokens, e.source_url
+       FROM usage_events u LEFT JOIN essays e ON e.id::text = u.subject_id ORDER BY u.ts, u.outcome`);
+
 
   const run = async (ids: number[], getModels: HooksDeps["getModels"]) => {
     await fresh.db.exec(`SET ROLE ${LOGIN}`);
@@ -355,6 +362,21 @@ describe("hooks phase on PGlite as a pipeline_rw member", () => {
     await setPaused(false);
     expect(primary.calls).toHaveLength(0);
     expect(JSON.stringify(await allHooks())).toBe(before);
+  });
+
+  it("AR3: each hook call (a corrective retry too) wrote one call record as pipeline_rw, linked to its essay", async () => {
+    const rows = await callRows();
+    for (const r of rows) expect(r).toMatchObject({ agent: "pipeline", purpose: "hook", subject_kind: "essay" });
+    expect(rows.every((r) => r.source_url !== null)).toBe(true);
+    expect(rows.filter((r) => r.source_url === urlOf(IDS.ok))).toEqual([expect.objectContaining({ outcome: "reported" })]);
+    // The invalid-reply essay: every call of its runs, the corrective retries too, is a record; the provider error on
+    // a retry left an unknown one with null tokens next to the reported first call.
+    const invalid = rows.filter((r) => r.source_url === urlOf(IDS.invalid));
+    expect(invalid.filter((r) => r.outcome === "reported").length).toBeGreaterThanOrEqual(2);
+    expect(invalid.some((r) => r.outcome === "unknown" && r.input_tokens === null)).toBe(true);
+    expect(rows.filter((r) => r.outcome === "started")).toEqual([]);
+    expect(rows.filter((r) => r.source_url === urlOf(IDS.link))).toEqual([]);
+    expect(JSON.stringify(await q("SELECT * FROM usage_events"))).not.toMatch(/Studies serve|You write the one-line hook/);
   });
 
   it("never prints essay text, the prompt, the hook, responses or keys", () => {

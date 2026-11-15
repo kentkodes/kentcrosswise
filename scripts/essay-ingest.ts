@@ -25,7 +25,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "./lib/args";
 import { DB_HELP, openDb } from "./lib/db";
 import { acceptancePhase } from "./lib/essay-acceptance";
-import { CATEGORIZE_OK, categorizePhase, MODELS_SECRET, modelsFromSecret } from "./lib/essay-categorize";
+import { CATEGORIZE_OK, categorizePhase, MODELS_SECRET, modelsFromSecret, recordPipelineCalls } from "./lib/essay-categorize";
 import { HOOK_OK, hooksPhase } from "./lib/essay-hooks";
 import {
   fetchPhase, IngestError, parseIds, REEXTRACT_OK, reextractPhase, spawnRunner, STORE_OK, storePhase, summarize,
@@ -99,9 +99,9 @@ ${DB_HELP}`);
   if (phase === "categorize" || phase === "hooks") {
     assertWriteAllowed(args, `essay-ingest ${phase}`);
     const modelsSecret = str(args["models-secret"]) ?? MODELS_SECRET;
-    // The one place both model phases get their provider: a later usage-accounting slice wraps it here.
-    const getModels = () => modelsFromSecret((key) => getSecret(modelsSecret, key));
     const { db, close } = await openDb(args);
+    // The one place both model phases get their provider. Every request is a call record (AR3).
+    const getModels = () => modelsFromSecret((key) => getSecret(modelsSecret, key), { onCall: recordPipelineCalls(db) });
     try {
       if (phase === "hooks") {
         const results = await hooksPhase(ids, { db, dir, log, getModels });
