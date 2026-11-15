@@ -2,7 +2,7 @@
 // (written at sign-in by auth/config.ts events.signIn); this module turns it into short-lived access tokens
 // and can disconnect. Never log tokens, the client secret or response bodies: only fixed codes and error classes.
 import { defaultSecretStore, SecretKeyMissingError, SecretNotFoundError } from "@kcw/secrets";
-import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/config";
+import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/google-consent";
 import { loadProdSettings } from "../auth/settings";
 
 export type GoogleScope = "calendar" | "youtube";
