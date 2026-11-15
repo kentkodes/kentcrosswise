@@ -75,7 +75,7 @@ export interface AgentRunRef {
 
 /** Where the task can be found: a branch name (needs no lookup), else a PR or issue number. */
 export interface TaskHint {
-  /** From the run title (`<role> task <id>`), set only when the agent run guards pass. */
+  /** From the run title (`<role> task <id>` or `<role> task <id> op <n>`), set only when the agent run guards pass. */
   agent_task_id?: number;
   /** Set when the agent run guards pass, with or without a matching title. */
   agent_run?: AgentRunRef;
@@ -210,7 +210,7 @@ export function normalize(eventName: string, body: unknown): NormalizeResult {
       if (headBranch !== null && sameRepo(run?.head_repository, repo)) hint.branch = headBranch;
       if (prNumbers.length > 0) hint.pr_number = prNumbers[0]!;
       const role = /^\.github\/workflows\/agent-(developer|qa|docs|scraper)\.yml$/.exec(str(run?.path) ?? "")?.[1];
-      const title = /^(developer|qa|docs|scraper) task ([1-9]\d{0,15})$/.exec(str(run?.display_title, 100) ?? "");
+      const title = /^(developer|qa|docs|scraper) task ([1-9]\d{0,15})(?: op (?:0|[1-9]\d{0,8}))?$/.exec(str(run?.display_title, 100) ?? "");
       // Only the two actions the orchestrator records (UNIT3-PLAN §6) become agent-run observations.
       // FORWARDED_ACTIONS already drops every other action above; this keeps the hint scoped even if
       // another workflow_run action is ever forwarded for CI runs (it would then be dropped as no_task).

@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, lstatSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { admit, fence, parseOp } from "./lib/agent-admission";
 import { gatherContext, linkedIssue, parseInputs } from "./lib/agent-context";
 import { ghGet, type GhPull } from "./lib/agent-github";
 import { AGENT_CONFIGS, isWorkflowAgent } from "./lib/agents";
@@ -82,6 +83,17 @@ await runMain(async () => {
   if (command === "prepare") {
     if (!isWorkflowAgent(args.agent)) throw new Error("agent required");
     const inputs = parseInputs(args.agent, { task_id: process.env.KCW_TASK_ID, issue: process.env.KCW_ISSUE, pr: process.env.KCW_PR, mode: process.env.KCW_MODE });
+    // The scraper is not dispatched by the orchestrator and has no op.
+    const op = inputs.agent === "scraper" ? null : parseOp(process.env.KCW_OP);
+    if (op !== null) {
+      const run = await admit(gh, { agent: inputs.agent, workflow: AGENT_CONFIGS[inputs.agent].workflow, taskId: inputs.taskId, op, runId: Number(process.env.GITHUB_RUN_ID) });
+      if (!run.admitted) {
+        console.log(`run_not_admitted op=${op} first=${run.first}`);
+        mkdirSync("context", { recursive: true });
+        writeFileSync("context/skipped.txt", "run_not_admitted\n");
+        output({ base_sha: "", skip: "true" }); return;
+      }
+    }
     const gathered = await gatherContext(inputs, gh);
     const branch = gathered.outputs.branch!;
     const existing = await ghGet<{ object: { sha: string } }>(gh, `/repos/${repo}/git/ref/heads/${branch}`, "reading task ref");
@@ -95,7 +107,7 @@ await runMain(async () => {
       }
     }
     const workflowSha = process.env.GITHUB_SHA!;
-    const c = parseTrustedContext(JSON.stringify({ version: 1, agent: inputs.agent, repo, taskId: inputs.taskId, issue: inputs.issue ?? null, pr: prNumber,
+    const c = parseTrustedContext(JSON.stringify({ version: 1, agent: inputs.agent, repo, taskId: inputs.taskId, op, issue: inputs.issue ?? null, pr: prNumber,
       branch, workflowSha, baseSha: gathered.outputs.head_sha ?? existing?.object.sha ?? workflowSha, remoteSha: existing?.object.sha ?? null }));
     if (c.pr && c.agent !== "docs") await requireLivePull(gh, c, c.baseSha, c.agent === "qa");
     mkdirSync("context", { recursive: true });
@@ -123,6 +135,15 @@ await runMain(async () => {
     return;
   }
   if (command !== "publish") throw new Error("unknown pipeline command");
+  // Fencing (AR2 slice 2b): before any write, this run must still be its operation's first run and
+  // no newer operation of the task may exist. The read uses the job's own token (actions: read);
+  // GH_TOKEN here is the publisher App token.
+  if (c.op !== null) {
+    const readToken = process.env.KCW_RUN_TOKEN;
+    if (!readToken) throw new Error("run read token is required");
+    const reason = await fence({ repo, token: readToken }, { agent: c.agent, workflow: AGENT_CONFIGS[c.agent].workflow, taskId: c.taskId, op: c.op, runId: Number(process.env.GITHUB_RUN_ID) });
+    if (reason) { console.log(`publish_fenced reason=${reason}`); output({ pushed: "false", fenced: "true" }); return; }
+  }
   const dir = mkdtempSync(path.join(tmpdir(), "kcw-candidate-"));
   try {
     runGit(["init", "--bare", "-q", dir]);

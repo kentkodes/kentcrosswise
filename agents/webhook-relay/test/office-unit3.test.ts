@@ -26,10 +26,14 @@ describe('trusted office run identity',()=>{
   }finally{forwarded.pop();}
   expect(FORWARDED_ACTIONS.workflow_run).toEqual(['requested','completed']);
  });
+ it.each(['developer task 42','developer task 42 op 0','developer task 42 op 17'])('maps the old and the op title %s to task 42',title=>{
+  const p=payload();Object.assign(p.workflow_run,{display_title:title});const result=normalize('workflow_run',p);expect(result.ok).toBe(true);
+  if(!result.ok)return;expect(result.value.hint.agent_task_id).toBe(42);expect(JSON.stringify(result.value)).not.toContain('op 17');
+ });
  it.each([
   {path:'.github/workflows/not-agent-developer.yml'}, {event:'pull_request'}, {head_branch:'feature'},
   {display_title:'qa task 42'}, {display_title:'developer task 042'}, {display_title:'developer task 0'},
-  {display_title:'developer task 9007199254740992'}, {display_title:'developer task 42 secret'}, {head_repository:{id:999}},
+  {display_title:'developer task 9007199254740992'}, {display_title:'developer task 42 secret'}, {display_title:'developer task 42 op'}, {display_title:'developer task 42 op 01'}, {display_title:'developer task 42 op 1234567890'}, {display_title:'developer task 42 op 1 x'}, {head_repository:{id:999}},
  ])('does not derive identity for %j',patch=>{
   const p=payload();Object.assign(p.workflow_run,patch);const result=normalize('workflow_run',p);expect(result.ok).toBe(true);
   if(!result.ok)return;expect(result.value.hint.agent_task_id).toBeUndefined();expect(result.value.payload).not.toHaveProperty('agent_task_id');

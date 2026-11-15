@@ -96,7 +96,7 @@ export class FakeGitHubClient implements GitHubClient {
    * The fake's clock (issue and run creation times); tests that use a fixed clock set it to theirs.
    */
   now: () => Date = () => new Date();
-  /** Dispatches also add a workflow run (display title `<role> task <task_id>`) that findWorkflowRun sees. Off by default. */
+  /** Dispatches also add a workflow run (display title `<role> task <task_id> op <op>`) that findWorkflowRun sees. Off by default. */
   registerRuns = false;
   /** While true, findWorkflowRun does not see registered runs (GitHub's delayed run visibility). */
   hideRuns = false;
@@ -161,7 +161,7 @@ export class FakeGitHubClient implements GitHubClient {
         status: "queued",
         conclusion: null,
         workflow: input.workflow,
-        displayTitle: `${role} task ${input.inputs.task_id}`,
+        displayTitle: `${role} task ${input.inputs.task_id}${input.inputs.op === undefined ? "" : ` op ${input.inputs.op}`}`,
         createdAt: this.now().toISOString(),
       });
     }

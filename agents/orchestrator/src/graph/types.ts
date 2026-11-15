@@ -22,12 +22,6 @@ export function agentRoleOfWorkflow(workflow: string): AgentRunRole | null {
   return Object.hasOwn(AGENT_WORKFLOW_ROLES, workflow) ? AGENT_WORKFLOW_ROLES[workflow]! : null;
 }
 
-/**
- * The `run-name` of an agent-docs.yml run (the workflow sets `run-name: docs task <task_id>`).
- * The docs sweep finds the run by this title (a dispatch may return no run id).
- */
-export const docsRunName = (taskId: number): string => `docs task ${taskId}`;
-
 /** Docs task sweep (§4.3): a run still queued or in progress after this many minutes goes to the owner (job timeouts sum to 95). */
 export const DOCS_WAIT_LIMIT_MINUTES = 150;
 

@@ -9,6 +9,8 @@ export interface TrustedContext {
   agent: WorkflowAgent;
   repo: string;
   taskId: number;
+  /** The dispatch operation id from the run-name (null only for the undispatched scraper). */
+  op: number | null;
   issue: number | null;
   pr: number | null;
   branch: string;
@@ -20,9 +22,9 @@ const sha = /^[a-f0-9]{40}$/;
 export function parseTrustedContext(text: string): TrustedContext {
   if (Buffer.byteLength(text) > 4096) throw new Error("context too large");
   const c = JSON.parse(text) as TrustedContext;
-  if (!c || Object.keys(c).sort().join(",") !== "agent,baseSha,branch,issue,pr,remoteSha,repo,taskId,version,workflowSha" ||
+  if (!c || Object.keys(c).sort().join(",") !== "agent,baseSha,branch,issue,op,pr,remoteSha,repo,taskId,version,workflowSha" ||
       c.version !== 1 || !isWorkflowAgent(c.agent) || !/^[\w-]+\/[\w.-]+$/.test(c.repo) ||
-      !Number.isSafeInteger(c.taskId) || c.taskId < 1 || c.branch !== branchOf(c.taskId) ||
+      !Number.isSafeInteger(c.taskId) || c.taskId < 1 || (c.agent === "scraper" ? c.op !== null : !Number.isSafeInteger(c.op) || c.op! < 0 || c.op! > 999_999_999) || c.branch !== branchOf(c.taskId) ||
       !sha.test(c.baseSha) || !sha.test(c.workflowSha) || (c.remoteSha !== null && !sha.test(c.remoteSha)) ||
       [c.issue, c.pr].some((n) => n !== null && (!Number.isSafeInteger(n) || n < 1))) throw new Error("invalid trusted context");
   return c;

@@ -226,8 +226,8 @@ describe("task graph (P2-10)", () => {
   }
 
   /** An agent-docs.yml run of the docs task as GitHub lists it, created now. */
-  function addDocsRun(taskId: number, status: string, conclusion: string | null = null) {
-    const run = { id: ++seq, workflow: "agent-docs.yml", displayTitle: `docs task ${taskId}`, createdAt: clock.toISOString(), status, conclusion };
+  function addDocsRun(taskId: number, status: string, conclusion: string | null = null, op = 0) {
+    const run = { id: ++seq, workflow: "agent-docs.yml", displayTitle: `docs task ${taskId} op ${op}`, createdAt: clock.toISOString(), status, conclusion };
     gh.workflowRuns.push(run);
     return run;
   }
@@ -258,7 +258,7 @@ describe("task graph (P2-10)", () => {
     expect(gh.issues[0]!.body).toContain(`kcw/task-${id}`);
     expect(gh.issues[0]!.body).not.toContain("please"); // owner text never reaches GitHub
     expect(devDispatches()).toEqual([
-      { workflow: "agent-developer.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "" } },
+      { workflow: "agent-developer.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "", op: "0" } },
     ]);
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "dev", github_issue: gh.issues[0]!.number, public_title: "Add a healthz page", branch: `kcw/task-${id}` });
     expect(await waits(id)).toEqual([{ phase: "dev", waiting_on: "dev" }]);
@@ -267,7 +267,7 @@ describe("task graph (P2-10)", () => {
     expect(await task(id)).toMatchObject({ waiting_on: "ci", pr_number: 41, head_sha: head });
 
     expect(await send(id, ciEvent(id, 41, head, "success"))).toBe("applied");
-    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), pr: "41" } }]);
+    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), pr: "41", op: "1" } }]);
     // RUN-ID-MAPPING-SPEC §2: both dispatches are linked to the task by run id, as orch_rw.
     expect(await sql<{ run_id: string; role: string }>("SELECT run_id::text, role FROM agent_dispatches WHERE task_id = $1 ORDER BY run_id", [id])).toEqual([
       { run_id: String(devDispatches()[0]!.runId), role: "developer" },
@@ -471,7 +471,7 @@ describe("task graph (P2-10)", () => {
       expect(await waits(id)).toEqual([]);
       // §4.2 step 8: Docs-keeper follows the externally merged PR as well.
       const docs = await docsTaskOf(id);
-      expect(docsDispatches()).toEqual([expect.objectContaining({ inputs: { task_id: String(docs), pr: "151" } })]);
+      expect(docsDispatches()).toEqual([expect.objectContaining({ inputs: { task_id: String(docs), pr: "151", op: "0" } })]);
       expect((await task(docs)).waiting_on).toBe("dev");
     });
 
@@ -737,7 +737,7 @@ describe("task graph (P2-10)", () => {
       expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied");
       expect(await task(id)).toMatchObject({ waiting_on: "qa", head_sha: h2, attempts: 0 });
       expect(qaDispatches()).toHaveLength(2);
-      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(id), pr: "56" });
+      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(id), pr: "56", op: "2" });
       expect((await events(id)).slice(-2)).toEqual(["ci_passed", "qa_reviewing"]);
       expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied"); // distinct duplicate CI event
       expect(await send(id, reviewEvent(id, 56, h1, "approved"))).toBe("stale");
@@ -852,7 +852,7 @@ describe("task graph (P2-10)", () => {
         branch: `kcw/task-${docs}`,
         github_issue: null,
       });
-      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "60" } }]);
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "60", op: "0" } }]);
       expect(gh.issues).toHaveLength(1); // the work task's: no planner, title node or issue for docs
       expect(devDispatches()).toHaveLength(1);
       expect(await sql("SELECT agent, event_type FROM agent_events WHERE task_id = $1", [docs])).toEqual([
@@ -881,6 +881,7 @@ describe("task graph (P2-10)", () => {
       expect((await task(id)).status).toBe("merged");
       const docs = await docsTaskOf(id);
       expect(docsDispatches()).toHaveLength(1);
+      expect(gh.workflowRuns.map((r) => r.displayTitle)).toEqual([`docs task ${docs} op 0`]); // the run is found by its exact op title
 
       expect(await send(id, reviewEvent(id, 61, head, "approved"), "approve-61")).toBe("finished");
       expect(docsDispatches()).toHaveLength(1); // found, not dispatched again
@@ -906,7 +907,7 @@ describe("task graph (P2-10)", () => {
 
       await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
       expect(await send(docs, sweep(docs))).toBe("unchanged"); // the deferred start ran first
-      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "62" } }]);
+      expect(docsDispatches()).toEqual([{ workflow: "agent-docs.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(docs), pr: "62", op: "0" } }]);
       expect(gh.issues).toHaveLength(1);
       expect(await task(docs)).toMatchObject({ status: "waiting", waiting_on: "dev" });
     });
@@ -939,7 +940,7 @@ describe("task graph (P2-10)", () => {
       expect(await send(docs, { task_id: docs, agent: "developer", event_type: "coding" })).toBe("stale");
       expect(await openDocsPr(docs, 65, head)).toBe("applied");
       expect(await send(docs, ciEvent(docs, 65, head, "success"))).toBe("applied");
-      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(docs), pr: "65" });
+      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(docs), pr: "65", op: "1" });
       expect(await send(docs, reviewEvent(docs, 65, head, "approved"))).toBe("applied");
 
       expect(gh.merges.at(-1)).toEqual({ pr: 65, sha: `squash-65-${head}` });
@@ -998,7 +999,7 @@ describe("task graph (P2-10)", () => {
 
       expect(await decide(docs, a.id, "approved")).toBe("applied");
       expect(docsDispatches()).toHaveLength(2);
-      expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: String(pr) });
+      expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: String(pr), op: kind === "CI failure" ? "1" : "2" });
       expect(devDispatches()).toHaveLength(1); // the work task's only
       expect(await task(docs)).toMatchObject({ waiting_on: "dev", attempts: 0, pr_number: docsPr });
 
@@ -1018,7 +1019,7 @@ describe("task graph (P2-10)", () => {
         expect(await send(docs, sweep(docs))).toBe("unchanged"); // no run listed yet
         expect(gh.calls.find((c) => c.method === "findWorkflowRun")!.args).toEqual({
           workflow: "agent-docs.yml",
-          displayTitle: `docs task ${docs}`,
+          displayTitle: `docs task ${docs} op 0`,
           createdAfter: new Date(clock.getTime() - 2 * 60_000).toISOString(),
         });
         const run = addDocsRun(docs, "in_progress");
@@ -1064,7 +1065,7 @@ describe("task graph (P2-10)", () => {
         expect(await send(docs, sweep(docs))).toBe("applied");
         expect(docsDispatches()).toHaveLength(2);
         expect(await send(docs, sweep(docs))).toBe("unchanged"); // the cancelled run predates the redispatch
-        addDocsRun(docs, "completed", "cancelled");
+        addDocsRun(docs, "completed", "cancelled", 1);
         expect(await send(docs, sweep(docs))).toBe("applied");
         expect(docsDispatches()).toHaveLength(2);
         expect((await pendingApproval(docs)).reasons[0]).toBe("Task failed: the agent-docs.yml run was cancelled, after one redispatch.");
@@ -1077,7 +1078,7 @@ describe("task graph (P2-10)", () => {
         advance(2);
         expect(await send(docs, sweep(docs))).toBe("applied");
         expect(docsDispatches()).toHaveLength(2);
-        expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: "84" });
+        expect(docsDispatches()[1]!.inputs).toEqual({ task_id: String(docs), pr: "84", op: "1" });
         advance(DOCS_NO_RUN_MINUTES + 1);
         expect(await send(docs, sweep(docs))).toBe("applied");
         expect(docsDispatches()).toHaveLength(2);

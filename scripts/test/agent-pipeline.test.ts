@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { candidateBundle, parseTrustedContext, readAdvisoryUsage, reportMessages, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
-const context = { version: 1, agent: "qa", repo: "owner/repo", taskId: 2, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha };
+const context = { version: 1, agent: "qa", repo: "owner/repo", taskId: 2, op: 0, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha };
 const dirs: string[] = [];
 const dir = () => { const p=mkdtempSync(path.join(tmpdir(),"kcw-boundary-")); dirs.push(p); return p; };
 afterEach(() => { for(const p of dirs.splice(0)) rmSync(p,{recursive:true,force:true}); vi.unstubAllEnvs(); });
@@ -29,7 +29,7 @@ describe("report messages",()=>{
 describe("trusted authority",()=>{
   it("fails empty code tasks while allowing validated PR retries and docs no-op",()=>{
     for(const agent of ["developer", "scraper"] as const) {
-      const c=parseTrustedContext(JSON.stringify({...context,agent,pr:null}));
+      const c=parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:0,pr:null}));
       expect(()=>requireCodeProgress(c,false)).toThrow(/no commits/);
       expect(()=>requireCodeProgress(c,true)).not.toThrow();
       expect(()=>requireCodeProgress({...c,pr:12},false)).not.toThrow();
@@ -38,8 +38,15 @@ describe("trusted authority",()=>{
   });
   it("rejects work fields, changed role schema, traversal branch and malformed baseline",()=>{
     expect(parseTrustedContext(JSON.stringify(context))).toEqual(context);
-    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{repo:"https://other/repo"}])
+    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{op:-1},{op:null},{op:1.5},{op:1_000_000_000},{repo:"https://other/repo"}])
       expect(()=>parseTrustedContext(JSON.stringify({...context,...change}))).toThrow();
+  });
+  it("binds op: required for dispatched agents, null only for the scraper",()=>{
+    expect(parseTrustedContext(JSON.stringify({...context,agent:"developer",op:7})).op).toBe(7);
+    expect(parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:null})).op).toBeNull();
+    expect(()=>parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:0}))).toThrow();
+    const { op: _op, ...without } = context;
+    expect(()=>parseTrustedContext(JSON.stringify(without))).toThrow();
   });
   it("requires exactly main branch deployment policy before credentials",async()=>{
     await expect(requirePublisherEnvironment(gh([{deployment_branch_policy:{custom_branch_policies:true,protected_branches:false}},{total_count:1,branch_policies:[{name:"main",type:"branch"}]}]),"qa")).resolves.toBeUndefined();
