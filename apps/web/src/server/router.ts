@@ -1,8 +1,8 @@
 // Entry routing (H3). DeepSeek picks the kind of each captured entry. A low-confidence pick goes to the
 // owner's inbox, and the owner can reassign any entry (a changed route is stored as a correction). Owner pages
-// only; runs as web_rw. It writes the entry's route, usage_events and inbox_items, and nothing downstream
-// (CRM, diary, todo, idea rows and console tasks are not created here). Logs carry codes and error classes,
-// never entry text.
+// only; runs as web_rw. It writes the entry's route and outcome (error code, attempts, last attempt time),
+// the derived record (derived.ts), usage_events and inbox_items. Logs carry codes and error classes, never
+// entry text or provider messages.
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_DEEPSEEK_MODEL,
@@ -11,8 +11,9 @@ import {
   type UsageRecord,
 } from "@kcw/core/models";
 import { getSecret, SecretKeyMissingError } from "@kcw/secrets";
-import { ROUTE_LABELS, type RouteKind } from "./capture";
+import { ROUTE_LABELS, type RouteError, type RouteKind } from "./capture";
 import { withDb, type Queryable } from "./db";
+import { applyRoute } from "./derived";
 import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
 
 /** Entries the model is less sure of than this go to the owner's inbox (0.59 goes, 0.6 is routed). */
@@ -124,6 +125,7 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
     if (capReachedUsd(spent.total.costUsd)) return { state: "cap" as const };
     return { state: "ready" as const, text: row.raw_text };
   });
+  if (before.state === "cap") await recordFailure(run, entryId, "spend_cap");
   if (before.state !== "ready") return { code: before.state };
 
   let answer: Awaited<ReturnType<ModelProvider["classify"]>>;
@@ -131,10 +133,12 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
     answer = await provider.classify(before.text, KINDS, { instructions: ROUTER_INSTRUCTIONS });
   } catch (err) {
     console.error(`[router] ${errorClass(err)}`);
+    await recordFailure(run, entryId, "provider_error");
     return { code: "error" };
   }
   if (!isRouteKind(answer.label)) {
     console.error("[router] label-not-in-set");
+    await recordFailure(run, entryId, "invalid_label");
     return { code: "error" };
   }
   const kind = answer.label;
@@ -142,11 +146,13 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
 
   const written = await run(async (db) => {
     const upd = await db.query<{ id: string }>(
-      `UPDATE entries SET route_kind = $2, route_confidence = $3, route_model = $4, routed_by = 'model', status = $5
+      `UPDATE entries SET route_kind = $2, route_confidence = $3, route_model = $4, routed_by = 'model', status = $5,
+            route_error = NULL, route_attempts = route_attempts + 1, route_attempted_at = now()
         WHERE id = $1 AND route_kind IS NULL RETURNING id`,
       [entryId, kind, answer.confidence, answer.model, needsOwner ? "needs_owner" : "routed"],
     );
     if (upd.rows.length === 0) return false;
+    if (!needsOwner) await applyRoute(db, entryId, null, kind);
     if (needsOwner) {
       await db.query(
         "INSERT INTO inbox_items (kind, ref_table, ref_id, title) VALUES ('routing', 'entries', $1, $2)",
@@ -159,18 +165,39 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
   return { code: needsOwner ? "needs_owner" : "routed", kind };
 }
 
+/** Stores a failed attempt: the fixed code, one more attempt, now. Only while the entry is still unrouted. */
+async function recordFailure(run: DbRun, entryId: string, code: RouteError): Promise<void> {
+  try {
+    await run((db) =>
+      db.query(
+        "UPDATE entries SET route_error = $2, route_attempts = route_attempts + 1, route_attempted_at = now() WHERE id = $1 AND route_kind IS NULL",
+        [entryId, code],
+      ),
+    );
+  } catch (err) {
+    console.error(`[router] record-${errorClass(err)}`);
+  }
+}
+
 /**
  * The owner moves an entry to another kind. A correction is stored only when the entry had a route and it changes;
  * the open routing inbox item for the entry is closed. Returns "not-found" for an unknown entry.
  */
 export async function reassignEntry(db: Queryable, entryId: string, to: RouteKind): Promise<"ok" | "not-found"> {
-  const { rows } = await db.query<{ route_kind: RouteKind | null }>(
-    "SELECT route_kind FROM entries WHERE id = $1 FOR UPDATE",
+  const { rows } = await db.query<{ route_kind: RouteKind | null; status: string | null }>(
+    "SELECT route_kind, status FROM entries WHERE id = $1 FOR UPDATE",
     [entryId],
   );
   const row = rows[0];
   if (!row) return "not-found";
-  await db.query("UPDATE entries SET route_kind = $2, routed_by = 'owner', status = 'routed' WHERE id = $1", [entryId, to]);
+  // Saving the unchanged kind of a routed entry changes nothing (a derived row the owner deleted stays deleted).
+  if (row.status === "routed" && row.route_kind === to) return "ok";
+  await db.query(
+    "UPDATE entries SET route_kind = $2, routed_by = 'owner', status = 'routed', route_error = NULL WHERE id = $1",
+    [entryId, to],
+  );
+  // A "needs you" entry has a guess but no derived row yet; a routed one has a row of its current kind.
+  await applyRoute(db, entryId, row.status === "needs_owner" ? null : row.route_kind, to);
   if (row.route_kind !== null && row.route_kind !== to) {
     await db.query("INSERT INTO route_corrections (entry_id, from_kind, to_kind) VALUES ($1, $2, $3)", [entryId, row.route_kind, to]);
   }

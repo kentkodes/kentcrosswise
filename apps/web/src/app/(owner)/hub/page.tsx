@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { entryStatus, listRecentEntries, MAX_CAPTURE_CHARS, ROUTE_LABELS, type EntryRow, type RouteKind } from "@/server/capture";
+import { listRecentEntries, listUnresolvedEntries, MAX_CAPTURE_CHARS, type EntryRow } from "@/server/capture";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
 import { routingEnabled } from "@/server/router";
-import { formatUtc } from "../format";
 import { isSuccessNotice, noticeText } from "../notices";
 import { OwnerFrame } from "../owner-frame";
-import { Dot, Notice, Region } from "../owner-ui";
+import { Notice, Region } from "../owner-ui";
 import s from "../owner.module.css";
-import { reassignAction, routeAgainAction, captureAction } from "./actions";
+import { captureAction } from "./actions";
 import { CaptureField } from "./capture-field";
+import { EntryItem } from "./entry-row";
 
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
 
@@ -21,12 +21,13 @@ const PAGES = [
   { href: "/essays", label: "Essays", note: "Library, recommendations and setup" },
 ] as const;
 
-const KINDS = Object.keys(ROUTE_LABELS) as RouteKind[];
-
-async function loadRecent(): Promise<{ rows?: EntryRow[]; problem?: string }> {
+async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; problem?: string }> {
   try {
-    const rows = await withDb("web_rw", (db) => listRecentEntries(db), { readOnly: true });
-    return { rows };
+    return await withDb(
+      "web_rw",
+      async (db) => ({ rows: await listRecentEntries(db), unresolved: await listUnresolvedEntries(db) }),
+      { readOnly: true },
+    );
   } catch (err) {
     if (err instanceof DbNotConfiguredError) return { problem: "The database is not connected yet." };
     console.error(`[hub] ${dbErrorLabel(err)}`);
@@ -40,7 +41,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
   const notice = noticeText(code);
   const ok = isSuccessNotice(code);
   const routing = routingEnabled(process.env);
-  const { rows, problem } = await loadRecent();
+  const { rows, unresolved, problem } = await loadRecent();
 
   return (
     <OwnerFrame title="Hub" current="/hub">
@@ -64,6 +65,18 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
         </form>
       </Region>
 
+      <Region id="unresolved" title="Unresolved" testId="unresolved">
+        {problem ? null : unresolved && unresolved.length > 0 ? (
+          <ol className={s.list} data-testid="unresolved-entries">
+            {unresolved.map((e) => (
+              <EntryItem key={e.id} e={e} routing={routing} />
+            ))}
+          </ol>
+        ) : (
+          <p className={`${s.note} ${s.pad}`}>Nothing is waiting.</p>
+        )}
+      </Region>
+
       <Region id="recent" title="Recent" testId="recent">
         {problem ? (
           <Notice role="alert" tone="warn">
@@ -73,55 +86,9 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
           <p className={`${s.note} ${s.pad}`}>Nothing captured yet.</p>
         ) : rows ? (
           <ol className={s.list} data-testid="entries">
-            {rows.map((e) => {
-              const status = entryStatus(e);
-              return (
-                <li key={e.id} data-entry-id={e.id}>
-                  <p className={s.entryText}>{e.rawText}</p>
-                  <p className={s.entryMeta}>
-                    <time className={s.mono} dateTime={e.createdAt}>
-                      {formatUtc(e.createdAt)}
-                    </time>
-                    <span className={s.statusWord}>
-                      <Dot tone={status.tone} />
-                      {e.status === "needs_owner" ? (
-                        <Link href="/inbox#routing" className={s.emph}>
-                          <span data-field="status">{status.label}</span>
-                        </Link>
-                      ) : (
-                        <span data-field="status" className={s.emph}>
-                          {status.label}
-                        </span>
-                      )}
-                    </span>
-                  </p>
-                  <form action={reassignAction} className={s.formRow}>
-                    <input type="hidden" name="entry_id" value={e.id} />
-                    <label className={s.fieldLabel}>
-                      Route
-                      <select className={s.field} name="to" defaultValue={e.routeKind ?? ""} required>
-                        <option value="" disabled>
-                          Choose a kind
-                        </option>
-                        {KINDS.map((k) => (
-                          <option key={k} value={k}>
-                            {ROUTE_LABELS[k]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button className={s.button} type="submit">
-                      Save
-                    </button>
-                    {routing && e.routeKind === null ? (
-                      <button className={s.button} type="submit" formAction={routeAgainAction} formNoValidate>
-                        Route again
-                      </button>
-                    ) : null}
-                  </form>
-                </li>
-              );
-            })}
+            {rows.map((e) => (
+              <EntryItem key={e.id} e={e} routing={routing} />
+            ))}
           </ol>
         ) : null}
       </Region>
