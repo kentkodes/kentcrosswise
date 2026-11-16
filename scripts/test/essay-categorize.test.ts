@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { freshDb } from "../../packages/db/test/helpers";
 import { registerGutenbergSource } from "../../packages/essays/src/registry/bootstrap";
 import {
-  EXCERPT_WORDS, ESSAY_TYPES, categorizePhase, modelsFromSecret, type CategorizeDeps,
+  EXCERPT_WORDS, ESSAY_TYPES, categorizePhase, modelsFromSecret, recordPipelineCalls, type CategorizeDeps,
 } from "../lib/essay-categorize";
 import { storePhase } from "../lib/essay-ingest";
 import { syntheticBook } from "../../packages/essays/test/synthetic-book";
@@ -42,7 +42,13 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
   const setPaused = (v: boolean) =>
     q("INSERT INTO system_flags (key, value) VALUES ('pipelines_paused', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [String(v)]);
 
-  const deepseek = (classify: FakeProviderOptions["classify"]) => new FakeProvider({ name: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, classify });
+  // AR3: every fake call is recorded as the pipeline does it (recordPipelineCalls, as the pipeline_rw member during run()).
+  const deepseek = (classify: FakeProviderOptions["classify"]) =>
+    new FakeProvider({ name: "deepseek", model: DEFAULT_DEEPSEEK_MODEL, classify, onCall: recordPipelineCalls(fresh.db) });
+  const callRows = async () => q<{ agent: string; purpose: string; subject_kind: string; subject_id: string; outcome: string; input_tokens: number | null; source_url: string }>(
+    `SELECT u.agent, u.purpose, u.subject_kind, u.subject_id, u.outcome, u.input_tokens, e.source_url
+       FROM usage_events u LEFT JOIN essays e ON e.id::text = u.subject_id ORDER BY u.ts, u.outcome`);
+
 
   const run = async (ids: number[], getModels: CategorizeDeps["getModels"]) => {
     await fresh.db.exec(`SET ROLE ${LOGIN}`);
@@ -232,6 +238,20 @@ describe("categorize phase on PGlite as a pipeline_rw member", () => {
     await setPaused(false);
     expect(primary.calls).toHaveLength(0);
     expect(JSON.stringify([await categories(), await statusOf(IDS.bad)])).toBe(before);
+  });
+
+  it("AR3: each categorize call wrote one call record as pipeline_rw, linked to its essay; failed calls stay unknown", async () => {
+    const rows = await callRows();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r).toMatchObject({ agent: "pipeline", purpose: "categorize", subject_kind: "essay" });
+    expect(rows.every((r) => r.source_url !== null)).toBe(true);
+    const ok = rows.filter((r) => r.source_url === urlOf(IDS.ok));
+    expect(ok).toEqual([expect.objectContaining({ outcome: "reported", input_tokens: expect.any(Number) })]);
+    const failed = rows.filter((r) => r.source_url === urlOf(IDS.perr));
+    expect(failed.length).toBeGreaterThan(0);
+    expect(failed.every((r) => r.outcome === "unknown" && r.input_tokens === null)).toBe(true);
+    expect(rows.filter((r) => r.outcome === "started")).toEqual([]);
+    expect(JSON.stringify(await q("SELECT * FROM usage_events"))).not.toMatch(/Studies serve|Choose the one label/);
   });
 
   it("never prints essay text, prompts, responses or keys", () => {

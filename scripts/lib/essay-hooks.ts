@@ -176,6 +176,7 @@ async function hookBook(id: number, deps: HooksDeps, models: () => Promise<Model
         prompt,
         // A reply cut off at the limit gets twice the room on its one retry.
         maxTokens: "reason" in verdict && verdict.reason === "max_tokens" && calls === 2 ? HOOK_MAX_TOKENS * 2 : HOOK_MAX_TOKENS,
+        call: { purpose: "hook", subject: { kind: "essay", id: row.id } },
       });
     } catch {
       return { id, code: "provider_error", calls, ...(model ? { model } : {}) };

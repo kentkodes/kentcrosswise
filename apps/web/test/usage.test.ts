@@ -47,7 +47,7 @@ describe("usageSummary as web_rw", () => {
     const s = await asRw((db) => usageSummary(db, RANGE));
     const m1 = find(s.byModel, "acme/m1")!;
     // $3 (old price) + $6 (new price) + $0.5 (stored cost)
-    expect(m1).toEqual({ key: "acme/m1", events: 3, inputTokens: 3_000_000, outputTokens: 1_500_000, costUsd: 9.5, unpricedEvents: 0 });
+    expect(m1).toEqual({ key: "acme/m1", events: 3, inputTokens: 3_000_000, outputTokens: 1_500_000, costUsd: 9.5, unpricedEvents: 0, unknownEvents: 0 });
     expect(find(s.byDay, "2026-03-10")!.costUsd).toBe(3);
     expect(find(s.byDay, "2026-03-15")!.costUsd).toBe(6);
     expect(find(s.byDay, "2026-03-16")!.costUsd).toBe(0.5);
@@ -73,6 +73,7 @@ describe("usageSummary as web_rw", () => {
       outputTokens: 1_501_010,
       costUsd: 9.5,
       unpricedEvents: 2,
+      unknownEvents: 0,
     });
     expect(s.byAgent.map((g) => g.key)).toEqual(["qa", "developer", "orchestrator"]);
     expect(find(s.byAgent, "developer")).toMatchObject({ events: 2, costUsd: 3.5 });
@@ -161,7 +162,7 @@ describe("usageSummary prices DeepSeek usage by its written provider and model",
       });
       // 1M in x $1 + 1M out x $2 = $3; the 2026-11-09 event has no row yet, so it is unpriced (never $0).
       expect(s.byModel).toEqual([
-        { key: "deepseek/deepseek-flash", events: 2, inputTokens: 2_000_000, outputTokens: 1_000_000, costUsd: 3, unpricedEvents: 1 },
+        { key: "deepseek/deepseek-flash", events: 2, inputTokens: 2_000_000, outputTokens: 1_000_000, costUsd: 3, unpricedEvents: 1, unknownEvents: 0 },
       ]);
     } finally {
       await pg.close();

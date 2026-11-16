@@ -7,7 +7,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { PGlite } from "@electric-sql/pglite";
-import { FakeProvider, type CompleteRequest, type UsageCallback } from "@kcw/core/models";
+import { FakeProvider, type CallCallback, type CompleteRequest } from "@kcw/core/models";
 import { fromPglite, migrate } from "@kcw/db";
 import { createFakeSecrets } from "@kcw/secrets";
 import pg from "pg";
@@ -53,11 +53,11 @@ describe("orchestrator Lambda on Postgres", () => {
     }
   };
 
-  const fakeProvider = (onUsage: UsageCallback) =>
+  const fakeProvider = (onCall: CallCallback) =>
     new FakeProvider({
       name: "anthropic",
       model: "claude-haiku-5-5",
-      onUsage,
+      onCall,
       complete: (req: CompleteRequest) => {
         const next = (req.system === PLANNER_SYSTEM ? replies.planner : replies.public_title).shift();
         return next === undefined ? new Error("unexpected model call") : { text: next };
@@ -86,7 +86,7 @@ describe("orchestrator Lambda on Postgres", () => {
       secrets: store,
       makePool: poolAsOrchRw,
       ...(gh && { makeGitHub: async () => gh }),
-      ...(opts.provider !== "default" && { makeProvider: ({ onUsage }) => fakeProvider(onUsage) }),
+      ...(opts.provider !== "default" && { makeProvider: ({ onCall }) => fakeProvider(onCall) }),
       log: (l) => lines.push(l),
     });
     return { handler, lines, env, aws, gh };

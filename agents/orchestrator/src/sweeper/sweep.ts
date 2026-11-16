@@ -56,7 +56,7 @@ export type PartName = "outbox" | "spend" | "tasks" | "pause" | "gc" | "redelive
 export interface SweepReport {
   window: string;
   /** Month-to-date model spend (UTC month); null when the spend check failed. */
-  spend: { month: string; spentUsd: number; unpricedEvents: number } | null;
+  spend: { month: string; spentUsd: number; unpricedEvents: number; unknownEvents: number } | null;
   /** True when the cap was reached in this run (agents_paused is set; no sweep messages sent). */
   capReached: boolean;
   /** Outbox rows sent, and rows whose send failed (they back off; their group's later rows wait). */
@@ -134,7 +134,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     const { month, start, end } = utcMonth(deps.now);
     const usage = await deps.store.monthUsage(start, end);
     const spend = monthToDateSpend(usage.events, usage.prices, deps.now);
-    report.spend = { month: spend.month, spentUsd: spend.spentUsd, unpricedEvents: spend.unpricedEvents };
+    report.spend = { month: spend.month, spentUsd: spend.spentUsd, unpricedEvents: spend.unpricedEvents, unknownEvents: spend.unknownEvents };
     if (!capReached(spend.spentUsd, SPEND_CAP_USD)) {
       mayDispatch = true;
       return;
@@ -142,7 +142,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     report.capReached = true;
     // Idempotent: the flag is written only when it is not already set. Never cleared here.
     if (!(await deps.store.isAgentsPaused())) await deps.store.setAgentsPaused();
-    log(`spend_cap_reached month=${month} spent=${spend.spentUsd.toFixed(2)}`);
+    log(`spend_cap_reached month=${month} spent=${spend.spentUsd.toFixed(2)} unpriced=${spend.unpricedEvents} unknown=${spend.unknownEvents}`);
   });
 
   await part("tasks", async () => {
@@ -200,7 +200,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
 
   log(
     `sweeper: window=${report.window} spend=${report.spend?.spentUsd.toFixed(2) ?? "unknown"} ` +
-      `unpriced=${report.spend?.unpricedEvents ?? "unknown"} cap=${report.capReached ? "reached" : "ok"} ` +
+      `unpriced=${report.spend?.unpricedEvents ?? "unknown"} unknown=${report.spend?.unknownEvents ?? "unknown"} cap=${report.capReached ? "reached" : "ok"} ` +
       `outbox=${report.outboxSent}/${report.outboxFailed} swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
       `gc=${report.gc} redelivered=${report.redelivered}` +
       (Object.keys(report.failed).length > 0 ? ` failed=${Object.keys(report.failed).join(",")}` : ""),

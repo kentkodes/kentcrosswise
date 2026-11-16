@@ -73,7 +73,7 @@ describe("scoreDiaryEntry (web_rw on PGlite)", () => {
     await expect(scoreDiaryEntry(run, id, provider)).resolves.toBe("scored");
     const row = await run((db) => getDiary(db, id));
     expect(row?.mood).toMatchObject({ ...GOOD, model: "deepseek-returned-1" });
-    expect(provider.calls).toEqual([{ op: "complete", input: "Synthetic body one" }]);
+    expect(provider.calls).toEqual([{ op: "complete", input: "Synthetic body one", tag: { purpose: "mood", subject: { kind: "diary_entry", id: expect.any(String) } } }]);
     expect(MOOD_INSTRUCTIONS).toContain("exactly these nine numeric fields");
   });
 

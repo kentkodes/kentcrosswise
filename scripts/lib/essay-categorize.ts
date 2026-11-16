@@ -3,7 +3,9 @@
 // are injected. Essay text, prompts, provider responses and keys never reach a log line or an error:
 // output is ids, fixed codes, the type, the confidence and the returned model id.
 import { createHash } from "node:crypto";
-import { DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL, DeepseekProvider, type ModelProvider } from "@kcw/core/models";
+import {
+  DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL, DeepseekProvider, recordCallsWith, type CallCallback, type ModelProvider,
+} from "@kcw/core/models";
 import { SecretKeyMissingError } from "@kcw/secrets";
 import type { Db } from "../../packages/essays/src/db";
 import { analyzeBook, assertNotPaused, bookUrl, ESSAY_TEXT_PREFIX, inTransaction } from "./essay-ingest";
@@ -48,7 +50,9 @@ export const CATEGORIZE_OK: ReadonlySet<string> = new Set(["categorized", "alrea
  * The DeepSeek provider. The key is read up front (a failure is the caller's models_unavailable); the base URL
  * and model keys are optional, and a missing or blank one means the default. No network here.
  */
-export async function modelsFromSecret(read: (key: string) => Promise<string>): Promise<ModelProvider> {
+export async function modelsFromSecret(
+  read: (key: string) => Promise<string>, opts: { onCall?: CallCallback } = {},
+): Promise<ModelProvider> {
   const apiKey = await read(API_KEY);
   const optional = (key: string) =>
     read(key).then((v) => v.trim(), (err: unknown) => {
@@ -56,7 +60,19 @@ export async function modelsFromSecret(read: (key: string) => Promise<string>): 
       throw err;
     });
   const [baseUrl, model] = await Promise.all([optional(BASE_URL_KEY), optional(MODEL_KEY)]);
-  return new DeepseekProvider({ apiKey, baseUrl: baseUrl || DEFAULT_DEEPSEEK_BASE_URL, model: model || DEFAULT_DEEPSEEK_MODEL });
+  return new DeepseekProvider({
+    apiKey, baseUrl: baseUrl || DEFAULT_DEEPSEEK_BASE_URL, model: model || DEFAULT_DEEPSEEK_MODEL,
+    ...(opts.onCall && { onCall: opts.onCall }),
+  });
+}
+
+/**
+ * AR3: the call records of the essay pipeline (agent `pipeline`), written through the pipeline's own
+ * connection (pipeline_rw, migration 0019 grants). Every request of categorize and hooks, each retry
+ * attempt too, is one usage_events row linked to its essay by id; no text is stored.
+ */
+export function recordPipelineCalls(db: Db): CallCallback {
+  return recordCallsWith("pipeline", (text, values) => db.query(text, values));
 }
 
 export interface CategorizeDeps {
@@ -123,7 +139,9 @@ async function categorizeBook(
   }
   let answer;
   try {
-    answer = await m.classify(excerpt(a.extraction.text), ESSAY_TYPES, { instructions: TYPE_INSTRUCTIONS });
+    answer = await m.classify(excerpt(a.extraction.text), ESSAY_TYPES, {
+      instructions: TYPE_INSTRUCTIONS, call: { purpose: "categorize", subject: { kind: "essay", id: row.id } },
+    });
   } catch {
     return { id, code: "provider_error" };
   }

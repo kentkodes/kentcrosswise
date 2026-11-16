@@ -2,7 +2,7 @@
 // Read-only: the sweeper never changes a task; the graph does when it processes the sweep message.
 // The one write is system_flags.agents_paused = true (the spend cap, spend.ts), plus the outbox
 // bookkeeping (orchestrator_outbox, migration 0011: mark sent, record a failed attempt).
-import type { SpendEvent, SpendPrice } from "./spend";
+import type { CallOutcomeValue, SpendEvent, SpendPrice } from "./spend";
 
 interface SpendEventRow {
   ts: Date | string;
@@ -11,6 +11,7 @@ interface SpendEventRow {
   input_tokens: number | string | null;
   output_tokens: number | string | null;
   cost_usd: number | string | null;
+  outcome: CallOutcomeValue;
 }
 
 interface SpendPriceRow {
@@ -114,7 +115,7 @@ export function sqlSweeperStore(db: SqlQuery): SweeperStore {
 
     async monthUsage(start, end) {
       const { rows: events } = await db.query<SpendEventRow>(
-        `SELECT ts, provider, model, input_tokens, output_tokens, cost_usd
+        `SELECT ts, provider, model, input_tokens, output_tokens, cost_usd, outcome
            FROM usage_events
           WHERE kind = 'model' AND ts >= $1::timestamptz AND ts < $2::timestamptz
           ORDER BY ts`,
@@ -140,6 +141,7 @@ export function sqlSweeperStore(db: SqlQuery): SweeperStore {
           inputTokens: r.input_tokens === null ? null : Number(r.input_tokens),
           outputTokens: r.output_tokens === null ? null : Number(r.output_tokens),
           costUsd: r.cost_usd === null ? null : Number(r.cost_usd),
+          outcome: r.outcome,
         })),
         prices: prices.map((r) => ({
           provider: r.provider,

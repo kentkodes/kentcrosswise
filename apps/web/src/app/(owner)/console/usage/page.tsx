@@ -48,6 +48,7 @@ function Cost({ group }: { group: UsageGroup }) {
     <>
       {formatUsd(group.costUsd)}
       {group.costUsd !== null && group.unpricedEvents > 0 ? <> (+{int(group.unpricedEvents)} with no price)</> : null}
+      {group.unknownEvents > 0 ? <> (+{int(group.unknownEvents)} usage unknown)</> : null}
     </>
   );
 }
@@ -77,6 +78,12 @@ function SpendCap({ month }: { month: UsageSummary }) {
         {month.total.unpricedEvents > 0 ? (
           <p data-testid="cap-unpriced" className={s.note}>
             {int(month.total.unpricedEvents)} model events have no price and are not counted in this total.
+          </p>
+        ) : null}
+        {month.total.unknownEvents > 0 ? (
+          <p data-testid="cap-unknown" className={s.note}>
+            {int(month.total.unknownEvents)} model calls may have been billed but reported no usage, and are not counted in
+            this total.
           </p>
         ) : null}
       </div>
@@ -153,7 +160,8 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
       {range.adjusted ? <Notice role="status" tone="ok">That range was not valid; showing the last 30 days.</Notice> : null}
       <p className={s.note}>
         Days are UTC. Cost uses the stored cost of an event when there is one, otherwise the model price in effect on the
-        event&apos;s day. Events without either show &quot;no price&quot;.
+        event&apos;s day. Events without either show &quot;no price&quot;. Calls that may have been billed but reported no
+        usage show &quot;usage unknown&quot;; their tokens are not counted. Neither is in the cap total.
       </p>
       {problem ? (
         <Notice role="alert" tone="warn">
@@ -176,6 +184,7 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
             </div>
           </Region>
           <GroupTable id="by-agent" title="By agent" label="Agent" groups={data.byAgent} />
+          <GroupTable id="by-purpose" title="By purpose" label="Purpose" groups={data.byPurpose} />
           <GroupTable id="by-model" title="By model" label="Model" groups={data.byModel} />
           <GroupTable id="by-day" title="By day" label="Day (UTC)" groups={data.byDay} />
         </>

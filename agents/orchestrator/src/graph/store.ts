@@ -2,6 +2,7 @@
 // approvals (+ inbox items, migration 0003), usage_events, system_flags, contact names. Events and
 // approvals carry effect keys, and a report is written in one transaction (AR2 slice 3, 0013).
 import type { AgentName, EventType, Usage } from "@kcw/core/events";
+import { callEventStatement, type CallEvent, type CallTag } from "@kcw/core/models";
 import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
 import type pg from "pg";
 import { OperationConflictError, type OperationKind } from "./operations";
@@ -306,6 +307,15 @@ export class PgTaskStore implements TaskStore {
     }
   }
 
+  /**
+   * AR3: one call event of an in-process model call (the planner's), as a usage_events call record
+   * (migration 0019, SQL in @kcw/core/models ledger.ts). `defaults` fill tag fields the call left unset.
+   */
+  async recordCall(agent: AgentName, event: CallEvent, defaults: CallTag = {}): Promise<void> {
+    const s = callEventStatement(agent, event, defaults);
+    await this.pool.query(s.text, s.values);
+  }
+
   async recordReport(r: ReportWrite): Promise<boolean> {
     const client = await this.pool.connect();
     try {
@@ -322,9 +332,9 @@ export class PgTaskStore implements TaskStore {
       for (const u of r.usage) {
         if (u.kind === "model") {
           await client.query(
-            `INSERT INTO usage_events (kind, agent, provider, model, input_tokens, output_tokens, task_id, dedupe_key)
-             VALUES ('model', $1, $2, $3, $4, $5, $6, $7) ON CONFLICT (dedupe_key) DO NOTHING`,
-            [r.agent, u.provider, u.model, u.input_tokens, u.output_tokens, r.taskId, u.dedupeKey],
+            `INSERT INTO usage_events (kind, agent, provider, model, input_tokens, output_tokens, task_id, dedupe_key, purpose)
+             VALUES ('model', $1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (dedupe_key) DO NOTHING`,
+            [r.agent, u.provider, u.model, u.input_tokens, u.output_tokens, r.taskId, u.dedupeKey, reportPurpose(u.dedupeKey)],
           );
         } else {
           await client.query(
@@ -486,4 +496,10 @@ export class PgTaskStore implements TaskStore {
   loadContacts(): Promise<ContactNames[]> {
     return loadContactNames({ query: <R>(sql: string) => this.pool.query(sql) as unknown as Promise<{ rows: R[] }> });
   }
+}
+
+/** AR3: a report usage line's purpose is the job that made the call (`report:<run>:<attempt>:<work|review>:<index>`). */
+export function reportPurpose(dedupeKey: string): "work" | "review" | null {
+  const m = /^report:\d+:\d+:(work|review):\d+$/.exec(dedupeKey);
+  return m ? (m[1] as "work" | "review") : null;
 }

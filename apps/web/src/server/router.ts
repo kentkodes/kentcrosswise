@@ -7,6 +7,8 @@ import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_DEEPSEEK_MODEL,
   DeepseekProvider,
+  callEventStatement,
+  type CallEvent,
   type ModelProvider,
   type UsageRecord,
 } from "@kcw/core/models";
@@ -16,7 +18,7 @@ import { withDb, type Queryable } from "./db";
 import { suggestFromNote } from "./calendar";
 import { linkCrmNote } from "./contacts";
 import { applyRoute } from "./derived";
-import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
+import { capReachedUsd, monthToDateRange, spendDecisionLine, usageSummary } from "./usage";
 
 /** Entries the model is less sure of than this go to the owner's inbox (0.59 goes, 0.6 is routed). */
 export const ROUTE_THRESHOLD = 0.6;
@@ -82,11 +84,19 @@ export async function routerFromEnv(env: Env): Promise<ModelProvider | undefined
     model: model || DEFAULT_DEEPSEEK_MODEL,
     timeoutMs: ROUTE_TIMEOUT_MS,
     retry: { retries: ROUTE_RETRIES },
-    onUsage: (u) => withDb("web_rw", (db) => recordRouterUsage(db, u)),
+    // AR3: every request (each retry attempt) is a call record, written with its own withDb call
+    // (never inside a routing transaction: the pool has one connection).
+    onCall: (e) => withDb("web_rw", (db) => recordRouterCall(db, e)),
   });
 }
 
-/** One model call as a usage_events row (kind model, agent router). Cost is priced later from model_prices. */
+/** One call event of the router provider (routing and mood scoring) as a usage_events call record (agent router, AR3). */
+export async function recordRouterCall(db: Queryable, e: CallEvent): Promise<void> {
+  const s = callEventStatement("router", e);
+  await db.query(s.text, s.values);
+}
+
+/** Legacy: one model call as a usage_events row (kind model, agent router), kept for callers of `onUsage`. New code uses recordRouterCall. */
 export async function recordRouterUsage(db: Queryable, u: UsageRecord): Promise<void> {
   await db.query(
     "INSERT INTO usage_events (kind, agent, provider, model, input_tokens, output_tokens) VALUES ('model', 'router', $1, $2, $3, $4)",
@@ -154,7 +164,10 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
     if (!row) return { state: "error" as const };
     if (row.route_kind !== null) return { state: "already" as const };
     const spent = await usageSummary(db, monthToDateRange());
-    if (capReachedUsd(spent.total.costUsd)) return { state: "cap" as const };
+    if (capReachedUsd(spent.total.costUsd)) {
+      console.error(`[router] ${spendDecisionLine(spent)}`);
+      return { state: "cap" as const };
+    }
     return { state: "ready" as const, text: row.raw_text };
   });
   if (before.state === "cap") await recordFailure(run, entryId, "spend_cap");
@@ -162,7 +175,10 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
 
   let answer: Awaited<ReturnType<ModelProvider["classify"]>>;
   try {
-    answer = await provider.classify(before.text, KINDS, { instructions: ROUTER_INSTRUCTIONS });
+    answer = await provider.classify(before.text, KINDS, {
+      instructions: ROUTER_INSTRUCTIONS,
+      call: { purpose: "route", subject: { kind: "entry", id: entryId } },
+    });
   } catch (err) {
     console.error(`[router] ${errorClass(err)}`);
     await recordFailure(run, entryId, "provider_error");

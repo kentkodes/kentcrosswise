@@ -227,7 +227,7 @@ describe("runSweep spend cap", () => {
     store.events = spendOf(10);
     const { sent, logs, deps } = sweepSetup(store);
     const r = await runSweep(deps);
-    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 10, unpricedEvents: 0 });
+    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 10, unpricedEvents: 0, unknownEvents: 0 });
     expect(r.capReached).toBe(false);
     expect(sent).toHaveLength(1);
     expect(store.flagWrites).toBe(0);
@@ -246,7 +246,7 @@ describe("runSweep spend cap", () => {
     expect(sent).toEqual([]);
     expect(store.flagWrites).toBe(1);
     expect(store.paused).toBe(true);
-    expect(logs).toContain("spend_cap_reached month=2026-11 spent=50.00");
+    expect(logs).toContain("spend_cap_reached month=2026-11 spent=50.00 unpriced=0 unknown=0");
     // The existing pause part then cancels the runs still in flight (DESIGN §4.3 pause-all).
     expect(gh.cancelled).toEqual([7]);
     expect(r.paused).toBe(true);
@@ -260,7 +260,7 @@ describe("runSweep spend cap", () => {
     const r = await runSweep(deps);
     expect(r.capReached).toBe(true);
     expect(sent).toEqual([]);
-    expect(logs).toContain("spend_cap_reached month=2026-11 spent=61.23");
+    expect(logs).toContain("spend_cap_reached month=2026-11 spent=61.23 unpriced=0 unknown=0");
   });
 
   it("already paused: no second write, still no dispatch, still logged", async () => {
@@ -273,7 +273,7 @@ describe("runSweep spend cap", () => {
     expect(store.flagWrites).toBe(0);
     expect(r.capReached).toBe(true);
     expect(sent).toEqual([]);
-    expect(logs).toContain("spend_cap_reached month=2026-11 spent=55.00");
+    expect(logs).toContain("spend_cap_reached month=2026-11 spent=55.00 unpriced=0 unknown=0");
   });
 
   it("never auto-unpauses: a manual pause stays set when spend is under the cap", async () => {
@@ -296,7 +296,7 @@ describe("runSweep spend cap", () => {
     store.events = [...spendOf(10), ev("2026-11-03T10:00:00Z", { model: "no-price", inputTokens: 9_999_999 })];
     const { sent, deps } = sweepSetup(store);
     const r = await runSweep(deps);
-    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 10, unpricedEvents: 1 });
+    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 10, unpricedEvents: 1, unknownEvents: 0 });
     expect(r.capReached).toBe(false);
     expect(sent).toHaveLength(1);
   });
@@ -383,7 +383,7 @@ describe("runSweep spend cap", () => {
     store.events = [ev("2026-10-31T20:00:00Z", { costUsd: 80 }), ev("2026-11-01T01:00:00Z", { costUsd: 5 })];
     const { sent, deps } = sweepSetup(store, "2026-11-01T01:15:00Z");
     const r = await runSweep(deps);
-    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 5, unpricedEvents: 0 });
+    expect(r.spend).toEqual({ month: "2026-11", spentUsd: 5, unpricedEvents: 0, unknownEvents: 0 });
     expect(r.capReached).toBe(false);
     expect(sent).toHaveLength(1);
   });

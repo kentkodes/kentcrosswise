@@ -12,8 +12,8 @@ import {
   AnthropicProvider,
   DEFAULT_ORCHESTRATOR_EFFORT,
   DEFAULT_ORCHESTRATOR_MODEL,
+  type CallCallback,
   type ModelProvider,
-  type UsageCallback,
 } from "@kcw/core/models";
 import { SecretKeyMissingError, SecretNotFoundError, SecretStore } from "@kcw/secrets";
 import type pg from "pg";
@@ -22,7 +22,7 @@ import { checkpointerFromPool, createPool, setupCheckpointer } from "./checkpoin
 import { githubClientFromSecret, type GitHubClient } from "./github";
 import { PgReceiptStore, PgTaskStore, buildTaskGraph, handleTaskSqsEvent, type TaskGraph } from "./graph";
 import type { SqsBatchResponse, SqsEvent } from "./handler";
-import { ModelPlanner, trackPlannerUsage } from "./nodes";
+import { ModelPlanner, trackPlannerCalls } from "./nodes";
 
 /** Env var names (values are secret *names*, set by infra/modules/orchestrator via infra/prod). */
 export const ORCHESTRATOR_SECRET_ENV = "KCW_ORCHESTRATOR_SECRET";
@@ -45,9 +45,9 @@ export interface LambdaDeps {
   makeGitHub?: (orchestratorSecret: string, secrets: SecretReader) => Promise<GitHubClient>;
   /**
    * The planner's model provider; defaults to AnthropicProvider (Opus 5.5 at high effort). It must report
-   * every call to `onUsage`, which writes the task's usage row. Tests inject a FakeProvider.
+   * every request to `onCall`, which writes the task's call record (AR3). Tests inject a FakeProvider.
    */
-  makeProvider?: (opts: { apiKey: () => Promise<string>; onUsage: UsageCallback }) => ModelProvider;
+  makeProvider?: (opts: { apiKey: () => Promise<string>; onCall: CallCallback }) => ModelProvider;
   log?: (line: string) => void;
 }
 
@@ -115,15 +115,10 @@ async function init(deps: LambdaDeps, log: (line: string) => void): Promise<{gra
   }
   const store = new PgTaskStore(pool);
 
-  // Planner usage goes to usage_events (kind model, agent orchestrator, cost_usd null: §11 Q13(1)).
-  const usage = trackPlannerUsage(
-    (taskId, u) =>
-      store.addUsage(taskId, "orchestrator", [
-        { kind: "model", provider: u.provider, model: u.model, input_tokens: u.inputTokens, output_tokens: u.outputTokens },
-      ]),
-    log,
-  );
-  const provider = (deps.makeProvider ?? defaultProvider)({ apiKey, onUsage: usage.onUsage });
+  // Every planner request is a call record in usage_events (kind model, agent orchestrator, purpose plan,
+  // cost_usd null: §11 Q13(1)), written at the start and completed with its usage or left unknown (AR3).
+  const usage = trackPlannerCalls((event) => store.recordCall("orchestrator", event), log);
+  const provider = (deps.makeProvider ?? defaultProvider)({ apiKey, onCall: usage.onCall });
   const planner = usage.planner(new ModelPlanner({ provider }));
 
   return { graph: buildTaskGraph(checkpointerFromPool(pool), { github, store, planner, log }), pool };
