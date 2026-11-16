@@ -47,6 +47,24 @@ export interface TaskRow {
   ownerText: string;
   prNumber: number | null;
   attempts: number;
+  /** AR6: the role this admitted task waits for a worker slot for ('developer', 'qa', 'docs'), or null. */
+  executionWait: string | null;
+}
+
+/**
+ * AR6: the owner's capacity line. Counts only; the limits are orchestrator constants this web app
+ * does not import. Definitions (agreed for the sprint; the orchestrator uses the same ones):
+ * - active: waiting on a Developer, QA or Docs run (`status = 'waiting' AND waiting_on IN ('dev','qa')`);
+ * - admitted: `status IN ('planning','in_progress','waiting')`, the WIP ceiling's set;
+ * - parked: admitted but not active, split into owner, ci (CI or merge), worker (`execution_wait`
+ *   set) and other (planning, or waiting without `waiting_on`); queued: `status = 'queued'`.
+ * Parents with children are not counted; their children are.
+ */
+export interface CapacitySummary {
+  active: number;
+  admitted: number;
+  parked: { owner: number; ci: number; worker: number; other: number };
+  queued: number;
 }
 
 export interface EventRow {
@@ -91,9 +109,10 @@ export async function listTasks(db: Queryable, limit = 50): Promise<TaskRow[]> {
     owner_text: string;
     pr_number: number | null;
     attempts: number;
+    execution_wait: string | null;
   }>(
     `SELECT id, parent_id, ${IS_DOCS_TASK} AS is_docs, created_at, updated_at, status, waiting_on, is_private,
-            public_title, owner_text, pr_number, attempts
+            public_title, owner_text, pr_number, attempts, execution_wait
        FROM tasks ORDER BY id DESC LIMIT $1`,
     [limit],
   );
@@ -110,7 +129,38 @@ export async function listTasks(db: Queryable, limit = 50): Promise<TaskRow[]> {
     ownerText: r.owner_text,
     prNumber: r.pr_number,
     attempts: r.attempts,
+    executionWait: r.execution_wait,
   }));
+}
+
+/** AR6: the capacity counts in one query (see CapacitySummary). */
+export async function capacitySummary(db: Queryable): Promise<CapacitySummary> {
+  const { rows } = await db.query<{ kind: string; n: number }>(
+    `WITH leaf AS (
+       SELECT status, waiting_on, execution_wait FROM tasks t
+        WHERE NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)
+     ), kinds AS (
+       SELECT CASE
+         WHEN status = 'waiting' AND waiting_on IN ('dev', 'qa') THEN 'active'
+         WHEN status IN ('planning', 'in_progress', 'waiting') THEN
+           CASE WHEN waiting_on = 'owner' THEN 'owner'
+                WHEN waiting_on = 'ci' THEN 'ci'
+                WHEN execution_wait IS NOT NULL THEN 'worker'
+                ELSE 'other' END
+         WHEN status = 'queued' THEN 'queued'
+       END AS kind
+         FROM leaf
+     )
+     SELECT kind, count(*)::int AS n FROM kinds WHERE kind IS NOT NULL GROUP BY kind`,
+  );
+  const n = (kind: string) => rows.find((r) => r.kind === kind)?.n ?? 0;
+  const parked = { owner: n("owner"), ci: n("ci"), worker: n("worker"), other: n("other") };
+  return {
+    active: n("active"),
+    admitted: n("active") + parked.owner + parked.ci + parked.worker + parked.other,
+    parked,
+    queued: n("queued"),
+  };
 }
 
 /** The latest `perTask` events of each task, oldest first. */
