@@ -76,9 +76,6 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
 /** How many applied report identities a thread remembers (a task has a few reports per run). */
 const APPLIED_REPORTS_KEPT = 200;
 
-/** A full commit SHA (a merge result can say "unknown" when GitHub returned none). */
-const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-
 /** Allowance for clock skew between the orchestrator and GitHub when looking up a run or an issue. */
 const CLOCK_SLACK_MS = 2 * 60_000;
 
@@ -346,7 +343,8 @@ class Machine {
     const agent: AgentName | null =
       phase === "dev" ? (this.isDocs ? "docs" : "developer") : phase === "qa" ? "qa" : phase === "done" ? null : "orchestrator";
     if (status === "merged") {
-      const released = await this.store.mergeTask(this.id, mergeSha != null && COMMIT_SHA.test(mergeSha) ? mergeSha : null);
+      // A reconciled merge whose commit GitHub did not return records "unknown" (merge()): no base.
+      const released = await this.store.mergeTask(this.id, mergeSha != null && mergeSha !== "unknown" ? mergeSha : null);
       if (released.length > 0) this.log(`released ${released.map((c) => `task-${c}`).join(", ")}`);
       return;
     }
@@ -544,7 +542,7 @@ class Machine {
       const waiting = [...blocked].map((c) => `task-${c}`);
       this.log(`children blocked: ${waiting.join(", ")}`);
       await this.toOwner("blocked", "critical_pr", [
-        `Subtask ${ended.join(", ")} ended without a merge; ${waiting.join(", ")} depend on it and were not started.`,
+        `Subtask ${ended.join(", ")} ended without a merge; the subtasks that depend on it were not started: ${waiting.join(", ")}.`,
         "Approve or reject to close the task as failed; the blocked subtasks are then cancelled.",
       ], `Task ${this.id}: subtasks blocked`);
       return "applied";

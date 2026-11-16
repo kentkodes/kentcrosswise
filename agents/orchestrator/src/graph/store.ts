@@ -133,7 +133,7 @@ export interface TaskStore {
   /**
    * AR4: the task is merged (status `merged`, no wait). In the same transaction, every queued
    * sibling whose prerequisites include it and are now all merged gets `base_sha` = `mergeSha`
-   * (when known) and its outbox start message. Serialized per parent (row lock), so two siblings
+   * (when known; a base already recorded is kept) and its outbox start message. Serialized per parent (row lock), so two siblings
    * merging at once cannot both miss a common dependent. Returns the released ids; a repeated call
    * enqueues nothing new.
    */
@@ -525,7 +525,7 @@ export class PgTaskStore implements TaskStore {
       let released: number[] = [];
       if (parent !== null) {
         const { rows } = await client.query<{ id: string }>(
-          `UPDATE tasks c SET base_sha = COALESCE($3, c.base_sha), updated_at = now()
+          `UPDATE tasks c SET base_sha = COALESCE(c.base_sha, $3), updated_at = now()
             WHERE c.parent_id = $2 AND c.status = 'queued' AND $1 = ANY(c.prerequisites)
               AND NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = ANY(c.prerequisites) AND p.status <> 'merged')
             RETURNING c.id`,
