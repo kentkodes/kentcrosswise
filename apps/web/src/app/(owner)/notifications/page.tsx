@@ -24,7 +24,7 @@ export default async function NotificationsPage() {
     });
   }
   return (
-    <OwnerFrame title="Notifications" current="/hub">
+    <OwnerFrame title="Notifications" current="/notifications">
       <Region id="push" title="Web push" testId="push">
         <div className={`${s.pad} ${s.stack}`}>
           <p className={s.note}>

@@ -33,12 +33,15 @@ export async function runInboxPush(deps: InboxPushDeps): Promise<{ code: string;
   const keys = await deps.loadKeys();
   if (!keys) return off();
 
-  const pending = await deps.run(async (db) => {
-    const { rows } = await db.query<{ n: number; at: string }>(
-      `SELECT count(*)::int AS n, now()::text AS at FROM inbox_items WHERE status = 'open' AND notified_at IS NULL`,
+  // The ids that this run announces. Only these are marked afterwards, so an item that is committed while the
+  // pushes are being sent stays un-notified for the next run.
+  const ids = await deps.run(async (db) => {
+    const { rows } = await db.query<{ id: string }>(
+      `SELECT id FROM inbox_items WHERE status = 'open' AND notified_at IS NULL ORDER BY created_at, id`,
     );
-    return rows[0]!;
+    return rows.map((r) => r.id);
   });
+  const pending = { n: ids.length };
   if (pending.n === 0) return off({ items: 0 });
 
   const subs = await deps.run(async (db) => {
@@ -68,9 +71,8 @@ export async function runInboxPush(deps: InboxPushDeps): Promise<{ code: string;
     if (failed > 0) throw new PushDeliveryError("send_failed");
     return off({ items: pending.n, gone: gone.length });
   }
-  // Items created after the count stay un-notified for the next run.
   await deps.run((db) =>
-    db.query(`UPDATE inbox_items SET notified_at = now() WHERE status = 'open' AND notified_at IS NULL AND created_at <= $1`, [pending.at]),
+    db.query(`UPDATE inbox_items SET notified_at = now() WHERE id = ANY($1::uuid[]) AND notified_at IS NULL`, [ids]),
   );
   return { code: "ok", counts: { items: pending.n, sent, failed, gone: gone.length } };
 }

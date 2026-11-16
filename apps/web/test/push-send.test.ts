@@ -45,6 +45,10 @@ describe("sendPush", () => {
     const opts = { fetch: f as unknown as typeof fetch };
     expect(await sendPush(sub("https://evil.example.com/x"), payload, vapid, opts)).toBe("failed");
     expect(await sendPush({ endpoint: sub().endpoint, keys: { p256dh: "x", auth: "y" } }, payload, vapid, opts)).toBe("failed");
+    // The right lengths, but the key is not a point on the curve: failed, not thrown.
+    const offCurve = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 1)]).toString("base64url");
+    const auth = Buffer.alloc(16, 2).toString("base64url");
+    expect(await sendPush({ endpoint: sub().endpoint, keys: { p256dh: offCurve, auth } }, payload, vapid, opts)).toBe("failed");
     expect(f).not.toHaveBeenCalled();
   });
 });

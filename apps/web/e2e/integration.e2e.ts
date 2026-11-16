@@ -131,6 +131,8 @@ test.describe("as the preview owner", () => {
     ["Essays", "/essays"],
     ["Boss console", "/console"],
     ["Usage", "/console/usage"],
+    ["Connections", "/connections"],
+    ["Notifications", "/notifications"],
   ] as const;
 
   for (const vp of [

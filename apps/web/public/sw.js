@@ -2,6 +2,17 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+// A path on this origin, or /inbox for anything else (the server only ever sends "/inbox").
+function sameOriginPath(value) {
+  if (typeof value !== "string") return "/inbox";
+  try {
+    const url = new URL(value, self.location.origin);
+    return url.origin === self.location.origin ? url.pathname + url.search : "/inbox";
+  } catch {
+    return "/inbox";
+  }
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -11,7 +22,7 @@ self.addEventListener("push", (event) => {
   }
   const title = typeof data.title === "string" && data.title ? data.title : "Kentcrosswise";
   const body = typeof data.body === "string" ? data.body : "";
-  const url = typeof data.url === "string" && data.url.startsWith("/") && !data.url.startsWith("//") ? data.url : "/inbox";
+  const url = sameOriginPath(data.url);
   event.waitUntil(
     self.registration.showNotification(title, { body, data: { url }, icon: "/icon-192.png", badge: "/icon-192.png", tag: "kcw-inbox" }),
   );
@@ -19,7 +30,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : "/inbox", self.location.origin).href;
+  const target = new URL(sameOriginPath(event.notification.data && event.notification.data.url), self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((all) => {
       for (const client of all) {

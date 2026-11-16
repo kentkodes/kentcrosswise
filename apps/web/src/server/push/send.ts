@@ -59,11 +59,17 @@ export async function sendPush(
   if (!isAllowedPushEndpoint(sub.endpoint)) return "failed";
   const keys = parseSubscriptionKeys(sub.keys);
   if (!keys) return "failed";
-  const body = encryptPayload({
-    plaintext: Buffer.from(JSON.stringify(payload)),
-    uaPublic: Buffer.from(keys.p256dh, "base64url"),
-    authSecret: Buffer.from(keys.auth, "base64url"),
-  });
+  let body: Buffer;
+  try {
+    body = encryptPayload({
+      plaintext: Buffer.from(JSON.stringify(payload)),
+      uaPublic: Buffer.from(keys.p256dh, "base64url"),
+      authSecret: Buffer.from(keys.auth, "base64url"),
+    });
+  } catch {
+    // A stored key that is not a point on the curve: this subscription fails, the others are still sent.
+    return "failed";
+  }
   const now = opts.nowSeconds ?? Math.floor(Date.now() / 1000);
   let res: Response;
   try {

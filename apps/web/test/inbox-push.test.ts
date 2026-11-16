@@ -89,6 +89,21 @@ describe("runInboxPush", () => {
     expect(await unnotified()).toBe(0);
   });
 
+  it("an item committed while the pushes are sent is not marked: the next run announces it", async () => {
+    await addSub("https://fcm.googleapis.com/a");
+    await addItem("web_rw", "first");
+    const send = vi.fn(async () => {
+      await addItem("orch_rw", "arrived during the send");
+      return "sent" as PushResult;
+    });
+    const d: InboxPushDeps = { run: (fn) => runAs(pglitePool(pg), "web_rw", fn), loadKeys: async () => KEYS, send };
+    expect(await runInboxPush(d)).toEqual({ code: "ok", counts: { items: 1, sent: 1, failed: 0, gone: 0 } });
+    expect(await unnotified()).toBe(1);
+    const next = deps(() => "sent");
+    expect(await runInboxPush(next.d)).toEqual({ code: "ok", counts: { items: 1, sent: 1, failed: 0, gone: 0 } });
+    expect(await unnotified()).toBe(0);
+  });
+
   it("throws when every subscription fails, keeping items un-notified and subscriptions", async () => {
     await addSub("https://fcm.googleapis.com/a");
     await addItem("web_rw", "one");

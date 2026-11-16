@@ -26,6 +26,8 @@ const PAGES = [
   { href: "/inbox", label: "Inbox", note: "Approvals and routing waiting on you" },
   { href: "/console/usage", label: "Usage", note: "Model cost, spend cap, Actions minutes" },
   { href: "/essays", label: "Essays", note: "Library, recommendations and setup" },
+  { href: "/connections", label: "Connections", note: "Google Calendar and YouTube access" },
+  { href: "/notifications", label: "Notifications", note: "Push notifications for new inbox items" },
 ] as const;
 
 async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; problem?: string }> {
