@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Privacy</h1>
-        <p className={s.updated}>Last updated: 15 November 2026</p>
+        <p className={s.updated}>Last updated: 16 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project with one account. This page says what the site does with
           data and which services it uses.
