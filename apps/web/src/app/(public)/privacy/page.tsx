@@ -72,9 +72,9 @@ export default function PrivacyPage() {
         <section aria-labelledby="private-data" className={s.section}>
           <h2 id="private-data" className={s.heading}>The owner&apos;s private data</h2>
           <p className={s.text}>
-            The owner&apos;s own notes and other private data stay behind sign-in and are not shown on
-            the public pages. The essay library is private: its texts are for the owner&apos;s reading
-            and are not distributed.
+            The owner&apos;s own notes and other private data are not shown on the public pages. Notes
+            are also sent to the language model service named under Third-party services. The essay
+            library is private: its texts are for the owner&apos;s reading and are not distributed.
           </p>
         </section>
 
@@ -84,12 +84,14 @@ export default function PrivacyPage() {
           <ul className={s.list}>
             <li>
               Google sign-in for the owner, requesting only the basic profile information (identity and
-              email address). See the{" "}
-              <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
+              email address). Connecting Calendar or YouTube, described below, asks for more. See
+              the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
             </li>
             <li>
-              A language model service (DeepSeek) receives the owner&apos;s own notes to sort them, to
-              score mood and to suggest calendar events. No visitor data is sent to it.
+              Language model services. The site sends the owner&apos;s own notes to DeepSeek to sort
+              them, to score mood and to suggest calendar events; it sends no visitor data. When the
+              project&apos;s software agents run, they send the owner&apos;s task text and the
+              project&apos;s code to Anthropic and DeepSeek models.
             </li>
             <li>
               Web push, for the owner&apos;s own devices only. A device the owner enables stores a push
@@ -100,25 +102,29 @@ export default function PrivacyPage() {
           </ul>
           <p className={s.text}>
             The owner can connect Google Calendar and YouTube to the owner&apos;s own Google account.
-            The connection asks Google for access to the owner&apos;s own calendar events and channel
-            statistics, stores a refresh token in the site&apos;s secret store, and can be disconnected
-            at any time, which revokes the token at Google. It reads only the owner&apos;s own data,
-            never visitors&apos; data. When the owner accepts a suggested event, the site adds that
-            event to the owner&apos;s calendar; it reads no existing events. Once a day the site reads
-            the owner&apos;s channel statistics (subscriber and view counts) and stores them. YouTube is
-            accessed through YouTube API Services. By using it you are also bound by the{" "}
+            The connection asks Google for access to the owner&apos;s own calendar events and for
+            read-only access to the owner&apos;s YouTube account, and stores a refresh token in the
+            site&apos;s secret store. It can be disconnected at any time: the site asks Google to
+            revoke the token and deletes its stored copy once Google confirms. It reads only the
+            owner&apos;s own data, never visitors&apos; data. When the owner accepts a suggested
+            event, the site adds that event to the owner&apos;s calendar; it reads no existing
+            events. From YouTube the site reads only channel statistics (subscriber and view counts):
+            once a day, for a channel the owner has marked for the daily job on the social page, and
+            it stores them. YouTube is accessed through YouTube API Services. By using it you are also
+            bound by the{" "}
             <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
             data under the{" "}
             <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
           </p>
           <p className={s.text}>
-            Instagram: once a day the site reads the follower count of the owner&apos;s own Instagram
-            account, with an access token the owner placed in the site&apos;s secret store. It reads no
-            other account and no visitors&apos; data.
+            Instagram: for an account the owner has marked for the daily job, the site reads the
+            follower count of the owner&apos;s own Instagram account once a day. It uses an access
+            token the owner placed in the site&apos;s secret store and renews that token about every 25
+            days. It reads no other account and no visitors&apos; data.
           </p>
           <p className={s.text}>
-            TikTok is not connected. The owner types those numbers in, and the site does not contact
-            TikTok.
+            TikTok is not connected. The owner types TikTok numbers in by hand, and the site does not
+            contact TikTok.
           </p>
         </section>
 
