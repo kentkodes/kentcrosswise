@@ -54,6 +54,8 @@ An ambiguous timeout stays reconciling. A run missing from an immediately consis
 
 ### Slice 3: atomic reports and accounting identities
 
+Status: implemented and merged (#127, migration `0013_effect_keys`, applied by its deploy). One identified message per report job (run, attempt, job, op from trusted context; usage call ids by job and artifact index), receipt plus usage plus event in one transaction, keyed machine events and approvals, obsolete-op reports fenced. Details in DESIGN section 4.3. Remaining: live acceptance once workflows are enabled.
+
 Change `packages/core/src/events`, `agents/report`, `scripts/lib/agent-pipeline.ts` and orchestrator report/store handling. Use stable report and call identities from run, attempt and job purpose, with distinct identities for genuinely separate calls. Reuse `usage_events.dedupe_key`; commit report receipt and all accounting lines atomically. Key event/approval effects too. Model name or array position alone is not a sufficient call identity.
 
 **Tests:** partial multi-line report; retry under a new SQS ID; late usage after terminal state; a genuine rerun counted separately; duplicate event/approval suppression. Keep usage separate from lifecycle transitions.
@@ -73,6 +75,10 @@ Change `packages/core/src/events`, `agents/report`, `scripts/lib/agent-pipeline.
 | AR9 acceptance | A useful, small schema-plus-consumer change through planning, disposable execution, independent head-bound QA, CI, merge, deployment and build verification. | After AR1-AR8, define the exact task/live steps and cost allowance. Record restart/duplicate/failure recovery, elapsed time, usage/coverage, human interventions and residual gaps. Source tests do not close external-runtime gaps. |
 
 AR2's durable identities precede AR3 and AR4; AR3/AR4 precede AR5; AR5 precedes AR6. AR7 and AR8 can be prepared independently when file ownership and privileged gates allow. AR1 must be verified before live agent acceptance; AR9 waits for AR1-AR8. Keep deferred hub/social/office expansion deferred.
+
+Status, AR3: implemented and merged (#136, migration `0019_usage_accounting`; the planner's calls are recorded through `trackPlannerCalls`). Every in-process model call writes a call record with a start and an outcome (`reported`, `unknown` or `rejected`); essay categorize and hooks are recorded as agent `pipeline`; unpriced and usage-unknown counts are shown next to totals. The unknown-price policy is soft (no enforcement change). Remaining: live provider behaviour (returned model ids, usage fields on errors) and the live acceptance after the migration.
+
+Status, AR8b: implemented and merged (#130): SNS topic `kcw-prod-alerts`, four alarms, one metric filter and the deploy failure steps. Remaining: the owner's email subscription and one controlled test ([alerts runbook](runbooks/alerts.md), section 2).
 
 ## Validation and session handoff
 
