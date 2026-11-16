@@ -76,6 +76,8 @@ export interface AgentReport {
   event_type?: EventType;
   /** Optional; omitted when the step used no model and no billed minutes. Required without `event_type`. */
   usage?: ReportUsage[];
+  /** Optional: SHA-256 hex of the task contract the run worked under (developer and QA). */
+  contract?: string;
 }
 
 /**
@@ -147,7 +149,7 @@ const isPositive = (v: unknown, max: number): v is number =>
  */
 export function parseAgentReport(x: unknown): AgentReport {
   if (!isObject(x)) throw new ReportFormatError("report must be an object");
-  const { task_id, agent, run_id, run_attempt, job, op, event_type, usage } = x;
+  const { task_id, agent, run_id, run_attempt, job, op, event_type, usage, contract } = x;
   if (typeof task_id !== "number" || !Number.isSafeInteger(task_id) || task_id < 1) {
     throw new ReportFormatError("task_id must be a positive integer");
   }
@@ -164,6 +166,10 @@ export function parseAgentReport(x: unknown): AgentReport {
   }
   const id = { task_id, agent, run_id, run_attempt, job: job as ReportJob, op: op as number | null };
   const out: AgentReport = event_type === undefined ? id : { ...id, event_type };
+  if (contract !== undefined) {
+    if (typeof contract !== "string" || !/^[a-f0-9]{64}$/.test(contract)) throw new ReportFormatError("contract must be a 64-hex hash");
+    out.contract = contract;
+  }
   if (usage !== undefined) {
     if (!Array.isArray(usage)) throw new ReportFormatError("usage must be an array");
     if (usage.length > 100) throw new ReportFormatError("usage has more than 100 lines");

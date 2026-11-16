@@ -67,6 +67,15 @@ describe("parseAgentReport", () => {
     });
   });
 
+  it("copies a 64-hex contract hash and rejects anything else", () => {
+    const hash = "ab".repeat(32);
+    expect(parseAgentReport({ task_id: 3, agent: "qa", ...ID, event_type: "approved", contract: hash }).contract).toBe(hash);
+    expect(parseAgentReport({ task_id: 3, agent: "qa", ...ID, event_type: "approved" })).not.toHaveProperty("contract");
+    for (const bad of ["AB".repeat(32), "ab".repeat(31), 5, null]) {
+      expect(() => parseAgentReport({ task_id: 3, agent: "qa", ...ID, event_type: "approved", contract: bad })).toThrow(ReportFormatError);
+    }
+  });
+
   it("keeps valid usage and drops an empty usage list", () => {
     const usage = [
       { kind: "model", provider: "anthropic", model: "claude-haiku-5-5", input_tokens: 10, output_tokens: 0, call: work(0) },
