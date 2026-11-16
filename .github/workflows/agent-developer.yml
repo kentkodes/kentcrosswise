@@ -26,6 +26,10 @@ on:
         type: string
         required: false
         default: ""
+      contract:
+        description: "Task contract (canonical JSON, @kcw/core/contract)"
+        type: string
+        required: true
 
 permissions: {}
 
@@ -55,6 +59,7 @@ jobs:
       KCW_ISSUE: ${{ inputs.issue }}
       KCW_PR: ${{ inputs.pr }}
       KCW_MODE: ${{ inputs.mode }}
+      KCW_CONTRACT: ${{ inputs.contract }}
     steps:
       - uses: actions/checkout@v7
         with:

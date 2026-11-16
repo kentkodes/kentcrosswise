@@ -16,6 +16,10 @@ on:
         description: "The task PR (head kcw/task-<task_id>)"
         type: string
         required: true
+      contract:
+        description: "Task contract (canonical JSON, @kcw/core/contract)"
+        type: string
+        required: true
 
 permissions: {}
 
@@ -43,6 +47,7 @@ jobs:
       KCW_TASK_ID: ${{ inputs.task_id }}
       KCW_OP: ${{ inputs.op }}
       KCW_PR: ${{ inputs.pr }}
+      KCW_CONTRACT: ${{ inputs.contract }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -2,10 +2,11 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rm
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { admit, fence, parseOp } from "./lib/agent-admission";
-import { gatherContext, linkedIssue, parseInputs } from "./lib/agent-context";
+import { canonicalContract, contractHash } from "@kcw/core/contract";
+import { gatherContext, linkedIssue, parseDispatchContract, parseInputs, requireContained } from "./lib/agent-context";
 import { ghGet, type GhPull } from "./lib/agent-github";
 import { AGENT_CONFIGS, isWorkflowAgent } from "./lib/agents";
-import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
+import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, readContract, requireArtifact, requireCodeProgress, requireContractIssue, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
 import { ensurePull, parseReviewDecision, pullText, pushCommits, runGit, submitReview } from "./lib/agent-publish";
 import { parseArgs } from "./lib/args";
 import { runMain } from "./lib/main";
@@ -94,7 +95,9 @@ await runMain(async () => {
         output({ base_sha: "", skip: "true" }); return;
       }
     }
-    const gathered = await gatherContext(inputs, gh);
+    // Developer and QA only: the task contract is validated before anything else is read.
+    const contract = parseDispatchContract(inputs.agent, process.env.KCW_CONTRACT);
+    const gathered = await gatherContext(inputs, gh, contract);
     const branch = gathered.outputs.branch!;
     const existing = await ghGet<{ object: { sha: string } }>(gh, `/repos/${repo}/git/ref/heads/${branch}`, "reading task ref");
     let prNumber = inputs.pr ?? null;
@@ -107,12 +110,15 @@ await runMain(async () => {
       }
     }
     const workflowSha = process.env.GITHUB_SHA!;
-    const c = parseTrustedContext(JSON.stringify({ version: 1, agent: inputs.agent, repo, taskId: inputs.taskId, op, issue: inputs.issue ?? null, pr: prNumber,
-      branch, workflowSha, baseSha: gathered.outputs.head_sha ?? existing?.object.sha ?? workflowSha, remoteSha: existing?.object.sha ?? null }));
+    const c = parseTrustedContext(JSON.stringify({ version: 2, agent: inputs.agent, repo, taskId: inputs.taskId, op, issue: inputs.issue ?? null, pr: prNumber,
+      branch, workflowSha, baseSha: gathered.outputs.head_sha ?? existing?.object.sha ?? workflowSha, remoteSha: existing?.object.sha ?? null,
+      contractHash: contract ? contractHash(contract) : null }));
+    if (contract) await requireContained(gh, contract, c.baseSha);
     if (c.pr && c.agent !== "docs") await requireLivePull(gh, c, c.baseSha, c.agent === "qa");
     mkdirSync("context", { recursive: true });
     writeFileSync("context/context.json", JSON.stringify(c));
     writeFileSync("context/task.md", gathered.markdown);
+    if (contract) writeFileSync("context/contract.json", canonicalContract(contract));
     output({ base_sha: c.baseSha, skip: gathered.outputs.skip! }); return;
   }
   const c = readContext("context/context.json");
@@ -143,6 +149,10 @@ await runMain(async () => {
     const reason = await fence({ repo, token: readToken }, { agent: c.agent, workflow: AGENT_CONFIGS[c.agent].workflow, taskId: c.taskId, op: c.op, runId: Number(process.env.GITHUB_RUN_ID) });
     if (reason) { console.log(`publish_fenced reason=${reason}`); output({ pushed: "false", fenced: "true" }); return; }
   }
+  // Contract binding (AR5a): the context artifact still carries the contract the run was started with,
+  // and the live task PR still closes its issue. Before any push or review.
+  const contract = readContract("context/contract.json", c);
+  if (contract) await requireContractIssue(gh, c, contract);
   const dir = mkdtempSync(path.join(tmpdir(), "kcw-candidate-"));
   try {
     runGit(["init", "--bare", "-q", dir]);

@@ -1,12 +1,15 @@
 // Trusted workflow controller. Candidate artifacts are data, never executable source.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
+import { MAX_CONTRACT_BYTES, parseContract, type TaskContract } from "@kcw/core/contract";
+import { linkedIssue } from "./agent-context";
 import type { AgentReport, ReportJob, ReportUsage } from "@kcw/core/events";
 import { ghGet, type GhOptions, type GhPull, type GhCheckRun } from "./agent-github";
 import { isWorkflowAgent, branchOf, type WorkflowAgent } from "./agents";
 
 export interface TrustedContext {
-  version: 1;
+  version: 2;
   agent: WorkflowAgent;
   repo: string;
   taskId: number;
@@ -18,15 +21,18 @@ export interface TrustedContext {
   baseSha: string;
   remoteSha: string | null;
   workflowSha: string;
+  /** SHA-256 of `context/contract.json` (developer and QA); null for docs and scraper. */
+  contractHash: string | null;
 }
 const sha = /^[a-f0-9]{40}$/;
 export function parseTrustedContext(text: string): TrustedContext {
   if (Buffer.byteLength(text) > 4096) throw new Error("context too large");
   const c = JSON.parse(text) as TrustedContext;
-  if (!c || Object.keys(c).sort().join(",") !== "agent,baseSha,branch,issue,op,pr,remoteSha,repo,taskId,version,workflowSha" ||
-      c.version !== 1 || !isWorkflowAgent(c.agent) || !/^[\w-]+\/[\w.-]+$/.test(c.repo) ||
+  if (!c || Object.keys(c).sort().join(",") !== "agent,baseSha,branch,contractHash,issue,op,pr,remoteSha,repo,taskId,version,workflowSha" ||
+      c.version !== 2 || !isWorkflowAgent(c.agent) || !/^[\w-]+\/[\w.-]+$/.test(c.repo) ||
       !Number.isSafeInteger(c.taskId) || c.taskId < 1 || (c.agent === "scraper" ? c.op !== null : !Number.isSafeInteger(c.op) || c.op! < 0 || c.op! > 999_999_999) || c.branch !== branchOf(c.taskId) ||
       !sha.test(c.baseSha) || !sha.test(c.workflowSha) || (c.remoteSha !== null && !sha.test(c.remoteSha)) ||
+      (c.agent === "developer" || c.agent === "qa" ? typeof c.contractHash !== "string" || !/^[a-f0-9]{64}$/.test(c.contractHash) : c.contractHash !== null) ||
       [c.issue, c.pr].some((n) => n !== null && (!Number.isSafeInteger(n) || n < 1))) throw new Error("invalid trusted context");
   return c;
 }
@@ -100,6 +106,25 @@ export async function requireLivePull(gh: GhOptions, c: TrustedContext, head: st
   return pr;
 }
 
+/** Reads `context/contract.json` (bounded, regular file) and checks it against the trusted context. */
+export function readContract(file: string, c: TrustedContext): TaskContract | null {
+  if (c.contractHash === null) return null;
+  const stat = lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_CONTRACT_BYTES) throw new Error("contract_hash_mismatch");
+  const text = readFileSync(file, "utf8");
+  if (createHash("sha256").update(text, "utf8").digest("hex") !== c.contractHash) throw new Error("contract_hash_mismatch");
+  const contract = parseContract(text);
+  if (contract.task !== c.taskId) throw new Error("contract_task_mismatch");
+  return contract;
+}
+
+/** Publish gate: the live task PR must still close the contract issue. */
+export async function requireContractIssue(gh: GhOptions, c: TrustedContext, contract: TaskContract): Promise<void> {
+  if (c.pr === null || c.agent === "docs") return;
+  const pr = await ghGet<GhPull>(gh, `/repos/${gh.repo}/pulls/${c.pr}`, "binding contract issue");
+  if (!pr || linkedIssue(pr.body) !== contract.issue) throw new Error("contract_issue_mismatch");
+}
+
 export function readContext(file: string): TrustedContext { return parseTrustedContext(readFileSync(file, "utf8")); }
 
 export function requireCodeProgress(c: TrustedContext, pushed: boolean): void {
@@ -139,7 +164,7 @@ export function buildReport(
   publishResult: string | undefined,
   usage: { work: readonly AdvisoryUsage[]; review: readonly AdvisoryUsage[] },
 ): AgentReport | null {
-  const id = { task_id: c.taskId, agent: c.agent, ...run, job: phase, op: c.op };
+  const id = { task_id: c.taskId, agent: c.agent, ...run, job: phase, op: c.op, ...(c.contractHash === null ? {} : { contract: c.contractHash }) };
   if (phase === "start") return { ...id, event_type: c.agent === "qa" ? "qa_reviewing" : "coding" };
   const lines: ReportUsage[] = [
     ...usage.work.map((u, index) => ({ ...u, call: { job: "work" as const, index } })),
