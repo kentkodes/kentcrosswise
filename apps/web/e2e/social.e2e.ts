@@ -125,4 +125,59 @@ test.describe("as the preview owner", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });
+
+  // The synthetic seed already gives YouTube and Instagram their one daily-job (API) account each, so an API
+  // add for those platforms is refused here. These tests check the refusal, never a successful API insert.
+  test.describe("the daily job slot", () => {
+    /** A handle no other test uses. Refused adds never save it; a manual save is deleted by the test. */
+    function uniqueApiHandle(): string {
+      return `example-api-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    }
+
+    /** Fills the add-account form (platform, numbers from, handle) and submits it. */
+    async function addAccountWith(page: Page, platform: string, handle: string, ingest: "manual" | "api"): Promise<void> {
+      const add = page.getByRole("region", { name: "Add account" });
+      await add.getByLabel("Platform").selectOption(platform);
+      await add.getByLabel("Numbers from").selectOption(ingest);
+      await add.getByLabel("Handle", { exact: true }).fill(handle);
+      await add.getByRole("button", { name: "Add account" }).click();
+    }
+
+    const refusal = (page: Page, text: string): Locator => page.getByRole("alert").filter({ hasText: text });
+
+    test("a second API YouTube account is refused, the same handle saved as manual, and API for TikTok is refused", async ({ page }) => {
+      const handle = uniqueApiHandle();
+      const tiktok = uniqueApiHandle();
+
+      await signIn(page, "/social?source=all");
+      await expect(rowFor(page, "demo-youtube").locator('[data-field="ingest"]')).toHaveText("API");
+
+      await addAccountWith(page, "youtube", handle, "api");
+      await expect(refusal(page, "The daily job already reads another YouTube account.")).toHaveCount(1);
+      await expect(rowFor(page, handle)).toHaveCount(0);
+
+      await addAccountWith(page, "youtube", handle, "manual");
+      await expect(page.getByRole("status").filter({ hasText: "Account added" })).toHaveCount(1);
+      await expect(rowFor(page, handle).locator('[data-field="ingest"]')).toHaveText("Manual");
+
+      await addAccountWith(page, "tiktok", tiktok, "api");
+      await expect(refusal(page, "TikTok numbers are typed in by hand.")).toHaveCount(1);
+      await expect(rowFor(page, tiktok)).toHaveCount(0);
+
+      // Remove the manual account this test saved, so the shared database keeps its own rows only.
+      await rowFor(page, handle).getByRole("link", { name: "Delete" }).click();
+      await page.getByTestId("confirm-delete").getByRole("button", { name: "Delete account" }).click();
+      await expect(page.getByRole("status").filter({ hasText: "Account deleted" })).toHaveCount(1);
+      await expect(rowFor(page, handle)).toHaveCount(0);
+    });
+
+    test("the refused second API account at 375 px wide, with no sideways scrolling of the page", async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await signIn(page, "/social?source=all");
+      await addAccountWith(page, "youtube", uniqueApiHandle(), "api");
+      await expect(refusal(page, "The daily job already reads another YouTube account.")).toHaveCount(1);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  });
 });
