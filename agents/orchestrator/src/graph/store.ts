@@ -22,8 +22,8 @@ export interface TaskRecord {
   parent_id: number | null;
   /** AR4: sibling subtasks that must be merged before this one starts (empty for other tasks). */
   prerequisites: number[];
-  /** AR4: the main revision with the merge that released this subtask, if GitHub returned one. */
-  base_sha: string | null;
+  /** AR4: the merge commit on main of this task's own pull request; null if not merged or GitHub returned none. */
+  merge_sha: string | null;
 }
 
 export interface ChildTask {
@@ -131,11 +131,11 @@ export interface TaskStore {
   createSubtasks(parentId: number, ownerTexts: readonly string[], after: readonly (readonly number[])[]): Promise<number[]>;
   getChildren(parentId: number): Promise<ChildTask[]>;
   /**
-   * AR4: the task is merged (status `merged`, no wait). In the same transaction, every queued
-   * sibling whose prerequisites include it and are now all merged gets `base_sha` = `mergeSha`
-   * (when known; a base already recorded is kept) and its outbox start message. Serialized per parent (row lock), so two siblings
-   * merging at once cannot both miss a common dependent. Returns the released ids; a repeated call
-   * enqueues nothing new.
+   * AR4: the task is merged (status `merged`, no wait) and `merge_sha` is its own merge commit (a
+   * sha already recorded is kept; null when GitHub returned none). In the same transaction, every
+   * queued sibling whose prerequisites are now all merged gets its outbox start message. Serialized
+   * per parent (row lock), so two siblings merging at once cannot both miss a common dependent.
+   * Returns the released ids; a repeated call enqueues nothing new.
    */
   mergeTask(id: number, mergeSha: string | null): Promise<number[]>;
   /** AR4: cancels these tasks if they are still queued (the blocked subtasks of a parked parent). */
@@ -256,8 +256,8 @@ export class PgTaskStore implements TaskStore {
       github_issue: number | null;
       parent_id: string | null;
       prerequisites: (string | number)[];
-      base_sha: string | null;
-    }>("SELECT id, status, owner_text, is_private, github_issue, parent_id, prerequisites, base_sha FROM tasks WHERE id = $1", [id]);
+      merge_sha: string | null;
+    }>("SELECT id, status, owner_text, is_private, github_issue, parent_id, prerequisites, merge_sha FROM tasks WHERE id = $1", [id]);
     const r = rows[0];
     return r
       ? {
@@ -268,7 +268,7 @@ export class PgTaskStore implements TaskStore {
           github_issue: r.github_issue,
           parent_id: num(r.parent_id),
           prerequisites: r.prerequisites.map(Number),
-          base_sha: r.base_sha,
+          merge_sha: r.merge_sha,
         }
       : null;
   }
@@ -521,15 +521,17 @@ export class PgTaskStore implements TaskStore {
       const parent = num(own[0]?.parent_id ?? null);
       // Siblings that merge at once take turns, so the later one sees the earlier one merged.
       if (parent !== null) await client.query("SELECT 1 FROM tasks WHERE id = $1 FOR UPDATE", [parent]);
-      await client.query("UPDATE tasks SET status = 'merged', waiting_on = NULL, agent = NULL, updated_at = now() WHERE id = $1", [id]);
+      await client.query(
+        "UPDATE tasks SET status = 'merged', waiting_on = NULL, agent = NULL, merge_sha = COALESCE(merge_sha, $2), updated_at = now() WHERE id = $1",
+        [id, mergeSha],
+      );
       let released: number[] = [];
       if (parent !== null) {
         const { rows } = await client.query<{ id: string }>(
-          `UPDATE tasks c SET base_sha = COALESCE(c.base_sha, $3), updated_at = now()
+          `SELECT c.id FROM tasks c
             WHERE c.parent_id = $2 AND c.status = 'queued' AND $1 = ANY(c.prerequisites)
-              AND NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = ANY(c.prerequisites) AND p.status <> 'merged')
-            RETURNING c.id`,
-          [id, parent, mergeSha],
+              AND NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = ANY(c.prerequisites) AND p.status <> 'merged')`,
+          [id, parent],
         );
         released = rows.map((r) => Number(r.id)).sort((a, b) => a - b);
         await enqueueStarts(client, released);

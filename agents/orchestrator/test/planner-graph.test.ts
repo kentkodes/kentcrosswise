@@ -177,7 +177,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     expect(await deliverOutbox()).toEqual([`task-${a}/start: started`]);
     expect(gh.issues.map((i) => i.title)).toEqual(["Add a healthz page"]);
     expect(gh.issues[0]!.body).toContain(`kcw/task-${a}`);
-    expect(gh.issues[0]!.body).not.toContain("Base:");
+    expect(gh.issues[0]!.body).not.toContain("Prerequisites merged on");
     expect(devDispatches().map((d) => d.inputs.task_id)).toEqual([String(a)]);
     expect(await task(a)).toMatchObject({ status: "waiting", waiting_on: "dev", public_title: "Add a healthz page", branch: `kcw/task-${a}` });
     expect(await task(b)).toMatchObject({ status: "queued", waiting_on: null });
@@ -188,12 +188,12 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     expect(await children(id)).toHaveLength(2);
     expect(await deliverOutbox()).toEqual([]);
 
-    // The first child merges: the second is released with that revision as its base.
+    // The first child merges: the second is released, and its footer names the first child's merge commit.
     const merge = "a".repeat(40);
     expect(await deps.store.mergeTask(a, merge)).toEqual([b]);
     expect(await deliverOutbox()).toEqual([`task-${b}/start: started`]);
     expect(gh.issues.map((i) => i.title)).toEqual(["Add a healthz page", "Add a status badge"]);
-    expect(gh.issues[1]!.body).toContain(`Base: \`main\` at or after ${merge}.`);
+    expect(gh.issues[1]!.body).toContain(`Prerequisites merged on \`main\`: ${merge}.`);
     expect(gh.issues.map((i) => i.body).join("\n")).not.toMatch(/jane/i); // owner text never reaches GitHub
     expect(await task(b)).toMatchObject({ status: "waiting", waiting_on: "dev", public_title: "Add a status badge" });
     // One planner call for the parent; one public-title call per child (children are never split again).

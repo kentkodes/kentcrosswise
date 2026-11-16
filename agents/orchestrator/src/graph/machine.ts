@@ -343,7 +343,7 @@ class Machine {
     const agent: AgentName | null =
       phase === "dev" ? (this.isDocs ? "docs" : "developer") : phase === "qa" ? "qa" : phase === "done" ? null : "orchestrator";
     if (status === "merged") {
-      // A reconciled merge whose commit GitHub did not return records "unknown" (merge()): no base.
+      // A reconciled merge whose commit GitHub did not return records "unknown" (merge()): no merge_sha.
       const released = await this.store.mergeTask(this.id, mergeSha != null && mergeSha !== "unknown" ? mergeSha : null);
       if (released.length > 0) this.log(`released ${released.map((c) => `task-${c}`).join(", ")}`);
       return;
@@ -571,9 +571,15 @@ class Machine {
       } else {
         if (!begun.created) number = await this.findIssue(begun.key, begun.record.createdAt);
         if (number === null) {
-          // AR4: a subtask released by a prerequisite's merge starts from main at or after that merge.
-          const base = row?.base_sha ? `Base: \`main\` at or after ${row.base_sha}.\n` : "";
-          const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.\n${base}${issueMarker(begun.key)}`;
+          // AR4: a subtask starts only after its prerequisites merged, so main at its dispatch contains
+          // them. The footer names their merge commits (the known ones, in prerequisite order).
+          const merges: string[] = [];
+          for (const p of row?.prerequisites ?? []) {
+            const commit = (await this.store.getTask(p))?.merge_sha;
+            if (commit) merges.push(commit);
+          }
+          const prereqs = merges.length > 0 ? `Prerequisites merged on \`main\`: ${merges.join(", ")}.\n` : "";
+          const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.\n${prereqs}${issueMarker(begun.key)}`;
           number = (await this.github.createIssue({ title: issue.title, body: issue.body + footer })).number;
         }
         await this.store.updateOperation(begun.key, "done", { number });

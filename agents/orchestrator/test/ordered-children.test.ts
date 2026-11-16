@@ -187,7 +187,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     return (await sql<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1 ORDER BY id", [parent])).map((r) => Number(r.id));
   }
   async function task(id: number) {
-    const [row] = await sql<{ status: string; waiting_on: string | null; base_sha: string | null }>("SELECT status, waiting_on, base_sha FROM tasks WHERE id = $1", [id]);
+    const [row] = await sql<{ status: string; waiting_on: string | null; merge_sha: string | null }>("SELECT status, waiting_on, merge_sha FROM tasks WHERE id = $1", [id]);
     return row!;
   }
   const hasThread = async (id: number) => (await graph.getState(threadConfig(id))).config.configurable?.checkpoint_id !== undefined;
@@ -219,17 +219,18 @@ describe("ordered child work in the task graph (AR4)", () => {
 
     expect(await deliverOutbox()).toEqual([`task-${schema}/start: started`]);
     expect(issuesOf(schema)).toHaveLength(1);
-    expect(await task(consumer)).toMatchObject({ status: "queued", base_sha: null });
+    expect(await task(consumer)).toMatchObject({ status: "queued", merge_sha: null });
     expect(await hasThread(consumer)).toBe(false);
 
     const merge = await mergeChild(schema, 201);
-    // Released in the merge's own write: the base and the start message.
-    expect(await task(consumer)).toMatchObject({ status: "queued", base_sha: merge });
+    // Released in the merge's own write: the schema records its merge commit, the consumer its start message.
+    expect(await task(schema)).toMatchObject({ status: "merged", merge_sha: merge });
+    expect(await task(consumer)).toMatchObject({ status: "queued", merge_sha: null });
     expect(await outboxKeys([consumer])).toEqual([`task-${consumer}/start`]);
     expect(await deliverOutbox()).toEqual([`task-${consumer}/start: started`]);
 
     const [issue] = issuesOf(consumer);
-    expect(issue!.body).toContain(`Base: \`main\` at or after ${merge}.`);
+    expect(issue!.body).toContain(`Prerequisites merged on \`main\`: ${merge}.`);
     const mergeCall = gh.calls.findIndex((c) => c.method === "merge" && (c.args as { pr: number }).pr === 201);
     expect(devCalls(consumer)).toHaveLength(1);
     expect(devCalls(consumer)[0]!).toBeGreaterThan(mergeCall); // dispatched on main after the merge
@@ -306,11 +307,12 @@ describe("ordered child work in the task graph (AR4)", () => {
     } finally {
       store.mergeTask = real;
     }
-    const base = (await task(b)).base_sha;
-    expect(base).toBe(gh.merges.find((m) => m.pr === 401)!.sha);
+    const merge = gh.merges.find((m) => m.pr === 401)!.sha;
+    expect(await task(a)).toMatchObject({ merge_sha: merge });
+    expect(await task(b)).toMatchObject({ merge_sha: null });
     // One more completion write: b is still queued, so it is named again, but nothing new is written.
     expect(await store.mergeTask(a, "f".repeat(40))).toEqual([b]);
-    expect(await task(b)).toMatchObject({ base_sha: base });
+    expect(await task(a)).toMatchObject({ merge_sha: merge }); // the first merge commit is kept
     expect(await outboxKeys([b])).toEqual([`task-${b}/start`]);
 
     const [row] = await sql<{ body: string }>("SELECT body FROM orchestrator_outbox WHERE message_key = $1", [`task-${b}/start`]);
@@ -349,6 +351,104 @@ describe("ordered child work in the task graph (AR4)", () => {
     // Its thread exists, so its start message is a duplicate start; the next sweep starts it.
     expect(await deliverOutbox()).toEqual([`task-${b}/start: duplicate_start`]);
     expect(await sweep(b)).toBe("applied");
-    expect(issuesOf(b)[0]!.body).toContain(`Base: \`main\` at or after ${"c".repeat(40)}.`);
+    expect(issuesOf(b)[0]!.body).toContain(`Prerequisites merged on \`main\`: ${"c".repeat(40)}.`);
+  });
+
+  /** Parent with independent subtasks A and B and a consumer C after both; A and B are started. */
+  async function fanIn(title: string): Promise<[number, number, number]> {
+    const parent = await newTask(title);
+    splits.set(parent, list(["Add the table", "Add the index", "Read both"], [[], [], [0, 1]]));
+    expect(await start(parent)).toBe("started");
+    const [a, b, c] = (await kids(parent)) as [number, number, number];
+    expect(await deliverOutbox()).toEqual([`task-${a}/start: started`, `task-${b}/start: started`]);
+    expect(await outboxKeys([c])).toEqual([]);
+    return [a, b, c];
+  }
+
+  /** A webhook-only merge: the PR closed as merged, with no merge commit from GitHub. */
+  async function mergeByWebhook(id: number, pr: number): Promise<void> {
+    const head = sha(`head-${id}`);
+    gh.prs.set(pr, { headSha: head, author: DEV_BOT, files: [ROUTE] });
+    gh.artifacts.set(head, clean(pr, head));
+    expect(await send(id, prEvent(id, "opened", pr, head))).toBe("applied");
+    expect(await send(id, prEvent(id, "closed", pr, head, true))).toBe("applied");
+    expect(await task(id)).toMatchObject({ status: "merged", merge_sha: null });
+  }
+
+  it("a consumer of two independent prerequisites is released once, by the second merge (A then B)", async () => {
+    const [a, b, c] = await fanIn("Two inputs, one page");
+    const mA = await mergeChild(a, 501);
+    expect(await task(c)).toMatchObject({ status: "queued", merge_sha: null });
+    expect(await outboxKeys([c])).toEqual([]);
+    const mB = await mergeChild(b, 502);
+    expect(await outboxKeys([c])).toEqual([`task-${c}/start`]); // one start row
+    expect(await task(a)).toMatchObject({ status: "merged", merge_sha: mA });
+    expect(await task(b)).toMatchObject({ status: "merged", merge_sha: mB });
+    expect(await task(c)).toMatchObject({ status: "queued", merge_sha: null });
+
+    expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
+    expect(issuesOf(c)[0]!.body).toContain(`Prerequisites merged on \`main\`: ${mA}, ${mB}.`); // prerequisite order
+    expect(devCalls(c)).toHaveLength(1);
+  });
+
+  it("a consumer of two independent prerequisites is released once, by the second merge (B then A)", async () => {
+    const [a, b, c] = await fanIn("Two inputs, another page");
+    const mB = await mergeChild(b, 511);
+    expect(await task(c)).toMatchObject({ status: "queued", merge_sha: null });
+    expect(await outboxKeys([c])).toEqual([]);
+    const mA = await mergeChild(a, 512);
+    expect(await outboxKeys([c])).toEqual([`task-${c}/start`]); // one start row
+    expect(await task(a)).toMatchObject({ merge_sha: mA });
+    expect(await task(b)).toMatchObject({ merge_sha: mB });
+
+    expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
+    expect(issuesOf(c)[0]!.body).toContain(`Prerequisites merged on \`main\`: ${mA}, ${mB}.`); // prerequisite order, not merge order
+    expect(devCalls(c)).toHaveLength(1);
+  });
+
+  it("a webhook-only merge (no sha) releases the consumer and leaves merge_sha null", async () => {
+    const parent = await newTask("Webhook merge");
+    splits.set(parent, list(["Add the table", "Read the table"]));
+    expect(await start(parent)).toBe("started");
+    const [a, b] = (await kids(parent)) as [number, number];
+    expect(await deliverOutbox()).toEqual([`task-${a}/start: started`]);
+
+    await mergeByWebhook(a, 521);
+    expect(await task(b)).toMatchObject({ status: "queued", merge_sha: null });
+    expect(await outboxKeys([b])).toEqual([`task-${b}/start`]);
+    expect(await deliverOutbox()).toEqual([`task-${b}/start: started`]);
+    expect(issuesOf(b)[0]!.body).not.toContain("Prerequisites merged on");
+  });
+
+  it("a second merge call for the same task keeps the first merge_sha and adds no outbox row", async () => {
+    const parent = await newTask("Repeated merge");
+    splits.set(parent, list(["Add the table", "Read the table"]));
+    expect(await start(parent)).toBe("started");
+    const [a, b] = (await kids(parent)) as [number, number];
+    expect(await deliverOutbox()).toEqual([`task-${a}/start: started`]);
+
+    expect(await store.mergeTask(a, "1".repeat(40))).toEqual([b]);
+    expect(await outboxKeys([b])).toEqual([`task-${b}/start`]);
+    expect(await store.mergeTask(a, "2".repeat(40))).toEqual([b]);
+    expect(await task(a)).toMatchObject({ status: "merged", merge_sha: "1".repeat(40) });
+    expect(await outboxKeys([b])).toEqual([`task-${b}/start`]); // still one row
+  });
+
+  it("the footer lists the known prerequisite merge commits; with one unknown, only the known one", async () => {
+    const [a, b, c] = await fanIn("One merge unknown");
+    const mA = await mergeChild(a, 531);
+    await mergeByWebhook(b, 532);
+    expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
+    expect(issuesOf(c)[0]!.body).toContain(`Prerequisites merged on \`main\`: ${mA}.`);
+  });
+
+  it("the footer has no prerequisite line when no merge commit is known", async () => {
+    const [a, b, c] = await fanIn("None merge commits known");
+    await mergeByWebhook(a, 541);
+    await mergeByWebhook(b, 542);
+    expect(await outboxKeys([c])).toEqual([`task-${c}/start`]);
+    expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
+    expect(issuesOf(c)[0]!.body).not.toContain("Prerequisites merged on");
+    expect(issuesOf(c)[0]!.body).toContain(`kcw/task-${c}`);
   });
 });
