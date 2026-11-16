@@ -251,8 +251,17 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
                 spellCheck={false}
               />
             </label>
+            <label className={s.fieldLabel}>
+              Numbers from
+              <select className={s.field} name="ingest" defaultValue="manual" required aria-describedby="ingest-hint">
+                <option value="manual">Manual entry</option>
+                <option value="api">Daily job (API)</option>
+              </select>
+            </label>
           </div>
-          <p className={s.note}>Entered by hand (numbers from: Manual). A leading @ is removed.</p>
+          <p id="ingest-hint" className={s.note}>
+            The daily job reads one YouTube and one Instagram account. TikTok is manual entry only. A leading @ is removed.
+          </p>
           <div>
             <button className={`${s.button} ${s.primary} ${s.tapTarget}`} type="submit">
               Add account
