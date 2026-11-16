@@ -165,3 +165,43 @@ test.describe("shared navigation, signed in", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Hub" })).toBeVisible();
   });
 });
+
+test("demo Essays tab: feed, recommended line, reader panel and local rating", async ({ page }) => {
+  await page.goto("/demo");
+  const tabs = page.getByRole("navigation", { name: "Hub sections" });
+  await tabs.getByRole("button", { name: "Essays" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Essays" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Essay feed" }).getByRole("listitem")).toHaveCount(6);
+  await expect(page.getByText("Because you liked Fenimore Cooper's Literary Offences")).toBeVisible();
+  await page.getByRole("list", { name: "Essay feed" }).getByRole("button", { name: "The Whistle" }).click();
+  const reader = page.getByRole("article");
+  await expect(reader.getByRole("heading", { level: 3, name: "The Whistle" })).toBeVisible();
+  await expect(reader.getByRole("link", { name: "Read it at Project Gutenberg" })).toHaveAttribute(
+    "href",
+    "https://www.gutenberg.org/ebooks/78663",
+  );
+  const save = reader.getByRole("button", { name: "Save rating" });
+  await expect(save).toBeDisabled();
+  await reader.getByLabel("4", { exact: true }).check();
+  await reader.getByLabel("Humor", { exact: true }).check();
+  await reader.getByLabel("Right", { exact: true }).check();
+  await save.click();
+  await expect(reader.getByRole("status")).toContainText("Saved on this page");
+  await page.reload();
+  await tabs.getByRole("button", { name: "Essays" }).click();
+  await expect(page.getByRole("article")).toHaveCount(0);
+});
+
+for (const width of [320, 375]) {
+  test(`demo Essays tab (${width}px): reader and rating fit without sideways page scroll`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto("/demo");
+    const tabs = page.getByRole("navigation", { name: "Hub sections" });
+    await tabs.getByRole("button", { name: "Essays" }).scrollIntoViewIfNeeded();
+    await tabs.getByRole("button", { name: "Essays" }).click();
+    await page.getByRole("list", { name: "Essay feed" }).getByRole("button", { name: "Walking" }).click();
+    await expect(page.getByRole("article")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}

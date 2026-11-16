@@ -1,6 +1,17 @@
 // View model for /demo: a small, serializable picture of the simulated hub, built from @kcw/demo-data.
 // Pure: no clock and no React. "Today" is the latest day present in the data, so the output is deterministic.
-import type { DemoContact, DemoData, MoodMetric, Platform, RouteKind } from "@kcw/demo-data";
+import {
+  DEMO_ESSAYS,
+  DEMO_ESSAY_RATINGS,
+  lengthBand,
+  readingMinutes,
+  recommend,
+  type DemoContact,
+  type DemoData,
+  type MoodMetric,
+  type Platform,
+  type RouteKind,
+} from "@kcw/demo-data";
 
 export interface DemoView {
   /** "Wednesday, 11 November" (UTC), for the latest day in the data. */
@@ -20,6 +31,28 @@ export interface DemoView {
   /** `change` is signed, over the last 30 snapshots. */
   following: { platform: string; followers: string; change: string; handle: string }[];
   notes: { todos: string[]; ideas: string[] };
+  essays: EssaysView;
+}
+
+export interface EssayCard {
+  id: string;
+  title: string;
+  author: string;
+  /** "1895", or null when the seed list has no year. */
+  year: string | null;
+  type: string;
+  length: string;
+  minutes: string;
+  hook: string;
+  sourceUrl: string;
+  /** The simulated earlier rating, if any. */
+  stars: number | null;
+}
+
+export interface EssaysView {
+  feed: EssayCard[];
+  /** The recommended essay id and the plain reason line, or null. */
+  recommended: { id: string; reason: string } | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -86,6 +119,26 @@ export function latestDay(data: DemoData): string {
   return dayOf(stamps.reduce((a, b) => (b > a ? b : a), data.start));
 }
 
+/** Static, link-only essays from @kcw/demo-data with the simulated ratings. */
+export function buildEssaysView(): EssaysView {
+  const stars = new Map(DEMO_ESSAY_RATINGS.map((r) => [r.essayId, r.stars]));
+  const feed = DEMO_ESSAYS.map((e) => ({
+    id: e.id,
+    title: e.title,
+    author: e.author,
+    year: e.year === null ? null : String(e.year),
+    type: capitalise(e.type),
+    length: lengthBand(e.words),
+    minutes: `${readingMinutes(e.words)} min`,
+    hook: e.hook,
+    sourceUrl: e.sourceUrl,
+    stars: stars.get(e.id) ?? null,
+  }));
+  const rec = recommend();
+  const liked = rec ? DEMO_ESSAYS.find((e) => e.id === rec.likedId) : undefined;
+  return { feed, recommended: rec && liked ? { id: rec.essayId, reason: `Because you liked ${liked.title}` } : null };
+}
+
 export function buildDemoView(data: DemoData): DemoView {
   const today = latestDay(data);
   const entryById = new Map(data.entries.map((e) => [e.id, e]));
@@ -111,6 +164,7 @@ export function buildDemoView(data: DemoData): DemoView {
       followers: topFollowers(data),
       captures: captures(data, contactById),
     },
+    essays: buildEssaysView(),
     people: data.contacts.slice(0, 8).map((c) => ({
       name: c.name,
       howKnown: c.howKnown,

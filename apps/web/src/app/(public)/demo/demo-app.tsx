@@ -4,9 +4,10 @@
 import { useId, useState } from "react";
 import { sparkline, SPARK_H, SPARK_W } from "../_site/sparkline";
 import type { DemoView } from "./demo-view";
+import { EssaysSection } from "./essays-section";
 import d from "./demo.module.css";
 
-const TABS = ["Today", "People", "Mood", "Following", "Notes"] as const;
+const TABS = ["Today", "People", "Mood", "Following", "Notes", "Essays"] as const;
 type Tab = (typeof TABS)[number];
 
 export function DemoApp({ view }: { view: DemoView }) {
@@ -28,6 +29,7 @@ export function DemoApp({ view }: { view: DemoView }) {
         {tab === "Mood" && <MoodSection view={view} titleId={titleId} />}
         {tab === "Following" && <FollowingSection view={view} titleId={titleId} />}
         {tab === "Notes" && <NotesSection view={view} titleId={titleId} />}
+        {tab === "Essays" && <EssaysSection view={view} titleId={titleId} />}
       </section>
     </div>
   );
