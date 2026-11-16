@@ -239,7 +239,12 @@ async function suggest(run: DbRun, crmNoteId: string, provider: ModelProvider, n
 
   let reply: Awaited<ReturnType<ModelProvider["complete"]>>;
   try {
-    reply = await provider.complete({ system: calendarInstructions(now, before.zone), prompt: before.body, maxTokens: MAX_TOKENS });
+    reply = await provider.complete({
+      system: calendarInstructions(now, before.zone),
+      prompt: before.body,
+      maxTokens: MAX_TOKENS,
+      call: { purpose: "calendar", subject: { kind: "crm_note", id: crmNoteId } },
+    });
   } catch (err) {
     console.error(`[calendar] ${err instanceof Error ? err.name : "error"}`);
     return "failed";

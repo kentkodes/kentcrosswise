@@ -11,5 +11,12 @@ export {
   type ModelPlannerOptions,
 } from "./planner";
 export { publicText, type PublicText } from "./public-title";
-export { trackPlannerUsage, type PlannerUsageTracker, type RecordTaskUsage } from "./usage";
+export {
+  trackPlannerCalls,
+  trackPlannerUsage,
+  type PlannerCallTracker,
+  type PlannerUsageTracker,
+  type RecordPlannerCall,
+  type RecordTaskUsage,
+} from "./usage";
 export { MAX_SUBTASKS, PlannerOutputError, type Plan, type PlanRequest, type Planner } from "../graph/types";
