@@ -189,7 +189,10 @@ describe("suggestions in the database", () => {
     const id = await note("Lunch with Sam on Friday");
     const p = provider(plan());
     await expect(suggestFromNote(run, id, p, NOW)).resolves.toBe("created");
-    expect(p.calls).toEqual([{ op: "complete", input: "Lunch with Sam on Friday" }]);
+    // The note is the whole prompt; the call is tagged with its purpose and the note's id (AR3), nothing else.
+    expect(p.calls).toEqual([
+      { op: "complete", input: "Lunch with Sam on Friday", tag: { purpose: "calendar", subject: { kind: "crm_note", id } } },
+    ]);
     const row = (await q<{ title: string; start_at: Date; end_at: Date; all_day: boolean; time_zone: string; status: string }>(
       "SELECT title, start_at, end_at, all_day, time_zone, status FROM calendar_suggestions WHERE crm_note_id = $1",
       [id],
