@@ -2,6 +2,8 @@
 // owner first. Nothing here throws, so a failed route never loses a saved capture; it becomes a notice code.
 import { dbErrorLabel, withDb } from "@/server/db";
 import { isEntryId, isRouteKind, reassignEntryDerived, routeEntry, routerDb, routerFromEnv, type RouteOutcome } from "@/server/router";
+// Relative on purpose: the action tests mock the "@/server/*" modules one by one and do not resolve the alias.
+import { suggestFromNote } from "../../server/calendar";
 import { scoreNow } from "./diary/score";
 import { CAPTURED_ROUTED, failureNotice, ROUTED, type NoticeCode } from "./notices";
 
@@ -26,6 +28,20 @@ export async function scoreCreated(derived: { kind: string; id: string } | null 
     // scoreNow does not throw; nothing may fail the capture.
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * A contact note that the owner's choice created gets its calendar suggestion, as a model-routed one does in
+ * routeEntry. Never throws and never changes a notice; without a configured model nothing happens.
+ */
+export async function suggestCreated(derived: { kind: string; id: string } | null | undefined): Promise<void> {
+  if (derived?.kind !== "crm_note") return;
+  try {
+    const provider = await routerFromEnv(process.env);
+    if (provider) await suggestFromNote(routerDb, derived.id, provider);
+  } catch {
+    // suggestFromNote does not throw; nothing may fail the reassignment.
   }
 }
 
@@ -86,6 +102,7 @@ export async function reassignNotice(formData: FormData): Promise<NoticeCode> {
     const res = await withDb("web_rw", (db) => reassignEntryDerived(db, id, to));
     if (res.result !== "ok") return "entry-not-found";
     await scoreCreated(res.derived);
+    await suggestCreated(res.derived);
     return ROUTED[to];
   } catch (err) {
     return failureNotice(err, "routing");

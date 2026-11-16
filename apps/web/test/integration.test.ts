@@ -145,6 +145,26 @@ describe("routing links notes and scores diary rows", () => {
     expect(await scores(id)).toBe("1");
   });
 
+  it("a contact note created by a reassignment gets one calendar suggestion with its inbox item", async () => {
+    const soon = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const plan = JSON.stringify({ plan: true, title: "Coffee with Zelda", date: soon, time: "09:30", duration_minutes: 30 });
+    f.routerFromEnv.mockResolvedValue(new FakeProvider({ classify: { label: "todo", confidence: 0.95 }, complete: { text: plan, model: "m" } }));
+    await captureAction(form({ raw_text: "Coffee with Zelda Integ next week", time_zone: "America/New_York" }));
+    const id = await entryId();
+    const suggestions = () =>
+      q<{ title: string; kind: string; status: string }>(
+        `SELECT s.title, i.kind, i.status FROM calendar_suggestions s
+           JOIN crm_notes n ON n.id = s.crm_note_id
+           JOIN inbox_items i ON i.ref_table = 'calendar_suggestions' AND i.ref_id = s.id::text
+          WHERE n.entry_id = $1`,
+        [id],
+      );
+    expect(await suggestions()).toEqual([]);
+    await reassignAction(form({ entry_id: id, to: "crm_note" }));
+    expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=routed-crm_note");
+    expect(await suggestions()).toEqual([{ title: "Coffee with Zelda", kind: "calendar", status: "open" }]);
+  });
+
   it("a scoring failure leaves the entry unscored and the capture intact", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     f.routerFromEnv.mockResolvedValueOnce(model("todo"));

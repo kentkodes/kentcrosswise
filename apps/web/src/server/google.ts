@@ -14,6 +14,8 @@ const API_SCOPE: Record<GoogleScope, string> = {
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+/** No call to Google may hold a request or a scheduled job until the function times out. */
+const GOOGLE_TIMEOUT_MS = 8000;
 /** Refresh this many seconds before Google says the token expires. */
 const EXPIRY_MARGIN_S = 60;
 
@@ -125,6 +127,7 @@ export async function googleAccessToken(scope: GoogleScope, deps: GoogleDeps = {
         client_id: client.clientId,
         client_secret: client.clientSecret,
       }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
   } catch (err) {
     console.error(`[google] refresh failed ${errorClass(err)}`);
@@ -192,6 +195,7 @@ export async function disconnectGoogle(deps: GoogleDeps = {}): Promise<boolean> 
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token: stored.refreshToken }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     // 400 means Google no longer knows the token (already revoked): the goal is reached either way.
     revoked = res.ok || res.status === 400;
