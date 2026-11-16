@@ -15,6 +15,7 @@ import {
 import { getSecret, SecretKeyMissingError } from "@kcw/secrets";
 import { ROUTE_LABELS, type RouteError, type RouteKind } from "./capture";
 import { withDb, type Queryable } from "./db";
+import { suggestFromNote } from "./calendar";
 import { linkCrmNote } from "./contacts";
 import { applyRoute } from "./derived";
 import { capReachedUsd, monthToDateRange, spendDecisionLine, usageSummary } from "./usage";
@@ -210,6 +211,7 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
     return { written: true as const, derived };
   });
   if (!written.written) return { code: "already" };
+  if (written.derived?.kind === "crm_note") await suggestFromNote(run, written.derived.id, provider);
   return needsOwner ? { code: "needs_owner", kind } : { code: "routed", kind, derived: written.derived };
 }
 

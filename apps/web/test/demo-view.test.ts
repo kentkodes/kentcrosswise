@@ -260,3 +260,14 @@ describe("notes", () => {
     expect(buildDemoView(data).notes.ideas).toEqual(["Open new", "Open old"]);
   });
 });
+
+describe("essays view", () => {
+  it("builds the static link-only feed with a because line", () => {
+    const { essays } = buildDemoView(base());
+    expect(essays.feed.length).toBeGreaterThanOrEqual(5);
+    expect(essays.feed.every((e) => e.sourceUrl.startsWith("https://www.gutenberg.org/ebooks/"))).toBe(true);
+    expect(essays.feed.some((e) => e.year === null)).toBe(true);
+    expect(essays.recommended?.reason).toBe("Because you liked Fenimore Cooper's Literary Offences");
+    expect(essays.feed.some((e) => e.id === essays.recommended?.id)).toBe(true);
+  });
+});

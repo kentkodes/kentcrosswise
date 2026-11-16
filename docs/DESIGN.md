@@ -126,7 +126,7 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, with runtime ow
 ### 3.1 Hub
 | Table | Key columns |
 |---|---|
-| `entries` | id, created_at, source (`web`,`shortcut`), raw_text, route_kind (`crm_note`,`diary`,`todo`,`idea`,`agent_request`, null=pending), route_confidence, route_model, routed_by (`model`,`owner`), status (`routed`,`needs_owner`) |
+| `entries` | id, created_at, source (`web`,`shortcut`), raw_text, route_kind (`crm_note`,`diary`,`todo`,`idea`,`agent_request`, null=pending), route_confidence, route_model, routed_by (`model`,`owner`), status (`routed`,`needs_owner`), route_error (null, or `provider_error`, `invalid_label`, `spend_cap`: the fixed code of the last failed routing attempt, never a message or text), route_attempts (integer, default 0), route_attempted_at (migration 0014) |
 | `route_corrections` | id, entry_id, from_kind, to_kind, created_at |
 | `contacts` | id, name, aliases text[], how_known, birthday date, notes, tags text[] |
 | `crm_notes` | id, entry_id, contact_id null, body, link_status (`linked`,`ambiguous`,`none`) |
@@ -139,6 +139,12 @@ Schemas: `public` (app) and `lg` (LangGraph checkpointer tables, with runtime ow
 | `projects` | slug, title, sort |
 | `inbox_items` | id, kind (`approval`,`routing`,`calendar`,`contact_match`), ref_table, ref_id, title, status (`open`,`done`), created_at, resolved_at |
 | `push_subscriptions` | id, endpoint UNIQUE, keys jsonb, created_at |
+
+Derived rows. `crm_notes`, `diary_entries`, `todos` and `ideas` each have a partial unique index on `entry_id WHERE entry_id IS NOT NULL` (migration 0014): one derived row per entry and kind, and writes use ON CONFLICT DO NOTHING. `applyRoute` in `apps/web/src/server/derived.ts` creates the row in the same transaction that sets the route. Reassignment moves the current body of the old row to a new row of the new kind. A same-kind save changes nothing, so a derived row the owner deleted stays deleted. Moving to `agent_request` discards the old derived row, including edits to its body, because agent requests have no destination table until their approval flow exists (after MVP); `entries.raw_text` never changes.
+
+Contacts (H4). Owner pages `/contacts`, `/contacts/new` and `/contacts/[id]` (Dense UI), code in `apps/web/src/server/contacts.ts`; no migration (tables from 0001). `linkCrmNote(db, noteId)` matches contact names and aliases in a note as whole words, case-insensitive, with Unicode letters, digits and underscore as word characters. Names and notes are compared in NFC, and whitespace inside a name matches any whitespace run. One match links the note; several set `link_status` to `ambiguous` and open one `inbox_items` row (kind `contact_match`, ref `crm_notes`); none sets `none`. Creating a contact, or changing its name or aliases, re-runs the match, in the same transaction, for the newest 500 notes whose `link_status` is `none`; linked and ambiguous notes are not touched. The owner's choice (`resolveCrmNote`) sets the link and closes the item. Deleting a contact sets its notes' `link_status` to `none`. `orch_rw` still reads contact names and aliases for the sanitizer. There is no last-contact tracking or reminder. `applyRoute` does not call `linkCrmNote` yet, and `ContactMatchRegion` is not yet shown on `/inbox` (H12).
+
+Mood and social. `/diary`, `/diary/[id]` and `/mood` use `diary_entries` and `mood_scores`; scoring is in section 9. `/social` reads `social_accounts` and `social_snapshots`; `upsertSnapshot` in `apps/web/src/server/social.ts` is the write path for later API ingestion, whose accounts use ingest `api`.
 
 ### 3.2 Agent system
 | Table | Key columns |
@@ -252,7 +258,7 @@ Start reports emit coding/qa_reviewing. Final successful reports contain usage o
 7. Merge-rules runs on the latest head SHA (diff + plan summary).
    - Critical: `kcw/merge-rules` stays pending; create `approvals(kind=critical_pr, reasons)`; inbox item + push notification; event `waiting_on_owner`; `interrupt(wait=owner)`.
    - Not critical, or owner approved: check success → squash merge → event `merged`.
-8. Push to main → `deploy.yml` (environment `prod`): migrate, `terraform apply infra/prod`, upload the OpenNext build, invalidate CloudFront `/*` and wait, then smoke-check that public pages show this build id. Reporting `deployed` is separate future work (the event type stays defined but unused).
+8. Push to main → `deploy.yml` (environment `prod`): prod web build and Lambda bundles first (no AWS credentials, so a failed build leaves the production schema and infrastructure untouched), then migrate, `terraform apply infra/prod` (uploads the OpenNext build and Lambda code), invalidate CloudFront `/*` and wait, then smoke-check that public pages show this build id. Merged, deployed and verified are three separate facts bound to the commit and build id ([runbooks/release-recovery.md](runbooks/release-recovery.md)). Reporting `deployed` is separate future work (the event type stays defined but unused).
    - Docs-keeper is dispatched at merge, not after deploy: in the step that squash-merges a task PR, the orchestrator creates the docs task (a child row of the merged task, §3.2), and the handler starts its thread. Only PRs the orchestrator merges trigger it; owner/local merges and docs PRs do not.
    - The docs task takes an in-flight slot (D20) and waits `queued` like any task when paused or at the limit. Its start skips the planner, the public-title node and the issue: it dispatches `agent-docs.yml` {task_id = the docs task, pr = the merged PR} (run-name `docs task <task_id>`), records `task_assigned` (agent `docs`) and waits on `dev`.
    - Its PR (branch `kcw/task-<docs task>`) goes through steps 3-7 unchanged, including merge-rules and the owner's critical gate (`docs/agents/**` and root adapters are critical). There is no Developer: a CI failure, QA changes requested or a refused merge (for example conflicting docs PRs) goes to the owner as a failure; approving re-dispatches Docs-keeper, rejecting marks the docs task `failed`.
@@ -425,7 +431,7 @@ Conventions for every task:
 | P1-13 | `infra/preview` | `infra/preview`, `scripts/check-preview-clean.ts` | 09, 12 | validate passes; **live:** a manual run for `pr-0` serves the app against its Neon branch; after destroy, the script finds no `kcw-pr-0` tagged resources, no `/kcw/preview/pr-0/*` parameter, no state object and no branch |
 | P1-14 | Playwright skeleton | `apps/web/e2e`, `playwright.config.ts` | 06, 07 | Runs against `BASE_URL`; tests: public home, demo page, owner route redirects when logged out, preview login works; passes locally against `next dev` |
 | P1-15 | `ci.yml` | `.github/workflows/ci.yml`, `.github/actions/aws-auth` | 11-14 | Same-repo guard; `concurrency: pr-<n>`; jobs per §4.2 step 4; teardown `if: always()`; **live:** a test PR is green and the clean-check passes |
-| P1-16 | `deploy.yml` + `preview-gc.yml` | `.github/workflows` | 15 | Deploy runs migrate, then apply, then upload, in environment `prod`; GC (PR closed + `workflow_dispatch`) has a dry-run mode; **live:** merging a trivial change updates prod |
+| P1-16 | `deploy.yml` + `preview-gc.yml` | `.github/workflows` | 15 | Deploy runs build, then migrate, then apply, then upload, in environment `prod`; GC (PR closed + `workflow_dispatch`) has a dry-run mode; **live:** merging a trivial change updates prod |
 | P1-17 | Repo settings checker | `scripts/check-repo-settings.ts`, `docs/runbooks/github-apps.md` | 15 | Reads the `main` ruleset via the API and compares it to the expected JSON (§4.1); unit test against fixtures; CI step (non-blocking until Phase 2) |
 | P1-18 | AGENTS.md and playbooks v1 | `AGENTS.md`, `docs/agents/*.md`, `CLAUDE.md` | 01-17 | Layout, commands, rules (no private data, no secrets, Windows-safe scripts, per-agent Bash allowlist); QA reviewer confirms each command in the canonical guide runs |
 
@@ -436,7 +442,7 @@ Conventions for every task:
 | P2-01 | Migration 0002: agent tables, flags, view, roles | `packages/db/migrations/0002_*.sql` | P1-04 | Tables per §3.2; test that `web_public` can select the view and nothing else; the view returns `Private task` for private/null titles |
 | P2-02 | Sanitizer | `packages/core/sanitize` | P2-01 | Rules per §4.5; table-driven tests incl. contact names, aliases, emails, URLs, phone numbers, non-ASCII |
 | P2-03 | Event types + `kcw-report` CLI | `packages/core/events`, `agents/report` | P1-01 | The CLI sends task/agent plus event, usage or both to SQS; dry-run prints JSON; tests with a fake SQS client |
-| P2-04 | Merge-rules | `agents/merge-rules` | P1-01 | Pure `evaluate({files, patches, planSummary, lockDiff, author}) -> {critical, reasons[]}`. One test per spec bullet: drop/rename in SQL; auth/secrets/IAM/`.github/**`/`.claude/**` paths; prod plan non-empty; any `docs/**/SPEC.md` change; new dependency not in `approved-deps.json`, or any edit to that file; new service; cost (any prod plan create). Routine design status and factual handoff remain ordinarily noncritical; governance instructions, native adapters and trusted automation/import/configuration/lockfile changes are owner-critical under Q15 |
+| P2-04 | Merge-rules | `agents/merge-rules` | P1-01 | Pure `evaluate({files, patches, planSummary, lockDiff, author}) -> {critical, reasons[]}`. One test per spec bullet: drop/rename/truncate in SQL, and SQL that is not compatible with the previously deployed build (`ALTER COLUMN ... TYPE`, `SET NOT NULL` on an existing column, `ADD COLUMN ... NOT NULL` without a default; expand then contract, while additive SQL stays non-critical); auth/secrets/IAM/`.github/**`/`.claude/**` paths; prod plan non-empty; any `docs/**/SPEC.md` change; new dependency not in `approved-deps.json`, or any edit to that file; new service; cost (any prod plan create). Routine design status and factual handoff remain ordinarily noncritical; governance instructions, native adapters and trusted automation/import/configuration/lockfile changes are owner-critical under Q15 |
 | P2-05 | Webhook relay | `agents/webhook-relay` | P2-03 | Signature verification (valid/invalid/missing), delivery dedupe via `inbound_events`, sender allowlist, normalization of the 5 event types, task resolution from branch/pr; tests with synthetic fixtures |
 | P2-06 | `infra/modules/orchestrator` | `infra/modules/orchestrator`, `infra/prod` | P1-11 | FIFO queue + DLQ, relay Function URL, Lambda roles reading only their secrets, LangSmith env incl. `LANGCHAIN_CALLBACKS_BACKGROUND=false`; validate passes; **live:** applied by owner |
 | P2-07 | GitHub Apps + ruleset + Anthropic federation | `docs/runbooks/github-apps.md` | P1-17, P1-10 | Runbook with permissions per §4.1 (orchestrator webhook active → relay; others inactive). **Live:** (a) owner creates 5 Apps, installs them on the repo, stores keys and sets repo variables; (b) owner creates the Claude Console federation rule(s) for prefix `P`; (c) **approval test:** on a throwaway PR opened by the Developer App, a QA App approval satisfies the ruleset's 1-approval rule. If it does not count: set required approvals = 0 and make `kcw/qa` a required check posted by the QA App (approve = success, changes requested = failure), with `kcw/merge-rules` still required; record the result in DESIGN.md. (d) checker passes |
@@ -455,24 +461,23 @@ Conventions for every task:
 ## 9. Phases 3-6 (epics; issues for the cloud orchestrator)
 
 **Phase 3: Hub MVP**
-- Public `/terms` and `/privacy` pages (needed for TikTok domain-verified URLs; also used by Google/Meta app settings).
-- Capture box (phone layout) storing raw `entries`.
+- Public `/terms` and `/privacy` pages (built; needed for TikTok domain-verified URLs; also used by Google/Meta app settings, where the owner enters their URLs).
+- Capture box (phone layout) storing raw `entries`. `/hub` lists every pending, failed, capped or Needs-you entry in an Unresolved region (oldest first, with a route picker and Route again), independent of the latest-ten Recent list.
 - Router on DeepSeek V4.1 Flash; inbox for low confidence; reassign + `route_corrections`.
 - Contacts CRUD; linking CRM notes to contacts, with an inbox item for ambiguous matches.
 - Google OAuth app **published "In production" (unverified, personal use)** so refresh tokens do not expire after 7 days; incremental consent for `calendar.events.owned`, `youtube.readonly`, `yt-analytics.readonly`; re-consent after publishing.
 - Calendar suggestion extraction; one-tap add via the Calendar API.
-- Diary page; mood scoring (Haiku) on save; mood board with per-metric toggles and an overall line.
-- Todos and ideas lists.
+- Diary page (`/diary`, `/diary/[id]`); mood scoring on save and on edit by DeepSeek through the router secret (`routerFromEnv`, `provider.complete`). Usage is recorded by the provider callback as agent `router`, the spend cap is checked first, and the model call never runs inside a transaction. The reply must be one JSON object with exactly the nine fields in range; one surrounding code fence is stripped, nothing else is accepted and nothing is clamped. The write locks the diary row and applies only if the body is still the scored one. A failed, capped or unavailable score leaves the entry unscored with "Score again". `scoreDiaryEntry` is exported but not yet called for diary items created from captures. Mood board (`/mood`): hand-written SVG, per-metric toggles and the overall sentiment on top.
+- Lists and projects (`/todos`, `/ideas`, `/projects`): owner-only Dense UI pages over the existing `todos`, `ideas` and `projects` tables (web_rw), with no model call. Todos: open first (oldest first), then done; add, mark done or undo, delete. Ideas: newest first with status open, done or dropped; add, change status, delete. Projects: a tab strip from `projects` ordered by sort then title, selected by `?tab=<slug>` (default the first). The Essays tab (inserted by migration 0016) shows the library and rated counts and links to `/essays`; other tabs show "No page for this project yet." Add (slug derived from the title; a taken slug is refused), rename (title only), move up or down, delete; Essays cannot be renamed or deleted. Rows created by captures appear in the same lists.
 - Social, YouTube: daily snapshot from `channels?part=statistics&mine=true`. `subscriberCount` is rounded (`followers_exact=false`); exact daily gains come from YouTube Analytics.
 - Social, Instagram (Instagram Login, `followers_count` field, `views` insights, 48 h delay) + **scheduled long-lived token refresh every ~30 days**, writing the new token back to Secrets Manager.
 - Social, TikTok **sandbox spike first** (does sandbox grant `user.info.stats` and return real numbers?). If not: manual-entry form (`ingest=manual`). Refresh-token rotation is written back to Secrets Manager.
-- Social dashboard with totals and a source filter.
-- Projects tabs shell.
+- Social dashboard (`/social`, built): per-source filter, totals of each account's latest known followers and views (each metric with its own day), the change against its previous known value, a followers trend of the newest 30 snapshots per account and manual entry with Manual/API provenance. Manual entry is the only writer so far.
 - Web push (VAPID, manifest `display: standalone`, service worker, permission request on a tap; iOS 16.4+ Home Screen only).
 - Public demo versions of the dashboard, mood board and CRM from `@kcw/demo-data`.
 
 **Phase 4: Office + X-ray**
-- X-ray registry for every component; overlay toggle with hover cards (tech, what, why).
+- X-ray (built): typed registry `XRAY` in `@kcw/xray` (id to label, tech, what, why; 9 entries; the site-wide ones are chips in a strip under the header); `<Xray id>` wrapper in `apps/web/src/app/(public)/_site/xray.tsx` and a header toggle (`aria-pressed`, off by default, kept per browser tab in sessionStorage). Off, the wrapper is `display: contents`. On, it draws an outline and a chip in a label row at the block's top; hover, focus or tap shows a card; Escape closes it. No design change to D10 and D24.
 - The original code-drawn woodland studio and Developer/QA event vignettes are implemented locally; retain native Canvas 2D pixels, accessible inspection, optional full motion and neutral unsupported/empty states.
 - Expand characters and event mapping for the full team after current connected-behavior review.
 - Five-second feed polling, latest-20 labeled replay, original timestamps and live priority are implemented locally. Public-safe task correlation needs a separate contract before concurrent-task animation.
@@ -483,7 +488,7 @@ Conventions for every task:
 - Seed list drafting task (~300) → `seed_items` → owner approval in the inbox.
 - Source registry + watcher Lambda (robots.txt, per-site rate limit).
 - Validator: exact hash, MinHash near-dup, fuzzy metadata dup, quality checks; quarantine + an issue for the Scraper-builder.
-- Categorizer (DeepSeek V4.1 Flash) and hook writer (Haiku).
+- Categorizer and hook writer (both DeepSeek V4.1 Flash, `deepseek-flash`, through the injected provider of `essay-ingest`). The hook phase calls `complete` for one plain sentence of at most 160 characters from the first 1500 words, validated before it is stored in `essays.hook`.
 - Extractors per seeded source (one issue per site, Scraper-builder).
 - Nightly source health check; weekly quality report.
 - Public demo with a handful of public-domain essays.

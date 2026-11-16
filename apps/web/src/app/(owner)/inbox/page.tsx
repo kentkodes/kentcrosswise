@@ -14,6 +14,7 @@ import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { approvalTone } from "../tones";
 import { decideAction, reassignRoutingAction } from "./actions";
+import { CalendarSuggestionRegion } from "./calendar-region";
 
 export const metadata: Metadata = { title: "Inbox | Kentcrosswise" };
 
@@ -62,7 +63,8 @@ function Summary({ a }: { a: ApprovalRow }) {
 
 export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireOwner();
-  const notice = noticeText((await searchParams).n);
+  const params = await searchParams;
+  const notice = noticeText(params.n);
   const { data, problem } = await load();
 
   return (
@@ -109,6 +111,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
             </ul>
           </Region>
           <ContactMatchRegion />
+          <CalendarSuggestionRegion code={params.cn} />
           <Region id="pending" title={`Waiting on you (${data.pending.length})`}>
             {data.pending.length === 0 ? <p className={`${s.note} ${s.pad}`}>Nothing is waiting on you.</p> : null}
             <ul data-testid="pending" className={s.list}>

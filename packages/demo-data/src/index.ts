@@ -15,3 +15,4 @@ export function getDemoData(): DemoData {
   cached ??= generateDemoData();
   return cached;
 }
+export * from "./essays";

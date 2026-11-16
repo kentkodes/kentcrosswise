@@ -2,7 +2,8 @@
 // (written at sign-in by auth/config.ts events.signIn); this module turns it into short-lived access tokens
 // and can disconnect. Never log tokens, the client secret or response bodies: only fixed codes and error classes.
 import { defaultSecretStore, SecretKeyMissingError, SecretNotFoundError } from "@kcw/secrets";
-import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/config";
+import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/google-consent";
+import { loadProdSettings } from "../auth/settings";
 
 export type GoogleScope = "calendar" | "youtube";
 
@@ -13,6 +14,8 @@ const API_SCOPE: Record<GoogleScope, string> = {
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+/** No call to Google may hold a request or a scheduled job until the function times out. */
+const GOOGLE_TIMEOUT_MS = 8000;
 /** Refresh this many seconds before Google says the token expires. */
 const EXPIRY_MARGIN_S = 60;
 
@@ -74,9 +77,12 @@ const defaultStore: NonNullable<GoogleDeps["store"]> = {
   },
 };
 
+// Reads the client settings without importing "../auth": the scheduled jobs bundle this module into the
+// OpenNext wrapper, and "../auth" would pull NextAuth and the preview-only login module into that prod bundle
+// (scripts/check-prod-bundle.ts). Previews have no Google client.
 async function defaultClient(): Promise<{ clientId: string; clientSecret: string } | null> {
-  const { getAuthSettings } = await import("../auth");
-  return (await getAuthSettings()).google ?? null;
+  if (process.env.KCW_ENV === "preview") return null;
+  return (await loadProdSettings(process.env, defaultSecretStore())).google ?? null;
 }
 
 function errorClass(err: unknown): string {
@@ -121,6 +127,7 @@ export async function googleAccessToken(scope: GoogleScope, deps: GoogleDeps = {
         client_id: client.clientId,
         client_secret: client.clientSecret,
       }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
   } catch (err) {
     console.error(`[google] refresh failed ${errorClass(err)}`);
@@ -188,6 +195,7 @@ export async function disconnectGoogle(deps: GoogleDeps = {}): Promise<boolean> 
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token: stored.refreshToken }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     // 400 means Google no longer knows the token (already revoked): the goal is reached either way.
     revoked = res.ok || res.status === 400;
