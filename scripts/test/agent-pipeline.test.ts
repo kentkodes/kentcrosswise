@@ -4,10 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAgentReport } from "@kcw/core/events";
-import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
+import { createHash } from "node:crypto";
+import { canonicalContract, type TaskContract } from "@kcw/core/contract";
+import { buildReport, candidateBundle, parseTrustedContext, readContract, requireContractIssue, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
-const context = { version: 1, agent: "qa", repo: "owner/repo", taskId: 2, op: 0, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha };
+const H = "d".repeat(64);
+const context = { version: 2, agent: "qa", repo: "owner/repo", taskId: 2, op: 0, issue: null, pr: 12, branch: "kcw/task-2", baseSha: sha, remoteSha: sha, workflowSha: sha, contractHash: H };
+const hashFor = (agent: string) => (agent === "developer" || agent === "qa" ? H : null);
 const dirs: string[] = [];
 const dir = () => { const p=mkdtempSync(path.join(tmpdir(),"kcw-boundary-")); dirs.push(p); return p; };
 afterEach(() => { for(const p of dirs.splice(0)) rmSync(p,{recursive:true,force:true}); vi.unstubAllEnvs(); });
@@ -15,18 +19,19 @@ const gh = (values: unknown[]) => ({ repo: "owner/repo", token: "synthetic", fet
 describe("report messages",()=>{
   const u=(n:number,model="claude-haiku-5-5")=>({kind:"model" as const,provider:"anthropic" as const,model,input_tokens:n,output_tokens:1});
   const run={run_id:900,run_attempt:2};
-  const ctx=(agent:"developer"|"qa"|"docs"|"scraper")=>parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:4}));
+  const ctx=(agent:"developer"|"qa"|"docs"|"scraper")=>parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:4,contractHash:hashFor(agent)}));
   const none={work:[],review:[]};
   it("starts with the lifecycle event and ends successfully with usage only (Q14(5)), in one identified message",()=>{
-    expect(buildReport(ctx("developer"),run,"start","success",{work:[u(1)],review:[]})).toEqual({task_id:2,agent:"developer",run_id:900,run_attempt:2,job:"start",op:4,event_type:"coding"});
-    expect(buildReport(ctx("qa"),run,"start",undefined,none)).toMatchObject({job:"start",event_type:"qa_reviewing"});
-    expect(buildReport(ctx("qa"),run,"end","success",{work:[u(1)],review:[u(2),u(3,"claude-other")]})).toEqual({task_id:2,agent:"qa",...run,job:"end",op:4,usage:[
+    expect(buildReport(ctx("developer"),run,"start","success",{work:[u(1)],review:[]})).toEqual({task_id:2,agent:"developer",run_id:900,run_attempt:2,job:"start",op:4,event_type:"coding",contract:H});
+    expect(buildReport(ctx("qa"),run,"start",undefined,none)).toMatchObject({job:"start",event_type:"qa_reviewing",contract:H});
+    expect(buildReport(ctx("qa"),run,"end","success",{work:[u(1)],review:[u(2),u(3,"claude-other")]})).toEqual({task_id:2,agent:"qa",...run,job:"end",op:4,contract:H,usage:[
       {...u(1),call:{job:"work",index:0}},{...u(2),call:{job:"review",index:0}},{...u(3,"claude-other"),call:{job:"review",index:1}}]});
     expect(buildReport(ctx("developer"),run,"end","success",none)).toBeNull();
   });
   it("still reports failed once on any unsuccessful end, with or without usage",()=>{
     for(const result of ["failure","cancelled","skipped",undefined]) {
       expect(buildReport(ctx("docs"),run,"end",result,none)).toEqual({task_id:2,agent:"docs",...run,job:"end",op:4,event_type:"failed"});
+      expect(buildReport(ctx("docs"),run,"end",result,none)).not.toHaveProperty("contract");
       expect(buildReport(ctx("scraper"),run,"end",result,{work:[u(1),u(2)],review:[]})).toEqual({task_id:2,agent:"scraper",...run,job:"end",op:null,event_type:"failed",
         usage:[{...u(1),call:{job:"work",index:0}},{...u(2),call:{job:"work",index:1}}]});
     }
@@ -40,22 +45,22 @@ describe("report messages",()=>{
 describe("trusted authority",()=>{
   it("fails empty code tasks while allowing validated PR retries and docs no-op",()=>{
     for(const agent of ["developer", "scraper"] as const) {
-      const c=parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:0,pr:null}));
+      const c=parseTrustedContext(JSON.stringify({...context,agent,op:agent==="scraper"?null:0,pr:null,contractHash:hashFor(agent)}));
       expect(()=>requireCodeProgress(c,false)).toThrow(/no commits/);
       expect(()=>requireCodeProgress(c,true)).not.toThrow();
       expect(()=>requireCodeProgress({...c,pr:12},false)).not.toThrow();
     }
-    expect(()=>requireCodeProgress(parseTrustedContext(JSON.stringify({...context,agent:"docs"})),false)).not.toThrow();
+    expect(()=>requireCodeProgress(parseTrustedContext(JSON.stringify({...context,agent:"docs",contractHash:null})),false)).not.toThrow();
   });
   it("rejects work fields, changed role schema, traversal branch and malformed baseline",()=>{
     expect(parseTrustedContext(JSON.stringify(context))).toEqual(context);
-    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{op:-1},{op:null},{op:1.5},{op:1_000_000_000},{repo:"https://other/repo"}])
+    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{op:-1},{op:null},{op:1.5},{op:1_000_000_000},{repo:"https://other/repo"},{version:1},{contractHash:null},{contractHash:"D".repeat(64)},{agent:"docs"},{agent:"developer",contractHash:"abc"}])
       expect(()=>parseTrustedContext(JSON.stringify({...context,...change}))).toThrow();
   });
   it("binds op: required for dispatched agents, null only for the scraper",()=>{
     expect(parseTrustedContext(JSON.stringify({...context,agent:"developer",op:7})).op).toBe(7);
-    expect(parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:null})).op).toBeNull();
-    expect(()=>parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:0}))).toThrow();
+    expect(parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:null,contractHash:null})).op).toBeNull();
+    expect(()=>parseTrustedContext(JSON.stringify({...context,agent:"scraper",op:0,contractHash:null}))).toThrow();
     const { op: _op, ...without } = context;
     expect(()=>parseTrustedContext(JSON.stringify(without))).toThrow();
   });
@@ -132,5 +137,30 @@ describe("untrusted files",()=>{
     }
     writeFileSync(path.join(root,"evil.ts"),"throw 1"); expect(()=>candidateBundle(root)).toThrow(); expect(readAdvisoryUsage(root)).toEqual([]);
     expect(readAdvisoryUsage(path.join(root,"missing"))).toEqual([]);
+  });
+});
+describe("contract binding at publish",()=>{
+  const contract:TaskContract={v:1,task:2,revision:1,issue:5,goal:"Synthetic goal.",acceptance:["Done."],base:sha,prerequisites:[],scope:[],context:[]};
+  const text=canonicalContract(contract);
+  const hash=createHash("sha256").update(text).digest("hex");
+  const ctx=(over:Record<string,unknown>={})=>parseTrustedContext(JSON.stringify({...context,agent:"developer",op:3,contractHash:hash,...over}));
+  const file=(content:string)=>{const p=path.join(dir(),"contract.json");writeFileSync(p,content);return p;};
+  it("returns the contract when its bytes match the trusted hash",()=>{
+    expect(readContract(file(text),ctx())).toEqual(contract);
+    expect(readContract("unused",ctx({agent:"docs",contractHash:null}))).toBeNull();
+  });
+  it("refuses a changed contract file, a task mismatch and an oversized file",()=>{
+    expect(()=>readContract(file(text.replace("Synthetic","Changed")),ctx())).toThrow(/^contract_hash_mismatch$/);
+    expect(()=>readContract(file(`${text} `),ctx())).toThrow(/^contract_hash_mismatch$/);
+    expect(()=>readContract(file("x".repeat(30_000)),ctx())).toThrow(/^contract_hash_mismatch$/);
+    expect(()=>readContract(file(text),ctx({taskId:3,branch:"kcw/task-3"}))).toThrow(/^contract_task_mismatch$/);
+  });
+  it("refuses a live task PR that no longer closes the contract issue, and skips docs or no PR",async()=>{
+    const open={body:"Closes #5"};
+    await expect(requireContractIssue(gh([open]),ctx({pr:9}),contract)).resolves.toBeUndefined();
+    await expect(requireContractIssue(gh([{body:"Closes #6"}]),ctx({pr:9}),contract)).rejects.toThrow(/^contract_issue_mismatch$/);
+    await expect(requireContractIssue(gh([{body:"no link"}]),ctx({pr:9}),contract)).rejects.toThrow(/^contract_issue_mismatch$/);
+    await expect(requireContractIssue(gh([]),ctx({pr:null}),contract)).resolves.toBeUndefined();
+    await expect(requireContractIssue(gh([]),ctx({agent:"docs",contractHash:null,pr:9}),contract)).resolves.toBeUndefined();
   });
 });

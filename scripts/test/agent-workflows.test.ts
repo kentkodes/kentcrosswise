@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { WORKFLOW_AGENTS } from "../lib/agents";
+import { AGENT_CONFIGS, WORKFLOW_AGENTS } from "../lib/agents";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8").replace(/\r/g, "");
 function jobs(yml: string): Record<string, string> {
@@ -198,5 +198,43 @@ describe.each(WORKFLOW_AGENTS)("isolated %s workflow", (agent) => {
     expect(tools(/--allowedTools "([^"]*)"/.exec(job.review!)![1]!)).toEqual([
       "Read", "Glob", "Grep", "Bash(git -C payload --no-pager diff --no-ext-diff --no-textconv:*)",
     ]);
+  });
+});
+
+describe.each(WORKFLOW_AGENTS)("%s workflow limits and contract input match AGENT_CONFIGS (AR5a)", (agent) => {
+  const yml = read(`.github/workflows/agent-${agent}.yml`), job = jobs(yml), cfg = AGENT_CONFIGS[agent];
+  const minutes = (name: string) => Number(/timeout-minutes: (\d+)/.exec(job[name]!)?.[1]);
+  const turns = (name: string) => [...job[name]!.matchAll(/--max-turns (\d+)/g)].map((m) => Number(m[1]));
+  it("pins each model job's timeout and turn limit", () => {
+    expect(minutes("work")).toBe(cfg.limits.work.minutes);
+    expect(turns("work")).toEqual([cfg.limits.work.turns]);
+    if (cfg.limits.review) {
+      expect(minutes("review")).toBe(cfg.limits.review.minutes);
+      expect(turns("review")).toEqual([cfg.limits.review.turns]);
+    } else expect(job.review).toBeUndefined();
+  });
+  it("takes the contract input only in the Developer and QA workflows, as a required string for prepare only", () => {
+    const input = /^ {6}contract:\n((?: {8}[^\n]+\n)*)/m.exec(yml)?.[1];
+    if (agent === "developer" || agent === "qa") {
+      expect(input).toMatch(/type: string\n {8}required: true\n/);
+      expect(job.prepare).toContain("KCW_CONTRACT: ${{ inputs.contract }}");
+      expect(Object.keys(job).filter((n) => n !== "prepare").every((n) => !job[n]!.includes("KCW_CONTRACT"))).toBe(true);
+      expect(yml.match(/inputs\.contract/g)).toHaveLength(1);
+    } else {
+      expect(input).toBeUndefined();
+      expect(yml).not.toMatch(/contract/i);
+    }
+  });
+});
+
+describe("publish contract binding order (AR5a)", () => {
+  it("checks the contract after the fence and before any git work, push or review", () => {
+    const src = read("scripts/agent-pipeline.ts");
+    const at = (needle: string) => { const i = src.indexOf(needle); expect(i).toBeGreaterThan(0); return i; };
+    const binding = at("requireContractIssue(gh, c, contract)");
+    expect(at("await fence(")).toBeLessThan(at("readContract("));
+    expect(binding).toBeLessThan(at('runGit(["init"'));
+    expect(binding).toBeLessThan(at("pushCommits("));
+    expect(binding).toBeLessThan(at("submitReview("));
   });
 });
