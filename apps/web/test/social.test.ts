@@ -207,13 +207,25 @@ describe("snapshotFromForm and newAccountFromForm", () => {
     expect(codeOf(() => snapshotFromForm(form({ account_id: ACCOUNT, day: "2026-11-13" }), today))).toBe("empty");
   });
 
-  it("reads the add account form, with the handle normalised", () => {
-    expect(newAccountFromForm(form({ platform: "tiktok", handle: " @sample.creator " }))).toEqual({
+  it("reads the add account form, with the handle normalised and the ingest choice", () => {
+    expect(newAccountFromForm(form({ platform: "tiktok", handle: " @sample.creator ", ingest: "manual" }))).toEqual({
       platform: "tiktok",
       handle: "sample.creator",
+      ingest: "manual",
     });
-    expect(codeOf(() => newAccountFromForm(form({ platform: "myspace", handle: "x" })))).toBe("platform");
-    expect(codeOf(() => newAccountFromForm(form({ platform: "tiktok", handle: "" })))).toBe("handle");
+    expect(newAccountFromForm(form({ platform: "youtube", handle: "@example-channel", ingest: "api" }))).toEqual({
+      platform: "youtube",
+      handle: "example-channel",
+      ingest: "api",
+    });
+    expect(codeOf(() => newAccountFromForm(form({ platform: "myspace", handle: "x", ingest: "manual" })))).toBe("platform");
+    expect(codeOf(() => newAccountFromForm(form({ platform: "tiktok", handle: "", ingest: "manual" })))).toBe("handle");
+  });
+
+  it("refuses an ingest value other than manual or api, and a missing one, as an ingest error", () => {
+    expect(codeOf(() => newAccountFromForm(form({ platform: "youtube", handle: "x", ingest: "auto" })))).toBe("ingest");
+    expect(codeOf(() => newAccountFromForm(form({ platform: "youtube", handle: "x", ingest: "API" })))).toBe("ingest");
+    expect(codeOf(() => newAccountFromForm(form({ platform: "youtube", handle: "x" })))).toBe("ingest");
   });
 });
 
