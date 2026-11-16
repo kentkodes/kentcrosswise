@@ -34,20 +34,21 @@ describe("0020 task prerequisites", () => {
     expect(first).toBe("SET LOCAL lock_timeout = '5s';");
   });
 
-  it("adds prerequisites (empty by default) and base_sha (null by default)", async () => {
+  it("adds prerequisites (empty by default) and merge_sha (null by default)", async () => {
     await db.exec("INSERT INTO tasks (source, owner_text) VALUES ('console', 'Synthetic task')");
-    const { rows } = await db.query<{ prerequisites: unknown; base_sha: string | null }>("SELECT prerequisites, base_sha FROM tasks");
-    expect(rows).toEqual([{ prerequisites: [], base_sha: null }]);
+    const { rows } = await db.query<{ prerequisites: unknown; merge_sha: string | null }>("SELECT prerequisites, merge_sha FROM tasks");
+    expect(rows).toEqual([{ prerequisites: [], merge_sha: null }]);
   });
 
-  it("orch_rw stores prerequisites and a base, and enqueues a child start once", async () => {
+  it("orch_rw stores prerequisites and a task's own merge commit, and enqueues a child start once", async () => {
     const [parent] = await asOrch<{ id: number }>("INSERT INTO tasks (source, owner_text) VALUES ('console', 'Parent') RETURNING id");
     const kids = await asOrch<{ id: number }>(
       "INSERT INTO tasks (parent_id, source, owner_text) VALUES ($1, 'console', 'A'), ($1, 'console', 'B') RETURNING id",
       [parent!.id],
     );
     const [a, b] = kids.map((k) => Number(k.id)) as [number, number];
-    await asOrch("UPDATE tasks SET prerequisites = $2::bigint[], base_sha = $3 WHERE id = $1", [b, [a], "a".repeat(40)]);
+    await asOrch("UPDATE tasks SET prerequisites = $2::bigint[] WHERE id = $1", [b, [a]]);
+    await asOrch("UPDATE tasks SET merge_sha = $2 WHERE id = $1", [a, "a".repeat(40)]);
     const enqueue = `INSERT INTO orchestrator_outbox (message_key, group_id, body)
       SELECT 'task-' || c.id || '/start', 'task-' || c.id,
              json_build_object('type', 'task.created', 'task_id', c.id, 'message_key', 'task-' || c.id || '/start')::text
@@ -60,8 +61,10 @@ describe("0020 task prerequisites", () => {
     );
     expect(rows).toEqual([{ message_key: `task-${b}/start`, group_id: `task-${b}`, body: expect.any(String) }]);
     expect(JSON.parse(rows[0]!.body)).toEqual({ type: "task.created", task_id: b, message_key: `task-${b}/start` });
-    const [row] = await asOrch<{ prerequisites: number[]; base_sha: string }>("SELECT prerequisites, base_sha FROM tasks WHERE id = $1", [b]);
-    expect(row).toEqual({ prerequisites: [a], base_sha: "a".repeat(40) });
+    const [row] = await asOrch<{ prerequisites: number[] }>("SELECT prerequisites FROM tasks WHERE id = $1", [b]);
+    expect(row).toEqual({ prerequisites: [a] });
+    const [merged] = await asOrch<{ merge_sha: string }>("SELECT merge_sha FROM tasks WHERE id = $1", [a]);
+    expect(merged).toEqual({ merge_sha: "a".repeat(40) });
     // Still no outbox reads beyond the drain's columns, no delete.
     for (const sql of ["SELECT last_error FROM orchestrator_outbox", "DELETE FROM orchestrator_outbox"]) {
       await expect(asOrch(sql), sql).rejects.toThrow(/permission denied/);
