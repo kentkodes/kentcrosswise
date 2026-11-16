@@ -8,7 +8,6 @@ The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. For impl
 
 | ID | Work and completion evidence |
 |---|---|
-| AR1 | Isolate candidate CI from production authority. Prove the preview role cannot retag/mutate prod CloudFront resources or shared policies, and candidate builds cannot obtain production write authority. Narrow the web router's model-secret access to its consumer need. Choose the IAM/provisioning technique after fresh source and policy review; bootstrap/workflow/live changes remain separately gated. Slice 1 (PR-scoped preview boundary, prod CloudFront deny, shared preview policies, router-only secret) is in #106 and waits for the owner's bootstrap cutover ([bootstrap runbook](runbooks/bootstrap.md#ar1-slice-1-cutover-authority-and-secret-split)); slice 2 is split: PR A (#107, trusted `preview-trusted.yml` plus credential-free `candidate-build`) added the path; PR B (cutover: old `preview` job removed, `kcw-gh-ci` loses its `pull_request` subject, PR-closed GC on `pull_request_target`) waits for its merge and the owner's bootstrap apply ([runbook](runbooks/bootstrap.md#ar1-slice-2-cutover)); slice 3 (trusted merge-rules input from `preview-trusted.yml` `prod-plan`, PR infra/workflow paths owner-reviewed as uncovered, orchestrator reads it only from the verified trusted run) is implemented in source and waits for its merge, the owner's bootstrap apply and the `prod-plan` environment ([runbook](runbooks/bootstrap.md#ar1-slice-3-trusted-merge-rules-input)). |
 | AR4 | Enforce subtask prerequisites. Start sequentially by default and verify a schema-then-consumer task uses the accepted predecessor revision; permit parallel work only when independence is explicit. Enqueue child starts without bundling their model work into one parent invocation. Depends on AR2. |
 | AR5 | Supply bounded, revision-pinned task contracts and on-demand context; record attempts, supersession, result validity and verification evidence per DESIGN 4.0. Test retry and replanning without losing task identity or reusing incompatible results/QA. Measure accepted-task input/output usage against the recorded ~1.1M-input-token one-line canary (former R3), not a token target invented here. Depends on AR3-AR4. |
 | AR6 | Separate active execution capacity from parked-work/PR limits. Verify four owner waits do not silently masquerade as four running workers; choose numeric limits and demonstrate deliberate backpressure. Depends on AR5's execution model. |
@@ -16,13 +15,15 @@ The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. For impl
 | AR8 | AR8a is done (#120): build before production migration, a pinned workflow-shape test, incompatible-schema rules in merge-rules, `pnpm restore-rehearsal` and [release-recovery.md](runbooks/release-recovery.md). AR8b failure alerts are merged (#130): SNS topic, alarms, metric filter and deploy failure steps ([alerts runbook](runbooks/alerts.md)); the owner's email subscription and one controlled test are open (see Owner steps). Still open: recording merged, deployed and verified separately in the orchestrator (the AR8a follow-up). Not verified live: a restore rehearsal against a real restored branch, a manual prior-build apply (the runbook's Neon steps say "verify at execution time"), and email delivery of an alert. |
 | AR9 | Demonstrate one representative dependent task through implementation, CI, independent head-bound QA, merge, deploy and verification, with restart/duplicate/failure recovery. Define the acceptance task, cost allowance and live steps before running; use offline fault tests wherever external behavior is not the question. Depends on AR1-AR8. Record elapsed time, usage, human interventions and unresolved gaps. |
 
-Unsettled implementation choices: preview isolation mechanism, worker/WIP/time limits, alert recovery targets, and the exact paid/live acceptance scope. The accepted priority and lifecycle defaults do not approve those privileged steps.
+Done and removed from the table: AR1 (#106-#109, live since the owner's bootstrap applies of 2026-11-14; the trusted `prod-plan` job has verified every PR since #110), AR2 (#110, #112, #113, #127) and AR3 (#136). Their live checks are under "Not verified live".
+
+Unsettled implementation choices: worker/WIP/time limits, alert recovery targets, the exact paid/live acceptance scope, and whether `kcw-gh-plan` keeps its `pull_request` trust (it now serves only the advisory `ci.yml` plan) before agents are enabled. The accepted priority and lifecycle defaults do not approve those privileged steps.
 
 ## Review candidates (2026-11-13, owner decision)
 
 | ID | Open point |
 |---|---|
-| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links) and "Contacts, moods, essays and notes" (the private contacts and mood pages exist but are not yet in the owner navigation). Its "Simulated data" frame also shows real agent rows. The owner navigation now lists the contacts and mood pages, so that part is stale. |
+| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links). Its "Simulated data" frame also shows real agent rows. Revisit with AR9, which decides how much of the first claim becomes true. |
 
 ## Essays (Phase 5)
 
@@ -30,12 +31,13 @@ Unsettled implementation choices: preview isolation mechanism, worker/WIP/time l
 |---|---|
 | E5 | Further sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback. With the first non-Gutenberg extractor, add the navigation/ad-text and language checks of SPEC item 4. |
-| E10 | Nightly source health and weekly quality report; open a GitHub issue for quarantined essays once the Scraper-builder runs. |
+| E10 | Nightly source health and weekly quality report; open a GitHub issue for quarantined essays once the Scraper-builder runs. Deferred (2026-11-16): the essays spec lists these as agent duties, not under "Done means (MVP)", and the only source is ingested by a manual run. Take it up with E5 or when the Scraper-builder runs. |
 
 ## Hub MVP (Phase 3)
 
 | ID | Open work |
 |---|---|
+| H8, H9 | The daily YouTube and Instagram job is built (#131), but `/social` cannot yet mark an account for it: `addAccount` in `apps/web/src/server/social.ts` always stores ingest `manual` and the job reads only ingest `api`, so it reads nothing. Open: the account choice on the `/social` add form (found in review on 2026-11-16, fix in progress), then owner step 2. |
 | H10 | TikTok sandbox stats spike and refresh-token rotation, optional later. The manual-entry fallback is done (`/social`, ingest `manual`); no code is planned. |
 | H12 | Unified owner inbox and web push. The inbox shows every region (routing, contact matches, calendar suggestions) and web push is built (W2-6, #135). Open: the owner steps below (VAPID keys, the iPhone Home Screen check). |
 
@@ -65,7 +67,7 @@ Unsettled implementation choices: preview isolation mechanism, worker/WIP/time l
 ## Owner steps (open)
 
 1. Alerts: subscribe an email address to SNS topic `kcw-prod-alerts` in the console, confirm it, then run one controlled test ([alerts runbook](runbooks/alerts.md), section 2). Until then alarms publish to a topic with no subscriber.
-2. Google: connect Google at `/connections` (Calendar and YouTube). Paste the Instagram token into the Instagram secret and add one YouTube and one Instagram account with ingest `api` for the daily job.
+2. Google: connect Google at `/connections` (Calendar and YouTube). Paste the Instagram token into the Instagram secret. Then, once the H8/H9 fix above is merged, add one YouTube and one Instagram account for the daily job on `/social`.
 3. Consent screens (H1 console step): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen, the Meta for Developers app settings (Instagram) and the TikTok for Developers app.
 4. Web push: approve the Liaison running `pnpm exec tsx scripts/vapid-keys.ts --secret kcw/prod/web` (a gated secret write; it refuses to overwrite keys without `--rotate`). Then on an iPhone (iOS 16.4+) add the site to the Home Screen, open it from there, sign in, enable notifications on `/notifications` and send a test.
 
@@ -86,7 +88,7 @@ Use these cases in AR9's acceptance matrix; each live case needs its own scoped,
 These are source or CI facts only until a scoped live check records a result.
 
 - A scheduled job run in prod (`social-daily`, `inbox-push`): the owner's AWS session had expired, so alarm states and job logs were not read.
-- AR3 call records against live providers: returned model ids, usage fields on error responses, and the acceptance run after migration 0019 applies.
+- AR3 call records against live providers (migration 0019 is applied on prod): a record written by a real call, returned model ids and usage fields on error responses.
 - A live DeepSeek route of a real capture, a live mood score, and a live calendar extraction (Google event-id character set included).
 - A real Google Calendar insert and a real Google token refresh.
 - YouTube and Instagram API calls (no account connected yet). Instagram `/me`, API version `v23.0` and token lifetime are unverified until the first live run.
