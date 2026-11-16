@@ -145,7 +145,8 @@ export class AnthropicProvider implements ModelProvider {
     } catch (err) {
       const status = err instanceof Anthropic.APIError ? err.status : undefined;
       // A 4xx was refused before any work (not billed); a 5xx, a timeout or a lost connection may have been processed.
-      const outcome = status !== undefined && status < 500 ? "rejected" : "unknown";
+      // A 408 (request timeout) may have been processed, so it is unknown like a 5xx; other 4xx were refused.
+      const outcome = status !== undefined && status < 500 && status !== 408 ? "rejected" : "unknown";
       await onCall?.({ ...base, phase: "end", model: this.model, outcome, inputTokens: null, outputTokens: null });
       const connection = err instanceof Anthropic.APIConnectionError;
       const retryAfter = err instanceof Anthropic.APIError ? Number(err.headers?.get?.("retry-after")) : NaN;

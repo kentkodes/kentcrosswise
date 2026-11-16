@@ -70,6 +70,14 @@ describe("DeepseekProvider call events", () => {
     expect(new Set(events.map((x) => x.callId)).size).toBe(3);
   });
 
+  it("a 408 may have been processed: every attempt is unknown, not rejected", async () => {
+    const a = deepseek(queue(json(408, {}), json(408, {}), json(408, {})));
+    await expect(a.p.classify(TEXT, LABELS)).rejects.toBeInstanceOf(ProviderError);
+    const e = ends(a.events);
+    expect(e.length).toBeGreaterThan(0);
+    expect(e.every((x) => x.phase === "end" && x.outcome === "unknown" && x.inputTokens === null)).toBe(true);
+  });
+
   it("a 4xx is rejected (not billed); invalid JSON is unknown", async () => {
     const a = deepseek(queue(json(400, {})));
     await expect(a.p.classify(TEXT, LABELS)).rejects.toBeInstanceOf(ProviderError);

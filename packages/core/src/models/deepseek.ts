@@ -158,7 +158,8 @@ export class DeepseekProvider implements ModelProvider {
     }
     if (!res.ok) {
       // A 4xx was refused before any work (not billed); a 5xx may have been processed.
-      await noUsage(res.status < 500 ? "rejected" : "unknown");
+      // A 408 (request timeout) may have been processed, so it is unknown like a 5xx; other 4xx were refused.
+      await noUsage(res.status < 500 && res.status !== 408 ? "rejected" : "unknown");
       const retryAfter = Number(res.headers.get("retry-after"));
       throw new ProviderError(`DeepSeek returned HTTP ${res.status}`, {
         provider: PROVIDER,
