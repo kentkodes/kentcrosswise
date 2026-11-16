@@ -18,7 +18,9 @@ export type OwnerPath =
   | "/projects"
   | "/essays"
   | "/console"
-  | "/console/usage";
+  | "/console/usage"
+  | "/connections"
+  | "/notifications";
 
 const NAV: { href: OwnerPath; label: string }[] = [
   { href: "/hub", label: "Hub" },
@@ -33,6 +35,8 @@ const NAV: { href: OwnerPath; label: string }[] = [
   { href: "/essays", label: "Essays" },
   { href: "/console", label: "Boss console" },
   { href: "/console/usage", label: "Usage" },
+  { href: "/connections", label: "Connections" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 export function OwnerFrame({

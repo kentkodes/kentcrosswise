@@ -14,7 +14,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const notice = connectionNotice(params.n);
   const conn = await googleConnection();
   return (
-    <OwnerFrame title="Connections" current="/hub">
+    <OwnerFrame title="Connections" current="/connections">
       {notice ? (
         <Notice role="status" tone={params.n === "disconnected" ? "ok" : "warn"}>
           {notice}
