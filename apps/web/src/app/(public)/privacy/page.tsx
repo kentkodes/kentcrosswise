@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <p className={s.updated}>Last updated: 15 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project with one account. This page says what the site does with
-          data, and marks what is only planned.
+          data and which services it uses.
         </p>
 
         <section aria-labelledby="account" className={s.section}>
@@ -87,27 +87,39 @@ export default function PrivacyPage() {
               email address). See the{" "}
               <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
             </li>
+            <li>
+              A language model service (DeepSeek) receives the owner&apos;s own notes to sort them, to
+              score mood and to suggest calendar events. No visitor data is sent to it.
+            </li>
+            <li>
+              Web push, for the owner&apos;s own devices only. A device the owner enables stores a push
+              subscription with the site. The site then sends a count of new inbox items, never their
+              text, through the push service of that browser&apos;s maker (Apple, Google, Mozilla or
+              Microsoft). Visitors are never asked for notification permission.
+            </li>
           </ul>
           <p className={s.text}>
             The owner can connect Google Calendar and YouTube to the owner&apos;s own Google account.
             The connection asks Google for access to the owner&apos;s own calendar events and channel
             statistics, stores a refresh token in the site&apos;s secret store, and can be disconnected
             at any time, which revokes the token at Google. It reads only the owner&apos;s own data,
-            never visitors&apos; data. Calendar suggestions and the daily YouTube snapshot are still
-            planned and not built yet. YouTube is accessed through YouTube API Services. By using it you
-            are also bound by the{" "}
+            never visitors&apos; data. When the owner accepts a suggested event, the site adds that
+            event to the owner&apos;s calendar; it reads no existing events. Once a day the site reads
+            the owner&apos;s channel statistics (subscriber and view counts) and stores them. YouTube is
+            accessed through YouTube API Services. By using it you are also bound by the{" "}
             <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
             data under the{" "}
             <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
           </p>
           <p className={s.text}>
-            Planned, not built yet. Each would read only the owner&apos;s own account statistics, never
-            visitors&apos; data:
+            Instagram: once a day the site reads the follower count of the owner&apos;s own Instagram
+            account, with an access token the owner placed in the site&apos;s secret store. It reads no
+            other account and no visitors&apos; data.
           </p>
-          <ul className={s.list}>
-            <li>Instagram, the owner&apos;s own account statistics only.</li>
-            <li>TikTok, the owner&apos;s own account statistics only.</li>
-          </ul>
+          <p className={s.text}>
+            TikTok is not connected. The owner types those numbers in, and the site does not contact
+            TikTok.
+          </p>
         </section>
 
         <section aria-labelledby="changes" className={s.section}>
