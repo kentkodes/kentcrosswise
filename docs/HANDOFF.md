@@ -10,7 +10,7 @@ Current state only. Earlier chronology is in Git history (this file before 2026-
 ## Repository and refs
 
 - Default branch `main` at `268fcf9`. Protection: ruleset 25683184, profile `final` (one approval, `ci/required` and `kcw/merge-rules`, squash, no bypass). The owner merges reviewed PRs with passing CI through the pinned merge script, which restores and verifies final protection after each merge.
-- The sprint's parallel PRs did not edit the shared docs. The wave 2 docs PR brought this file, [OPEN-POINTS.md](OPEN-POINTS.md), [DESIGN.md](DESIGN.md), the hub spec, [PRODUCT.md](../PRODUCT.md), the reliability plan's status lines and the agent instructions up to date with #123-#136.
+- The sprint's parallel PRs did not edit the shared docs. The wave 2 docs PR brought this file, [OPEN-POINTS.md](OPEN-POINTS.md), [DESIGN.md](DESIGN.md), the hub spec, `PRODUCT.md`, the reliability plan's status lines and the agent instructions up to date with #123-#136.
 
 ## PRs and checks
 
