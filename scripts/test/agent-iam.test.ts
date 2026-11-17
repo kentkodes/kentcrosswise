@@ -29,7 +29,7 @@ describe("isolated publisher IAM source contracts", () => {
       .map((match) => [match[1], [...match[2]!.matchAll(/"([^"]+)"/g)].map((value) => value[1])]);
     expect(Object.fromEntries(entries)).toEqual({
       "kcw-gh-ci": ["${local.github_sub}:environment:preview-gc"],
-      "kcw-gh-plan": ["${local.github_sub}:pull_request", "${local.github_sub}:environment:prod-plan"],
+      "kcw-gh-plan": ["${local.github_sub}:environment:prod-plan"],
       "kcw-gh-deploy": ["${local.github_sub}:environment:prod"],
       ...Object.fromEntries(agents.map((agent) => [`kcw-gh-agent-${agent}`, [`\${local.github_sub}:environment:agent-publish-${agent}`]])),
       "kcw-gh-agent-model": ["${local.github_sub}:environment:agent-model"],

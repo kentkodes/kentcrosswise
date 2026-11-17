@@ -64,7 +64,7 @@ PGlite DB tests take ~2 s per fresh database; reuse one per `describe` where pos
 
 | Workflow | Trigger | What | AWS role (OIDC) |
 |---|---|---|---|
-| `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `candidate-build` and `candidate-prod-build` (credential-free, AR1 slices 2 and 3) and `prod-plan` (advisory, feeds nothing); `ci/required` aggregates them and is the required check | `kcw-gh-plan` (advisory read-only prod plan); no `pull_request` job can assume `kcw-gh-ci` |
+| `ci.yml` | every PR | `checks` (lint, typecheck, test, Next build, terraform fmt, repo-settings check non-blocking); same-repo PRs also `candidate-build` and `candidate-prod-build` (credential-free, AR1 slices 2 and 3); `ci/required` aggregates them and is the required check | none: no `pull_request` job can assume an AWS role (the prod plan runs only in `preview-trusted.yml`) |
 | `preview-trusted.yml` | `workflow_run` of `ci` (AR1 slice 2; definition from `main`) | `verify` (artifact and PR checks, no credentials), `provision` (restore dump, extract build as data, apply `infra/preview` for the PR number), `prod-plan` (AR1 slice 3: main's `infra/prod` planned with the verified prod build as data; writes the merge-rules input), `e2e` (candidate tests, environment `preview-e2e`, no AWS), `teardown`, `result` (status `kcw/trusted-preview`, informational; merges verify the run itself) | `kcw-gh-ci` through environment `preview-gc` (provision, teardown); `kcw-gh-plan` through environment `prod-plan` (prod-plan) |
 | `deploy.yml` | push to `main` (environment `prod`) | prod `build-web` and `build-lambdas` (before anything credentialed), strict prod migrate using `kcw/prod/migrator` (missing or invalid configuration fails deployment), `terraform apply infra/prod` (uploads the builds), CloudFront invalidation of `/*`, build-id smoke check | `kcw-gh-deploy` |
 | `preview-gc.yml` | `pull_request_target` closed (default-branch definition and checkout, same-repo PRs); nightly; manual (`dry_run`, default true) | removes preview leftovers of closed PRs or older than 24 h, then `check-preview-clean` | `kcw-gh-ci` (both jobs run in environment `preview-gc`) |
@@ -77,7 +77,7 @@ Trusted preview (AR1 slice 2; behaviour in DESIGN section 5): `candidate-build` 
 
 No Playwright report or trace is uploaded: a trace would contain the typed preview login token. The prod plan JSON contains sensitive values in clear text; CI keeps only the summary.
 
-The `prod-plan` job of `ci.yml` is advisory: plan and step summary only, no artifact. The trusted `prod-plan` job of `preview-trusted.yml` uploads `merge-rules-input` (summary, lockfile diff of the PR base vs head read as text, uncovered paths) and nothing else.
+`ci.yml` runs no prod plan. The trusted `prod-plan` job of `preview-trusted.yml` uploads `merge-rules-input` (summary, lockfile diff of the PR base vs head read as text, uncovered paths) and nothing else.
 
 Repo variables (non-secret): `AWS_ACCOUNT_ID`, `AWS_ROLE_CI_ARN`, `AWS_ROLE_PLAN_ARN`, `AWS_ROLE_DEPLOY_ARN`, `AWS_ROLE_AGENT_DEVELOPER_ARN`, `AWS_ROLE_AGENT_QA_ARN`, `AWS_ROLE_AGENT_SCRAPER_ARN`, `AWS_ROLE_AGENT_DOCS_ARN`, `AWS_ROLE_AGENT_MODEL_ARN`, `AWS_ROLE_ESSAY_INGEST_ARN`, `KCW_AGENT_WORKFLOWS_ENABLED`, `TF_STATE_BUCKET`, `NEON_CI_PROJECT_ID`; optional `KCW_DOMAIN_NAME` (empty: CloudFront URLs, D22), `KCW_RULESET_PROFILE`, `KCW_ORCHESTRATOR_APP_ID`. There are no GitHub Actions secrets.
 
