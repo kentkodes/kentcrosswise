@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAgentReport } from "@kcw/core/events";
 import { createHash } from "node:crypto";
 import { canonicalContract, type TaskContract } from "@kcw/core/contract";
-import { buildReport, candidateBundle, parseTrustedContext, readContract, requireContractIssue, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
+import { buildReport, candidateBundle, parseTrustedContext, prepareContext, readContract, requireContractIssue, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
 const H = "d".repeat(64);
@@ -162,5 +162,67 @@ describe("contract binding at publish",()=>{
     await expect(requireContractIssue(gh([{body:"no link"}]),ctx({pr:9}),contract)).rejects.toThrow(/^contract_issue_mismatch$/);
     await expect(requireContractIssue(gh([]),ctx({pr:null}),contract)).resolves.toBeUndefined();
     await expect(requireContractIssue(gh([]),ctx({agent:"docs",contractHash:null,pr:9}),contract)).resolves.toBeUndefined();
+  });
+});
+
+describe("prepareContext (AR5a)", () => {
+  const WF = "c".repeat(40), BASE = "a".repeat(40), MERGE = "b".repeat(40), HEAD = "e".repeat(40);
+  const REPO = "owner/repo";
+  const contract: TaskContract = { v: 1, task: 12, revision: 1, issue: 5, goal: "Synthetic goal.", acceptance: ["Done."], base: BASE, prerequisites: [{ task: 3, merge: MERGE }], scope: [], context: [] };
+  const text = canonicalContract(contract);
+  const pull = { number: 9, title: "T", body: "Closes #5", state: "open", merged: false, merge_commit_sha: null, user: { login: "x" },
+    head: { ref: "kcw/task-12", sha: HEAD, repo: { full_name: REPO } }, base: { ref: "main" } };
+  const check = { name: "ci/required", head_sha: HEAD, app: { slug: "github-actions" }, status: "completed", conclusion: "success" };
+  const routes = (run: string, compare = "ahead"): Record<string, unknown> => ({
+    [`/repos/${REPO}/issues/5`]: { number: 5, title: "I", body: "raw issue body", state: "open" },
+    [`/repos/${REPO}/pulls/9`]: pull,
+    [`/repos/${REPO}/commits/${HEAD}/check-runs?filter=latest&per_page=100`]: { total_count: 1, check_runs: [check] },
+    [`/repos/${REPO}/compare/${BASE}...${run}?per_page=1`]: { status: compare },
+    [`/repos/${REPO}/compare/${MERGE}...${run}?per_page=1`]: { status: compare },
+  });
+  const client = (r: Record<string, unknown>) => ({ repo: REPO, token: "synthetic",
+    fetch: (async (url: string | URL) => { const body = r[String(url).replace("https://api.github.com", "")]; return body === undefined ? new Response("{}", { status: 404 }) : Response.json(body); }) as typeof fetch });
+  const files = (d: string) => (existsSync(d) ? readdirSync(d).sort() : []);
+  const dev = { agent: "developer", taskId: 12, issue: 5, mode: "implement" } as const;
+  const qa = { agent: "qa", taskId: 12, pr: 9, mode: "implement" } as const;
+
+  it("writes exactly context.json, task.md and contract.json for developer and QA", async () => {
+    for (const [inputs, run] of [[dev, WF], [qa, HEAD]] as const) {
+      const d = path.join(dir(), "context");
+      const r = await prepareContext({ inputs, op: 1, gh: client(routes(run)), contractText: text, workflowSha: WF, dir: d });
+      expect(r).toEqual({ baseSha: run, skip: "false" });
+      expect(files(d)).toEqual(["context.json", "contract.json", "task.md"]);
+      expect(readFileSync(path.join(d, "contract.json"), "utf8")).toBe(text);
+      expect(readFileSync(path.join(d, "task.md"), "utf8")).not.toContain("raw issue body");
+      const c = parseTrustedContext(readFileSync(path.join(d, "context.json"), "utf8"));
+      expect(c.contractHash).toBe(createHash("sha256").update(text).digest("hex"));
+    }
+  });
+
+  it("writes nothing when the contract or its base is refused", async () => {
+    const cases: [string, unknown, string | undefined, Record<string, unknown>][] = [
+      ["contract_invalid", dev, undefined, routes(WF)],
+      ["contract_task_mismatch", dev, canonicalContract({ ...contract, task: 13 }), routes(WF)],
+      ["contract_issue_mismatch", dev, canonicalContract({ ...contract, issue: 6 }), routes(WF)],
+      ["contract_issue_mismatch", qa, canonicalContract({ ...contract, issue: 6 }), routes(HEAD)],
+      ["contract_base_not_contained", dev, text, routes(WF, "behind")],
+      ["contract_prerequisite_not_contained", dev, text, { ...routes(WF), [`/repos/${REPO}/compare/${MERGE}...${WF}?per_page=1`]: { status: "diverged" } }],
+    ];
+    for (const [code, inputs, contractText, r] of cases) {
+      const d = path.join(dir(), "context");
+      await expect(prepareContext({ inputs: inputs as typeof dev, op: 1, gh: client(r), contractText, workflowSha: WF, dir: d })).rejects.toThrow(new RegExp(`^${code}$`));
+      expect(existsSync(d)).toBe(false);
+    }
+  });
+});
+
+describe("readContract read failures", () => {
+  it("throws only the fixed code for a missing file or a directory", () => {
+    const c = parseTrustedContext(JSON.stringify({ ...context, agent: "developer", op: 3, contractHash: "f".repeat(64) }));
+    const d = dir();
+    for (const f of [path.join(d, "missing.json"), d]) {
+      const err = (() => { try { readContract(f, c); } catch (e) { return e as Error; } })();
+      expect(err?.message).toBe("contract_hash_mismatch");
+    }
   });
 });

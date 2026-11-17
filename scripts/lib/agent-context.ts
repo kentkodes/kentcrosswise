@@ -277,4 +277,3 @@ export async function gatherContext(inputs: AgentInputs, gh: GhOptions, contract
   }
   return done();
 }
-

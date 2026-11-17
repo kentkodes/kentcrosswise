@@ -87,12 +87,33 @@ describe("task contract", () => {
 
   it("bounds the whole canonical contract at 24,576 bytes", () => {
     expect(MAX_CONTRACT_BYTES).toBe(24_576);
-    const big = { ...base(), goal: "g".repeat(8000), acceptance: Array.from({ length: 10 }, () => "a".repeat(400)),
+    // Quotes are escaped in the canonical form, so valid field bounds can exceed the byte cap.
+    const heavy = { ...base(), goal: '"'.repeat(8000), acceptance: Array.from({ length: 10 }, () => '"'.repeat(400)),
       scope: Array.from({ length: 20 }, () => "s".repeat(200)), context: Array.from({ length: 20 }, () => "c".repeat(200)) };
-    // This maximal contract is ~17 KB and fits; padding the text beyond the cap is refused before parsing.
-    expect(Buffer.byteLength(text(big))).toBeLessThan(MAX_CONTRACT_BYTES);
-    expect(parseContract(text(big))).toBeTruthy();
-    expect(() => parseContract(`${text(base())}${" ".repeat(MAX_CONTRACT_BYTES)}`)).toThrow("contract_invalid");
+    expect(Buffer.byteLength(text(heavy))).toBeGreaterThan(MAX_CONTRACT_BYTES);
+    bad(heavy);
+    // Grow valid paths one by one: the last accepted contract is just under the cap, the next is refused.
+    const grown = { ...base(), goal: '"'.repeat(8000), acceptance: Array.from({ length: 10 }, () => "a".repeat(400)), scope: [] as string[], context: [] as string[] };
+    let size = Buffer.byteLength(text(grown));
+    expect(size).toBeLessThan(MAX_CONTRACT_BYTES);
+    for (let i = 0; i < 40; i++) {
+      const next = { ...grown, scope: [...grown.scope], context: [...grown.context] };
+      (i < 20 ? next.scope : next.context).push("p".repeat(199) + String(i % 10));
+      const nextSize = Buffer.byteLength(text(next));
+      if (nextSize > MAX_CONTRACT_BYTES) { bad(next); break; }
+      grown.scope = next.scope; grown.context = next.context; size = nextSize;
+    }
+    expect(size).toBeGreaterThan(MAX_CONTRACT_BYTES - 250);
+    expect(parseContract(text(grown))).toEqual(grown);
+  });
+
+  it("rejects bad paths through parseContract, not only isContractPath", () => {
+    for (const p of ["../x", "a/../../b", "https:x", "/abs", "a//b"]) {
+      bad({ ...base(), scope: [p] });
+      bad({ ...base(), context: [p] });
+    }
+    bad({ ...base(), scope: "apps/web" });
+    bad({ ...base(), context: [1] });
   });
 
   it("accepts only strict repository paths", () => {

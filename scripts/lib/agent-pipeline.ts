@@ -1,9 +1,9 @@
 // Trusted workflow controller. Candidate artifacts are data, never executable source.
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { MAX_CONTRACT_BYTES, parseContract, type TaskContract } from "@kcw/core/contract";
-import { linkedIssue } from "./agent-context";
+import { canonicalContract, contractHash, MAX_CONTRACT_BYTES, parseContract, type TaskContract } from "@kcw/core/contract";
+import { gatherContext, linkedIssue, parseDispatchContract, requireContained, type AgentInputs } from "./agent-context";
 import type { AgentReport, ReportJob, ReportUsage } from "@kcw/core/events";
 import { ghGet, type GhOptions, type GhPull, type GhCheckRun } from "./agent-github";
 import { isWorkflowAgent, branchOf, type WorkflowAgent } from "./agents";
@@ -109,9 +109,14 @@ export async function requireLivePull(gh: GhOptions, c: TrustedContext, head: st
 /** Reads `context/contract.json` (bounded, regular file) and checks it against the trusted context. */
 export function readContract(file: string, c: TrustedContext): TaskContract | null {
   if (c.contractHash === null) return null;
-  const stat = lstatSync(file);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_CONTRACT_BYTES) throw new Error("contract_hash_mismatch");
-  const text = readFileSync(file, "utf8");
+  let text: string;
+  try {
+    const stat = lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_CONTRACT_BYTES) throw new Error();
+    text = readFileSync(file, "utf8");
+  } catch {
+    throw new Error("contract_hash_mismatch"); // never surface a path or an OS message
+  }
   if (createHash("sha256").update(text, "utf8").digest("hex") !== c.contractHash) throw new Error("contract_hash_mismatch");
   const contract = parseContract(text);
   if (contract.task !== c.taskId) throw new Error("contract_task_mismatch");
@@ -182,4 +187,37 @@ export async function requireArtifact(gh: GhOptions, id: string | undefined, nam
   if (!artifact || String(artifact.id) !== id || artifact.name !== name || artifact.expired ||
       String(artifact.workflow_run?.id) !== runId || artifact.workflow_run?.head_sha !== process.env.GITHUB_SHA ||
       artifact.size_in_bytes > 20 * 1024 * 1024) throw new Error("artifact does not belong to this run and purpose");
+}
+
+/**
+ * The prepare write sequence (after admission): validates the contract, gathers the public context,
+ * binds the base and the live PR, and only then writes `context.json`, `task.md` and (Developer and
+ * QA) `contract.json` into `dir`. Any rejection throws before the first write.
+ */
+export async function prepareContext(o: { inputs: AgentInputs; op: number | null; gh: GhOptions; contractText: string | undefined; workflowSha: string; dir?: string }): Promise<{ baseSha: string; skip: string }> {
+  const { inputs, op, gh, workflowSha } = o;
+  const dir = o.dir ?? "context";
+  const contract = parseDispatchContract(inputs.agent, o.contractText);
+  const gathered = await gatherContext(inputs, gh, contract);
+  const branch = gathered.outputs.branch!;
+  const existing = await ghGet<{ object: { sha: string } }>(gh, `/repos/${gh.repo}/git/ref/heads/${branch}`, "reading task ref");
+  let prNumber = inputs.pr ?? null;
+  if (existing && (inputs.agent === "developer" || inputs.agent === "scraper") && prNumber === null) {
+    const pulls = await ghGet<GhPull[]>(gh, `/repos/${gh.repo}/pulls?state=open&head=${encodeURIComponent(`${gh.repo.split("/")[0]}:${branch}`)}`, "binding retry task PR");
+    if ((pulls?.length ?? 0) > 1) throw new Error("ambiguous task PR");
+    if (pulls?.[0]) {
+      if (linkedIssue(pulls[0].body) !== inputs.issue) throw new Error("retry task PR does not close the dispatched issue");
+      prNumber = pulls[0].number;
+    }
+  }
+  const c = parseTrustedContext(JSON.stringify({ version: 2, agent: inputs.agent, repo: gh.repo, taskId: inputs.taskId, op, issue: inputs.issue ?? null, pr: prNumber,
+    branch, workflowSha, baseSha: gathered.outputs.head_sha ?? existing?.object.sha ?? workflowSha, remoteSha: existing?.object.sha ?? null,
+    contractHash: contract ? contractHash(contract) : null }));
+  if (contract) await requireContained(gh, contract, c.baseSha);
+  if (c.pr && c.agent !== "docs") await requireLivePull(gh, c, c.baseSha, c.agent === "qa");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "context.json"), JSON.stringify(c));
+  writeFileSync(path.join(dir, "task.md"), gathered.markdown);
+  if (contract) writeFileSync(path.join(dir, "contract.json"), canonicalContract(contract));
+  return { baseSha: c.baseSha, skip: gathered.outputs.skip! };
 }
