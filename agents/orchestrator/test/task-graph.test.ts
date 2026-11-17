@@ -115,9 +115,10 @@ describe("task graph (P2-10)", () => {
 
   /** Sends one message through the SQS handler; returns its outcome (or "failed" if returned to the queue). */
   async function send(taskId: number, body: unknown, messageId = `m${++seq}`): Promise<string> {
-    // AR5b: an approval counts only after its QA attempt's start report; this harness starts the latest QA attempt.
+    // AR5b: a QA review counts only after its QA attempt's start report; this harness starts the latest QA attempt.
     const sent = (typeof body === "string" ? JSON.parse(body) : body) as { resume?: { event?: string; payload?: { review_state?: string } } } | null;
-    if (sent?.resume?.event === "pull_request_review.submitted" && sent.resume.payload?.review_state === "approved") {
+    const state = sent?.resume?.event === "pull_request_review.submitted" ? sent.resume.payload?.review_state : undefined;
+    if (state === "approved" || state === "changes_requested") {
       await sql(
         "UPDATE task_attempts SET started_at = now() WHERE started_at IS NULL AND effect_key = (SELECT effect_key FROM task_attempts WHERE task_id = $1 AND role = 'qa' ORDER BY op DESC LIMIT 1)",
         [taskId],
@@ -341,7 +342,7 @@ describe("task graph (P2-10)", () => {
     ]);
   });
 
-  it(`${MAX_ATTEMPTS} failures send the task to the owner; approving gives the Developer new attempts, rejecting fails it`, async () => {
+  it(`${MAX_ATTEMPTS} failures send the task to the owner; approving replans the task (attempts restart), rejecting fails it`, async () => {
     const id = await newTask();
     await start(id);
     await openPr(id, 43, sha(`${id}-0`));

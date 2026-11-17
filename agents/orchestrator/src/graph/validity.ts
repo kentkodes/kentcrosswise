@@ -51,16 +51,18 @@ export function latestQaAttempt(rows: Pick<ValidityRows, "attempts">, revision: 
 
 /**
  * Whether a `ci` success or a `qa` approval is valid for the current head:
- * - CI is head-bound and contract-independent: a success row for the head is valid for any revision.
+ * - CI is head-bound and contract-independent: a success row for the head is valid for any revision
+ *   (the caller has already checked that the checkpoint's latest CI result of the head is a success).
  * - A QA approval needs the same revision (not superseded, no row superseded), the same head, the
  *   revision's latest QA attempt as its `attempt_key`, and that attempt must have started (its start
  *   report arrived). For a docs task (null revision) no revision condition applies.
  */
 export function evidenceValid(kind: "ci" | "qa", q: ValidityQuery, rows: ValidityRows): boolean {
   if (kind === "ci") {
-    // The latest CI result of the head decides (a re-run that failed after a success is not valid).
-    const latest = rows.evidence.filter((e) => e.kind === "ci" && e.head_sha === q.head && e.superseded_at === null).at(-1);
-    return latest?.outcome === "success";
+    // A recorded success of the head. Which CI result is the latest is the checkpoint's `ci` (the
+    // caller checks it first): the rows hold at most one success and one failure per head, so their
+    // order says nothing after a re-run.
+    return rows.evidence.some((e) => e.kind === "ci" && e.head_sha === q.head && e.outcome === "success" && e.superseded_at === null);
   }
   if (q.revision !== null) {
     const current = rows.revisions.find((r) => r.revision === q.revision);

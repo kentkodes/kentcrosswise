@@ -1032,9 +1032,15 @@ class Machine {
       return "applied";
     }
     if (i.review_state === "changes_requested") {
+      // AR5b: like an approval, it counts only from the current revision's latest QA attempt once
+      // that attempt has started; a late review of an earlier run must not cost the new revision an attempt.
       const rows = await this.store.loadValidity(this.id, this.revision, d.head_sha!);
       const latest = latestQaAttempt(rows, this.revision);
-      await this.recordQaEvidence("changes_requested", latest?.effect_key ?? null, latest?.op ?? null);
+      if (latest === null || latest.started_at === null) {
+        this.log("review_not_valid");
+        return undefined;
+      }
+      await this.recordQaEvidence("changes_requested", latest.effect_key, latest.op);
       await this.event("changes_requested", "qa", { pr: d.pr_number, head_sha: d.head_sha });
       await this.failedAttempt("QA requested changes");
       return "applied";
@@ -1416,10 +1422,12 @@ class Machine {
       await this.dispatchDev("fix", "replan");
       return;
     }
-    if (d.ci?.sha === head) await this.writeCi(); // a checkpoint from before the tables existed
-    if (evidenceValid("ci", { revision, head }, await this.store.loadValidity(this.id, revision, head))) {
-      await this.dispatchQa("replan");
-      return;
+    if (d.ci?.sha === head) {
+      await this.writeCi(); // a checkpoint from before the tables existed
+      if (evidenceValid("ci", { revision, head }, await this.store.loadValidity(this.id, revision, head))) {
+        await this.dispatchQa("replan");
+        return;
+      }
     }
     await this.event("ci_running", "orchestrator", { pr: d.pr_number, head_sha: head });
     await this.enter("ci");

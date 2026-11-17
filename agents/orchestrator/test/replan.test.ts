@@ -24,6 +24,10 @@ describe("replan (AR5b)", () => {
       if (n === 1) await t.openPr(id, pr, head);
       else await t.push(id, pr, head);
       expect(await t.send(id, t.ciEvent(id, pr, head, "success"))).toBe("applied");
+      const op = Number(t.qa().at(-1)!.inputs.op);
+      // A review counts only from a QA attempt that has started (its start report arrived).
+      if (n === 1) expect(await t.send(id, t.reviewEvent(id, pr, head, "changes_requested"))).toBe("stale");
+      expect(await t.startQa(id, op)).toBe("applied");
       expect(await t.send(id, t.reviewEvent(id, pr, head, "changes_requested"))).toBe("applied");
     }
     expect(await t.task(id)).toMatchObject({ waiting_on: "owner", attempts: MAX_ATTEMPTS });
