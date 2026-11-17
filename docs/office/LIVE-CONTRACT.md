@@ -4,6 +4,8 @@ Status: source-grounded contract for the connected office, which is merged and d
 
 Superseded 2026-11-11: the sibling `/office/connected` page was removed. The connected room is the Room tab on `/office`.
 
+Related design target (owner direction 2026-11-17, not implemented): the planned published task records reuse this document's public projection module and playback pattern (sanitized projection, restricted `web_public` views, privacy epochs and in-place redaction) as their precedent; see [DESIGN section 4.6](../DESIGN.md#46-personal-helper-and-published-task-records-owner-direction-2026-11-17). Nothing below changes for that target.
+
 ## Release status note
 
 - The `execution_observations` capability is enabled for future trusted workflow events.

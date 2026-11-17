@@ -1,6 +1,6 @@
 # Kentcrosswise: Design
 
-Current architecture and accepted decisions, consolidated 2026-10-25; section 4.0 records the owner-accepted direction of 2026-11-14. Implements the approved [hub](hub/SPEC.md) and [essays](essays/SPEC.md) specs. [HANDOFF.md](HANDOFF.md) records observed source/deployment status; [OPEN-POINTS.md](OPEN-POINTS.md) is the active backlog. Vendor research is dated evidence, not a fresh validation. Accepted targets and task tables are delivery contracts, not claims that implementation or live acceptance has passed.
+Current architecture and accepted decisions, consolidated 2026-10-25; section 4.0 records the owner-accepted direction of 2026-11-14, and section 4.6 the owner direction of 2026-11-17 (personal helper, published task records). Implements the approved [hub](hub/SPEC.md) and [essays](essays/SPEC.md) specs. [HANDOFF.md](HANDOFF.md) records observed source/deployment status; [OPEN-POINTS.md](OPEN-POINTS.md) is the active backlog. Vendor research is dated evidence, not a fresh validation. Accepted targets and task tables are delivery contracts, not claims that implementation or live acceptance has passed.
 
 ## 0. Accepted architecture decisions
 
@@ -190,7 +190,7 @@ A docs task (§4.2 step 8) is a `tasks` row whose `parent_id` is the merged task
 
 ### 3.4 DB roles
 - `web_rw`: web Lambda, all app tables; `INSERT (message_key, group_id, body)`, `SELECT (message_key, sent_at)`, `UPDATE (sent_at)` on `orchestrator_outbox` (0011).
-- `web_public`: SELECT on `v_public_agent_events` only; used by public API routes.
+- `web_public`: SELECT on `v_public_agent_events` (0002) and the five sanitized `v_office_*` views (0006) only; used by public API routes. The planned published-records projection (section 4.6) follows the same pattern.
 - `orch_rw`: agent tables, the `lg` schema, read on `contacts.name`/`aliases` for the sanitizer, and INSERT (only) on `inbox_items` for approvals (0003); SELECT and INSERT (no UPDATE or DELETE) on `agent_dispatches` (0010); the outbox drain (0011): `SELECT (id, message_key, group_id, body, created_at, sent_at, attempts, next_attempt_at)` and `UPDATE (sent_at, attempts, next_attempt_at, last_error)` on `orchestrator_outbox`, and `SELECT`, `INSERT` on `orchestrator_receipts`; `INSERT (message_key, group_id, body)` on `orchestrator_outbox` for child starts (0020); `task_releases` as in section 3.2 (0023); `task_revisions`, `task_attempts` and `task_evidence` (0021): `SELECT, INSERT` on the three, `UPDATE (superseded_at)` on `task_revisions` and `task_evidence`, `UPDATE (run_id, started_at, ended_at, outcome)` on `task_attempts`; no other role has any right (pinned by `packages/db/test/task-revisions.test.ts`).
 - `pipeline_rw`: essays tables, plus insert on `tasks` and `agent_events`; for the call records of essay categorize and hooks (0019): `INSERT (kind, agent, provider, model, input_tokens, output_tokens, task_id, purpose, subject_kind, subject_id, outcome, dedupe_key)`, `SELECT (dedupe_key, outcome)` and `UPDATE (model, input_tokens, output_tokens, outcome)` on `usage_events`.
 - `relay_rw` (0005): webhook relay only. `INSERT (delivery_id, source)`, `SELECT (delivery_id)` on `inbound_events` (its `DELETE` was revoked in 0011: a claim is never released); `INSERT (message_key, group_id, body)`, `SELECT (id, sent_at)`, `UPDATE (sent_at)` on `orchestrator_outbox` (0011); `SELECT (id, pr_number, github_issue)` on `tasks`; `INSERT (ts, kind, agent, minutes, cost_usd, task_id, dedupe_key)`, `SELECT (id, dedupe_key)` on `usage_events` (§11 "Relay DB role"); `SELECT (run_id, task_id, role)` on `agent_dispatches` (0010).
@@ -204,7 +204,7 @@ The CI project has the same roles with synthetic data.
 
 ### 4.0 Accepted direction and task lifecycle (2026-11-14)
 
-**Success criterion:** autonomous development is the product; the personal hub and essays are its demonstration workload. Reliability precedes further feature expansion. Keep LangGraph, Lambda, SQS, Postgres and GitHub Actions; implement the ordered reliability work in [OPEN-POINTS.md](OPEN-POINTS.md) before expanding the demonstration.
+**Success criterion** (framing amended 2026-11-17, section 4.6): the personal helper is the product, and inspectable engineering evidence is its public proof. The autonomous development system is how the site is built and maintained; this section's execution target and lifecycle are unchanged. Reliability precedes further feature expansion. Keep LangGraph, Lambda, SQS, Postgres and GitHub Actions; implement the ordered reliability work in [OPEN-POINTS.md](OPEN-POINTS.md) before further expansion. The 2026-11-14 wording ("autonomous development is the product; the personal hub and essays are its demonstration workload") is superseded.
 
 **Execution target:** durable tasks, disposable workers, reusable skills and approved permission profiles. Workers already start fresh per dispatch. The four current workflow/App profiles are authorities a worker may use, not four persistent AI minds. Office roles and seats present actual executions; they do not determine backend workforce size. Preserve pinned trusted instructions, isolated credentialed publishers, owner-critical gates and independent QA bound to the reviewed head.
 
@@ -323,6 +323,29 @@ There are two public surfaces: the office feed **and GitHub itself** (issues, PR
 5. The feed endpoint `/api/public/agent-events?since=` uses the `web_public` role; CloudFront TTL is 5 s.
 6. The task contract is public. Its `goal` and every `acceptance` item pass `checkText`; every `scope` and `context` path passes `checkText` with only the `url` code ignored (a file name such as `machine.ts` looks like a domain) and the contract path rule (letters, digits and `_ . / -`, no `..`, no leading `/`, no `//`, at most 200 characters). Any failure goes to the existing `issue_text` approval, whose reasons list the proposed title, body, acceptance and paths; approving publishes them as written. A plan whose body cannot form a valid contract (non-ASCII, size) goes to the owner as a planning failure instead. The worker renders the contract goal as markdown, so this sanitizer is the only guard on that text.
 7. Workflows never print secrets or essay text, and `show_full_output` stays false. Extractor tests use public-domain fixtures only.
+8. **Design target, not delivered (owner direction 2026-11-17, section 4.6):** delivered today, `@kcw/core/sanitize` guards public task titles (items 1-3) and contract text (item 6) only. The target extends the same deterministic sanitizer, rather than a model judgement, to every field of a published task record: the routed entry (sanitized input and intended outcome), tool call arguments and results, and state diffs (resulting changes). Each field passes or the whole record fails closed and stays private (counted as withheld). Fixed rejections in addition to items 2 and 6: credentials and secrets, access links (signed or tokenized URLs, invite or reset links), other people's sensitive information (contact names and aliases already, plus any field a route kind marks as personal), and any raw tool payload without a field-level rule. A publication path never falls back to "publish unchanged" when a check errors.
+
+### 4.6 Personal helper and published task records (owner direction 2026-11-17)
+
+Status: accepted direction and design target. **None of this section is implemented**; current behaviour is described in sections 3, 4.5 and 9 and in [HANDOFF.md](HANDOFF.md). Open questions are in [OPEN-POINTS.md](OPEN-POINTS.md) ("Personal helper and published records").
+
+**Framing.** The product is the owner's personal helper. The public site shows that helper working: real inputs, real routing, real evidence. The autonomous development system (section 4.0) stays as how the site is built and maintained. The social aspect is dropped for now, and every playground idea is held (visitor-submitted challenges, break-my-agent, public evaluation scoreboards): the public surface is a demonstration of the real thing, nothing more.
+
+**Records.** Every routed input (hub capture pipeline, section 3.1: `entries`, route kinds, derived rows) gets a private execution record: the input, its route, the actions taken (tool calls with arguments and results), the resulting changes (state diffs), the checks run and any recovery. The record is where each published record originates; whether it extends `agent_events` or is a new table is open.
+
+**Publication.** Automatic after sanitization; there is no per-record owner approval step (this differs from the `issue_text` approval of section 4.5 item 3, which stays for GitHub issue text). Fail closed:
+- Never published: credentials or access links, other people's sensitive information, and raw tool payloads that have not been sanitized.
+- If sanitization fails, errors or cannot establish that a record is safe, the record stays private. Only a count of withheld records is public, never their contents or titles.
+- The feed is labelled: "Tasks published automatically after sanitization; some records withheld for privacy/security", with the withheld count.
+- The sanitizer is the deterministic `@kcw/core/sanitize` extended per section 4.5 item 8.
+
+**Public projection.** The public surface reads a separate sanitized projection, never the live private records. Reuse the existing pattern: D10/D24 import restrictions on `(public)/**`; the restricted `web_public` role, which today reads only `v_public_agent_events` and the `v_office_*` views; and the public projection module and playback contract of [office/LIVE-CONTRACT.md](office/LIVE-CONTRACT.md) (sanitized projection written inside the source transaction, restricted views, versioned read interface, privacy epochs and in-place redaction when a record is withdrawn). New grants, views and routes are owner-critical changes and go through the existing review.
+
+**Evidence view (X-ray).** The X-ray grows from component labels (`@kcw/xray`, which describes only what is built) to per-task evidence. For a published task a visitor can open: the sanitized input and intended outcome; the actual tool calls and resulting changes; the checks that passed or failed; the recovery, if any, and anything still unresolved. "Completed, checks passed, no recovery needed" is a complete record; no failure story is forced onto a task. Show actions, evidence and concise explanations; never publish raw model reasoning.
+
+**Honest evaluation.** A record carries checks: verifiable pass/fail facts about that run (how checks are defined per route kind is open). A record carries no accuracy percentage. Accuracy claims belong across a labelled set and are reported as versioned aggregates. Planned capabilities are described as planned, and the feed is never presented as a complete reliability record (withheld records and unrouted inputs are not in it).
+
+**Ordering.** How this work orders against the reliability sequence (AR5-AR9) is open; until the owner decides, the reliability sequence keeps its priority.
 
 ## 5. Terraform
 
@@ -499,9 +522,11 @@ Conventions for every task:
 - Social dashboard (`/social`, built): per-source filter, totals of each account's latest known followers and views (each metric with its own day), the change against its previous known value, a followers trend of the newest 30 snapshots per account and manual entry with Manual/API provenance. The add-account form chooses how an account's numbers arrive (ingest `manual` or `api`); `api` is allowed for one YouTube and one Instagram account (the daily job reads one per platform), and TikTok stays manual. Ingest cannot be changed on an existing account. Manual entry still works for API accounts.
 - Web push (VAPID, manifest `display: standalone`, service worker, permission request on a tap; iOS 16.4+ Home Screen only).
 - Public demo versions of the dashboard, mood board and CRM from `@kcw/demo-data`.
+- Social is dropped for now (owner direction 2026-11-17, section 4.6): the social bullets above record what is built; no further social work is planned until the owner decides the scope (OPEN-POINTS).
 
 **Phase 4: Office + X-ray**
 - X-ray (built): typed registry `XRAY` in `@kcw/xray` (id to label, tech, what, why; 9 entries; the site-wide ones are chips in a strip under the header); `<Xray id>` wrapper in `apps/web/src/app/(public)/_site/xray.tsx` and a header toggle (`aria-pressed`, off by default, kept per browser tab in sessionStorage). Off, the wrapper is `display: contents`. On, it draws an outline and a chip in a label row at the block's top; hover, focus or tap shows a card; Escape closes it. No design change to D10 and D24.
+- X-ray per-task evidence view (proposed scope, owner direction 2026-11-17, not built): section 4.6 "Evidence view". The registry keeps describing only built components; the evidence view reads the sanitized public projection, not the registry (`packages/xray/README.md`).
 - The original code-drawn woodland studio and Developer/QA event vignettes are implemented locally; retain native Canvas 2D pixels, accessible inspection, optional full motion and neutral unsupported/empty states.
 - Expand characters and event mapping for the full team after current connected-behavior review.
 - Five-second feed polling, latest-20 labeled replay, original timestamps and live priority are implemented locally. Public-safe task correlation needs a separate contract before concurrent-task animation.

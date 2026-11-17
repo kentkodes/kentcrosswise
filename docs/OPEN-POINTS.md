@@ -1,6 +1,21 @@
 # Kentcrosswise open points
 
-Current backlog, 2026-11-17 UTC, from origin/main at `88190c7`. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction: autonomous development is the primary outcome; the hub is its demonstration workload. Complete the reliability sequence below before further hub, essay or office expansion.
+Current backlog, 2026-11-17 UTC, from origin/main at `88190c7`. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction (2026-11-17, superseding the 2026-11-14 framing): the personal helper is the product and the public site shows it working; the autonomous development system is how the site is built and maintained. Complete the reliability sequence below before further hub, essay or office expansion unless the owner orders the published-records work otherwise (PH6).
+
+## Personal helper and published records (owner direction 2026-11-17)
+
+Accepted direction, design target only: [DESIGN.md](DESIGN.md) section 4.6, hub SPEC features 9 and 10, [X-ray README](../packages/xray/README.md). Nothing is implemented. Open questions, recorded, not answered:
+
+| ID | Open question |
+|---|---|
+| PH1 | What happens to `/demo` (the synthetic hub) and `/office` under the new direction. |
+| PH2 | Whether the owner `/social` page (and the `social-daily` job) is parked too, or only the public and demo social surfaces (the demo's Following tab). Until decided, the built pages stay as they are and no social work is planned. |
+| PH3 | Whether the essays library and its spec stay unchanged (the essays SPEC was not changed in this pass). |
+| PH4 | How per-record checks are defined for each route kind (`crm_note`, `diary`, `todo`, `idea`, `agent_request`). |
+| PH5 | The publication pipeline's data model: extend `agent_events` or add a new table, and the shape of the sanitized projection. |
+| PH6 | How this direction orders against the reliability sequence (AR5 to AR9). |
+
+Implementation slices (sanitizer extension per DESIGN section 4.5 item 8, private execution records, projection and grants, published-records feed, evidence view) are defined after these are answered. Projection views, grants and public routes are owner-critical changes.
 
 ## Autonomous development reliability (accepted priority, implementation pending)
 
@@ -24,7 +39,7 @@ Unsettled implementation choices: worker/WIP/time limits (when to raise the acti
 
 | ID | Open point |
 |---|---|
-| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links). Its "Simulated data" frame also shows real agent rows. Revisit with AR9, which decides how much of the first claim becomes true. |
+| R1 | Kept for later (owner 2026-11-14). Public copy overstates what is delivered. The home page says every change is made by the agents and that the office shows the work "as it happens", but agents are paused and most recent changes were owner-run sessions. It lists "Three hundred classic and modern essays, with a reader and recommendations" (8 full texts, the rest links). Its "Simulated data" frame also shows real agent rows. Revisit with AR9, which decides how much of the first claim becomes true. The home copy must also move to the 2026-11-17 framing (personal helper first) once PH1 is decided, without presenting published records as built before they are. |
 
 ## Essays (Phase 5)
 
@@ -38,8 +53,7 @@ Unsettled implementation choices: worker/WIP/time limits (when to raise the acti
 
 | ID | Open work |
 |---|---|
-| H8, H9 | The daily YouTube and Instagram job is built (#131), and the `/social` add form marks an account for it (ingest `api`, one account per platform). Open: owner step 2, then the first live run (see "Not verified live"). |
-| H10 | TikTok sandbox stats spike and refresh-token rotation, optional later. The manual-entry fallback is done (`/social`, ingest `manual`); no code is planned. |
+| H8, H9 | On hold: social is dropped for now (2026-11-17); PH2 decides whether this owner job stays in use. Built: the daily YouTube and Instagram job (#131), and the `/social` add form marks an account for it (ingest `api`, one account per platform). If PH2 keeps it: owner step 2, then the first live run (see "Not verified live"). |
 | H12 | Unified owner inbox and web push. The inbox shows every region (routing, contact matches, calendar suggestions) and web push is built (W2-6, #135). Open: the owner steps below (VAPID keys, the iPhone Home Screen check). |
 
 ## Office and X-ray (Phase 4)
@@ -72,7 +86,7 @@ Unsettled implementation choices: worker/WIP/time limits (when to raise the acti
 ## Owner steps (open)
 
 1. Alerts: subscribe an email address to SNS topic `kcw-prod-alerts` in the console, confirm it, then run one controlled test ([alerts runbook](runbooks/alerts.md), section 2). Until then alarms publish to a topic with no subscriber.
-2. Google: connect Google at `/connections` (Calendar and YouTube). Paste the Instagram token into the Instagram secret. Then add one YouTube and one Instagram account on `/social` with "Numbers from" set to "Daily job (API)". An account that was already added as manual must be deleted and added again, because the choice cannot be changed afterwards.
+2. Google: connect Google at `/connections` (Calendar and YouTube). The social part is on hold until PH2: paste the Instagram token into the Instagram secret, then add one YouTube and one Instagram account on `/social` with "Numbers from" set to "Daily job (API)". An account that was already added as manual must be deleted and added again, because the choice cannot be changed afterwards.
 3. Consent screens (H1 console step): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen, the Meta for Developers app settings (Instagram) and the TikTok for Developers app.
 4. Web push: approve the Liaison running `pnpm exec tsx scripts/vapid-keys.ts --secret kcw/prod/web` (a gated secret write; it refuses to overwrite keys without `--rotate`). Then on an iPhone (iOS 16.4+) add the site to the Home Screen, open it from there, sign in, enable notifications on `/notifications` and send a test.
 
@@ -113,7 +127,7 @@ These are source or CI facts only until a scoped live check records a result.
 - U5 Fork-PR id-token behaviour (keep same-repo CI guards).
 - U7 Neon project-scoped keys and URL masking.
 - U9 Google consent screen and refresh-token longevity after incremental consent.
-- U10 Instagram development mode without App Review; TikTok sandbox stats.
+- U10 Instagram development mode without App Review (on hold with social, PH2).
 - U12 Current AWS pricing and free-tier state.
 
 ## Later (Phase 6, not blockers)
