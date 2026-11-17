@@ -1,7 +1,17 @@
 // Boss console (P2-14): create tasks for the orchestrator, follow their status and events, and the
 // pause switches. Owner only (the (owner) layout; actions check again).
 import type { Metadata } from "next";
-import { getFlags, listEvents, listTasks, MAX_TASK_TEXT, type EventRow, type Flags, type TaskRow } from "@/server/console";
+import {
+  capacitySummary,
+  getFlags,
+  listEvents,
+  listTasks,
+  MAX_TASK_TEXT,
+  type CapacitySummary,
+  type EventRow,
+  type Flags,
+  type TaskRow,
+} from "@/server/console";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { essayStatus, type EssayStatus } from "@/server/essay-status";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
@@ -17,15 +27,15 @@ import { createTaskAction, setFlagAction } from "./actions";
 
 export const metadata: Metadata = { title: "Boss console | Kentcrosswise" };
 
-type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags; essays: EssayStatus };
+type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags; essays: EssayStatus; capacity: CapacitySummary };
 
 async function load(): Promise<{ data?: Data; problem?: string }> {
   try {
     const data = await withDb(
       "web_rw",
       async (db) => {
-        const [tasks, flags] = [await listTasks(db), await getFlags(db)];
-        return { tasks, flags, events: await listEvents(db, tasks.map((t) => t.id)), essays: await essayStatus(db) };
+        const [tasks, flags, capacity] = [await listTasks(db), await getFlags(db), await capacitySummary(db)];
+        return { tasks, flags, capacity, events: await listEvents(db, tasks.map((t) => t.id)), essays: await essayStatus(db) };
       },
       { readOnly: true },
     );
@@ -57,6 +67,17 @@ function FlagSwitch({ name, label, on }: { name: keyof Flags; label: string; on:
   );
 }
 
+// AR6: active workers are not the admitted work; owner waits are parked, not running.
+function CapacityText({ c }: { c: CapacitySummary }) {
+  return (
+    <>
+      Active workers <span data-field="active">{c.active}</span> · Admitted work <span data-field="admitted">{c.admitted}</span>{" "}
+      (parked: owner <span data-field="parked-owner">{c.parked.owner}</span>, CI <span data-field="parked-ci">{c.parked.ci}</span>,
+      waiting for a worker <span data-field="parked-worker">{c.parked.worker}</span>) · Queued <span data-field="queued">{c.queued}</span>
+    </>
+  );
+}
+
 function TaskItem({ task, events }: { task: TaskRow; events: EventRow[] }) {
   return (
     <li id={`task-${task.id}`} data-task-id={task.id}>
@@ -69,6 +90,7 @@ function TaskItem({ task, events }: { task: TaskRow; events: EventRow[] }) {
           </span>
         </span>{" "}
         {task.waitingOn ? <><span>waiting on {task.waitingOn}</span>{" "}</> : null}
+        {task.executionWait ? <><span data-field="execution-wait">Waiting for a worker</span>{" "}</> : null}
         <span data-field="visibility">{task.isPrivate ? "private" : "public"}</span>
         {task.publicTitle ? <>{" "}<span>public title: {task.publicTitle}</span></> : null}
         {task.prNumber ? <>{" "}<span>PR #{task.prNumber}</span></> : null}
@@ -143,6 +165,9 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
           </Region>
 
           <Region id="tasks" title="Tasks" aside={<span className={s.count}>{data.tasks.length}</span>}>
+            <p data-testid="capacity" className={`${s.note} ${s.pad}`}>
+              <CapacityText c={data.capacity} />
+            </p>
             {data.tasks.length === 0 ? <p className={`${s.note} ${s.pad}`}>No tasks yet.</p> : null}
             <ol data-testid="tasks" reversed className={s.list}>
               {data.tasks.map((t) => (
