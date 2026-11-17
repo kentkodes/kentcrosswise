@@ -172,10 +172,11 @@ class Machine {
   get revision(): number | null {
     return this.isDocs ? null : (this.d.contract?.revision ?? this.d.revision ?? 1);
   }
-  /** AR5b: the hash of the current contract (null for a docs task or one without a contract). */
+  /** AR5b: whether "plan" means a replan (a new contract revision): a work task with its issue and contract. */
   get canReplan(): boolean {
     return !this.isDocs && this.d.issue_number !== null && this.d.contract !== undefined;
   }
+  /** AR5b: the hash of the current contract (null for a docs task or one without a contract). */
   get currentHash(): string | null {
     return this.isDocs || this.d.contract === undefined ? null : contractHash(this.d.contract);
   }
@@ -1014,7 +1015,9 @@ class Machine {
       return;
     }
     // AR5b: attempts exhausted: approving replans (a new contract revision) instead of more attempts.
-    await this.toOwnerFailure(`${what}; ${d.attempts} failed attempts.`, "plan");
+    // A task planned before contracts existed cannot replan: it keeps the Developer retry, whose
+    // dispatch then fails it (it is never planned again onto its existing PR).
+    await this.toOwnerFailure(`${what}; ${d.attempts} failed attempts.`, this.canReplan ? "plan" : "dev");
   }
 
   // ------------------------------------------------------------------ QA (step 6)
@@ -1296,6 +1299,8 @@ class Machine {
       if (!task) return this.finish("failed", "the task row is gone");
       // AR5b: a task with its issue and contract replans: a new contract revision, the issue untouched.
       if (this.canReplan) return this.replan(task);
+      // A task with a PR is never planned again (that would dispatch `implement` onto the PR).
+      if (d.pr_number !== null) return this.finish("failed", "the task was planned before task contracts existed; create the task again");
       // A deliberate replan: new planner and issue operations (new keys).
       this.bumpOp("plan");
       this.bumpOp("issue");

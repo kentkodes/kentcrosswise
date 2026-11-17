@@ -141,10 +141,10 @@ describe("attempts and result evidence (AR5b)", () => {
     expect(t.qa()[1]!.inputs.contract).toBe(t.qa()[0]!.inputs.contract);
   });
 
-  it("a docs task's attempts carry no revision, hash or base; its approval needs the latest QA attempt to have started", async () => {
+  it("a docs task's attempts carry no revision, hash or base (its approval rule is pinned in validity.test.ts)", async () => {
     const id = await toQa(45, sha("d1"));
-    await t.startQa(id, 1);
-    await t.send(id, t.reviewEvent(id, 45, sha("d1"), "approved"));
+    expect(await t.startQa(id, 1)).toBe("applied");
+    expect(await t.send(id, t.reviewEvent(id, 45, sha("d1"), "approved"))).toBe("applied");
     const [docs] = await t.sql<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1", [id]);
     const rows = await t.attempts(Number(docs!.id));
     expect(rows).toEqual([expect.objectContaining({ role: "docs", revision: null, contract_hash: null, base_sha: null, op: 0 })]);

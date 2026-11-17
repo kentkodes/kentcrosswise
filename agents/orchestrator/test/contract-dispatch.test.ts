@@ -9,7 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { checkpointerFromPool, setupCheckpointer, threadConfig } from "../src/index";
 import { FakeGitHubClient } from "../src/github";
-import { PgTaskStore, buildTaskGraph, handleTaskSqsEvent, initialTaskData, runStep, type TaskGraph, type TaskGraphDeps } from "../src/graph";
+import { MAX_ATTEMPTS, PgTaskStore, buildTaskGraph, handleTaskSqsEvent, initialTaskData, runStep, type TaskGraph, type TaskGraphDeps } from "../src/graph";
 import { ModelPlanner, PLANNER_SYSTEM } from "../src/nodes";
 import { MAX_REPO_BRIEF_BYTES } from "../src/nodes/repo-brief";
 import { MAX_PLANNER_INPUT_BYTES } from "../src/nodes/planner";
@@ -267,5 +267,27 @@ describe("planner contract and repository brief (AR5a)", () => {
     expect(next).toMatchObject({ phase: "done" });
     expect((await task(id)).status).toBe("failed");
     expect(await pending(id)).toEqual([]);
+  });
+
+  it("a task without a contract whose attempts run out keeps the Developer retry; approving fails it, nothing is planned onto its PR", async () => {
+    const id = await newTask("Planned before contracts existed");
+    const head = "c".repeat(40);
+    await sql("UPDATE tasks SET status = 'waiting', waiting_on = 'ci' WHERE id = $1", [id]);
+    const data = { ...initialTaskData(), phase: "ci" as const, pr_number: 9, head_sha: head, attempts: MAX_ATTEMPTS - 1, issue_number: 5, waiting_since: "2026-11-15T00:00:00.000Z" };
+    const ciFailure = {
+      kind: "github" as const, event: "workflow_run" as const, action: "completed", run_id: 77, run_attempt: 1, head_branch: `kcw/task-${id}`,
+      run_started_at: null, updated_at: null, workflow_path: ".github/workflows/ci.yml", conclusion: "failure", trigger: "pull_request", head_sha: head, pr_numbers: [9],
+      message_id: "ci-77",
+    };
+    const owner = await runStep(id, data, ciFailure, deps);
+    expect(owner).toMatchObject({ phase: "owner", owner_wait: "failure", retry: "dev" });
+    const [a] = await pending(id);
+    expect(a!.reasons[1]).toBe(`Approve to give the Developer ${MAX_ATTEMPTS} more attempts; reject to mark the task failed.`);
+    await sql("UPDATE approvals SET status = 'approved', decided_at = now() WHERE id = $1", [a!.id]);
+    const after = await runStep(id, owner, { kind: "decision", approval_id: a!.id, decision: "approved", message_id: "d-1" }, deps);
+    expect(after).toMatchObject({ phase: "done" });
+    expect(gh.dispatches).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+    expect((await task(id)).status).toBe("failed");
   });
 });
