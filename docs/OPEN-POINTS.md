@@ -1,6 +1,6 @@
 # Kentcrosswise open points
 
-Current backlog, 2026-11-16 UTC, from origin/main at `268fcf9`. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction: autonomous development is the primary outcome; the hub is its demonstration workload. Complete the reliability sequence below before further hub, essay or office expansion.
+Current backlog, 2026-11-17 UTC, from origin/main at `88190c7`. Current state and holds are in [HANDOFF.md](HANDOFF.md); done items are removed (Git history has the earlier list). Owner direction: autonomous development is the primary outcome; the hub is its demonstration workload. Complete the reliability sequence below before further hub, essay or office expansion.
 
 ## Autonomous development reliability (accepted priority, implementation pending)
 
@@ -8,16 +8,17 @@ The target lifecycle is defined in [DESIGN.md](DESIGN.md), section 4.0. For impl
 
 | ID | Work and completion evidence |
 |---|---|
-| AR4 | Enforce subtask prerequisites. Start sequentially by default and verify a schema-then-consumer task uses the accepted predecessor revision; permit parallel work only when independence is explicit. Enqueue child starts without bundling their model work into one parent invocation. Depends on AR2. |
-| AR5 | Supply bounded, revision-pinned task contracts and on-demand context; record attempts, supersession, result validity and verification evidence per DESIGN 4.0. Test retry and replanning without losing task identity or reusing incompatible results/QA. Measure accepted-task input/output usage against the recorded ~1.1M-input-token one-line canary (former R3), not a token target invented here. Depends on AR3-AR4. |
-| AR6 | Separate active execution capacity from parked-work/PR limits. Verify four owner waits do not silently masquerade as four running workers; choose numeric limits and demonstrate deliberate backpressure. Depends on AR5's execution model. |
+| AR5 | AR5a is merged (the worker side #143, the planner side #145, QA of a Docs-keeper PR without a contract #146): contracts are authored against a repository brief and sent with every Developer and QA dispatch. Remaining: AR5b (revisions, attempts, supersession, result validity, verification evidence, replan; migration 0021), in review as a separate PR. Test retry and replanning without losing task identity or reusing incompatible results/QA. Measure accepted-task input/output usage against the recorded ~1.1M-input-token one-line canary (former R3), not a token target invented here. Depends on AR3-AR4. |
+| AR6 | The owner status is merged (#141: the console shows active workers apart from parked and queued work; migration 0022 adds `tasks.execution_wait`, which has no writer yet; no limit changed). Remaining: execution reservations in the orchestrator (`claimExecution`, the active-worker limit, reconcile before replacement), after AR5b; demonstrate deliberate backpressure. The numeric rollout value is the owner's decision (the plan recommends 1; the design keeps 4 until the owner decides). |
 | AR7 | Delivered and deployed (migration 0014): `/hub` Unresolved region, stored outcome and per-entry retry, derived rows that move on reassignment. Not verified live: a real capture routed by DeepSeek or recovered after a provider failure. |
-| AR8 | AR8a is done (#120): build before production migration, a pinned workflow-shape test, incompatible-schema rules in merge-rules, `pnpm restore-rehearsal` and [release-recovery.md](runbooks/release-recovery.md). AR8b failure alerts are merged (#130): SNS topic, alarms, metric filter and deploy failure steps ([alerts runbook](runbooks/alerts.md)); the owner's email subscription and one controlled test are open (see Owner steps). Still open: recording merged, deployed and verified separately in the orchestrator (the AR8a follow-up). Not verified live: a restore rehearsal against a real restored branch, a manual prior-build apply (the runbook's Neon steps say "verify at execution time"), and email delivery of an alert. |
+| AR8 | AR8a is done (#120): build before production migration, a pinned workflow-shape test, incompatible-schema rules in merge-rules, `pnpm restore-rehearsal` and [release-recovery.md](runbooks/release-recovery.md). AR8b failure alerts are merged (#130): SNS topic, alarms, metric filter and deploy failure steps ([alerts runbook](runbooks/alerts.md)); the owner's email subscription and one controlled test are open (see Owner steps). The AR8a follow-up is merged and deployed (#144, migration 0023): the sweeper part `releases` records merged, deployed and verified per merge commit and the console shows them; its live check needs a real orchestrator merge and belongs to AR9. Not verified live: a restore rehearsal against a real restored branch, a manual prior-build apply (the runbook's Neon steps say "verify at execution time"), and email delivery of an alert. |
 | AR9 | Demonstrate one representative dependent task through implementation, CI, independent head-bound QA, merge, deploy and verification, with restart/duplicate/failure recovery. Define the acceptance task, cost allowance and live steps before running; use offline fault tests wherever external behavior is not the question. Depends on AR1-AR8. Record elapsed time, usage, human interventions and unresolved gaps. |
 
-Done and removed from the table: AR1 (#106-#109, live since the owner's bootstrap applies of 2026-11-14; the trusted `prod-plan` job has verified every PR since #110), AR2 (#110, #112, #113, #127) and AR3 (#136). Their live checks are under "Not verified live".
+Done and removed from the table: AR1 (#106-#109, live since the owner's bootstrap applies of 2026-11-14; the trusted `prod-plan` job has verified every PR since #110), AR2 (#110, #112, #113, #127), AR3 (#136) and AR4 (#140: validated prerequisites, sequential by default, merge commits recorded, child starts through the outbox, a blocked parent parked for the owner; migration 0020 applied by its deploy). Their live checks are under "Not verified live". AR4 is verified with PGlite and fakes only: SQS delivery of a child start, a real planner order and GitHub merges by the orchestrator are not verified live.
 
-Unsettled implementation choices: worker/WIP/time limits, alert recovery targets, the exact paid/live acceptance scope, and whether `kcw-gh-plan` keeps its `pull_request` trust (it now serves only the advisory `ci.yml` plan) before agents are enabled. The accepted priority and lifecycle defaults do not approve those privileged steps.
+Migrations on main: 0020, 0022 and 0023 are applied on prod by their deploys; 0021 is not on main (reserved for AR5b); 0015 and 0017 are not on main.
+
+Unsettled implementation choices: worker/WIP/time limits (the active-worker limit for AR6 rollout), alert recovery targets, the exact paid/live acceptance scope, and whether `kcw-gh-plan` keeps its `pull_request` trust (it now serves only the advisory `ci.yml` plan) before agents are enabled, and, once AR5b lands, whether approving a Developer-attempts failure replans the task (new contract, QA again) instead of only granting three more attempts. The accepted priority and lifecycle defaults do not approve those privileged steps.
 
 ## Review candidates (2026-11-13, owner decision)
 
@@ -62,6 +63,10 @@ Unsettled implementation choices: worker/WIP/time limits, alert recovery targets
 - Mood scoring strips one code fence and is otherwise strict.
 - No new dependencies were added; charts are hand-written SVG.
 - The X-ray overlay uses no accent colour and keeps its state per browser tab.
+- Ordered children (AR4): each merged task records its own merge commit (`tasks.merge_sha`), nothing pins the dispatch base, and the consumer's issue footer lists its prerequisites' merge commits. A released child starts when the sweeper's outbox part sends its start row (within one sweep interval). A failed or cancelled child that blocks others parks the parent for the owner, and either decision fails the parent and cancels the blocked children.
+- Task contracts (AR5a): planning needs GitHub read access (the `main` head and one file) before the first model call. A work task planned before contracts existed fails at its Developer or QA dispatch instead of going to the owner. The worker renders the contract goal as markdown, so the orchestrator's sanitizer is the only guard on that text. QA of a Docs-keeper PR takes no contract (decided by the PR author id).
+- Deploy state (AR8a): a verified release row is final; a failing annotation read leaves `build_id` null; no failure is recorded when the compare budget ran out; the console shows "Release state is unavailable right now." on a failing read.
+- Dependency: `next` and `@next/eslint-plugin-next` are 16.4.5 (advisory GHSA-mfr8-8qww-v76h, moderate; the app does not use the affected API).
 - Open risk: the spend cap stays soft; unpriced and usage-unknown rows add $0 to the total until prices are entered and live provider usage is checked (AR3).
 
 ## Owner steps (open)
@@ -96,6 +101,10 @@ These are source or CI facts only until a scoped live check records a result.
 - An outbox delivery and a live AR2 effect reconciliation (agents paused).
 - Live acceptance of the AR2 slice 3 identities after workflows are enabled.
 - QA on Anthropic federation (not run since #88).
+- AR4: SQS delivery of a child start, a real planner order and GitHub merges by the orchestrator.
+- AR5a: a real Developer or QA dispatch with a contract (the 422 for a missing required input, the `compare` containment call, the artifact round trip), a real Docs-keeper QA run without one, and a planner run against a real repository brief.
+- AR8a: that `::notice` annotations are returned by `GET /check-runs/{job_id}/annotations` with the installation token, the job step and run list fields as the sweeper reads them, the compare `status` values, and that the job id equals the check-run id; and the first `releases` rows from a real orchestrator merge.
+- AR6: the console capacity line against live data (migration 0022 is applied; no writer sets `execution_wait`).
 
 ## Vendor and account facts to verify at execution time
 
