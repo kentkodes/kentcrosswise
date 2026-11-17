@@ -30,7 +30,9 @@ describe("active execution reservations (AR6)", () => {
     expect([ACTIVE_EXECUTION_LIMIT, IN_FLIGHT_LIMIT]).toEqual([4, 4]);
   });
 
-  it("simultaneous admission at limit 1: exactly one claim wins; the loser records its role in execution_wait", async () => {
+  // The harness serves PGlite over one connection, so the two claims run one after the other here: this pins the
+  // outcome, not the advisory lock under real concurrency (claimSlot's lock and transaction shape, reused).
+  it("two claims at limit 1: exactly one wins; the loser records its role in execution_wait", async () => {
     const a = await seed("planning", null);
     const b = await seed("planning", null);
     const results = await Promise.all([t.deps.store.claimExecution(a, "developer", 1), t.deps.store.claimExecution(b, "qa", 1)]);
@@ -86,15 +88,38 @@ describe("active execution reservations (AR6)", () => {
     expect(await holders()).toBe(ACTIVE_EXECUTION_LIMIT);
   });
 
-  it("a QA dispatch is refused the same way and clears its wait once it dispatches", async () => {
+  it("a QA dispatch is refused the same way: no QA run, the task waits in CI with execution_wait qa; a later sweep dispatches it", async () => {
     const a = await t.newTask();
     await t.start(a);
     await t.openPr(a, 51, "a".repeat(40));
-    // Developer finished; CI green would dispatch QA. Fill the other reservations first.
-    for (let i = 0; i < ACTIVE_EXECUTION_LIMIT - 1; i += 1) await seed("waiting", "qa");
-    expect(await t.send(a, t.ciEvent(a, 51, "a".repeat(40), "success"))).toBe("applied");
+    expect(await row(a)).toMatchObject({ status: "waiting", waiting_on: "ci" });
+    const others: number[] = [];
+    for (let i = 0; i < ACTIVE_EXECUTION_LIMIT; i += 1) others.push(await seed("waiting", "qa"));
+    expect(await t.send(a, t.ciEvent(a, 51, "a".repeat(40), "success"))).toBe("queued");
+    expect(t.qa()).toHaveLength(0);
+    expect(await row(a)).toEqual({ status: "waiting", waiting_on: "ci", execution_wait: "qa" });
+    expect(await t.send(a, t.sweep(a))).toBe("queued"); // still full
+    expect(t.qa()).toHaveLength(0);
+
+    await t.sql("UPDATE tasks SET waiting_on = 'owner' WHERE id = $1", [others[0]]); // a holder moves on
+    expect(await t.send(a, t.sweep(a))).toBe("applied");
     expect(t.qa()).toHaveLength(1);
-    expect(await row(a)).toMatchObject({ waiting_on: "qa", execution_wait: null });
+    expect(await row(a)).toEqual({ status: "waiting", waiting_on: "qa", execution_wait: null });
+    expect(await holders()).toBe(ACTIVE_EXECUTION_LIMIT);
+  });
+
+  it("a dispatch GitHub refuses (4xx) creates no run and keeps no reservation; the re-run of the step claims again", async () => {
+    const a = await t.newTask();
+    const msg = { type: "task.created", task_id: a };
+    t.h.gh.failNext("dispatchWorkflow", 422);
+    expect(await t.send(a, msg, `refused-${a}`)).toBe("failed");
+    expect(t.dev()).toHaveLength(0);
+    expect(await row(a)).toMatchObject({ status: "planning", waiting_on: null });
+    expect(await holders()).toBe(0);
+    expect(await t.send(a, msg, `refused-${a}`)).toBe("recovered"); // the redelivery uses the next dispatch key
+    expect(t.dev()).toHaveLength(1);
+    expect(await row(a)).toEqual({ status: "waiting", waiting_on: "dev", execution_wait: null });
+    expect(await holders()).toBe(1);
   });
 
   it("pause and restart: a reservation survives a pause that cancels the run; the count stays 1 and a second task is still refused at limit 1", async () => {
@@ -107,7 +132,7 @@ describe("active execution reservations (AR6)", () => {
     minutes(5);
     expect(await t.send(a, t.sweep(a))).toBe("paused");
     await t.sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
-    // Another store instance and thread read the same rows.
+    // The rows are the record: the count and every claim read them, not a checkpoint or an in-memory state.
     expect(await holders()).toBe(1);
     expect(await row(a)).toMatchObject({ status: "waiting", waiting_on: "dev" });
     const b = await seed("planning", null);
@@ -177,7 +202,7 @@ describe("active execution reservations (AR6)", () => {
     expect(await holders()).toBe(1);
   });
 
-  it("every path out of the Developer wait releases the reservation: the PR moves the task to CI, a task that ends leaves the count", async () => {
+  it("paths out of the Developer wait release the reservation: the PR moves the task to CI; a second timeout parks it for the owner; rejecting ends it", async () => {
     const a = await t.newTask();
     await t.start(a);
     await t.openPr(a, 61, "b".repeat(40));
@@ -186,7 +211,15 @@ describe("active execution reservations (AR6)", () => {
     const c = await t.newTask();
     await t.start(c);
     expect(await holders()).toBe(1);
-    await t.sql("UPDATE tasks SET status = 'cancelled' WHERE id = $1", [c]);
+    t.h.gh.hideRuns = true;
+    minutes(WAIT_LIMIT_MINUTES.dev + 1);
+    expect(await t.send(c, t.sweep(c))).toBe("applied"); // the one redispatch, within the reservation
+    expect(await holders()).toBe(1);
+    minutes(WAIT_LIMIT_MINUTES.dev + 1);
+    expect(await t.send(c, t.sweep(c))).toBe("applied"); // the second timeout goes to the owner
+    expect(await row(c)).toMatchObject({ status: "waiting", waiting_on: "owner" });
     expect(await holders()).toBe(0);
+    expect(await t.decide(c, (await t.pendingApproval(c)).id, "rejected")).toBe("applied");
+    expect(await row(c)).toMatchObject({ status: "failed", waiting_on: null });
   });
 });

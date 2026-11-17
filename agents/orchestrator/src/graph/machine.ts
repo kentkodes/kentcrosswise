@@ -477,7 +477,9 @@ class Machine {
   async start(): Promise<StepOutcome> {
     const task = await this.store.getTask(this.id);
     if (!task || !["queued", "planning", "waiting"].includes(task.status)) {
-      // Unknown, or already finished/cancelled outside the graph: nothing to run. `waiting`: a re-run step whose execution reservation (AR6) was already claimed.
+      // Unknown, or already finished/cancelled outside the graph: nothing to run. `waiting`: a re-run start step
+      // whose execution reservation (AR6) was already claimed. The status is no running-worker guard: start()
+      // runs only in phase `queued`, which the checkpoint leaves once the start step completes.
       this.log(task ? `not started: status ${task.status}` : "not started: no such task");
       this.d.phase = "done";
       return "stale";
@@ -802,6 +804,8 @@ class Machine {
             await this.store.updateOperation(begun.key, "done", { dispatched: false, status });
             await this.store.updateAttempt(begun.key, { endedAt: this.now().toISOString(), outcome: "failed" });
             this.bumpOp("dispatch");
+            // AR6: no run, so no reservation: the row goes back to what the phase says (a re-run claims again).
+            await this.store.updateTask(this.id, { status: d.phase === "queued" ? "planning" : "waiting", waiting_on: waitingOnOf(d.phase) });
           }
           throw err;
         }
@@ -1474,10 +1478,12 @@ class Machine {
       // the reservation stays; a later sweep looks again. Completed or not visible: it is reconciled below.
       const role = phase === "dev" ? "developer" : "qa";
       const prev = d.dispatch_ops?.[role] ?? Math.max(0, (d.ops?.dispatch ?? 1) - 1);
+      // The run-name is exact (task and op); the time only bounds the listing. `waiting_since` is set when the
+      // run was found, which can be up to DISPATCH_UNKNOWN_MINUTES after its dispatch intent.
       const run = await this.github.findWorkflowRun({
         workflow: phase === "dev" ? DEV_WORKFLOW : QA_WORKFLOW,
         displayTitle: agentRunName(role, this.id, prev),
-        createdAfter: new Date(Date.parse(d.waiting_since ?? this.now().toISOString()) - CLOCK_SLACK_MS).toISOString(),
+        createdAfter: new Date(Date.parse(d.waiting_since ?? this.now().toISOString()) - DISPATCH_UNKNOWN_MINUTES * 60_000 - CLOCK_SLACK_MS).toISOString(),
       });
       if (run !== null && run.status !== "completed") {
         await this.github.cancelRun(run.id);
