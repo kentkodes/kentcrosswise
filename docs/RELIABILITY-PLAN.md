@@ -80,6 +80,14 @@ AR2's durable identities precede AR3 and AR4; AR3/AR4 precede AR5; AR5 precedes 
 
 Status, AR3: implemented and merged (#136, migration `0019_usage_accounting`; the planner's calls are recorded through `trackPlannerCalls`). Every in-process model call writes a call record with a start and an outcome (`reported`, `unknown` or `rejected`); essay categorize and hooks are recorded as agent `pipeline`; unpriced and usage-unknown counts are shown next to totals. The unknown-price policy is soft (no enforcement change). Remaining: live provider behaviour (returned model ids, usage fields on errors) and the live acceptance after the migration.
 
+Status, AR4: implemented and merged (#140, migration `0020_task_prerequisites`, applied by its deploy): validated prerequisites, sequential by default, each merged task's merge commit recorded, child starts through the outbox, a blocked parent parked for the owner. Live SQS delivery of a child start, a real planner order and GitHub merges by the orchestrator are not verified.
+
+Status, AR5a: implemented and merged: the worker side (#143), the planner side (#145) and QA of a Docs-keeper PR without a contract (#146). Developer and QA dispatches carry the contract; no dispatch has run live with one. Remaining: AR5b (revisions, attempts, evidence, replan; migration 0021), which is in review, and the usage measurement.
+
+Status, AR6: the owner status is merged (#141, migration `0022_execution_wait`): the console shows active workers apart from parked and queued work, and `tasks.execution_wait` has no writer yet. Remaining: execution reservations (`claimExecution`, the active-worker limit, reconcile before replacement), which follow AR5b; the numeric limit is the owner's decision.
+
+Status, AR8a: the deploy-state follow-up is merged and deployed (#144, migration `0023_release_states`): merged, deployed and verified are recorded separately per merge commit (`task_releases`, sweeper part `releases`, console block). A failed, cancelled-without-successor or missing deploy is never shown as verified. The live check needs a real orchestrator merge: AR9.
+
 Status, AR8b: implemented and merged (#130): SNS topic `kcw-prod-alerts`, four alarms, one metric filter and the deploy failure steps. Remaining: the owner's email subscription and one controlled test ([alerts runbook](runbooks/alerts.md), section 2).
 
 ## Validation and session handoff
