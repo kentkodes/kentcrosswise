@@ -89,7 +89,7 @@ describe("sweeps for stale planning tasks", () => {
     gh.failAfterNext("dispatchWorkflow"); // sent, the response was lost
     const created = JSON.stringify({ type: "task.created", task_id: id });
     expect(await send(id, { body: created }, "start-1")).toBe("failed");
-    expect((await sql<{ status: string }>("SELECT status FROM tasks WHERE id = $1", [id]))[0]!.status).toBe("planning");
+    expect((await sql<{ status: string }>("SELECT status FROM tasks WHERE id = $1", [id]))[0]!.status).toBe("waiting"); // AR6: the execution reservation was claimed before the dispatch
     expect(gh.issues).toHaveLength(1);
     expect(gh.dispatches).toHaveLength(1);
 

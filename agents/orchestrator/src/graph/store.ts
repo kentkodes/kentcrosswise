@@ -43,6 +43,8 @@ export interface TaskUpdate {
   branch?: string;
   head_sha?: string;
   attempts?: number;
+  /** AR6: cleared when the task leaves a wait for an execution reservation. */
+  execution_wait?: "developer" | "qa" | "docs" | null;
 }
 
 export type ApprovalKind = "critical_pr" | "issue_text";
@@ -98,6 +100,13 @@ export interface TaskStore {
    * children hold the slots (§11 Q12).
    */
   claimSlot(id: number, limit: number): Promise<boolean>;
+  /**
+   * AR6: the active execution reservation of a worker run: `status = 'waiting'` with `waiting_on` dev (Developer,
+   * Docs) or qa. Same lock and transaction shape as claimSlot. A task that holds one keeps it (true); otherwise,
+   * if fewer than `limit` other tasks (not parents) hold one, the task takes it and its `execution_wait` is
+   * cleared (true); at the limit `execution_wait` is set to the role and the answer is false.
+   */
+  claimExecution(id: number, role: "developer" | "qa" | "docs", limit: number): Promise<boolean>;
   updateTask(id: number, fields: TaskUpdate): Promise<void>;
   /**
    * Adds an event. With an `effectKey` (migration 0013) a second call with the same key writes
@@ -246,6 +255,7 @@ const UPDATABLE = [
   "branch",
   "head_sha",
   "attempts",
+  "execution_wait",
 ] as const satisfies readonly (keyof TaskUpdate)[];
 
 const num = (v: string | number | null): number | null => (v === null ? null : Number(v));
@@ -361,6 +371,40 @@ export class PgTaskStore implements TaskStore {
         if ((rows[0]?.n ?? 0) < limit) {
           await client.query("UPDATE tasks SET status = 'planning', updated_at = now() WHERE id = $1", [id]);
           claimed = true;
+        }
+      }
+      await client.query("COMMIT");
+      return claimed;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async claimExecution(id: number, role: "developer" | "qa" | "docs", limit: number): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock($1)", [SLOT_LOCK_KEY]);
+      const { rows: own } = await client.query<{ status: TaskStatus; waiting_on: string | null }>("SELECT status, waiting_on FROM tasks WHERE id = $1", [id]);
+      const status = own[0]?.status;
+      let claimed = false;
+      if (status === "waiting" && (own[0]?.waiting_on === "dev" || own[0]?.waiting_on === "qa")) {
+        claimed = true; // already reserved: a redispatch within the reservation needs no second one
+      } else if (status !== undefined && IN_FLIGHT_STATUSES.includes(status)) {
+        const { rows } = await client.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM tasks t
+           WHERE t.status = 'waiting' AND t.waiting_on IN ('dev', 'qa') AND t.id <> $1
+             AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)`,
+          [id],
+        );
+        if ((rows[0]?.n ?? 0) < limit) {
+          await client.query("UPDATE tasks SET status = 'waiting', waiting_on = $2, execution_wait = NULL, updated_at = now() WHERE id = $1", [id, role === "qa" ? "qa" : "dev"]);
+          claimed = true;
+        } else {
+          await client.query("UPDATE tasks SET execution_wait = $2 WHERE id = $1", [id, role]);
         }
       }
       await client.query("COMMIT");

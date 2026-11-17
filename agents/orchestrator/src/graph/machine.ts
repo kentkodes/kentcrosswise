@@ -27,6 +27,7 @@ import {
   DOCS_WAIT_LIMIT_MINUTES,
   DOCS_WORKFLOW,
   INCOMPLETE_INPUT_TIMEOUT_MINUTES,
+  ACTIVE_EXECUTION_LIMIT,
   IN_FLIGHT_LIMIT,
   MAX_ATTEMPTS,
   QA_WORKFLOW,
@@ -256,7 +257,7 @@ class Machine {
       outcome = await this.apply(next);
     }
     // A dispatch still waiting for its run is not progress: a sweep checks it again.
-    d.last_outcome = outcome === "applied" && d.pending_dispatch != null ? "unchanged" : outcome;
+    d.last_outcome = d.pending_capacity != null ? "queued" : outcome === "applied" && d.pending_dispatch != null ? "unchanged" : outcome;
   }
 
   async apply(input: TaskInput): Promise<StepOutcome> {
@@ -270,9 +271,10 @@ class Machine {
     }
     // A dispatch whose run is not visible yet (see dispatchAgent): only a sweep resumes it, and an
     // owner decision cannot apply to a step that has not finished.
+    if (d.pending_capacity != null && input.kind === "sweep") return this.resumeDispatch(d.pending_capacity);
     if (d.pending_dispatch != null && input.kind === "sweep") return this.resumeDispatch(d.pending_dispatch);
     let out: StepOutcome | undefined;
-    if (d.pending_dispatch != null && input.kind === "decision") out = undefined;
+    if ((d.pending_dispatch != null || d.pending_capacity != null) && input.kind === "decision") out = undefined;
     else switch (d.phase) {
       case "queued":
         if (input.kind === "start" || input.kind === "sweep") out = await this.start();
@@ -378,6 +380,9 @@ class Machine {
       d.pending_dispatch = null;
       this.bumpOp("dispatch");
     }
+    // Leaving the wait for an execution reservation (a PR closed, a replan): the refusal no longer stands.
+    const wasWaitingForCapacity = d.pending_capacity != null;
+    d.pending_capacity = null;
     d.phase = phase;
     d.waiting_since = this.now().toISOString();
     d.redispatched = false;
@@ -396,7 +401,7 @@ class Machine {
       if (released.length > 0) this.log(`released ${released.map((c) => `task-${c}`).join(", ")}`);
       return;
     }
-    await this.store.updateTask(this.id, { status, waiting_on: waitingOnOf(phase), agent });
+    await this.store.updateTask(this.id, { status, waiting_on: waitingOnOf(phase), agent, ...(wasWaitingForCapacity && { execution_wait: null }) });
   }
 
   /**
@@ -471,8 +476,8 @@ class Machine {
 
   async start(): Promise<StepOutcome> {
     const task = await this.store.getTask(this.id);
-    if (!task || !["queued", "planning"].includes(task.status)) {
-      // Unknown, or already finished/cancelled outside the graph: nothing to run.
+    if (!task || !["queued", "planning", "waiting"].includes(task.status)) {
+      // Unknown, or already finished/cancelled outside the graph: nothing to run. `waiting`: a re-run step whose execution reservation (AR6) was already claimed.
       this.log(task ? `not started: status ${task.status}` : "not started: no such task");
       this.d.phase = "done";
       return "stale";
@@ -755,6 +760,13 @@ class Machine {
     let inputs = opInputs();
     const role = agentRoleOfWorkflow(workflow);
     if (role === null || role === "scraper") throw new Error("dispatchAgent: not an agent workflow");
+    // AR6: the active execution reservation comes first. A task that holds one (a redispatch, a re-run step) claims nothing twice.
+    if (!(await this.store.claimExecution(this.id, role, ACTIVE_EXECUTION_LIMIT))) {
+      d.pending_capacity = pending;
+      this.log(`execution_full role=${role}`);
+      return false;
+    }
+    d.pending_capacity = null;
     let begun = await this.beginOp("dispatch", { workflow, inputs }, RETRY_OF_ROLE[pending.role]);
     // A key whose dispatch GitHub refused created no run: this attempt (a re-run of the step) uses the next key.
     while (begun !== null && begun.record.state === "done" && (begun.record.result as { dispatched?: boolean }).dispatched === false) {
@@ -835,6 +847,7 @@ class Machine {
     if (p.role === "dev") await this.dispatchDev(p.mode ?? "implement", p.reason, p.redispatched);
     else if (p.role === "qa") await this.dispatchQa(p.reason, p.redispatched);
     else await this.dispatchDocs(p.reason, p.redispatched);
+    if (this.d.pending_capacity != null) return "queued";
     return this.d.pending_dispatch != null ? "unchanged" : "applied";
   }
 
@@ -1457,7 +1470,21 @@ class Machine {
       // CI is not an agent workflow: there is nothing to redispatch.
       await this.toOwnerFailure(`CI did not finish within ${limit} minutes.`, this.devRetry);
     } else if (!d.redispatched) {
-      // Redispatch once (§4.3); the run that timed out ends as `lost` (AR5b).
+      // AR6: the replacement starts only once the previous run is over. A run that still runs is cancelled and
+      // the reservation stays; a later sweep looks again. Completed or not visible: it is reconciled below.
+      const role = phase === "dev" ? "developer" : "qa";
+      const prev = d.dispatch_ops?.[role] ?? Math.max(0, (d.ops?.dispatch ?? 1) - 1);
+      const run = await this.github.findWorkflowRun({
+        workflow: phase === "dev" ? DEV_WORKFLOW : QA_WORKFLOW,
+        displayTitle: agentRunName(role, this.id, prev),
+        createdAfter: new Date(Date.parse(d.waiting_since ?? this.now().toISOString()) - CLOCK_SLACK_MS).toISOString(),
+      });
+      if (run !== null && run.status !== "completed") {
+        await this.github.cancelRun(run.id);
+        this.log(`replacement_waits role=${role}`);
+        return "unchanged";
+      }
+      // Redispatch once (§4.3); the run that ended without a report is `lost` (AR5b).
       await this.markLost(phase === "dev" ? "developer" : "qa");
       if (phase === "dev") await this.dispatchDev(d.dev_mode, reason, true);
       else await this.dispatchQa(reason, true);

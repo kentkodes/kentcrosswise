@@ -73,7 +73,8 @@ describe("dispatch links (agent_dispatches)", () => {
     // Task ids 1..4 (identity).
     await db.query("INSERT INTO tasks (source, owner_text) SELECT 'console', 'Synthetic task' FROM generate_series(1, 4)");
     await db.query("SET ROLE orch_rw");
-    pgStore = new PgTaskStore({ query: (text: string, params?: unknown[]) => db.query(text, params) } as unknown as pg.Pool);
+    const conn = { query: (text: string, params?: unknown[]) => db.query(text, params), release: () => undefined };
+    pgStore = new PgTaskStore({ query: conn.query, connect: async () => conn } as unknown as pg.Pool);
   });
   afterAll(async () => {
     await db.close();
@@ -82,6 +83,7 @@ describe("dispatch links (agent_dispatches)", () => {
     gh = new FakeGitHubClient();
     calls = [];
     lines = [];
+    await sql("UPDATE tasks SET status = 'planning', waiting_on = NULL, execution_wait = NULL"); // admitted, as the steps below assume (AR6 reservations)
     await sql("DELETE FROM agent_dispatches");
     await sql("DELETE FROM github_operations"); // the steps below reuse task ids and start from checkpoint-free data
     await sql("UPDATE system_flags SET value = 'false' WHERE key = 'agents_paused'");
