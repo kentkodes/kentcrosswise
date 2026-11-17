@@ -353,6 +353,12 @@ describe("operation records (AR2 slice 2a)", () => {
       waiting_since: clock.toISOString(),
       children: [id],
     });
+    // AR5b: the QA attempt of revision 1 has started, so the approval is valid evidence.
+    const qaStarted = async (id: number): Promise<TaskData> => {
+      await sql("INSERT INTO task_revisions (task_id, revision, contract_hash, contract) VALUES ($1, 1, $2, '{}') ON CONFLICT DO NOTHING", [id, "a".repeat(64)]);
+      await sql("INSERT INTO task_attempts (effect_key, task_id, revision, role, op, started_at) VALUES ($1, $2, 1, 'qa', 0, now()) ON CONFLICT DO NOTHING", [`task-${id}/dispatch/0`, id]);
+      return qaDone(id);
+    };
     const approve = (): TaskInput => ({ kind: "github", event: "pull_request_review", action: "submitted", pr_number: 5, review_state: "approved", commit_id: HEAD, message_id: `m${++seq}` });
     const setup = () => {
       gh.prs.set(5, { headSha: HEAD, author: "kcw-developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
@@ -362,7 +368,7 @@ describe("operation records (AR2 slice 2a)", () => {
     it("a lost merge response: the re-run sees the PR merged and continues as a successful merge", async () => {
       const id = await newTask();
       setup();
-      const data = qaDone(id);
+      const data = await qaStarted(id);
       gh.failAfterNext("merge");
       await expect(runStep(id, data, approve(), deps())).rejects.toThrow(/merge/);
       expect(gh.merges).toHaveLength(1);
@@ -378,7 +384,7 @@ describe("operation records (AR2 slice 2a)", () => {
     it("a failure after the merge was recorded: the re-run uses the record", async () => {
       const id = await newTask();
       setup();
-      const data = qaDone(id);
+      const data = await qaStarted(id);
       const flaky = failingAfter("addEvent", (_t, _a, type) => type === "merged");
       await expect(runStep(id, data, approve(), deps({ store: flaky }))).rejects.toThrow("synthetic database failure");
       await runStep(id, data, approve(), deps());
@@ -389,7 +395,7 @@ describe("operation records (AR2 slice 2a)", () => {
     it("an intent with the PR not merged: the re-run merges as before", async () => {
       const id = await newTask();
       setup();
-      const data = qaDone(id);
+      const data = await qaStarted(id);
       gh.failNext("merge", 503); // not merged, the answer is an error
       await expect(runStep(id, data, approve(), deps())).rejects.toThrow(/merge/);
       expect(gh.merges).toHaveLength(0);
@@ -402,7 +408,7 @@ describe("operation records (AR2 slice 2a)", () => {
       const id = await newTask();
       setup();
       gh.prs.get(5)!.mergeable = false;
-      const d = await runStep(id, qaDone(id), approve(), deps());
+      const d = await runStep(id, await qaStarted(id), approve(), deps());
       expect(d).toMatchObject({ phase: "owner", owner_wait: "failure" });
       expect(await op(`task-${id}/merge/0`)).toMatchObject({ state: "done", result: { merged: false, reason: "not_mergeable" } });
       expect(d.ops?.merge).toBe(1);
