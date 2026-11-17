@@ -34,6 +34,7 @@ export function harness() {
     plan: PLAN as Plan,
     replanPlan: null as Plan | null,
     planRequests: [] as PlanRequest[],
+    splitCalls: 0,
     seq: 0,
     runSeq: 9000,
   };
@@ -43,7 +44,10 @@ export function harness() {
     github: h.gh,
     store: undefined as unknown as PgTaskStore,
     planner: {
-      split: async (r) => [r.owner_text],
+      split: async (r) => {
+        h.splitCalls += 1;
+        return [r.owner_text];
+      },
       plan: async (r) => {
         h.planRequests.push(r);
         return r.previous !== undefined && h.replanPlan !== null ? h.replanPlan : h.plan;
@@ -83,6 +87,7 @@ export function harness() {
     h.plan = PLAN;
     h.replanPlan = null;
     h.planRequests = [];
+    h.splitCalls = 0;
     await sql("UPDATE tasks SET status = 'done' WHERE status IN ('planning', 'in_progress', 'waiting')");
   });
 
