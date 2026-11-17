@@ -816,11 +816,12 @@ class Machine {
   }
 
   async dispatchQa(reason?: string, redispatched = false): Promise<boolean> {
-    const contract = await this.contractInput();
+    // A docs task's PR is reviewed without a contract (Docs dispatches are unchanged, AR5a).
+    const contract = this.isDocs ? undefined : await this.contractInput();
     if (contract === null) return false;
     const sent = await this.dispatchAgent(
       QA_WORKFLOW,
-      { contract, task_id: String(this.id), pr: String(this.d.pr_number) },
+      { ...(contract !== undefined && { contract }), task_id: String(this.id), pr: String(this.d.pr_number) },
       { role: "qa", ...(reason !== undefined && { reason }), redispatched },
     );
     if (!sent) return false;

@@ -89,7 +89,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     store: undefined as unknown as PgTaskStore,
     planner: {
       split: async (r) => splits.get(r.task_id) ?? [r.owner_text],
-      plan: async (r) => ({ title: `Do ${r.owner_text.toLowerCase()}`, body: `${r.owner_text}.` }),
+      plan: async (r) => ({ title: `Do ${r.owner_text.toLowerCase()}`, body: `${r.owner_text}.`, acceptance: ["It works."], scope: [], context: [] }),
     },
     now: () => clock,
   };
@@ -215,7 +215,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(await start(parent)).toBe("started");
     const [schema, consumer] = (await kids(parent)) as [number, number];
     expect(await outboxKeys([schema, consumer])).toEqual([`task-${schema}/start`]);
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
 
     expect(await deliverOutbox()).toEqual([`task-${schema}/start: started`]);
     expect(issuesOf(schema)).toHaveLength(1);
@@ -333,7 +333,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(await task(parent)).toMatchObject({ status: "waiting", waiting_on: "owner" });
     const [approval] = await sql<{ reasons: string[] }>("SELECT reasons FROM approvals WHERE task_id = $1 AND status = 'pending'", [parent]);
     expect(approval!.reasons[0]).toBe("Task failed: The planner model returned unusable output (the subtask order has a cycle).");
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
   });
 
   it("an early start or a sweep of a child does not run it before its prerequisites merged", async () => {
@@ -406,7 +406,16 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(devCalls(c)).toHaveLength(1);
   });
 
-  it("a webhook-only merge (no sha) releases the consumer and leaves merge_sha null", async () => {
+  /** AR5a: the consumer of a prerequisite with no recorded merge commit is not planned; the owner decides. */
+  async function expectPlanningFailure(consumer: number): Promise<void> {
+    expect(await task(consumer)).toMatchObject({ status: "waiting", waiting_on: "owner" });
+    const [approval] = await sql<{ reasons: string[] }>("SELECT reasons FROM approvals WHERE task_id = $1 AND status = 'pending'", [consumer]);
+    expect(approval!.reasons[0]).toBe("Task failed: a prerequisite task has no recorded merge commit, so the task cannot be planned; approve to plan it again");
+    expect(issuesOf(consumer)).toEqual([]);
+    expect(devCalls(consumer)).toEqual([]);
+  }
+
+  it("a webhook-only merge (no sha) releases the consumer and leaves merge_sha null; the consumer goes to the owner at planning", async () => {
     const parent = await newTask("Webhook merge");
     splits.set(parent, list(["Add the table", "Read the table"]));
     expect(await start(parent)).toBe("started");
@@ -417,7 +426,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(await task(b)).toMatchObject({ status: "queued", merge_sha: null });
     expect(await outboxKeys([b])).toEqual([`task-${b}/start`]);
     expect(await deliverOutbox()).toEqual([`task-${b}/start: started`]);
-    expect(issuesOf(b)[0]!.body).not.toContain("Prerequisites merged on");
+    await expectPlanningFailure(b);
   });
 
   it("a second merge call for the same task keeps the first merge_sha and adds no outbox row", async () => {
@@ -434,21 +443,20 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(await outboxKeys([b])).toEqual([`task-${b}/start`]); // still one row
   });
 
-  it("the footer lists the known prerequisite merge commits; with one unknown, only the known one", async () => {
+  it("with one prerequisite merge commit unknown, the consumer goes to the owner at planning", async () => {
     const [a, b, c] = await fanIn("One merge unknown");
-    const mA = await mergeChild(a, 531);
+    await mergeChild(a, 531);
     await mergeByWebhook(b, 532);
     expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
-    expect(issuesOf(c)[0]!.body).toContain(`Prerequisites merged on \`main\`: ${mA}.`);
+    await expectPlanningFailure(c);
   });
 
-  it("the footer has no prerequisite line when no merge commit is known", async () => {
+  it("with no prerequisite merge commit known, the consumer goes to the owner at planning", async () => {
     const [a, b, c] = await fanIn("None merge commits known");
     await mergeByWebhook(a, 541);
     await mergeByWebhook(b, 542);
     expect(await outboxKeys([c])).toEqual([`task-${c}/start`]);
     expect(await deliverOutbox()).toEqual([`task-${c}/start: started`]);
-    expect(issuesOf(c)[0]!.body).not.toContain("Prerequisites merged on");
-    expect(issuesOf(c)[0]!.body).toContain(`kcw/task-${c}`);
+    await expectPlanningFailure(c);
   });
 });

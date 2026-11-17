@@ -1,6 +1,7 @@
 // In-memory GitHubClient for graph tests (P2-10). It records every call, keeps issues, dispatches,
 // checks and merges, and answers getDiff/getArtifact from data the test sets up. Behaviour mirrors
 // OctokitGitHubClient: squash merge refused when the head moved, 409-style cancel of a finished run.
+import { createHash } from "node:crypto";
 import type { MergeInput } from "@kcw/core/merge-input";
 import {
   ArtifactFormatError,
@@ -28,6 +29,9 @@ import {
 } from "./types";
 
 export type FakeMethod = keyof GitHubClient;
+
+/** The merge commit the fake gives a squash merge of that PR head: 40-hex, like a real commit (the contract requires it). */
+export const fakeMergeSha = (pr: number, headSha: string): string => createHash("sha1").update(`squash-${pr}-${headSha}`).digest("hex");
 
 export interface FakePr {
   headSha: string;
@@ -185,7 +189,7 @@ export class FakeGitHubClient implements GitHubClient {
     if (pr.headSha !== input.headSha) return { merged: false, reason: "head_changed" };
     if (pr.merged || pr.mergeable === false) return { merged: false, reason: "not_mergeable" };
     pr.merged = true;
-    const sha = `squash-${input.pr}-${input.headSha}`;
+    const sha = fakeMergeSha(input.pr, input.headSha);
     pr.mergeSha = sha;
     this.merges.push({ pr: input.pr, sha });
     this.#lostResponse("merge");

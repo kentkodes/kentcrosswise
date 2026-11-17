@@ -70,7 +70,7 @@ describe("checkpointed office observation failures", () => {
     const { threadConfig } = await import("../src/handler");
     const recordRun = vi.fn().mockResolvedValue(undefined);
     const store = { recordRun } as unknown as TaskStore;
-    const deps = { store, github: new FakeGitHubClient(), planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic" }) } };
+    const deps = { store, github: new FakeGitHubClient(), planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic", acceptance: ["It works."], scope: [], context: [] }) } };
     const saver = new MemorySaver();
     const graph = buildTaskGraph(saver, deps);
     const observation = (messageId: string, runId: number): TaskInput => ({

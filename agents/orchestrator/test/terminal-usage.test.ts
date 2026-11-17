@@ -56,7 +56,7 @@ describe("terminal task usage", () => {
     });
     const graph = buildTaskGraph(new MemorySaver(), {
       github, store, now: () => new Date("2026-10-23T10:00:00Z"),
-      planner: { split: async (req) => [req.owner_text], plan: async () => ({ title: "Add a healthz page", body: "Return ok from a healthz route." }) },
+      planner: { split: async (req) => [req.owner_text], plan: async () => ({ title: "Add a healthz page", body: "Return ok from a healthz route.", acceptance: ["It works."], scope: [], context: [] }) },
     });
     expect(await processTaskInput(graph, taskId, { kind: "start", message_id: "start" })).toBe("started");
     await processTaskInput(graph, taskId, { kind: "github", event: "pull_request", action: "opened", pr_number: 41, head_ref: "kcw/task-1", head_sha: head, merged: false, message_id: "opened" });
@@ -111,7 +111,7 @@ function fixture(initialStatus: TaskStatus = "queued") {
     github, store,
     planner: {
       split: async (req: { owner_text: string }) => [req.owner_text],
-      plan: async () => ({ title: "Add a healthz page", body: "Return ok from a healthz route." }),
+      plan: async () => ({ title: "Add a healthz page", body: "Return ok from a healthz route.", acceptance: ["It works."], scope: [], context: [] }),
     },
   };
   const graph = buildTaskGraph(saver, deps);

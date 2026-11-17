@@ -3,6 +3,7 @@
 // as orch_rw; a null run id stores nothing. Plus: a late `requested` never regresses a completed run.
 import { PGlite } from "@electric-sql/pglite";
 import { fromPglite, migrate } from "@kcw/db";
+import type { TaskContract } from "@kcw/core/contract";
 import type pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FakeGitHubClient } from "../src/github";
@@ -17,6 +18,8 @@ import {
   type TaskInput,
   type TaskStore,
 } from "../src/graph";
+
+const CONTRACT: TaskContract = { v: 1, task: 1, revision: 1, issue: 5, goal: "Synthetic", acceptance: ["It works."], base: "1".repeat(40), prerequisites: [], scope: [], context: [] };
 
 describe("dispatch links (agent_dispatches)", () => {
   let db: PGlite;
@@ -54,7 +57,7 @@ describe("dispatch links (agent_dispatches)", () => {
   const deps = (): TaskGraphDeps => ({
     github: gh,
     store: recording(pgStore),
-    planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic" }) },
+    planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic", acceptance: ["It works."], scope: [], context: [] }) },
     now: () => now,
     log: (l) => lines.push(l),
   });
@@ -103,7 +106,7 @@ describe("dispatch links (agent_dispatches)", () => {
   });
 
   it("dispatchDev records the developer link before the task event", async () => {
-    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, issue_number: 5 };
+    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, contract: CONTRACT, issue_number: 5 };
     const next = await runStep(1, data, sweep, deps());
     expect(gh.dispatches.map((d) => d.workflow)).toEqual(["agent-developer.yml"]);
     expect(next.redispatched).toBe(true);
@@ -112,7 +115,7 @@ describe("dispatch links (agent_dispatches)", () => {
   });
 
   it("dispatchQa records the qa link before the task event", async () => {
-    const data: TaskData = { ...initialTaskData(), phase: "qa", waiting_since: longAgo, issue_number: 5, pr_number: 7 };
+    const data: TaskData = { ...initialTaskData(), phase: "qa", waiting_since: longAgo, contract: CONTRACT, issue_number: 5, pr_number: 7 };
     await runStep(2, data, sweep, deps());
     expect(gh.dispatches.map((d) => d.workflow)).toEqual(["agent-qa.yml"]);
     expectLinkBeforeEvent();
@@ -129,7 +132,7 @@ describe("dispatch links (agent_dispatches)", () => {
 
   it("a null run id stores no link; the dispatch, event and phase change still happen", async () => {
     gh.runIdMode = "null";
-    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, issue_number: 5 };
+    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, contract: CONTRACT, issue_number: 5 };
     const next = await runStep(1, data, sweep, deps());
     expect(gh.dispatches).toHaveLength(1);
     expect(calls).not.toContain("recordDispatch");
@@ -158,7 +161,7 @@ describe("dispatch links (agent_dispatches)", () => {
   it("a conflicting link is logged as dispatch_link_failed and the step continues (one dispatch)", async () => {
     gh = new FakeGitHubClient({ firstRunId: 880001 }); // the run id the dispatch below gets
     await pgStore.recordDispatch(880001, 4, "developer");
-    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, issue_number: 5 };
+    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, contract: CONTRACT, issue_number: 5 };
     const next = await runStep(1, data, sweep, deps());
     expect(gh.dispatches).toHaveLength(1);
     expect(calls.indexOf("addEvent")).toBeGreaterThan(calls.indexOf("recordDispatch"));
@@ -177,7 +180,7 @@ describe("dispatch links (agent_dispatches)", () => {
         throw Object.assign(new Error("synthetic connection detail 880002"), { name: "DatabaseError" });
       },
     });
-    const data: TaskData = { ...initialTaskData(), phase: "qa", waiting_since: longAgo, issue_number: 5, pr_number: 7 };
+    const data: TaskData = { ...initialTaskData(), phase: "qa", waiting_since: longAgo, contract: CONTRACT, issue_number: 5, pr_number: 7 };
     const next = await runStep(2, data, sweep, { ...deps(), store: failing });
     expect(gh.dispatches.map((d) => d.workflow)).toEqual(["agent-qa.yml"]);
     expect(calls.indexOf("addEvent")).toBeGreaterThan(calls.indexOf("recordDispatch"));
@@ -212,7 +215,7 @@ describe("dispatch links (agent_dispatches)", () => {
         return store.addEvent(...args);
       },
     });
-    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, issue_number: 5 };
+    const data: TaskData = { ...initialTaskData(), phase: "dev", waiting_since: longAgo, contract: CONTRACT, issue_number: 5 };
     await expect(runStep(1, data, sweep, { ...deps(), store: flaky })).rejects.toThrow("synthetic event failure");
     const next = await runStep(1, data, sweep, { ...deps(), store: flaky });
     expect(next.redispatched).toBe(true);
@@ -264,7 +267,7 @@ describe("a requested delivery after completed (redelivery order, spec §4)", ()
     const deps: TaskGraphDeps = {
       github: new FakeGitHubClient(),
       store,
-      planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic" }) },
+      planner: { split: async () => [], plan: async () => ({ title: "Synthetic", body: "Synthetic", acceptance: ["It works."], scope: [], context: [] }) },
     };
     const data: TaskData = { ...initialTaskData(), phase: "qa", pr_number: 7, waiting_since: "2026-10-28T10:00:00.000Z" };
     const afterCompleted = await runStep(1, data, observation("completed", "m-completed"), deps);

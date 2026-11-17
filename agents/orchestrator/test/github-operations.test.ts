@@ -22,7 +22,7 @@ import {
 } from "../src/graph";
 import { servePglite, type PgSocketServer } from "./pg-socket";
 
-const PLAN: Plan = { title: "Add a healthz page", body: "Add a /healthz route that returns ok." };
+const PLAN: Plan = { title: "Add a healthz page", body: "Add a /healthz route that returns ok.", acceptance: ["It works."], scope: [], context: [] };
 const HEAD = "a".repeat(40);
 const clean = (pr: number, head: string): MergeInput => ({
   pr,

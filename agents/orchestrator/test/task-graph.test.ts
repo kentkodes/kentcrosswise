@@ -9,6 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { checkpointerFromPool, setupCheckpointer, threadConfig } from "../src/index";
 import { ArtifactFormatError, FakeGitHubClient, type ArtifactResult, type ChangedFile, type GetArtifactInput } from "../src/github";
+import { fakeMergeSha } from "../src/github/fake";
 import {
   DOCS_NO_RUN_MINUTES,
   DOCS_WAIT_LIMIT_MINUTES,
@@ -37,7 +38,7 @@ const clean = (pr: number, head: string): MergeInput => ({
   uncoveredPaths: [],
 });
 const ROUTE: ChangedFile = { path: "apps/web/src/app/healthz/route.ts", status: "added" };
-const PLAN: Plan = { title: "Add a healthz page", body: "Add a /healthz route that returns ok.\n\nInclude a test." };
+const PLAN: Plan = { title: "Add a healthz page", body: "Add a /healthz route that returns ok.\n\nInclude a test.", acceptance: ["It works."], scope: [], context: [] };
 
 describe("task graph (P2-10)", () => {
   let db: PGlite;
@@ -271,7 +272,7 @@ describe("task graph (P2-10)", () => {
     expect(gh.issues[0]!.body).toContain(`kcw/task-${id}`);
     expect(gh.issues[0]!.body).not.toContain("please"); // owner text never reaches GitHub
     expect(devDispatches()).toEqual([
-      { workflow: "agent-developer.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "", op: "0" } },
+      { workflow: "agent-developer.yml", ref: "main", runId: expect.any(Number), inputs: { contract: expect.any(String), task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "", op: "0" } },
     ]);
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "dev", github_issue: gh.issues[0]!.number, public_title: "Add a healthz page", branch: `kcw/task-${id}` });
     expect(await waits(id)).toEqual([{ phase: "dev", waiting_on: "dev" }]);
@@ -280,7 +281,7 @@ describe("task graph (P2-10)", () => {
     expect(await task(id)).toMatchObject({ waiting_on: "ci", pr_number: 41, head_sha: head });
 
     expect(await send(id, ciEvent(id, 41, head, "success"))).toBe("applied");
-    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { task_id: String(id), pr: "41", op: "1" } }]);
+    expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { contract: expect.any(String), task_id: String(id), pr: "41", op: "1" } }]);
     // RUN-ID-MAPPING-SPEC §2: both dispatches are linked to the task by run id, as orch_rw.
     expect(await sql<{ run_id: string; role: string }>("SELECT run_id::text, role FROM agent_dispatches WHERE task_id = $1 ORDER BY run_id", [id])).toEqual([
       { run_id: String(devDispatches()[0]!.runId), role: "developer" },
@@ -290,7 +291,7 @@ describe("task graph (P2-10)", () => {
 
     expect(await send(id, reviewEvent(id, 41, head, "approved"))).toBe("applied");
     expect(gh.latestCheck(head)).toMatchObject({ state: "success" });
-    expect(gh.merges).toEqual([{ pr: 41, sha: `squash-41-${head}` }]);
+    expect(gh.merges).toEqual([{ pr: 41, sha: fakeMergeSha(41, head) }]);
     expect(gh.calls.find((c) => c.method === "merge")!.args).toEqual({ pr: 41, headSha: head, title: "Add a healthz page (#41)" });
     expect(await task(id)).toMatchObject({ status: "merged", waiting_on: null });
     expect(await events(id)).toEqual(["task_assigned", "pr_opened", "ci_running", "ci_passed", "qa_reviewing", "approved", "merged"]);
@@ -427,7 +428,7 @@ describe("task graph (P2-10)", () => {
 
       expect(await decide(id, a.id, "approved")).toBe("applied");
       expect(gh.latestCheck(head)).toMatchObject({ state: "success", title: "Approved by the owner" });
-      expect(gh.merges).toEqual([{ pr: 45, sha: `squash-45-${head}` }]);
+      expect(gh.merges).toEqual([{ pr: 45, sha: fakeMergeSha(45, head) }]);
       expect(await task(id)).toMatchObject({ status: "merged", waiting_on: null });
       expect((await events(id)).slice(-2)).toEqual(["approved", "merged"]);
     });
@@ -750,7 +751,7 @@ describe("task graph (P2-10)", () => {
       expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied");
       expect(await task(id)).toMatchObject({ waiting_on: "qa", head_sha: h2, attempts: 0 });
       expect(qaDispatches()).toHaveLength(2);
-      expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(id), pr: "56", op: "2" });
+      expect(qaDispatches().at(-1)!.inputs).toEqual({ contract: expect.any(String), task_id: String(id), pr: "56", op: "2" });
       expect((await events(id)).slice(-2)).toEqual(["ci_passed", "qa_reviewing"]);
       expect(await send(id, ciEvent(id, 56, h2, "success"))).toBe("applied"); // distinct duplicate CI event
       expect(await send(id, reviewEvent(id, 56, h1, "approved"))).toBe("stale");
@@ -765,7 +766,7 @@ describe("task graph (P2-10)", () => {
         expect(gh.latestCheck(h2)).toMatchObject({ state: "pending", title: "Owner approval required" });
         expect(await decide(id, approval.id, "approved")).toBe("applied");
       }
-      expect(gh.merges).toEqual([{ pr: 56, sha: `squash-56-${h2}` }]);
+      expect(gh.merges).toEqual([{ pr: 56, sha: fakeMergeSha(56, h2) }]);
       expect(await task(id)).toMatchObject({ status: "merged", attempts: 0 });
     });
 
@@ -956,7 +957,7 @@ describe("task graph (P2-10)", () => {
       expect(qaDispatches().at(-1)!.inputs).toEqual({ task_id: String(docs), pr: "65", op: "1" });
       expect(await send(docs, reviewEvent(docs, 65, head, "approved"))).toBe("applied");
 
-      expect(gh.merges.at(-1)).toEqual({ pr: 65, sha: `squash-65-${head}` });
+      expect(gh.merges.at(-1)).toEqual({ pr: 65, sha: fakeMergeSha(65, head) });
       expect(gh.calls.filter((c) => c.method === "merge").at(-1)!.args).toEqual({ pr: 65, headSha: head, title: "docs: update after #64 (#65)" });
       expect(await task(docs)).toMatchObject({ status: "merged", pr_number: 65 });
       expect(await sql("SELECT id FROM tasks WHERE parent_id = $1", [docs])).toEqual([]);
@@ -1118,7 +1119,7 @@ describe("task graph (P2-10)", () => {
   describe("public text", () => {
     it("a title naming a contact is never published: the issue says Private task and public_title stays null", async () => {
       const id = await newTask();
-      plans.set(id, { title: "Plan Janie's page", body: "Add a page." });
+      plans.set(id, { title: "Plan Janie's page", body: "Add a page.", acceptance: ["It works."], scope: [], context: [] });
       expect(await start(id)).toBe("started");
       expect(gh.issues[0]!.title).toBe("Private task");
       expect((await task(id)).public_title).toBeNull();
@@ -1127,9 +1128,9 @@ describe("task graph (P2-10)", () => {
 
     it("an issue body that fails the content rules waits for an issue_text approval", async () => {
       const id = await newTask();
-      plans.set(id, { title: "Add a contact page", body: "Ask Jane Doe for the copy.\nSee https://example.com" });
+      plans.set(id, { title: "Add a contact page", body: "Ask Jane Doe for the copy.\nSee https://example.com", acceptance: ["It works."], scope: [], context: [] });
       expect(await start(id)).toBe("started");
-      expect(gh.calls).toEqual([]);
+      expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
       expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "owner", github_issue: null });
       const a = await pendingApproval(id);
       expect(a.kind).toBe("issue_text");
@@ -1144,11 +1145,11 @@ describe("task graph (P2-10)", () => {
 
     it("rejecting the issue text cancels the task without touching GitHub", async () => {
       const id = await newTask();
-      plans.set(id, { title: "Add a page", body: "Call 555-123-4567" });
+      plans.set(id, { title: "Add a page", body: "Call 555-123-4567", acceptance: ["It works."], scope: [], context: [] });
       await start(id);
       const a = await pendingApproval(id);
       expect(await decide(id, a.id, "rejected")).toBe("applied");
-      expect(gh.calls).toEqual([]);
+      expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
       expect(await task(id)).toMatchObject({ status: "cancelled" });
     });
   });

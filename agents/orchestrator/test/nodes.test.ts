@@ -13,8 +13,11 @@ import {
   parseSubtasks,
   publicText,
 } from "../src/nodes";
+import { MAX_PLANNER_INPUT_BYTES, contractViolations } from "../src/nodes/planner";
+import { PlannerInputError } from "../src/graph/types";
 
-const REQ = { task_id: 1, owner_text: "Add a healthz page and a status badge", is_private: true };
+const REQ = { task_id: 1, owner_text: "Add a healthz page and a status badge", is_private: true, brief: "## Layout\n\nagents/  code" };
+const REST = { acceptance: ["It works."], scope: [], context: [] };
 
 /** A provider answering each call with the next scripted text. */
 function scripted(...answers: string[]) {
@@ -106,8 +109,8 @@ describe("planner node", () => {
 
 describe("public-title node", () => {
   it("returns the title and body with the public-title prompt", async () => {
-    const { systems, planner } = scripted('{"title": "Add a healthz page", "body": "Add a /healthz route that returns ok."}');
-    expect(await planner.plan(REQ)).toEqual({ title: "Add a healthz page", body: "Add a /healthz route that returns ok." });
+    const { systems, planner } = scripted(JSON.stringify({ title: "Add a healthz page", body: "Add a /healthz route that returns ok.", acceptance: ["GET /healthz answers ok"], scope: ["apps/web/src"], context: ["agents/orchestrator/src/graph/machine.ts"] }));
+    expect(await planner.plan(REQ)).toEqual({ title: "Add a healthz page", body: "Add a /healthz route that returns ok.", acceptance: ["GET /healthz answers ok"], scope: ["apps/web/src"], context: ["agents/orchestrator/src/graph/machine.ts"] });
     expect(systems).toEqual([PUBLIC_TITLE_SYSTEM]);
   });
 
@@ -118,14 +121,59 @@ describe("public-title node", () => {
   });
 
   it("schema: a long title is not a schema error (the sanitizer decides)", () => {
-    expect(parsePlan(JSON.stringify({ title: "t".repeat(80), body: "b" }))).toMatchObject({ ok: true });
+    expect(parsePlan(JSON.stringify({ title: "t".repeat(80), body: "b", ...REST }))).toMatchObject({ ok: true });
+  });
+
+describe("contract fields", () => {
+    const ok = { title: "T", body: "B", acceptance: ["a"], scope: [], context: [] };
+    it.each([
+      ["no acceptance", { ...ok, acceptance: [] }, "acceptance must have 1 to 10 items, not 0"],
+      ["eleven acceptance items", { ...ok, acceptance: Array<string>(11).fill("a") }, "acceptance must have 1 to 10 items, not 11"],
+      ["an over-long acceptance item", { ...ok, acceptance: ["x".repeat(401)] }, "acceptance[0] is longer than 400 characters"],
+      ["a missing scope", { ...ok, scope: undefined }, "scope is not an array"],
+      ["a traversal path", { ...ok, context: ["a/../b"] }, "context[0] is not a valid repository path"],
+      ["a leading slash", { ...ok, scope: ["/etc"] }, "scope[0] is not a valid repository path"],
+      ["21 paths", { ...ok, scope: Array.from({ length: 21 }, (_, i) => `p${i}`) }, "scope must have 0 to 20 items, not 21"],
+    ])("schema: rejects %s", (_name, value, reason) => {
+      expect(parsePlan(JSON.stringify(value))).toEqual({ ok: false, reason });
+    });
+
+    it("accepts a repository path and normalizes line ends and tabs in the body", () => {
+      const r = parsePlan(JSON.stringify({ ...ok, body: "a\r\n\tb", scope: ["agents/orchestrator/src/graph/machine.ts"] }));
+      expect(r).toMatchObject({ ok: true, value: { body: "a\n  b", scope: ["agents/orchestrator/src/graph/machine.ts"] } });
+    });
+
+    const sanitizer = createSanitizer({ contacts: [{ name: "Jane Doe", aliases: ["Janie"] }] });
+    it("a file path passes checkText with the url code ignored; a contact name in a path fails", () => {
+      const clean = { ...ok, scope: ["agents/orchestrator/src/graph/machine.ts"], context: ["docs/DESIGN.md"] };
+      expect(contractViolations(clean, sanitizer)).toEqual([]);
+      expect(contractViolations({ ...clean, context: ["docs/jane-notes.md"] }, sanitizer)).toEqual(["contact"]);
+      expect(contractViolations({ ...ok, acceptance: ["See https://example.com"] }, sanitizer)).toEqual(["url"]);
+    });
+  });
+
+  describe("repository brief in the prompt", () => {
+    it("puts the brief in a repository block before the task", async () => {
+      const { provider, planner } = scripted('{"subtasks": ["x"]}');
+      await planner.split(REQ);
+      const input = provider.calls[0]!.input as string;
+      expect(input.indexOf("<repository>")).toBeLessThan(input.indexOf("<task>"));
+      expect(input).toContain("agents/  code");
+    });
+
+    it("an oversized prompt throws PlannerInputError and makes no model call", async () => {
+      const { provider, planner } = scripted('{"subtasks": ["x"]}');
+      await expect(planner.split({ ...REQ, brief: "b".repeat(MAX_PLANNER_INPUT_BYTES) })).rejects.toBeInstanceOf(PlannerInputError);
+      await expect(planner.plan({ ...REQ, owner_text: "é".repeat(MAX_PLANNER_INPUT_BYTES) })).rejects.toBeInstanceOf(PlannerInputError);
+      expect(provider.calls).toHaveLength(0);
+    });
   });
 
   describe("public text (§4.5)", () => {
     const sanitizer = createSanitizer({ contacts: [{ name: "Jane Doe", aliases: ["Janie"] }] });
 
     it("a clean plan is published as is", () => {
-      expect(publicText({ title: "Add a healthz page", body: "Add a route.\n\nTest it." }, sanitizer)).toEqual({
+      expect(publicText({ title: "Add a healthz page", body: "Add a route.\n\nTest it.", ...REST }, sanitizer)).toEqual({
         publicTitle: "Add a healthz page",
         issue: { title: "Add a healthz page", body: "Add a route.\n\nTest it." },
         body: { ok: true, violations: [] },
@@ -133,15 +181,15 @@ describe("public-title node", () => {
     });
 
     it("a title naming a contact becomes Private task", () => {
-      const t = publicText({ title: "Build Janie's page", body: "Add a page." }, sanitizer);
+      const t = publicText({ title: "Build Janie's page", body: "Add a page.", ...REST }, sanitizer);
       expect(t.publicTitle).toBeNull();
       expect(t.issue.title).toBe(PRIVATE_TITLE);
     });
 
     it("a body longer than 60 characters passes; one with a URL does not", () => {
       const long = "Add a route that answers ok to every request, with a unit test and an e2e test.";
-      expect(publicText({ title: "Add a page", body: long }, sanitizer).body.ok).toBe(true);
-      expect(publicText({ title: "Add a page", body: `${long}\nSee https://example.org` }, sanitizer).body).toEqual({ ok: false, violations: ["url"] });
+      expect(publicText({ title: "Add a page", body: long, ...REST }, sanitizer).body.ok).toBe(true);
+      expect(publicText({ title: "Add a page", body: `${long}\nSee https://example.org`, ...REST }, sanitizer).body).toEqual({ ok: false, violations: ["url"] });
     });
   });
 });

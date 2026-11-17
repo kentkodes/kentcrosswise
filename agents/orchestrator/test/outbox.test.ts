@@ -70,7 +70,7 @@ describe("orchestrator outbox drain and consumer receipts", () => {
     graph = buildTaskGraph(checkpointerFromPool(pool), {
       github: gh,
       store: new PgTaskStore(pool),
-      planner: { split: async (r) => [r.owner_text], plan: async () => ({ title: "Add a page", body: "Add it." }) },
+      planner: { split: async (r) => [r.owner_text], plan: async () => ({ title: "Add a page", body: "Add it.", acceptance: ["It works."], scope: [], context: [] }) },
     });
     q = new FakeFifo();
     // Earlier tests leave tasks in flight; finish them so each start finds a free slot.
@@ -191,7 +191,7 @@ describe("orchestrator outbox drain and consumer receipts", () => {
     graph = buildTaskGraph(checkpointerFromPool(pool), {
       github: failing,
       store: new PgTaskStore(pool),
-      planner: { split: async (r) => [r.owner_text], plan: async () => ({ title: "Add a page", body: "Add it." }) },
+      planner: { split: async (r) => [r.owner_text], plan: async () => ({ title: "Add a page", body: "Add it.", acceptance: ["It works."], scope: [], context: [] }) },
     });
     expect(await consume()).toEqual(["failed"]);
     expect(await receiptKeys()).toEqual([]);
