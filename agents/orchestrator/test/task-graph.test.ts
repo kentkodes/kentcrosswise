@@ -9,6 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { checkpointerFromPool, setupCheckpointer, threadConfig } from "../src/index";
 import { ArtifactFormatError, FakeGitHubClient, type ArtifactResult, type ChangedFile, type GetArtifactInput } from "../src/github";
+import { contractHash, parseContract } from "@kcw/core/contract";
 import { fakeMergeSha } from "../src/github/fake";
 import {
   DOCS_NO_RUN_MINUTES,
@@ -282,6 +283,11 @@ describe("task graph (P2-10)", () => {
 
     expect(await send(id, ciEvent(id, 41, head, "success"))).toBe("applied");
     expect(qaDispatches()).toEqual([{ workflow: "agent-qa.yml", ref: "main", runId: expect.any(Number), inputs: { contract: expect.any(String), task_id: String(id), pr: "41", op: "1" } }]);
+    // AR5a: QA gets the very contract the Developer got (same canonical text, same hash).
+    const devContract = parseContract(devDispatches()[0]!.inputs.contract);
+    expect(qaDispatches()[0]!.inputs.contract).toBe(devDispatches()[0]!.inputs.contract);
+    expect(contractHash(parseContract(qaDispatches()[0]!.inputs.contract))).toBe(contractHash(devContract));
+    expect(devContract).toMatchObject({ task: id, issue: gh.issues[0]!.number, prerequisites: [] });
     // RUN-ID-MAPPING-SPEC §2: both dispatches are linked to the task by run id, as orch_rw.
     expect(await sql<{ run_id: string; role: string }>("SELECT run_id::text, role FROM agent_dispatches WHERE task_id = $1 ORDER BY run_id", [id])).toEqual([
       { run_id: String(devDispatches()[0]!.runId), role: "developer" },

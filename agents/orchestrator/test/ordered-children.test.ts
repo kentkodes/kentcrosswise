@@ -3,6 +3,7 @@
 // messages, and a failed prerequisite parks the parent. GitHub is FakeGitHubClient, the planner a
 // fake; Postgres is PGlite (all migrations, 0020 included) served over the wire protocol as orch_rw.
 import { createHash } from "node:crypto";
+import { parseContract } from "@kcw/core/contract";
 import { PGlite } from "@electric-sql/pglite";
 import type { MergeInput } from "@kcw/core/merge-input";
 import { fromPglite, migrate } from "@kcw/db";
@@ -227,6 +228,7 @@ describe("ordered child work in the task graph (AR4)", () => {
     expect(await task(schema)).toMatchObject({ status: "merged", merge_sha: merge });
     expect(await task(consumer)).toMatchObject({ status: "queued", merge_sha: null });
     expect(await outboxKeys([consumer])).toEqual([`task-${consumer}/start`]);
+    gh.heads.set("main", "9".repeat(40)); // main moved on since the parent was planned
     expect(await deliverOutbox()).toEqual([`task-${consumer}/start: started`]);
 
     const [issue] = issuesOf(consumer);
@@ -234,6 +236,9 @@ describe("ordered child work in the task graph (AR4)", () => {
     const mergeCall = gh.calls.findIndex((c) => c.method === "merge" && (c.args as { pr: number }).pr === 201);
     expect(devCalls(consumer)).toHaveLength(1);
     expect(devCalls(consumer)[0]!).toBeGreaterThan(mergeCall); // dispatched on main after the merge
+    // AR5a: the consumer's contract names main's head read at its planning and the schema's own merge commit.
+    const dispatched = gh.dispatches.find((d) => d.workflow === "agent-developer.yml" && d.inputs.task_id === String(consumer))!;
+    expect(parseContract(dispatched.inputs.contract)).toMatchObject({ task: consumer, base: gh.heads.get("main"), prerequisites: [{ task: schema, merge }] });
     expect(await task(consumer)).toMatchObject({ status: "waiting", waiting_on: "dev" });
   });
 
