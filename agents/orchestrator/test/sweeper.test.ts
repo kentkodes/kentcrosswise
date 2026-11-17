@@ -266,6 +266,13 @@ class FakeStore implements SweeperStore {
   }
   async markOutboxSent() {}
   async recordOutboxFailure() {}
+  async recordMergedReleases() {
+    return 0;
+  }
+  async listReleasesToPoll() {
+    return [];
+  }
+  async recordReleaseCheck() {}
 }
 
 class FakeQueue {
@@ -305,6 +312,15 @@ class FakeSweeperGitHub implements SweeperGitHub {
   }
   async redeliver(id: number) {
     this.redelivered.push(id);
+  }
+  async listDeployRuns() {
+    return [];
+  }
+  async getDeployJob() {
+    return null;
+  }
+  async isDescendant() {
+    return false;
   }
 }
 

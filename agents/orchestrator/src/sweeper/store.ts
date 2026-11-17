@@ -67,6 +67,28 @@ export interface OutboxRow {
   body: string;
 }
 
+/** Releases (migration 0023): only merges of the last 24 hours get a row; rows are polled for 7 days, 20 per sweep. */
+export const RELEASE_NEW_WINDOW_HOURS = 24;
+export const RELEASE_POLL_DAYS = 7;
+export const MAX_RELEASE_POLLS = 20;
+
+/** A task_releases row that is still to be verified. */
+export interface ReleaseRow {
+  mergeSha: string;
+  mergedAt: Date;
+}
+
+/** What one poll found for a release: the deploy run chosen and the facts it proves. */
+export interface ReleaseEvidence {
+  runId: number;
+  attempt: number;
+  deploySha: string;
+  buildId: string | null;
+  deployedAt: Date | null;
+  verifiedAt: Date | null;
+  failedAt: Date | null;
+}
+
 export interface SweeperStore {
   /** Tasks with a SWEEP_STATUSES status or a stale `planning` one, oldest first, at most `limit`. */
   listSweepTasks(limit: number): Promise<SweepTask[]>;
@@ -83,6 +105,12 @@ export interface SweeperStore {
   markOutboxSent(id: number): Promise<void>;
   /** Counts a failed send: attempts + 1, the error class, and the next attempt time (backoff). */
   recordOutboxFailure(id: number, errorClass: string): Promise<void>;
+  /** Creates task_releases rows for merged events of the last 24 hours with a 40-hex sha; returns the rows added. */
+  recordMergedReleases(): Promise<number>;
+  /** Releases not yet verified, merged within 7 days, oldest check first (never checked first), at most `limit`. */
+  listReleasesToPoll(limit: number): Promise<ReleaseRow[]>;
+  /** Stamps checked_at; with evidence, also writes the evidence columns (null evidence writes nothing else). */
+  recordReleaseCheck(mergeSha: string, evidence: ReleaseEvidence | null): Promise<void>;
 }
 
 export function sqlSweeperStore(db: SqlQuery): SweeperStore {
@@ -188,6 +216,45 @@ export function sqlSweeperStore(db: SqlQuery): SweeperStore {
                                                 make_interval(hours => $4))
           WHERE id = $1`,
         [id, errorClass, OUTBOX_BACKOFF_MINUTES, OUTBOX_BACKOFF_MAX_HOURS],
+      );
+    },
+
+    async recordMergedReleases() {
+      const { rows } = await db.query<{ merge_sha: string }>(
+        `INSERT INTO task_releases (merge_sha, task_id, pr_number, merged_at)
+         SELECT e.detail->>'sha', e.task_id,
+                CASE WHEN e.detail->>'pr' ~ '^[0-9]{1,9}$' THEN (e.detail->>'pr')::int END, e.ts
+           FROM agent_events e
+          WHERE e.event_type = 'merged' AND e.task_id IS NOT NULL AND e.detail->>'sha' ~ '^[0-9a-f]{40}$'
+            AND e.ts > now() - make_interval(hours => $1)
+         ON CONFLICT (merge_sha) DO NOTHING
+         RETURNING merge_sha`,
+        [RELEASE_NEW_WINDOW_HOURS],
+      );
+      return rows.length;
+    },
+
+    async listReleasesToPoll(limit) {
+      const { rows } = await db.query<{ merge_sha: string; merged_at: Date | string }>(
+        `SELECT merge_sha, merged_at FROM task_releases
+          WHERE verified_at IS NULL AND merged_at > now() - make_interval(days => $2)
+          ORDER BY checked_at NULLS FIRST, merged_at LIMIT $1`,
+        [limit, RELEASE_POLL_DAYS],
+      );
+      return rows.map((r) => ({ mergeSha: r.merge_sha, mergedAt: new Date(r.merged_at) }));
+    },
+
+    async recordReleaseCheck(mergeSha, e) {
+      if (e === null) {
+        await db.query("UPDATE task_releases SET checked_at = now() WHERE merge_sha = $1", [mergeSha]);
+        return;
+      }
+      await db.query(
+        `UPDATE task_releases
+            SET deploy_run_id = $2, deploy_attempt = $3, deploy_sha = $4, build_id = $5,
+                deployed_at = $6::timestamptz, verified_at = $7::timestamptz, failed_at = $8::timestamptz, checked_at = now()
+          WHERE merge_sha = $1`,
+        [mergeSha, e.runId, e.attempt, e.deploySha, e.buildId, e.deployedAt?.toISOString() ?? null, e.verifiedAt?.toISOString() ?? null, e.failedAt?.toISOString() ?? null],
       );
     },
   };

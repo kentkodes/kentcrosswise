@@ -5,6 +5,7 @@ export * from "./deliveries";
 export * from "./errors";
 export * from "./github";
 export * from "./lambda";
+export * from "./releases";
 export * from "./schedule";
 export * from "./store";
 export * from "./spend";

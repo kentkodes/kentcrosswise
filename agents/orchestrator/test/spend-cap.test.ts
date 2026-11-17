@@ -169,6 +169,13 @@ class FakeSpendStore implements SweeperStore {
   }
   async markOutboxSent() {}
   async recordOutboxFailure() {}
+  async recordMergedReleases() {
+    return 0;
+  }
+  async listReleasesToPoll() {
+    return [];
+  }
+  async recordReleaseCheck() {}
 }
 
 class FakeGitHub implements SweeperGitHub {
@@ -197,6 +204,15 @@ class FakeGitHub implements SweeperGitHub {
     return [];
   }
   async redeliver(_id: number) {}
+  async listDeployRuns() {
+    return [];
+  }
+  async getDeployJob() {
+    return null;
+  }
+  async isDescendant() {
+    return false;
+  }
 }
 
 // 06:20 UTC is inside the nightly gc window [06:15, 07:15).
