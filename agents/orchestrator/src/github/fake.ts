@@ -100,6 +100,15 @@ export class FakeGitHubClient implements GitHubClient {
   registerRuns = false;
   /** While true, findWorkflowRun does not see registered runs (GitHub's delayed run visibility). */
   hideRuns = false;
+  /** Branch heads getBranchHead answers (404 for another branch). `main` is set by default. */
+  readonly heads = new Map<string, string>([["main", "1".repeat(40)]]);
+  /** Files readFile answers by path, at any ref (the calls record the ref); another path is null. The Layout brief is set by default. */
+  readonly files = new Map<string, string>([
+    [
+      "docs/agents/INSTRUCTIONS.md",
+      ["# Instructions", "", "## Layout", "", "```", "agents/orchestrator/  the task graph", "packages/core/  shared code", "```", "", "## Rules", "", "Be careful.", ""].join("\n"),
+    ],
+  ]);
   #failures = new Map<FakeMethod, GitHubApiError>();
   #afterFailures = new Set<FakeMethod>();
   #nextId = 1;
@@ -242,6 +251,18 @@ export class FakeGitHubClient implements GitHubClient {
       .filter((i) => Date.parse(i.createdAt) >= Date.parse(input.createdAfter))
       .map((i) => ({ number: i.number, body: i.body, createdAt: i.createdAt }))
       .reverse();
+  }
+
+  async getBranchHead(branch: string): Promise<string> {
+    this.#record("getBranchHead", branch);
+    const sha = this.heads.get(branch);
+    if (sha === undefined) throw new GitHubApiError("getBranchHead", 404);
+    return sha;
+  }
+
+  async readFile(path: string, ref: string): Promise<string | null> {
+    this.#record("readFile", { path, ref });
+    return this.files.get(path) ?? null;
   }
 
   async getPrMergeState(pr: number): Promise<PrMergeState> {

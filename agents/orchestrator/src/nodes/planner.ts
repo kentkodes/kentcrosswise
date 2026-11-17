@@ -6,18 +6,22 @@
 // limit or was refused is not retried (the same limit or request would fail again): it throws at once.
 // Provider errors propagate unchanged (the step fails and SQS redelivers the message).
 import type { ModelProvider } from "@kcw/core/models";
-import { MAX_TITLE_LENGTH } from "@kcw/core/sanitize";
-import { MAX_SUBTASKS, PlannerOutputError, orderSubtasks, type Plan, type PlanRequest, type Planner, type SubtaskList } from "../graph/types";
+import { MAX_ACCEPTANCE_CHARS, MAX_ACCEPTANCE_ITEMS, MAX_PATHS, isContractPath } from "@kcw/core/contract";
+import { MAX_TITLE_LENGTH, VIOLATIONS, type Sanitizer, type Violation } from "@kcw/core/sanitize";
+import { MAX_SUBTASKS, PlannerInputError, PlannerOutputError, orderSubtasks, type Plan, type PlanRequest, type Planner, type SubtaskList } from "../graph/types";
 
 /** Upper bound for one subtask's text (it is stored as the child's private owner_text). */
 export const MAX_SUBTASK_LENGTH = 4000;
 /** Upper bound for an issue body. */
 export const MAX_BODY_LENGTH = 8000;
+/** AR5a: the whole prompt (system, repository brief and task text), in UTF-8 bytes. Larger: a planning failure, no model call. */
+export const MAX_PLANNER_INPUT_BYTES = 40_960;
 
 export const PLANNER_SYSTEM = [
   "You plan work for a team of coding agents that maintain a small web app in a public GitHub repository.",
   `Split the owner's task into 1 to ${MAX_SUBTASKS} subtasks. Each subtask becomes one pull request by a developer agent,`,
   "so each must be implementable and reviewable on its own, in the order listed.",
+  "The <repository> block is the repository's layout, for reference.",
   "Use a single subtask unless the task clearly contains separate changes.",
   "Write each subtask as a self-contained instruction that keeps every detail of the task it needs.",
   "The subtasks run one after another: each starts only after the previous one is merged, from code that contains it.",
@@ -31,10 +35,13 @@ export const PUBLIC_TITLE_SYSTEM = [
   "You write the public GitHub issue for one task of a coding agent. The repository and its issues are public.",
   `title: a product-level summary of the change, at most ${MAX_TITLE_LENGTH} characters.`,
   "body: what to build and how to check it is done, for a developer agent. Markdown is fine.",
+  `acceptance: 1 to ${MAX_ACCEPTANCE_ITEMS} checkable statements of at most ${MAX_ACCEPTANCE_CHARS} characters each.`,
+  `scope: 0 to ${MAX_PATHS} repository path prefixes the change owns; context: 0 to ${MAX_PATHS} repository paths to read first.`,
+  "Take paths from the <repository> block (the repository's layout); a path has letters, digits, _ . / - only, no .. and no leading /.",
   "Rules for both: plain ASCII only; no names of people; no personal facts; no email addresses, @handles,",
   "URLs or domain names, phone numbers, or numbers longer than 4 digits. Leave out anything private;",
   "describe the change at product level instead.",
-  'Reply with JSON only, no prose and no code fence: {"title": "<title>", "body": "<body>"}',
+  'Reply with JSON only, no prose and no code fence: {"title": "<title>", "body": "<body>", "acceptance": ["<item>"], "scope": ["<path>"], "context": ["<path>"]}',
 ].join("\n");
 
 export interface ModelPlannerOptions {
@@ -50,15 +57,16 @@ export class ModelPlanner implements Planner {
   constructor(private readonly opts: ModelPlannerOptions) {}
 
   split(req: PlanRequest): Promise<SubtaskList> {
-    return this.#ask("planner", PLANNER_SYSTEM, req.owner_text, parseSubtasks);
+    return this.#ask("planner", PLANNER_SYSTEM, req.brief, req.owner_text, parseSubtasks);
   }
 
   plan(req: PlanRequest): Promise<Plan> {
-    return this.#ask("public_title", PUBLIC_TITLE_SYSTEM, req.owner_text, parsePlan);
+    return this.#ask("public_title", PUBLIC_TITLE_SYSTEM, req.brief, req.owner_text, parsePlan);
   }
 
-  async #ask<T>(node: PlannerOutputError["node"], system: string, text: string, parse: (raw: string) => Parsed<T>): Promise<T> {
-    const prompt = `<task>\n${text}\n</task>`;
+  async #ask<T>(node: PlannerOutputError["node"], system: string, brief: string, text: string, parse: (raw: string) => Parsed<T>): Promise<T> {
+    const prompt = `<repository>\n${brief}\n</repository>\n<task>\n${text}\n</task>`;
+    if (Buffer.byteLength(system, "utf8") + Buffer.byteLength(prompt, "utf8") > MAX_PLANNER_INPUT_BYTES) throw new PlannerInputError();
     const maxTokens = this.opts.maxTokens ?? 8000;
     const first = await this.#reply(node, system, prompt, maxTokens);
     const parsed = parse(first);
@@ -140,9 +148,25 @@ export function parseSubtasks(raw: string): Parsed<SubtaskList> {
   return { ok: true, value: out };
 }
 
+function textList(v: unknown, field: string, min: number, max: number, item: (s: string) => string | null): Parsed<string[]> {
+  if (!Array.isArray(v)) return { ok: false, reason: `${field} is not an array` };
+  if (v.length < min || v.length > max) return { ok: false, reason: `${field} must have ${min} to ${max} items, not ${v.length}` };
+  const out: string[] = [];
+  for (const [i, e] of v.entries()) {
+    if (typeof e !== "string") return { ok: false, reason: `${field}[${i}] is not a string` };
+    const t = e.trim();
+    const problem = item(t);
+    if (problem !== null) return { ok: false, reason: `${field}[${i}] ${problem}` };
+    out.push(t);
+  }
+  return { ok: true, value: out };
+}
+
 /**
- * `{"title": string, "body": string}`, both non-empty. The title's length and content are not
- * schema errors: the sanitizer decides (a failing title becomes `Private task`, §4.5).
+ * `{"title", "body", "acceptance", "scope", "context"}`: title and body non-empty strings; acceptance
+ * 1 to 10 items of 1 to 400 characters; scope and context 0 to 20 repository paths each (the
+ * `@kcw/core/contract` path rule). The title's length and content are not schema errors: the
+ * sanitizer decides (a failing title becomes `Private task`, §4.5).
  */
 export function parsePlan(raw: string): Parsed<Plan> {
   const obj = parseObject(raw);
@@ -151,5 +175,28 @@ export function parsePlan(raw: string): Parsed<Plan> {
   if (!title.ok) return title;
   const body = text(obj.value.body, "body", MAX_BODY_LENGTH);
   if (!body.ok) return body;
-  return { ok: true, value: { title: title.value, body: body.value } };
+  const acceptance = textList(obj.value.acceptance, "acceptance", 1, MAX_ACCEPTANCE_ITEMS, (s) =>
+    s.length === 0 ? "is empty" : s.length > MAX_ACCEPTANCE_CHARS ? `is longer than ${MAX_ACCEPTANCE_CHARS} characters` : null,
+  );
+  if (!acceptance.ok) return acceptance;
+  const pathItem = (s: string) => (isContractPath(s) ? null : "is not a valid repository path");
+  const scope = textList(obj.value.scope, "scope", 0, MAX_PATHS, pathItem);
+  if (!scope.ok) return scope;
+  const context = textList(obj.value.context, "context", 0, MAX_PATHS, pathItem);
+  if (!context.ok) return context;
+  // The contract goal is printable ASCII with \n only: normalize line ends and tabs.
+  const goal = body.value.replace(/\r\n?/g, "\n").replace(/\t/g, "  ");
+  return { ok: true, value: { title: title.value, body: goal, acceptance: acceptance.value, scope: scope.value, context: context.value } };
+}
+
+/**
+ * The sanitizer codes of the contract fields other than the goal (AR5a): every acceptance item by
+ * `checkText`; every scope and context path by `checkText` with the `url` code ignored (a file
+ * name such as `machine.ts` looks like a domain). Codes only, never the text.
+ */
+export function contractViolations(plan: Plan, sanitizer: Sanitizer): Violation[] {
+  const found = new Set<Violation>();
+  for (const a of plan.acceptance) for (const v of sanitizer.checkText(a).violations) found.add(v);
+  for (const p of [...plan.scope, ...plan.context]) for (const v of sanitizer.checkText(p).violations) if (v !== "url") found.add(v);
+  return VIOLATIONS.filter((v) => found.has(v));
 }

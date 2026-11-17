@@ -171,6 +171,10 @@ export interface GitHubClient {
   listRecentIssues(input: ListRecentIssuesInput): Promise<RecentIssue[]>;
   /** Whether the PR is merged, and its merge commit SHA. */
   getPrMergeState(pr: number): Promise<PrMergeState>;
+  /** The commit SHA (40-hex) a branch points at now (AR5a: the contract base is the head of `main`). */
+  getBranchHead(branch: string): Promise<string>;
+  /** A repository file's decoded text at a commit or ref, or null when it does not exist there (404). */
+  readFile(path: string, ref: string): Promise<string | null>;
 }
 
 /**
