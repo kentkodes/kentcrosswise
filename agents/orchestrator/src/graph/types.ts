@@ -35,6 +35,13 @@ export const MAX_ATTEMPTS = 3;
 /** D20: at most this many agent tasks in flight (statuses planning, in_progress, waiting). */
 export const IN_FLIGHT_LIMIT = 4;
 
+/**
+ * AR6: at most this many active execution reservations: tasks waiting on a Developer, QA or Docs run
+ * (`status = 'waiting' AND waiting_on IN ('dev','qa')`), separate from the admitted work above. Parked
+ * owner, CI and merge waits do not count. The rollout value is the owner's decision.
+ */
+export const ACTIVE_EXECUTION_LIMIT = 4;
+
 /** §4.3 sweeper limits per wait, in minutes. The owner never times out. */
 export const WAIT_LIMIT_MINUTES = { dev: 60, ci: 90, qa: 60 } as const;
 
@@ -222,6 +229,8 @@ export interface TaskData {
    */
   ops?: Partial<Record<OperationKind, number>>;
   pending_dispatch?: PendingDispatch | null;
+  /** AR6: a dispatch refused for want of an execution reservation (ACTIVE_EXECUTION_LIMIT); every sweep retries it first. */
+  pending_capacity?: PendingDispatch | null;
   /**
    * AR2 slice 3: per agent, the op of its latest dispatch (written with the dispatch intent). A
    * report with a lower op comes from a superseded run: its usage is recorded, its event is not.
