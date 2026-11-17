@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { listRecentEntries, listUnresolvedEntries, MAX_CAPTURE_CHARS, type EntryRow } from "@/server/capture";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
@@ -13,21 +12,6 @@ import { CaptureField } from "./capture-field";
 import { EntryItem } from "./entry-row";
 
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
-
-const PAGES = [
-  { href: "/contacts", label: "Contacts", note: "People and the notes about them" },
-  { href: "/diary", label: "Diary", note: "Entries, scored for mood" },
-  { href: "/mood", label: "Mood", note: "Mood scores over time" },
-  { href: "/todos", label: "Todos", note: "Things to do" },
-  { href: "/ideas", label: "Ideas", note: "Ideas and project thoughts" },
-  { href: "/projects", label: "Projects", note: "One tab per project" },
-  { href: "/console", label: "Boss console", note: "Create tasks, follow them, pause switches" },
-  { href: "/inbox", label: "Inbox", note: "Approvals and routing waiting on you" },
-  { href: "/console/usage", label: "Usage", note: "Model cost, spend cap, Actions minutes" },
-  { href: "/essays", label: "Essays", note: "Library, recommendations and setup" },
-  { href: "/connections", label: "Connections", note: "Google Calendar access" },
-  { href: "/notifications", label: "Notifications", note: "Push notifications for new inbox items" },
-] as const;
 
 async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; problem?: string }> {
   try {
@@ -99,19 +83,6 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
             ))}
           </ol>
         ) : null}
-      </Region>
-
-      <Region>
-        <ul className={s.list}>
-          {PAGES.map((p) => (
-            <li key={p.href}>
-              <Link className={s.label} href={p.href}>
-                {p.label}
-              </Link>
-              <p className={s.note}>{p.note}</p>
-            </li>
-          ))}
-        </ul>
       </Region>
     </OwnerFrame>
   );

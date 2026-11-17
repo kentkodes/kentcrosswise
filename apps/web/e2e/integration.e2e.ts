@@ -30,6 +30,7 @@ test.describe("as the preview owner", () => {
   async function routeTo(page: Page, text: string, label: string): Promise<void> {
     const row = page.getByTestId("unresolved").locator("li").filter({ hasText: text });
     await expect(row).toHaveCount(1);
+    await row.getByText("Change route", { exact: true }).click();
     await row.getByRole("combobox").selectOption({ label });
     await row.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toHaveText(`Routed to ${label}.`);
@@ -54,6 +55,7 @@ test.describe("as the preview owner", () => {
     await page.goto("/hub");
     const recent = page.getByTestId("recent").locator("li").filter({ hasText: text });
     await expect(recent).toHaveCount(1);
+    await recent.getByText("Change route", { exact: true }).click();
     await recent.getByRole("combobox").selectOption({ label: "Idea" });
     await recent.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toHaveText("Routed to Idea.");
