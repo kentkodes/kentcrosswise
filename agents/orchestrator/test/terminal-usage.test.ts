@@ -1,11 +1,13 @@
 // Reproduce final QA usage arriving after its approval has already caused the task to merge.
 // The real graph/checkpointer seam runs entirely in memory: no DB, network or model calls.
 // AR2 slice 3: a report is one recordReport call (receipt, keyed usage and event in one transaction).
+import { contractHash } from "@kcw/core/contract";
 import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it, vi } from "vitest";
 import { FakeGitHubClient } from "../src/github";
 import { buildTaskGraph, initialTaskData, processTaskInput, type TaskInput, type TaskStatus, type TaskStore, type TaskUpdate } from "../src/graph";
 import { threadConfig } from "../src/handler";
+import { memoryEvidence } from "./memory-evidence";
 
 const ID = { run_id: 900, run_attempt: 1, job: "end", op: 1 } as const;
 const line = { kind: "model" as const, provider: "anthropic", model: "synthetic-review-model", input_tokens: 100, output_tokens: 20 };
@@ -23,6 +25,7 @@ describe("terminal task usage", () => {
     const head = "a".repeat(40);
     let status = "queued";
     const recordReport = vi.fn<TaskStore["recordReport"]>().mockResolvedValue(true);
+    const evidence = memoryEvidence();
     const store: TaskStore = {
       recordRun: async () => undefined,
       recordDispatch: async () => undefined,
@@ -44,6 +47,7 @@ describe("terminal task usage", () => {
       createDocsTask: async () => 2, // the merge creates the docs child (its own thread)
       beginOperation: async (i) => ({ record: { effectKey: i.effectKey, kind: i.kind, requestHash: i.requestHash, state: "intent", result: null, createdAt: i.createdAt }, created: true }),
       updateOperation: async () => undefined,
+      ...evidence,
     };
     const github = new FakeGitHubClient();
     github.prs.set(41, { headSha: head, author: "developer[bot]", files: [{ path: "apps/web/src/app/healthz/route.ts", status: "added" }] });
@@ -61,6 +65,9 @@ describe("terminal task usage", () => {
     expect(await processTaskInput(graph, taskId, { kind: "start", message_id: "start" })).toBe("started");
     await processTaskInput(graph, taskId, { kind: "github", event: "pull_request", action: "opened", pr_number: 41, head_ref: "kcw/task-1", head_sha: head, merged: false, message_id: "opened" });
     await processTaskInput(graph, taskId, { kind: "github", event: "workflow_run", action: "completed", run_id: 10, workflow_path: ".github/workflows/ci.yml", conclusion: "success", trigger: "pull_request", head_sha: head, pr_numbers: [41], message_id: "ci" });
+    // The QA attempt (op 1) has started: its start report carried the contract hash.
+    const contract = (await graph.getState(threadConfig(taskId))).values.task.contract;
+    await evidence.updateAttempt("task-1/dispatch/1", { startedAt: "2026-10-23T10:00:00.000Z", startContract: contractHash(contract) });
     await processTaskInput(graph, taskId, { kind: "github", event: "pull_request_review", action: "submitted", pr_number: 41, review_state: "approved", commit_id: head, message_id: "approval" });
     expect(status).toBe("merged");
     expect(github.merges).toHaveLength(1);
@@ -80,6 +87,7 @@ function fixture(initialStatus: TaskStatus = "queued") {
   let status = initialStatus;
   const receipts = new Set<string>();
   const store: TaskStore = {
+    ...memoryEvidence(),
     recordRun: async () => undefined,
     recordDispatch: async () => undefined,
     getTask: async () => ({ id: 1, status, owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null, prerequisites: [], merge_sha: null }),

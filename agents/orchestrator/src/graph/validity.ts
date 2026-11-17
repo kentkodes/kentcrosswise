@@ -58,7 +58,9 @@ export function latestQaAttempt(rows: Pick<ValidityRows, "attempts">, revision: 
  */
 export function evidenceValid(kind: "ci" | "qa", q: ValidityQuery, rows: ValidityRows): boolean {
   if (kind === "ci") {
-    return rows.evidence.some((e) => e.kind === "ci" && e.outcome === "success" && e.head_sha === q.head && e.superseded_at === null);
+    // The latest CI result of the head decides (a re-run that failed after a success is not valid).
+    const latest = rows.evidence.filter((e) => e.kind === "ci" && e.head_sha === q.head && e.superseded_at === null).at(-1);
+    return latest?.outcome === "success";
   }
   if (q.revision !== null) {
     const current = rows.revisions.find((r) => r.revision === q.revision);
