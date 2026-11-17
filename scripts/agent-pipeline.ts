@@ -2,10 +2,9 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rm
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { admit, fence, parseOp } from "./lib/agent-admission";
-import { gatherContext, linkedIssue, parseInputs } from "./lib/agent-context";
-import { ghGet, type GhPull } from "./lib/agent-github";
+import { parseInputs } from "./lib/agent-context";
 import { AGENT_CONFIGS, isWorkflowAgent } from "./lib/agents";
-import { buildReport, candidateBundle, parseTrustedContext, readAdvisoryUsage, readContext, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
+import { buildReport, candidateBundle, readAdvisoryUsage, prepareContext, readContext, readContract, requireArtifact, requireCodeProgress, requireContractIssue, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "./lib/agent-pipeline";
 import { ensurePull, parseReviewDecision, pullText, pushCommits, runGit, submitReview } from "./lib/agent-publish";
 import { parseArgs } from "./lib/args";
 import { runMain } from "./lib/main";
@@ -94,26 +93,8 @@ await runMain(async () => {
         output({ base_sha: "", skip: "true" }); return;
       }
     }
-    const gathered = await gatherContext(inputs, gh);
-    const branch = gathered.outputs.branch!;
-    const existing = await ghGet<{ object: { sha: string } }>(gh, `/repos/${repo}/git/ref/heads/${branch}`, "reading task ref");
-    let prNumber = inputs.pr ?? null;
-    if (existing && (inputs.agent === "developer" || inputs.agent === "scraper") && prNumber === null) {
-      const pulls = await ghGet<GhPull[]>(gh, `/repos/${repo}/pulls?state=open&head=${encodeURIComponent(`${repo.split("/")[0]}:${branch}`)}`, "binding retry task PR");
-      if ((pulls?.length ?? 0) > 1) throw new Error("ambiguous task PR");
-      if (pulls?.[0]) {
-        if (linkedIssue(pulls[0].body) !== inputs.issue) throw new Error("retry task PR does not close the dispatched issue");
-        prNumber = pulls[0].number;
-      }
-    }
-    const workflowSha = process.env.GITHUB_SHA!;
-    const c = parseTrustedContext(JSON.stringify({ version: 1, agent: inputs.agent, repo, taskId: inputs.taskId, op, issue: inputs.issue ?? null, pr: prNumber,
-      branch, workflowSha, baseSha: gathered.outputs.head_sha ?? existing?.object.sha ?? workflowSha, remoteSha: existing?.object.sha ?? null }));
-    if (c.pr && c.agent !== "docs") await requireLivePull(gh, c, c.baseSha, c.agent === "qa");
-    mkdirSync("context", { recursive: true });
-    writeFileSync("context/context.json", JSON.stringify(c));
-    writeFileSync("context/task.md", gathered.markdown);
-    output({ base_sha: c.baseSha, skip: gathered.outputs.skip! }); return;
+    const prepared = await prepareContext({ inputs, op, gh, contractText: process.env.KCW_CONTRACT, workflowSha: process.env.GITHUB_SHA! });
+    output({ base_sha: prepared.baseSha, skip: prepared.skip }); return;
   }
   const c = readContext("context/context.json");
   if (c.repo !== repo || c.workflowSha !== process.env.GITHUB_SHA || c.agent !== args.agent) throw new Error("trusted context binding mismatch");
@@ -143,6 +124,10 @@ await runMain(async () => {
     const reason = await fence({ repo, token: readToken }, { agent: c.agent, workflow: AGENT_CONFIGS[c.agent].workflow, taskId: c.taskId, op: c.op, runId: Number(process.env.GITHUB_RUN_ID) });
     if (reason) { console.log(`publish_fenced reason=${reason}`); output({ pushed: "false", fenced: "true" }); return; }
   }
+  // Contract binding (AR5a): the context artifact still carries the contract the run was started with,
+  // and the live task PR still closes its issue. Before any push or review.
+  const contract = readContract("context/contract.json", c);
+  if (contract) await requireContractIssue(gh, c, contract);
   const dir = mkdtempSync(path.join(tmpdir(), "kcw-candidate-"));
   try {
     runGit(["init", "--bare", "-q", dir]);

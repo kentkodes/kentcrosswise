@@ -9,6 +9,11 @@ export const WORKFLOW_AGENTS: readonly WorkflowAgent[] = ["developer", "qa", "sc
 /** Which files an agent's commits may touch (checked before the workflow pushes them). */
 export type PushRule = "code" | "tests" | "docs";
 
+export interface JobLimit {
+  minutes: number;
+  turns: number;
+}
+
 export interface AgentConfig {
   agent: WorkflowAgent;
   /** `.github/workflows/<file>` */
@@ -19,6 +24,8 @@ export interface AgentConfig {
   botLogin: string;
   botId: number;
   pushRule: PushRule;
+  /** Per job: the workflow `timeout-minutes` and Claude `--max-turns` (pinned by a drift test). */
+  limits: { work: JobLimit; review?: JobLimit };
 }
 
 export const AGENT_CONFIGS: Readonly<Record<WorkflowAgent, AgentConfig>> = {
@@ -29,6 +36,7 @@ export const AGENT_CONFIGS: Readonly<Record<WorkflowAgent, AgentConfig>> = {
     botLogin: "kentcrosswise-dev[bot]",
     botId: 346713162,
     pushRule: "code",
+    limits: { work: { minutes: 50, turns: 80 } },
   },
   qa: {
     agent: "qa",
@@ -37,6 +45,7 @@ export const AGENT_CONFIGS: Readonly<Record<WorkflowAgent, AgentConfig>> = {
     botLogin: "kentcrosswise-qa[bot]",
     botId: 346713513,
     pushRule: "tests",
+    limits: { work: { minutes: 50, turns: 80 }, review: { minutes: 25, turns: 40 } },
   },
   scraper: {
     agent: "scraper",
@@ -45,6 +54,7 @@ export const AGENT_CONFIGS: Readonly<Record<WorkflowAgent, AgentConfig>> = {
     botLogin: "kentcrosswise-scraper[bot]",
     botId: 346713720,
     pushRule: "code",
+    limits: { work: { minutes: 50, turns: 80 } },
   },
   docs: {
     agent: "docs",
@@ -53,6 +63,7 @@ export const AGENT_CONFIGS: Readonly<Record<WorkflowAgent, AgentConfig>> = {
     botLogin: "kentcrosswise-docs[bot]",
     botId: 346713905,
     pushRule: "docs",
+    limits: { work: { minutes: 50, turns: 80 } },
   },
 };
 
