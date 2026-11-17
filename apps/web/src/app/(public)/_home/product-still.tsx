@@ -1,20 +1,17 @@
 // The home page's product still: a framed, static picture of the hub, built from simulated data.
 // Only the live activity list (RecentActivity) is client-side. Sidebar is decorative and hidden on phones.
-import { getDemoData, type Platform } from "@kcw/demo-data";
+import { getDemoData } from "@kcw/demo-data";
 import { Xray } from "../_site/xray";
 import { sparkline, SPARK_H, SPARK_W } from "../_site/sparkline";
 import { RecentActivity } from "./recent-activity";
 import s from "./home.module.css";
 
-const SIDEBAR = ["Today", "People", "Mood", "Following", "Notes", "Agents"];
-const PLATFORM: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+const SIDEBAR = ["Today", "People", "Mood", "Notes", "Agents"];
 
 export function ProductStill() {
   const data = getDemoData();
   const spark = sparkline(data.moods.slice(-7).map((m) => m.sentiment));
   const contact = data.contacts[0];
-  const account = data.socialAccounts[0];
-  const followers = account ? data.socialSnapshots.filter((x) => x.accountId === account.id).at(-1) : undefined;
 
   return (
     <div className={s.still}>
@@ -52,13 +49,6 @@ export function ProductStill() {
               <span className={s.cardLabel}>Follow up</span>
               <p className={s.cardValue}>{contact.name}</p>
               <span className={s.cardNote}>{contact.howKnown}</span>
-            </div>
-          ) : null}
-          {account && followers ? (
-            <div className={s.card}>
-              <span className={s.cardLabel}>Followers</span>
-              <p className={s.cardValue}>{followers.followers.toLocaleString("en-US")}</p>
-              <span className={s.cardNote}>{PLATFORM[account.platform]}</span>
             </div>
           ) : null}
         </div>

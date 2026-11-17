@@ -31,7 +31,7 @@ export const XRAY = {
   "product-still": {
     label: "Hub preview",
     tech: "React server component, @kcw/demo-data",
-    what: "A still picture of the private hub, drawn from simulated people, mood and follower numbers.",
+    what: "A still picture of the private hub, drawn from simulated people, notes and mood.",
     why: "Public pages may import only the demo data, so private data cannot reach them by accident.",
   },
   "activity-feed": {
@@ -43,13 +43,13 @@ export const XRAY = {
   "demo-data": {
     label: "Simulated data",
     tech: "@kcw/demo-data",
-    what: "People, notes, mood and follower numbers are generated from a fixed seed, so every visit shows the same made-up hub.",
+    what: "People, notes and mood are generated from a fixed seed, so every visit shows the same made-up hub.",
     why: "The real hub is private. This package is one of only two workspace packages the public pages may import.",
   },
   "demo-app": {
     label: "Demo hub",
     tech: "React, server-built view model",
-    what: "Tabs for Today, People, Mood, Following and Notes. The server prepares the numbers and the browser only tracks the selected tab.",
+    what: "Tabs for Today, People, Mood and Notes. The server prepares the numbers and the browser only tracks the selected tab.",
     why: "The server builds the view from the demo data, and the browser only holds the selected tab.",
   },
   "office-board": {

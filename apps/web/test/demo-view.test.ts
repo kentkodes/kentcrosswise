@@ -5,8 +5,6 @@ import {
   type DemoData,
   type DemoEntry,
   type DemoIdea,
-  type DemoSocialAccount,
-  type DemoSocialSnapshot,
   type DemoTodo,
 } from "@kcw/demo-data";
 import { describe, expect, it } from "vitest";
@@ -74,61 +72,6 @@ describe("today: follow-up", () => {
   it("falls back to the first contact, with no note age, when no contact has a note", () => {
     const data: DemoData = { ...base(), contacts, entries: [], crmNotes: [] };
     expect(buildDemoView(data).today.followUp).toEqual({ name: "Ada Early", howKnown: "Old friend", sinceLastNote: null });
-  });
-});
-
-describe("today: followers change", () => {
-  const account = (id: string, platform: DemoSocialAccount["platform"]): DemoSocialAccount => ({ id, platform, handle: `demo-${platform}`, ingest: "api" });
-  const snaps = (accountId: string, counts: number[]): DemoSocialSnapshot[] =>
-    counts.map((followers, i) => ({ accountId, day: `2026-01-${String(i + 1).padStart(2, "0")}`, followers, views: 0, followersExact: true }));
-
-  it("uses the account with the most followers and the change over the last 7 snapshots", () => {
-    const yt = [100, 110, 120, 130, 140, 150, 160, 170, 180, 190];
-    const data: DemoData = {
-      ...base(),
-      socialAccounts: [account("yt", "youtube"), account("tt", "tiktok")],
-      socialSnapshots: [...snaps("yt", yt), ...snaps("tt", [10, 20, 30])],
-    };
-    const view = buildDemoView(data);
-    // Latest 190 minus the snapshot 7 intervals earlier (120): +70, spanning 7 days.
-    expect(view.today.followers).toEqual({ platform: "YouTube", count: "190", change: "+70 this week" });
-    // Following: 10 snapshots is fewer than the 31 a 30-day window needs, so it uses all of them: +90.
-    expect(view.following.map((f) => [f.platform, f.followers, f.change, f.handle])).toEqual([
-      ["YouTube", "190", "+90 in 30 days", "demo-youtube"],
-      ["TikTok", "30", "+20 in 30 days", "demo-tiktok"],
-    ]);
-  });
-
-  it("spans exactly 7 and 30 intervals when enough snapshots exist", () => {
-    const series = Array.from({ length: 40 }, (_, i) => i); // followers rise by 1 a day
-    const data: DemoData = {
-      ...base(),
-      socialAccounts: [account("yt", "youtube")],
-      socialSnapshots: snaps("yt", series),
-    };
-    const view = buildDemoView(data);
-    expect(view.today.followers?.change).toBe("+7 this week");
-    expect(view.following[0]?.change).toBe("+30 in 30 days");
-  });
-
-  it("shows a negative change with its sign", () => {
-    const data: DemoData = {
-      ...base(),
-      socialAccounts: [account("yt", "youtube")],
-      socialSnapshots: snaps("yt", [500, 480, 450]),
-    };
-    expect(buildDemoView(data).today.followers?.change).toBe("-50 this week");
-  });
-
-  it("says no change instead of 0 (rounded counts can stay flat)", () => {
-    const data: DemoData = {
-      ...base(),
-      socialAccounts: [account("yt", "youtube")],
-      socialSnapshots: snaps("yt", [5120, 5110, 5120]),
-    };
-    const view = buildDemoView(data);
-    expect(view.today.followers?.change).toBe("no change this week");
-    expect(view.following[0]?.change).toBe("no change in 30 days");
   });
 });
 

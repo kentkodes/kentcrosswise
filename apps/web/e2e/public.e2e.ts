@@ -27,10 +27,6 @@ test("demo page is the app frame with simulated data", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 2, name: "Mood" })).toBeVisible();
   await expect(page.getByText("Happiness", { exact: true })).toBeVisible();
 
-  await tabs.getByRole("button", { name: "Following" }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "Following" })).toBeVisible();
-  await expect(page.getByText(/in 30 days · demo-/)).toHaveCount(3);
-
   await tabs.getByRole("button", { name: "Notes" }).click();
   await expect(page.getByRole("heading", { level: 3, name: "To do" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 3, name: "Ideas" })).toBeVisible();
