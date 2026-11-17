@@ -17,9 +17,10 @@ on:
         type: string
         required: true
       contract:
-        description: "Task contract (canonical JSON, @kcw/core/contract)"
+        description: "Task contract (canonical JSON, @kcw/core/contract); required for a task PR, empty for a Docs-keeper PR"
         type: string
-        required: true
+        required: false
+        default: ""
 
 permissions: {}
 

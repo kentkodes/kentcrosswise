@@ -7,6 +7,7 @@ import { parseAgentReport } from "@kcw/core/events";
 import { createHash } from "node:crypto";
 import { canonicalContract, type TaskContract } from "@kcw/core/contract";
 import { buildReport, candidateBundle, parseTrustedContext, prepareContext, readContract, requireContractIssue, readAdvisoryUsage, requireArtifact, requireCodeProgress, requireLivePull, requirePublisherEnvironment, restoreTrustedInstructions, stripInstructions } from "../lib/agent-pipeline";
+import { AGENT_CONFIGS } from "../lib/agents";
 import { checkAgentDocs } from "../check-agent-docs.mjs";
 const sha = "a".repeat(40);
 const H = "d".repeat(64);
@@ -54,8 +55,17 @@ describe("trusted authority",()=>{
   });
   it("rejects work fields, changed role schema, traversal branch and malformed baseline",()=>{
     expect(parseTrustedContext(JSON.stringify(context))).toEqual(context);
-    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{op:-1},{op:null},{op:1.5},{op:1_000_000_000},{repo:"https://other/repo"},{version:1},{contractHash:null},{contractHash:"D".repeat(64)},{agent:"docs"},{agent:"developer",contractHash:"abc"}])
+    for(const change of [{ extra:true },{baseSha:"HEAD"},{branch:"kcw/task-3"},{agent:"owner"},{taskId:0},{op:-1},{op:null},{op:1.5},{op:1_000_000_000},{repo:"https://other/repo"},{version:1},{agent:"developer",contractHash:null},{contractHash:"D".repeat(64)},{agent:"docs"},{agent:"docs",contractHash:H},{agent:"qa",contractHash:"abc"},{agent:"developer",contractHash:"abc"}])
       expect(()=>parseTrustedContext(JSON.stringify({...context,...change}))).toThrow();
+  });
+  it("accepts a null contract hash for QA only (Docs-keeper PR)",()=>{
+    expect(parseTrustedContext(JSON.stringify({...context,contractHash:null})).contractHash).toBeNull();
+  });
+  it("reports a QA run without a contract with no contract field",()=>{
+    const c=parseTrustedContext(JSON.stringify({...context,op:4,contractHash:null}));
+    const r=buildReport(c,{run_id:900,run_attempt:2},"start",undefined,{work:[],review:[]});
+    expect(r).toMatchObject({job:"start",event_type:"qa_reviewing"});
+    expect(r).not.toHaveProperty("contract");
   });
   it("binds op: required for dispatched agents, null only for the scraper",()=>{
     expect(parseTrustedContext(JSON.stringify({...context,agent:"developer",op:7})).op).toBe(7);
@@ -161,6 +171,9 @@ describe("contract binding at publish",()=>{
     await expect(requireContractIssue(gh([{body:"Closes #6"}]),ctx({pr:9}),contract)).rejects.toThrow(/^contract_issue_mismatch$/);
     await expect(requireContractIssue(gh([{body:"no link"}]),ctx({pr:9}),contract)).rejects.toThrow(/^contract_issue_mismatch$/);
     await expect(requireContractIssue(gh([]),ctx({pr:null}),contract)).resolves.toBeUndefined();
+    const none=gh([]);
+    expect(readContract("unused",ctx({agent:"qa",contractHash:null,pr:9}))).toBeNull();
+    expect(none.fetch).not.toHaveBeenCalled();
     await expect(requireContractIssue(gh([]),ctx({agent:"docs",contractHash:null,pr:9}),contract)).resolves.toBeUndefined();
   });
 });
@@ -208,10 +221,29 @@ describe("prepareContext (AR5a)", () => {
       ["contract_base_not_contained", dev, text, routes(WF, "behind")],
       ["contract_prerequisite_not_contained", dev, text, { ...routes(WF), [`/repos/${REPO}/compare/${MERGE}...${WF}?per_page=1`]: { status: "diverged" } }],
     ];
+    const docsRoutes = { ...routes(HEAD), [`/repos/${REPO}/pulls/9`]: { ...pull, user: { login: "kentcrosswise-docs[bot]", id: AGENT_CONFIGS.docs.botId } } };
+    cases.push(
+      ["contract_invalid", qa, undefined, routes(HEAD)],
+      ["contract_invalid", qa, "", routes(HEAD)],
+      ["contract_invalid", qa, text, docsRoutes],
+      ["contract_invalid", qa, canonicalContract({ ...contract, issue: 6 }), docsRoutes],
+    );
     for (const [code, inputs, contractText, r] of cases) {
       const d = path.join(dir(), "context");
       await expect(prepareContext({ inputs: inputs as typeof dev, op: 1, gh: client(r), contractText, workflowSha: WF, dir: d })).rejects.toThrow(new RegExp(`^${code}$`));
       expect(existsSync(d)).toBe(false);
+    }
+  });
+
+  it("prepares a Docs-keeper PR for QA without a contract", async () => {
+    const docsRoutes = { ...routes(HEAD), [`/repos/${REPO}/pulls/9`]: { ...pull, body: "No issue.", user: { login: "kentcrosswise-docs[bot]", id: AGENT_CONFIGS.docs.botId } } };
+    for (const contractText of [undefined, ""]) {
+      const d = path.join(dir(), "context");
+      const r = await prepareContext({ inputs: qa, op: 1, gh: client(docsRoutes), contractText, workflowSha: WF, dir: d });
+      expect(r).toEqual({ baseSha: HEAD, skip: "false" });
+      expect(files(d)).toEqual(["context.json", "task.md"]);
+      expect(parseTrustedContext(readFileSync(path.join(d, "context.json"), "utf8")).contractHash).toBeNull();
+      expect(readFileSync(path.join(d, "task.md"), "utf8")).not.toContain("Task contract");
     }
   });
 });
