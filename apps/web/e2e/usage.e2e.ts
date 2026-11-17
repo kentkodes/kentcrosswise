@@ -33,7 +33,10 @@ test.describe("as the preview owner", () => {
     await page.goto("/console/usage?from=2026-02-30&to=2026-03-01");
     await expect(page.getByRole("status")).toContainText("showing the last 30 days");
 
-    await page.getByRole("link", { name: "Boss console" }).click();
+    // Boss console sits inside the More disclosure.
+    const nav = page.getByRole("navigation", { name: "Owner" });
+    await nav.locator("summary").click();
+    await nav.getByRole("link", { name: "Boss console" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Boss console" })).toBeVisible();
   });
 });

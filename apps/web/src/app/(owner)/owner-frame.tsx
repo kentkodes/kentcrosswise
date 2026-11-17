@@ -22,14 +22,17 @@ export type OwnerPath =
   | "/connections"
   | "/notifications";
 
-const NAV: { href: OwnerPath; label: string }[] = [
+const PRIMARY: { href: OwnerPath; label: string }[] = [
   { href: "/hub", label: "Hub" },
   { href: "/inbox", label: "Inbox" },
-  { href: "/contacts", label: "Contacts" },
-  { href: "/diary", label: "Diary" },
-  { href: "/mood", label: "Mood" },
   { href: "/todos", label: "Todos" },
+  { href: "/diary", label: "Diary" },
   { href: "/ideas", label: "Ideas" },
+  { href: "/contacts", label: "Contacts" },
+];
+
+const MORE: { href: OwnerPath; label: string }[] = [
+  { href: "/mood", label: "Mood" },
   { href: "/social", label: "Social" },
   { href: "/projects", label: "Projects" },
   { href: "/essays", label: "Essays" },
@@ -59,7 +62,7 @@ export function OwnerFrame({
             <h1 className={s.title}>{title}</h1>
             {actions ? <div className={s.actions}>{actions}</div> : null}
           </header>
-          <OwnerNav items={NAV} current={current} />
+          <OwnerNav primary={PRIMARY} more={MORE} current={current} />
         </div>
         {children}
       </div>
