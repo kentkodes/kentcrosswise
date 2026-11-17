@@ -1,8 +1,7 @@
 // AR6 active execution reservations: a worker run holds `status = 'waiting' AND waiting_on IN ('dev','qa')`,
 // separate from the admitted-work slot. The store as orch_rw on PGlite, the machine through the SQS handler
-// with the fake GitHub client. ACTIVE_EXECUTION_LIMIT equals IN_FLIGHT_LIMIT (4), so a limit that binds is
-// reached here by tasks admitted before the others took their reservations (set by SQL), or by a limit
-// argument of 1 on the store.
+// with the fake GitHub client. ACTIVE_EXECUTION_LIMIT (1 for rollout) is below IN_FLIGHT_LIMIT (4); the tests
+// fill the reservations by SQL, or pass a limit argument of 1 to the store.
 import { describe, expect, it } from "vitest";
 import { capacitySummary } from "../../../apps/web/src/server/console";
 import { ACTIVE_EXECUTION_LIMIT, IN_FLIGHT_LIMIT, WAIT_LIMIT_MINUTES } from "../src/graph";
@@ -26,8 +25,8 @@ describe("active execution reservations (AR6)", () => {
   }
   const queryable = { query: async <R>(text: string, params?: unknown[]) => ({ rows: (await t.sql(text, params)) as R[] }) };
 
-  it("keeps both limits at 4 (the rollout value is the owner's decision)", () => {
-    expect([ACTIVE_EXECUTION_LIMIT, IN_FLIGHT_LIMIT]).toEqual([4, 4]);
+  it("rolls out with one active worker under four admitted tasks (owner decision for AR9)", () => {
+    expect([ACTIVE_EXECUTION_LIMIT, IN_FLIGHT_LIMIT]).toEqual([1, 4]);
   });
 
   // The harness serves PGlite over one connection, so the two claims run one after the other here: this pins the

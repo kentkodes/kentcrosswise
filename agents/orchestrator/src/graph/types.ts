@@ -38,9 +38,10 @@ export const IN_FLIGHT_LIMIT = 4;
 /**
  * AR6: at most this many active execution reservations: tasks waiting on a Developer, QA or Docs run
  * (`status = 'waiting' AND waiting_on IN ('dev','qa')`), separate from the admitted work above. Parked
- * owner, CI and merge waits do not count. The rollout value is the owner's decision.
+ * owner, CI and merge waits do not count. Owner decision 2026-11-17: 1 for the first live runs (AR9), raised
+ * once the cost per task and the live behaviour are confirmed.
  */
-export const ACTIVE_EXECUTION_LIMIT = 4;
+export const ACTIVE_EXECUTION_LIMIT = 1;
 
 /** §4.3 sweeper limits per wait, in minutes. The owner never times out. */
 export const WAIT_LIMIT_MINUTES = { dev: 60, ci: 90, qa: 60 } as const;

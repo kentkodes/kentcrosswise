@@ -30,6 +30,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     store: undefined as unknown as PgTaskStore,
     planner: undefined as unknown as ModelPlanner,
     now: () => new Date("2026-10-23T10:00:00Z"),
+    activeExecutionLimit: 4, // these tests run several workers at once to test other limits and ordering
   };
 
   const sql = async <T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> => {
