@@ -72,6 +72,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     });
     deps.planner = new ModelPlanner({ provider });
     await sql("UPDATE tasks SET status = 'done' WHERE status IN ('planning', 'in_progress', 'waiting')");
+    await sql("UPDATE orchestrator_outbox SET sent_at = now() WHERE sent_at IS NULL");
   });
 
   async function send(taskId: number, body: unknown, messageId = `m${++seq}`): Promise<string> {
@@ -85,6 +86,21 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     return last.slice(last.indexOf(": ") + 2);
   }
   const start = (id: number) => send(id, { type: "task.created", task_id: id });
+
+  /** The sweeper's outbox part (AR4 child starts): sends every unsent row, in id order, and marks it sent. */
+  async function deliverOutbox(): Promise<string[]> {
+    const rows = await sql<{ id: string; group_id: string; body: string; message_key: string }>(
+      "SELECT id, group_id, body, message_key FROM orchestrator_outbox WHERE sent_at IS NULL ORDER BY id",
+    );
+    const out: string[] = [];
+    for (const r of rows) {
+      const lines: string[] = [];
+      await handleTaskSqsEvent({ Records: [{ messageId: `o${++seq}`, body: r.body, attributes: { MessageGroupId: r.group_id } }] }, { graph, log: (l) => lines.push(l) });
+      out.push(`${r.message_key}: ${lines.at(-1)!.slice(lines.at(-1)!.indexOf(": ") + 2)}`);
+      await sql("UPDATE orchestrator_outbox SET sent_at = now() WHERE id = $1", [r.id]);
+    }
+    return out;
+  }
   const sweep = (id: number) => send(id, { type: "sweep", task_id: id, thread_id: `task-${id}` });
 
   async function newTask(ownerText: string): Promise<number> {
@@ -127,7 +143,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
 
   // ------------------------------------------------------------------ DoD
 
-  it("happy path: two subtasks become child tasks, each with its own issue and Developer; the parent ends when both merge", async () => {
+  it("happy path: two subtasks become child tasks; the first starts by its own message, the second after the first merged", async () => {
     const id = await newTask("Add a healthz page and a status badge for Jane");
     replies.planner.push('{"subtasks": ["Add a /healthz route that returns ok", "Add a status badge to the footer"]}');
     replies.public_title.push(
@@ -144,29 +160,46 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     ]);
     const [a, b] = kids.map((k) => Number(k.id)) as [number, number];
     expect(kids.map((k) => k.thread_id)).toEqual([`task-${a}`, `task-${b}`]);
+    // Sequential by default: the second waits for the first.
+    expect(await sql("SELECT id::int, prerequisites::int[] AS p FROM tasks WHERE parent_id = $1 ORDER BY id", [id])).toEqual([
+      { id: a, p: [] },
+      { id: b, p: [a] },
+    ]);
 
     // The parent publishes nothing itself and waits for its children without holding a dev wait.
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: null, github_issue: null, public_title: null });
     expect((await graph.getState(threadConfig(id))).values.task).toMatchObject({ phase: "children", children: [a, b] });
+    // AR4: the parent's invocation made the planner call only; no child was planned in it.
+    expect(provider.calls).toHaveLength(1);
+    expect(gh.calls).toEqual([]);
 
-    // Each child: public title, issue on its own branch, Developer dispatched.
-    expect(gh.issues.map((i) => i.title)).toEqual(["Add a healthz page", "Add a status badge"]);
+    // The first child's start message, then its own invocation: public title, issue, Developer.
+    expect(await deliverOutbox()).toEqual([`task-${a}/start: started`]);
+    expect(gh.issues.map((i) => i.title)).toEqual(["Add a healthz page"]);
     expect(gh.issues[0]!.body).toContain(`kcw/task-${a}`);
-    expect(gh.issues[1]!.body).toContain(`kcw/task-${b}`);
-    expect(gh.issues.map((i) => i.body).join("\n")).not.toMatch(/jane/i); // owner text never reaches GitHub
-    expect(devDispatches().map((d) => d.inputs.task_id)).toEqual([String(a), String(b)]);
+    expect(gh.issues[0]!.body).not.toContain("Prerequisites merged on");
+    expect(devDispatches().map((d) => d.inputs.task_id)).toEqual([String(a)]);
     expect(await task(a)).toMatchObject({ status: "waiting", waiting_on: "dev", public_title: "Add a healthz page", branch: `kcw/task-${a}` });
+    expect(await task(b)).toMatchObject({ status: "queued", waiting_on: null });
+    expect(provider.calls).toHaveLength(2);
+
+    // A repeated start changes nothing (no second split, no second issue, no new message).
+    expect(await start(id)).toBe("duplicate_start");
+    expect(await children(id)).toHaveLength(2);
+    expect(await deliverOutbox()).toEqual([]);
+
+    // The first child merges: the second is released, and its footer names the first child's merge commit.
+    const merge = "a".repeat(40);
+    expect(await deps.store.mergeTask(a, merge)).toEqual([b]);
+    expect(await deliverOutbox()).toEqual([`task-${b}/start: started`]);
+    expect(gh.issues.map((i) => i.title)).toEqual(["Add a healthz page", "Add a status badge"]);
+    expect(gh.issues[1]!.body).toContain(`Prerequisites merged on \`main\`: ${merge}.`);
+    expect(gh.issues.map((i) => i.body).join("\n")).not.toMatch(/jane/i); // owner text never reaches GitHub
     expect(await task(b)).toMatchObject({ status: "waiting", waiting_on: "dev", public_title: "Add a status badge" });
     // One planner call for the parent; one public-title call per child (children are never split again).
     expect(provider.calls).toHaveLength(3);
 
-    // A repeated start changes nothing (no second split, no second issue).
-    expect(await start(id)).toBe("duplicate_start");
-    expect(await children(id)).toHaveLength(2);
-    expect(gh.issues).toHaveLength(2);
-
     // The parent ends on the first sweep after both children merged.
-    await sql("UPDATE tasks SET status = 'merged', waiting_on = NULL WHERE id = $1", [a]);
     expect(await sweep(id)).toBe("unchanged");
     await sql("UPDATE tasks SET status = 'merged', waiting_on = NULL WHERE id = $1", [b]);
     expect(await sweep(id)).toBe("applied");
@@ -242,16 +275,17 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     expect(approvals[0]!.reasons[0]).toContain("(email, url)");
   });
 
-  it("a split parent does not hold an in-flight slot: four children start beside another task", async () => {
+  it("a split parent does not hold an in-flight slot: four independent children start beside another task", async () => {
     const other = await newTask("Something else");
     replies.planner.push('{"subtasks": ["Other work"]}');
     replies.public_title.push(plan("Other work", "Do the other work."));
     await start(other);
 
     const id = await newTask("Four things");
-    replies.planner.push('{"subtasks": ["One", "Two", "Three", "Four"]}');
+    replies.planner.push(JSON.stringify({ subtasks: ["One", "Two", "Three", "Four"].map((text) => ({ text, after: [] })) }));
     replies.public_title.push(...["One", "Two", "Three", "Four"].map((t) => plan(`Do ${t.toLowerCase()}`, `Do ${t.toLowerCase()}.`)));
     expect(await start(id)).toBe("started");
+    expect((await deliverOutbox()).map((l) => l.slice(l.indexOf(": ") + 2))).toEqual(["started", "started", "started", "queued"]);
     const kids = await children(id);
     // other + 3 children fill the four slots; the fourth child waits in the queue.
     expect(kids.map((k) => k.status)).toEqual(["waiting", "waiting", "waiting", "queued"]);

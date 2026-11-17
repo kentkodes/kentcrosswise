@@ -26,7 +26,7 @@ describe("terminal task usage", () => {
     const store: TaskStore = {
       recordRun: async () => undefined,
       recordDispatch: async () => undefined,
-    getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
+    getTask: async () => ({ id: taskId, status: "queued", owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null, prerequisites: [], merge_sha: null }),
       isPaused: async () => false,
       claimSlot: async () => true,
       updateTask: async (id: number, fields: TaskUpdate) => { if (id === taskId && fields.status) status = fields.status; },
@@ -39,6 +39,8 @@ describe("terminal task usage", () => {
       loadContacts: async () => [],
       createSubtasks: async () => { throw new Error("unexpected split"); },
       getChildren: async () => [],
+      mergeTask: async (id: number) => { if (id === taskId) status = "merged"; return []; },
+      cancelQueued: async () => undefined,
       createDocsTask: async () => 2, // the merge creates the docs child (its own thread)
       beginOperation: async (i) => ({ record: { effectKey: i.effectKey, kind: i.kind, requestHash: i.requestHash, state: "intent", result: null, createdAt: i.createdAt }, created: true }),
       updateOperation: async () => undefined,
@@ -80,7 +82,7 @@ function fixture(initialStatus: TaskStatus = "queued") {
   const store: TaskStore = {
     recordRun: async () => undefined,
     recordDispatch: async () => undefined,
-    getTask: async () => ({ id: 1, status, owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null }),
+    getTask: async () => ({ id: 1, status, owner_text: "Add a healthz page", is_private: false, github_issue: null, parent_id: null, prerequisites: [], merge_sha: null }),
     isPaused: async () => false,
     claimSlot: async () => true,
     updateTask: vi.fn(async (_id: number, fields: TaskUpdate) => { if (fields.status) status = fields.status; }),
@@ -97,6 +99,8 @@ function fixture(initialStatus: TaskStatus = "queued") {
     loadContacts: async () => [],
     createSubtasks: async () => { throw new Error("unexpected split"); },
     getChildren: async () => [],
+    mergeTask: async () => { status = "merged"; return []; },
+    cancelQueued: async () => undefined,
     createDocsTask: async () => { throw new Error("unexpected docs task"); },
     beginOperation: async (i) => ({ record: { effectKey: i.effectKey, kind: i.kind, requestHash: i.requestHash, state: "intent", result: null, createdAt: i.createdAt }, created: true }),
     updateOperation: async () => undefined,

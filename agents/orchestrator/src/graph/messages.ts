@@ -6,7 +6,7 @@
 // receipt (reportKey, AR2 slice 3) is written in the same transaction as their usage and event, and
 // the report step itself recognises a report it already applied. Sweep messages have none.
 //
-//   {type:"task.created", task_id, message_key?}                         console (§4.2 step 1)
+//   {type:"task.created", task_id, message_key?}                         console (§4.2 step 1); a child start (AR4 outbox, key task-<id>/start)
 //   {type:"owner.decision", task_id, thread_id, message_key?, resume:{approval_id, decision}}   inbox (§4.3)
 //   {type:"sweep", task_id, thread_id}                                   sweeper (§4.3, P2-17)
 //   {source:"github", delivery_id, task_id, thread_id, resume:{event, head_sha, payload}}   relay (P2-05)
