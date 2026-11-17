@@ -56,7 +56,7 @@ export interface GhPull {
   state: string;
   merged: boolean;
   merge_commit_sha: string | null;
-  user: { login: string } | null;
+  user: { login: string; id?: number } | null;
   head: { ref: string; sha: string; repo: { full_name: string } | null };
   base: { ref: string };
 }

@@ -247,7 +247,7 @@ export async function gatherContext(inputs: AgentInputs, gh: GhOptions, contract
   } else if (inputs.agent === "qa") {
     const pr = await getTaskPull(gh, inputs.pr!, branch, "open");
     // A Docs-keeper PR (author id set by GitHub) has no contract; every other PR needs a valid one.
-    const docsPr = (pr.user as { id?: number } | null)?.id === AGENT_CONFIGS.docs.botId;
+    const docsPr = pr.user?.id === AGENT_CONFIGS.docs.botId;
     if (docsPr ? contract !== null : !contract) throw new InputError("contract_invalid");
     if (contract) {
       if (contract.task !== inputs.taskId) throw new InputError("contract_task_mismatch");
