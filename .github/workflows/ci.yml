@@ -8,13 +8,11 @@
 #   candidate-prod-build  same-repo PRs only, also credential-free: prod build + Lambda bundles as the data-only
 #              artifact `candidate-prod` (the Terraform inputs of infra/prod). preview-trusted.yml verifies it and
 #              runs the prod plan that feeds merge-rules from main's definition (AR1 slice 3).
-#   prod-plan  same-repo PRs only: ADVISORY read-only prod plan of this PR's own infra and build, shown in the step
-#              summary. Its output feeds nothing: it runs candidate code beside a plan role, so merge-rules never
-#              reads it (the trusted `prod-plan` job of preview-trusted.yml does that).
 #   required   the aggregate check `ci/required` that the main ruleset requires
 #
-# Fork PRs get `checks` only: no AWS role, no secrets (and the role trust would refuse them anyway).
-# Only prod-plan assumes an AWS role here (kcw-gh-plan, read-only).
+# No job here assumes an AWS role or reads a secret. The prod plan runs only in the trusted `prod-plan` job of
+# preview-trusted.yml (kcw-gh-plan trusts only environment:prod-plan, main-only); the advisory plan that ran
+# candidate code beside the plan role was removed on 2026-11-17. Fork PRs get `checks` only.
 #
 # Cancelled runs: a new push cancels the running CI for that PR (concurrency below). The preview itself is
 # provisioned and torn down by preview-trusted.yml; preview-gc.yml removes leftovers when the PR closes and
@@ -232,60 +230,9 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  prod-plan:
-    name: prod-plan
-    needs: checks
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      id-token: write
-      contents: read
-    env:
-      TF_VAR_domain_name: ${{ vars.KCW_DOMAIN_NAME }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup
-        with:
-          terraform: "true"
-
-      # Prod build; build-web also fails if the preview login is in the bundle.
-      - name: Prod build
-        run: pnpm build-web
-
-      # Orchestrator, webhook relay and sweeper Lambda code (agents/*/dist*, read by infra/prod).
-      - name: Lambda bundles
-        run: pnpm build-lambdas
-
-      - name: AWS credentials (kcw-gh-plan, read-only)
-        uses: aws-actions/configure-aws-credentials@v6.3.0
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
-          aws-region: us-east-1
-
-      - name: Terraform init infra/prod
-        env:
-          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-        run: terraform -chdir=infra/prod init -backend-config="bucket=$TF_STATE_BUCKET"
-
-      # -lock=false: the plan role cannot write the lock object, and a plan changes nothing.
-      - name: Terraform plan infra/prod
-        run: terraform -chdir=infra/prod plan -lock=false -out=prod.tfplan
-
-      # The plan JSON contains sensitive values in clear text: it is summarized, then deleted, never uploaded.
-      # The summary markdown is all this job keeps; no artifact is uploaded.
-      - name: Plan summary
-        run: |
-          terraform -chdir=infra/prod show -json prod.tfplan > "$RUNNER_TEMP/prod-plan.json"
-          pnpm plan-summary --plan-json "$RUNNER_TEMP/prod-plan.json" --out "$RUNNER_TEMP/prod-plan-summary.json" --markdown "$GITHUB_STEP_SUMMARY"
-          rm -f "$RUNNER_TEMP/prod-plan.json" infra/prod/prod.tfplan
-
   required:
     name: ci/required
-    needs: [checks, candidate-build, candidate-prod-build, prod-plan]
+    needs: [checks, candidate-build, candidate-prod-build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -297,14 +244,12 @@ jobs:
           CHECKS: ${{ needs.checks.result }}
           CANDIDATE: ${{ needs['candidate-build'].result }}
           CANDIDATE_PROD: ${{ needs['candidate-prod-build'].result }}
-          PLAN: ${{ needs['prod-plan'].result }}
         run: |
-          echo "checks=$CHECKS candidate-build=$CANDIDATE candidate-prod-build=$CANDIDATE_PROD prod-plan=$PLAN same-repo=$SAME_REPO"
+          echo "checks=$CHECKS candidate-build=$CANDIDATE candidate-prod-build=$CANDIDATE_PROD same-repo=$SAME_REPO"
           test "$CHECKS" = success
           if [ "$SAME_REPO" = true ]; then
             test "$CANDIDATE" = success
             test "$CANDIDATE_PROD" = success
-            test "$PLAN" = success
           else
-            echo "Fork PR: candidate-build, candidate-prod-build and prod plan do not run."
+            echo "Fork PR: candidate-build and candidate-prod-build do not run."
           fi

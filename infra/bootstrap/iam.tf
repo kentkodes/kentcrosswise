@@ -13,15 +13,11 @@ locals {
   # kcw-gh-ci (AR1 slice 2): no pull_request subject, so no PR-context job can assume it. Its users are
   # preview-trusted.yml (provision, teardown) and preview-gc.yml (closed-PR cleanup, sweep), all in
   # environment preview-gc (main-only), so agent workflows on main (ref:refs/heads/main) cannot use it.
-  # kcw-gh-plan (AR1 slice 3): pull_request for the advisory prod plan of ci.yml (its output feeds nothing), and
-  # environment:prod-plan (main-only) for the trusted prod plan of preview-trusted.yml, whose merge-rules input the
-  # orchestrator reads.
+  # kcw-gh-plan: environment:prod-plan only (main-only), the trusted prod plan of preview-trusted.yml, whose
+  # merge-rules input the orchestrator reads. No pull_request job assumes it (the advisory plan of ci.yml is removed).
   role_subs = {
-    "kcw-gh-ci" = ["${local.github_sub}:environment:preview-gc"]
-    "kcw-gh-plan" = [
-      "${local.github_sub}:pull_request",
-      "${local.github_sub}:environment:prod-plan",
-    ]
+    "kcw-gh-ci"     = ["${local.github_sub}:environment:preview-gc"]
+    "kcw-gh-plan"   = ["${local.github_sub}:environment:prod-plan"]
     "kcw-gh-deploy" = ["${local.github_sub}:environment:prod"]
     # Publisher jobs use protected, main-only environments. Work jobs have no AWS trust, except
     # kcw-gh-agent-model below, which reads only the model key.
@@ -400,7 +396,7 @@ resource "aws_iam_role_policy" "ci" {
   policy = data.aws_iam_policy_document.ci.json
 }
 
-# ---------- kcw-gh-plan: read-only prod plan on PRs ----------
+# ---------- kcw-gh-plan: read-only prod plan (trusted prod-plan job of preview-trusted.yml) ----------
 # AWS ReadOnlyAccess, minus anything that reads data rather than configuration.
 
 resource "aws_iam_role_policy_attachment" "plan_readonly" {

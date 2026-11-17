@@ -37,12 +37,12 @@ describe("ci.yml candidate-build", () => {
     expect(job).toContain("retention-days: 3");
     expect(job).toContain("if: github.event.pull_request.head.repo.full_name == github.repository");
     const required = jobs(ci).required!;
-    expect(required).toContain("needs: [checks, candidate-build, candidate-prod-build, prod-plan]");
+    expect(required).toContain("needs: [checks, candidate-build, candidate-prod-build]");
     expect(required).toContain('test "$CANDIDATE" = success');
   });
 });
 
-describe("ci.yml candidate-prod-build and the advisory prod-plan (AR1 slice 3)", () => {
+describe("ci.yml candidate-prod-build (AR1 slice 3); no plan in pull_request context", () => {
   const ci = read(".github/workflows/ci.yml");
   const j = jobs(ci);
   const job = j["candidate-prod-build"]!;
@@ -73,13 +73,11 @@ describe("ci.yml candidate-prod-build and the advisory prod-plan (AR1 slice 3)",
     expect(j.required).toContain('test "$CANDIDATE_PROD" = success');
   });
 
-  it("carries no merge-rules input or plan summary artifact: the advisory plan feeds nothing", () => {
+  it("assumes no AWS role and runs no plan: the prod plan runs only in the trusted prod-plan of preview-trusted.yml", () => {
+    expect(Object.keys(j)).toEqual(["checks", "candidate-build", "candidate-prod-build", "required"]);
+    expect(ci).not.toMatch(/configure-aws-credentials|vars\.AWS_ROLE|id-token: write|terraform -chdir=infra\/prod plan/);
     expect(ci).not.toContain("merge-rules-input");
-    expect(ci).not.toMatch(/name: prod-plan-summary/);
     expect(ci).not.toContain("pnpm merge-input");
-    expect(j["prod-plan"]).not.toContain("upload-artifact");
-    expect(j["prod-plan"]).toContain("terraform -chdir=infra/prod plan");
-    expect(j["prod-plan"]).toContain('--markdown "$GITHUB_STEP_SUMMARY"');
   });
 });
 

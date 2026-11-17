@@ -18,7 +18,7 @@ Done and removed from the table: AR1 (#106-#109, live since the owner's bootstra
 
 Migrations on main: 0020, 0021, 0022 and 0023 are applied on prod by their deploys (0021 landed after 0023; the runner applies any unrecorded file); 0015 and 0017 are not on main.
 
-Unsettled implementation choices: worker/WIP/time limits (when to raise the active-worker limit after AR9), alert recovery targets, the exact paid/live acceptance scope, and whether `kcw-gh-plan` keeps its `pull_request` trust (it now serves only the advisory `ci.yml` plan) before agents are enabled. The accepted priority and lifecycle defaults do not approve those privileged steps.
+Unsettled implementation choices: worker/WIP/time limits (when to raise the active-worker limit after AR9) and the exact paid/live acceptance scope. Alert recovery objectives are set ([alerts.md](runbooks/alerts.md) section 4), and `kcw-gh-plan` trusts only the main-only `prod-plan` environment (2026-11-17; bootstrap apply in [bootstrap.md](runbooks/bootstrap.md#plan-role-trusted-path-only-2026-11-17)). The accepted priority and lifecycle defaults do not approve those privileged steps.
 
 ## Review candidates (2026-11-13, owner decision)
 
@@ -86,7 +86,7 @@ Use these cases in AR9's acceptance matrix; each live case needs its own scoped,
 - Protected paths: owner approval and rejection through the inbox (A6).
 - Browsers: Safari, Firefox and physical phones (canvas, touch, reduced motion, playback).
 - Runtime adapters: native instruction loading in each supported local and cloud runtime (A13).
-- `docs/runbooks/oidc-debug.yml` predates per-agent publishing; repair or delete it before reuse (A14).
+- `docs/runbooks/oidc-debug.yml` predates per-agent publishing and the trusted-path roles (no role trusts `pull_request` since 2026-11-17); repair or delete it before reuse (A14).
 
 ## Not verified live
 

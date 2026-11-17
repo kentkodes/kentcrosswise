@@ -40,3 +40,16 @@ All alarms treat missing data as healthy and notify on both ALARM and OK.
 | `kcw-prod-hub-jobs-failing` | At least one scheduled web job (`social-daily`, `inbox-push`) logged `[job] <name> failed <ErrorClass>` in one day. A metric filter on `/aws/lambda/kcw-prod-server` counts those lines into `kcw/HubJobFailures`. | Search that log group for `[job]` to see the job and the error class. The job runs again on its next schedule: `inbox-push` within 15 minutes, `social-daily` the next day. |
 
 A failed deploy is not an alarm: the last two steps of `deploy.yml` run only when the run failed and publish "kcw deploy failed" with the run id and commit. Open that run and follow [release-recovery.md](release-recovery.md) section 3. If the deploy role could not be assumed at all, nothing is published; GitHub's failed-run email is the fallback.
+
+## 4. Recovery objectives
+
+Owner decision (2026-11-17), for one owner with no on-call. Detection is the alarm's own threshold; the objectives start when the email arrives and count waking hours, not a pager. They are targets for the owner's response, not guarantees.
+
+| Failure | Detected within | Contained within | Recovered within | What is at risk meanwhile |
+|---|---|---|---|---|
+| Agent pipeline: DLQ not empty, input queue older than 30 minutes, sweeper failing | 5 to 35 minutes | 4 hours: set `agents_paused=true` if the cause is not obvious (no new dispatch, nothing merges) | 1 day: fix forward, then redrive or delete the message | Agent tasks only. The public site and the hub keep working. |
+| Hub job failing (`social-daily`, `inbox-push`) | 1 day (daily sum) | Nothing to contain: the job retries on its own schedule | Before its next scheduled run after the email, or 2 days if the cause is a provider (token or quota) | One day of social counts, delayed push notices. No data loss. |
+| Failed deploy (SNS "kcw deploy failed") | the run's end | Immediate: the previous build stays live (build runs before the migration) | Before the next merge: fix forward or revert ([release-recovery.md](release-recovery.md) section 3) | New changes do not ship; a failed migration leaves earlier files of that run applied. |
+| Data loss or corruption in the database | when noticed (no alarm) | 1 hour: stop writers ([release-recovery.md](release-recovery.md) section 6 step 1) | Decide inside Neon's restore window (6 hours recorded for the Free plan; verify in the console): restore as a branch, check, cut over | Work after the restore point. Recovery point = the restore timestamp. |
+
+Agents stay paused during any open pipeline alarm. A pipeline alarm that is still open after 1 day, a second failed deploy in a row, or any database restore is recorded in [OPEN-POINTS.md](../OPEN-POINTS.md) with its cause.
