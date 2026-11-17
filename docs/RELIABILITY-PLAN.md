@@ -88,7 +88,9 @@ Status, AR6: the owner status is merged (#141, migration `0022_execution_wait`; 
 
 Status, AR8a: the deploy-state follow-up is merged and deployed (#144, migration `0023_release_states`): merged, deployed and verified are recorded separately per merge commit (`task_releases`, sweeper part `releases`, console block). A failed, cancelled-without-successor or missing deploy is never shown as verified. The live check needs a real orchestrator merge: AR9.
 
-Status, AR8b: implemented and merged (#130): SNS topic `kcw-prod-alerts`, four alarms, one metric filter and the deploy failure steps. Remaining: the owner's email subscription and one controlled test ([alerts runbook](runbooks/alerts.md), section 2).
+Status, AR8b: implemented and merged (#130): SNS topic `kcw-prod-alerts`, four alarms, one metric filter and the deploy failure steps. The owner's email subscription is confirmed and the controlled test passed on 2026-11-17 ([alerts runbook](runbooks/alerts.md), section 2).
+
+Status, AR9: first live run on 2026-11-17, a UI-only owner-hub cleanup split into two subtasks. One subtask ran the whole chain without the owner, through orchestrator merge and deploy; the other merged after the owner accepted a scope deviation that QA flagged. About $2.74 of model spend. Results, findings and follow-ups are in [OPEN-POINTS](OPEN-POINTS.md) (AR9, AR9a). A schema-plus-consumer run is still to do.
 
 ## Validation and session handoff
 
