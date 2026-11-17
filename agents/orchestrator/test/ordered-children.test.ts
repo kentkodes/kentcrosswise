@@ -93,6 +93,7 @@ describe("ordered child work in the task graph (AR4)", () => {
       plan: async (r) => ({ title: `Do ${r.owner_text.toLowerCase()}`, body: `${r.owner_text}.`, acceptance: ["It works."], scope: [], context: [] }),
     },
     now: () => clock,
+    activeExecutionLimit: 4, // these tests run several workers at once to test other limits and ordering
   };
   let seq = 0;
 

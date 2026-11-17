@@ -61,6 +61,8 @@ export interface TaskGraphDeps {
   /** Extra sanitizer blocklist terms (§4.5). */
   blocklist?: readonly string[];
   now?: () => Date;
+  /** AR6: active worker reservations; default ACTIVE_EXECUTION_LIMIT. Tests of other limits raise it. */
+  activeExecutionLimit?: number;
   /** One line per notable step; never task text or message content. */
   log?: (line: string) => void;
 }
@@ -763,7 +765,7 @@ class Machine {
     const role = agentRoleOfWorkflow(workflow);
     if (role === null || role === "scraper") throw new Error("dispatchAgent: not an agent workflow");
     // AR6: the active execution reservation comes first. A task that holds one (a redispatch, a re-run step) claims nothing twice.
-    if (!(await this.store.claimExecution(this.id, role, ACTIVE_EXECUTION_LIMIT))) {
+    if (!(await this.store.claimExecution(this.id, role, this.deps.activeExecutionLimit ?? ACTIVE_EXECUTION_LIMIT))) {
       d.pending_capacity = pending;
       this.log(`execution_full role=${role}`);
       return false;

@@ -54,6 +54,7 @@ describe("task graph (P2-10)", () => {
     store: undefined as unknown as PgTaskStore,
     planner: { split: async (r) => [r.owner_text], plan: async (r) => plans.get(r.task_id) ?? PLAN },
     now: () => clock,
+    activeExecutionLimit: 4, // these tests run several workers at once to test other limits and ordering
   };
   let seq = 0;
 
