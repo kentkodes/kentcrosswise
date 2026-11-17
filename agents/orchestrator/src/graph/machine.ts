@@ -16,7 +16,7 @@ import { evaluate } from "@kcw/merge-rules";
 import { ArtifactFormatError, CI_WORKFLOW, GitHubApiError, type GitHubClient, type MergeResult } from "../github";
 import { publicText } from "../nodes/public-title";
 import { OperationConflictError, agentRunName, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
-import { DispatchLinkConflictError, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
+import { DispatchLinkConflictError, type ChildTask, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
 import {
   DEV_WORKFLOW,
   DISPATCH_UNKNOWN_MINUTES,
@@ -31,10 +31,12 @@ import {
   WAIT_LIMIT_MINUTES,
   agentRoleOfWorkflow,
   branchOf,
+  orderSubtasks,
   waitingOnOf,
   type DevMode,
   type GitHubInput,
   type IncompleteReason,
+  type OwnerWait,
   type PendingDispatch,
   type Phase,
   type Plan,
@@ -317,8 +319,11 @@ class Machine {
     await this.store.addEvent(this.id, agent, type, detail, this.nextEffectKey(`event/${type}`));
   }
 
-  /** Moves to a phase: writes tasks.status / waiting_on and restarts the wait clock. */
-  async enter(phase: Phase, finalStatus?: TaskStatus): Promise<void> {
+  /**
+   * Moves to a phase: writes tasks.status / waiting_on and restarts the wait clock. A merged task
+   * also releases the sibling subtasks that waited for it (AR4, store.mergeTask), in the same write.
+   */
+  async enter(phase: Phase, finalStatus?: TaskStatus, mergeSha?: string | null): Promise<void> {
     const d = this.d;
     // Leaving the wait for a dispatch's run abandons it; its next dispatch is a new operation.
     if (d.pending_dispatch != null) {
@@ -337,6 +342,12 @@ class Machine {
     const status: TaskStatus = phase === "done" ? (finalStatus ?? "done") : phase === "queued" ? "queued" : "waiting";
     const agent: AgentName | null =
       phase === "dev" ? (this.isDocs ? "docs" : "developer") : phase === "qa" ? "qa" : phase === "done" ? null : "orchestrator";
+    if (status === "merged") {
+      // A reconciled merge whose commit GitHub did not return records "unknown" (merge()): no merge_sha.
+      const released = await this.store.mergeTask(this.id, mergeSha != null && mergeSha !== "unknown" ? mergeSha : null);
+      if (released.length > 0) this.log(`released ${released.map((c) => `task-${c}`).join(", ")}`);
+      return;
+    }
     await this.store.updateTask(this.id, { status, waiting_on: waitingOnOf(phase), agent });
   }
 
@@ -404,6 +415,16 @@ class Machine {
       this.d.phase = "done";
       return "stale";
     }
+    // AR4: a subtask starts only after each prerequisite merged (its start message is sent then; this
+    // also holds for any other start or sweep of its thread).
+    if (task.parent_id !== null && task.prerequisites.length > 0) {
+      const merged = new Set((await this.store.getChildren(task.parent_id)).filter((c) => c.status === "merged").map((c) => c.id));
+      const waiting = task.prerequisites.filter((p) => !merged.has(p));
+      if (waiting.length > 0) {
+        this.log(`not started: waiting for ${waiting.map((p) => `task-${p}`).join(", ")}`);
+        return "queued";
+      }
+    }
     if (!(await this.store.claimSlot(this.id, IN_FLIGHT_LIMIT))) {
       this.log(`queued: ${IN_FLIGHT_LIMIT} tasks in flight`);
       return "queued";
@@ -435,16 +456,31 @@ class Machine {
     // so a re-run of this step reuses them instead of calling the model again.
     const begun = await this.beginOp("plan", { owner_text: task.owner_text, is_private: task.is_private, subtask: task.parent_id !== null }, "plan");
     if (begun === null) return "applied";
-    const stored = (begun.record.result ?? {}) as { subtasks?: string[]; plan?: Plan };
+    // after: each subtask's prerequisites (indices); records written before AR4 have none (sequential).
+    const stored = (begun.record.result ?? {}) as { subtasks?: string[]; after?: number[][]; plan?: Plan };
     let plan: Plan;
     try {
       let subtasks = stored.subtasks;
+      let after = stored.after;
       if (subtasks === undefined) {
-        // A subtask was planned by its parent: it is never split again.
-        subtasks = task.parent_id === null ? await this.deps.planner.split(req) : [task.owner_text];
-        if (task.parent_id === null) await this.store.updateOperation(begun.key, subtasks.length > 1 ? "done" : "intent", { subtasks });
+        if (task.parent_id === null) {
+          const list = await this.deps.planner.split(req);
+          // AR4: an invalid order (unknown or self reference, cycle) is invalid planner output.
+          const order = orderSubtasks(list);
+          if (!order.ok) throw new PlannerOutputError("planner", order.reason);
+          subtasks = [...list];
+          after = order.value;
+          await this.store.updateOperation(begun.key, subtasks.length > 1 ? "done" : "intent", { subtasks, after });
+        } else {
+          // A subtask was planned by its parent: it is never split again.
+          subtasks = [task.owner_text];
+        }
       }
-      if (subtasks.length > 1) return await this.split(subtasks);
+      if (subtasks.length > 1) {
+        const order = after === undefined ? orderSubtasks(subtasks) : { ok: true as const, value: after };
+        if (!order.ok) throw new PlannerOutputError("planner", order.reason);
+        return await this.split(subtasks, order.value);
+      }
       if (stored.plan !== undefined) {
         plan = stored.plan;
       } else {
@@ -480,18 +516,37 @@ class Machine {
     return "applied";
   }
 
-  /** Child rows for the subtasks; the handler starts their threads (index.ts `startSubtasks`). */
-  async split(subtasks: string[]): Promise<StepOutcome> {
-    this.d.children = await this.store.createSubtasks(this.id, subtasks);
+  /**
+   * Child rows for the subtasks with their prerequisites. The children without prerequisites get
+   * their start message in the same transaction (AR4); each child is planned in its own invocation
+   * when that message arrives, never in this one.
+   */
+  async split(subtasks: string[], after: number[][]): Promise<StepOutcome> {
+    this.d.children = await this.store.createSubtasks(this.id, subtasks, after);
     this.log(`split into ${this.d.children.length} subtasks: ${this.d.children.map((c) => `task-${c}`).join(", ")}`);
     await this.enter("children");
     return "applied";
   }
 
-  /** Phase `children`, on a sweep: the parent ends once every child has (§11 Q12). */
+  /**
+   * Phase `children`, on a sweep: the parent ends once every child has (§11 Q12). A child that
+   * failed or was cancelled blocks the queued children that depend on it, directly or not (AR4):
+   * they never start. Once no child can make progress, the parent goes to the owner with the reason.
+   */
   async childrenDone(): Promise<StepOutcome> {
     const children = await this.store.getChildren(this.id);
-    if (children.some((c) => !FINAL_STATUSES.has(c.status))) return "unchanged";
+    const blocked = blockedChildren(children);
+    if (children.some((c) => !FINAL_STATUSES.has(c.status) && !blocked.has(c.id))) return "unchanged";
+    if (blocked.size > 0) {
+      const ended = children.filter((c) => c.status === "failed" || c.status === "cancelled").map((c) => `task-${c.id}`);
+      const waiting = [...blocked].map((c) => `task-${c}`);
+      this.log(`children blocked: ${waiting.join(", ")}`);
+      await this.toOwner("blocked", "critical_pr", [
+        `Subtask ${ended.join(", ")} ended without a merge; the subtasks that depend on it were not started: ${waiting.join(", ")}.`,
+        "Approve or reject to close the task as failed; the blocked subtasks are then cancelled.",
+      ], `Task ${this.id}: subtasks blocked`);
+      return "applied";
+    }
     if (children.every((c) => c.status === "merged" || c.status === "done")) {
       await this.enter("done", "done");
       return "applied";
@@ -506,7 +561,8 @@ class Machine {
    * it creates anything. The number is stored in tasks.github_issue as soon as it is known.
    */
   async publishIssue(issue: { title: string; body: string }): Promise<boolean> {
-    let number = (await this.store.getTask(this.id))?.github_issue ?? null;
+    const row = await this.store.getTask(this.id);
+    let number = row?.github_issue ?? null;
     if (number === null) {
       const begun = await this.beginOp("issue", { title: issue.title, body: issue.body }, "plan");
       if (begun === null) return false;
@@ -515,7 +571,15 @@ class Machine {
       } else {
         if (!begun.created) number = await this.findIssue(begun.key, begun.record.createdAt);
         if (number === null) {
-          const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.\n${issueMarker(begun.key)}`;
+          // AR4: a subtask starts only after its prerequisites merged, so main at its dispatch contains
+          // them. The footer names their merge commits (the known ones, in prerequisite order).
+          const merges: string[] = [];
+          for (const p of row?.prerequisites ?? []) {
+            const commit = (await this.store.getTask(p))?.merge_sha;
+            if (commit) merges.push(commit);
+          }
+          const prereqs = merges.length > 0 ? `Prerequisites merged on \`main\`: ${merges.join(", ")}.\n` : "";
+          const footer = `\n\n---\nTask ${this.id}. Branch: \`${branchOf(this.id)}\`.\n${prereqs}${issueMarker(begun.key)}`;
           number = (await this.github.createIssue({ title: issue.title, body: issue.body + footer })).number;
         }
         await this.store.updateOperation(begun.key, "done", { number });
@@ -733,7 +797,9 @@ class Machine {
     await this.event("merged", "orchestrator", { pr: d.pr_number, by: "external" });
     // §4.2 step 8 as in merge(): Docs-keeper follows every merged work PR, never a docs PR.
     if (!this.isDocs) await this.createDocsTask(d.pr_number!);
-    await this.enter("done", "merged");
+    // The webhook carries no merge commit: dependents are released without a recorded base (their
+    // dispatch still runs on main after this merge).
+    await this.enter("done", "merged", null);
     return "applied";
   }
 
@@ -893,7 +959,7 @@ class Machine {
       await this.event("merged", "orchestrator", { pr, sha: res.sha });
       // §4.2 step 8: Docs-keeper follows every merged work PR, never a docs PR (no loop).
       if (!this.isDocs) await this.createDocsTask(pr);
-      await this.enter("done", "merged");
+      await this.enter("done", "merged", res.sha);
       return;
     }
     if (res.reason === "head_changed") return this.incomplete("head_moved"); // the push event moves it back to CI
@@ -914,7 +980,7 @@ class Machine {
   // ------------------------------------------------------------------ owner (§4.3 owner decisions)
 
   async toOwner(
-    wait: "issue_text" | "critical" | "failure",
+    wait: OwnerWait,
     kind: "issue_text" | "critical_pr",
     reasons: string[],
     inboxTitle: string,
@@ -951,6 +1017,11 @@ class Machine {
     if (!a || a.task_id !== this.id || a.status !== decision) return undefined;
     const wait = d.owner_wait;
     const pr = d.pr_number;
+
+    if (wait === "blocked") {
+      await this.store.cancelQueued([...blockedChildren(await this.store.getChildren(this.id))]);
+      return this.finish("failed", "a subtask failed; the subtasks that depend on it were cancelled");
+    }
 
     if (wait === "issue_text") {
       if (decision === "rejected") return this.finish("cancelled", "issue text rejected by the owner");
@@ -1074,4 +1145,24 @@ class Machine {
     await this.dispatchDocs(reason, true);
     return "applied";
   }
+}
+
+/**
+ * AR4: the queued children that can never start: a prerequisite failed or was cancelled, or is
+ * itself blocked.
+ */
+export function blockedChildren(children: readonly ChildTask[]): Set<number> {
+  const byId = new Map(children.map((c) => [c.id, c]));
+  const blocked = new Set<number>();
+  const dead = (id: number) => blocked.has(id) || ["failed", "cancelled"].includes(byId.get(id)?.status ?? "");
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const c of children) {
+      if (c.status === "queued" && !blocked.has(c.id) && c.prerequisites.some(dead)) {
+        blocked.add(c.id);
+        changed = true;
+      }
+    }
+  }
+  return blocked;
 }

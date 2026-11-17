@@ -61,7 +61,8 @@ export const branchOf = (taskId: number): string => `kcw/task-${taskId}`;
  * - `merge`: QA approved; waiting for complete merge-rules inputs (Q11).
  * - `owner`: waiting on an approval.
  * - `children`: the planner split the task into subtasks (child tasks with their own threads); a
- *   sweep finishes the parent once every child has ended (§11 Q12).
+ *   child starts by an outbox message once its prerequisites merged (AR4); a sweep finishes the
+ *   parent once every child has ended, or parks it for the owner when a failed child blocks others.
  * - `done`: merged, failed or cancelled (the thread ends).
  */
 export type Phase = "queued" | "dev" | "ci" | "qa" | "merge" | "owner" | "children" | "done";
@@ -69,8 +70,12 @@ export type Phase = "queued" | "dev" | "ci" | "qa" | "merge" | "owner" | "childr
 /** `tasks.waiting_on` (§3.2). */
 export type WaitingOn = "dev" | "ci" | "qa" | "owner" | "deploy";
 
-/** Why the thread waits on the owner. */
-export type OwnerWait = "issue_text" | "critical" | "failure";
+/**
+ * Why the thread waits on the owner. `blocked`: a split parent whose failed or cancelled subtask
+ * blocks the subtasks that depend on it (AR4); either decision closes the parent as failed and
+ * cancels the blocked subtasks.
+ */
+export type OwnerWait = "issue_text" | "critical" | "failure" | "blocked";
 
 export type DevMode = "implement" | "fix";
 
@@ -280,13 +285,58 @@ export interface PlanRequest {
   is_private: boolean;
 }
 
+/**
+ * The planner's subtasks in order (AR4). `after[i]`, when present, lists the subtasks (0-based
+ * indices) that must be merged before subtask i starts; `[]` marks it independent. Without `after`
+ * (or for a missing entry) a subtask waits for the one before it: sequential by default. A plain
+ * `string[]` is a valid list, so planners that give no order information stay sequential.
+ */
+export type SubtaskList = string[] & { after?: (number[] | undefined)[] };
+
+/**
+ * The validated prerequisites of each subtask (0-based indices), or why the order is invalid: an
+ * entry that is not a list of integers, a self reference, an unknown subtask, a repeated entry or a
+ * cycle. Missing entries default to the previous subtask. The reason never quotes subtask text.
+ */
+export function orderSubtasks(list: SubtaskList): { ok: true; value: number[][] } | { ok: false; reason: string } {
+  const n = list.length;
+  const after = list.after;
+  if (after !== undefined && (!Array.isArray(after) || after.length > n)) return { ok: false, reason: "after does not match the subtasks" };
+  const value: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const given = after?.[i];
+    if (given === undefined) {
+      value.push(i === 0 ? [] : [i - 1]);
+      continue;
+    }
+    if (!Array.isArray(given) || !given.every((p) => Number.isInteger(p))) return { ok: false, reason: `subtask ${i + 1}: after is not a list of subtask numbers` };
+    if (given.includes(i)) return { ok: false, reason: `subtask ${i + 1} depends on itself` };
+    if (given.some((p) => p < 0 || p >= n)) return { ok: false, reason: `subtask ${i + 1} depends on an unknown subtask` };
+    if (new Set(given).size !== given.length) return { ok: false, reason: `subtask ${i + 1} lists a prerequisite twice` };
+    value.push([...given].sort((a, b) => a - b));
+  }
+  // Kahn's algorithm: every subtask must become startable.
+  const remaining = value.map((p) => p.length);
+  const ready = remaining.flatMap((r, i) => (r === 0 ? [i] : []));
+  let seen = 0;
+  while (ready.length > 0) {
+    const done = ready.pop()!;
+    seen += 1;
+    value.forEach((p, i) => {
+      if (p.includes(done) && --remaining[i]! === 0) ready.push(i);
+    });
+  }
+  if (seen !== n) return { ok: false, reason: "the subtask order has a cycle" };
+  return { ok: true, value };
+}
+
 /** The planner and public-title nodes (P2-11: `ModelPlanner` in `@kcw/orchestrator/nodes`; tests use fakes). */
 export interface Planner {
   /**
    * Planner node: the task's private text split into 1..MAX_SUBTASKS subtasks, each a private,
-   * self-contained description of one PR. Only top-level tasks are split.
+   * self-contained description of one PR, with their order (SubtaskList). Only top-level tasks are split.
    */
-  split(req: PlanRequest): Promise<string[]>;
+  split(req: PlanRequest): Promise<SubtaskList>;
   /** Public-title node: the public title and issue body of one (sub)task. */
   plan(req: PlanRequest): Promise<Plan>;
 }

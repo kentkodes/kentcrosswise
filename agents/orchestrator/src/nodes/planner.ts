@@ -7,7 +7,7 @@
 // Provider errors propagate unchanged (the step fails and SQS redelivers the message).
 import type { ModelProvider } from "@kcw/core/models";
 import { MAX_TITLE_LENGTH } from "@kcw/core/sanitize";
-import { MAX_SUBTASKS, PlannerOutputError, type Plan, type PlanRequest, type Planner } from "../graph/types";
+import { MAX_SUBTASKS, PlannerOutputError, orderSubtasks, type Plan, type PlanRequest, type Planner, type SubtaskList } from "../graph/types";
 
 /** Upper bound for one subtask's text (it is stored as the child's private owner_text). */
 export const MAX_SUBTASK_LENGTH = 4000;
@@ -20,6 +20,10 @@ export const PLANNER_SYSTEM = [
   "so each must be implementable and reviewable on its own, in the order listed.",
   "Use a single subtask unless the task clearly contains separate changes.",
   "Write each subtask as a self-contained instruction that keeps every detail of the task it needs.",
+  "The subtasks run one after another: each starts only after the previous one is merged, from code that contains it.",
+  "Only if a subtask does not need the one before it, write it as an object instead of a string:",
+  '{"text": "<subtask>", "after": [<numbers of the subtasks that must be merged first, counting from 1>]}.',
+  'Use "after": [] for a subtask that needs no other subtask. Mark independence only when you are sure of it.',
   'Reply with JSON only, no prose and no code fence: {"subtasks": ["<subtask>", ...]}',
 ].join("\n");
 
@@ -45,7 +49,7 @@ type Parsed<T> = { ok: true; value: T } | { ok: false; reason: string };
 export class ModelPlanner implements Planner {
   constructor(private readonly opts: ModelPlannerOptions) {}
 
-  split(req: PlanRequest): Promise<string[]> {
+  split(req: PlanRequest): Promise<SubtaskList> {
     return this.#ask("planner", PLANNER_SYSTEM, req.owner_text, parseSubtasks);
   }
 
@@ -98,8 +102,12 @@ function text(v: unknown, field: string, max: number): Parsed<string> {
   return { ok: true, value: t };
 }
 
-/** `{"subtasks": [string, ...]}` with 1..MAX_SUBTASKS non-empty strings. */
-export function parseSubtasks(raw: string): Parsed<string[]> {
+/**
+ * `{"subtasks": [item, ...]}` with 1..MAX_SUBTASKS items, each a non-empty string (it waits for the
+ * item before it) or `{"text": string, "after": [n, ...]}` with the 1-based numbers of the subtasks
+ * it waits for (AR4). An invalid order (unknown or self reference, cycle) is a schema error.
+ */
+export function parseSubtasks(raw: string): Parsed<SubtaskList> {
   const obj = parseObject(raw);
   if (!obj.ok) return obj;
   const list = obj.value.subtasks;
@@ -107,12 +115,28 @@ export function parseSubtasks(raw: string): Parsed<string[]> {
   if (list.length < 1 || list.length > MAX_SUBTASKS) {
     return { ok: false, reason: `subtasks must have 1 to ${MAX_SUBTASKS} items, not ${list.length}` };
   }
-  const out: string[] = [];
+  const out: SubtaskList = [];
+  const after: (number[] | undefined)[] = [];
   for (const [i, item] of list.entries()) {
-    const t = text(item, `subtasks[${i}]`, MAX_SUBTASK_LENGTH);
+    const isObj = typeof item === "object" && item !== null && !Array.isArray(item);
+    const t = text(isObj ? (item as Record<string, unknown>).text : item, isObj ? `subtasks[${i}].text` : `subtasks[${i}]`, MAX_SUBTASK_LENGTH);
     if (!t.ok) return t;
     out.push(t.value);
+    if (!isObj) {
+      after.push(undefined);
+      continue;
+    }
+    const a = (item as Record<string, unknown>).after;
+    if (a === undefined) {
+      after.push(undefined);
+      continue;
+    }
+    if (!Array.isArray(a) || !a.every((n) => Number.isInteger(n))) return { ok: false, reason: `subtasks[${i}].after is not a list of subtask numbers` };
+    after.push((a as number[]).map((n) => n - 1));
   }
+  if (after.some((a) => a !== undefined)) out.after = after;
+  const order = orderSubtasks(out);
+  if (!order.ok) return order;
   return { ok: true, value: out };
 }
 
