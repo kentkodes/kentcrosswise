@@ -766,7 +766,8 @@ textarea.field.capture {
   .button,
   .primary,
   .field,
-  .pill {
+  .pill,
+  .entrySummary {
     transition: none;
   }
 }
@@ -790,4 +791,45 @@ textarea.field.capture {
   gap: 6px 12px;
   margin: 6px 0 0;
   font-size: 13px;
+}
+
+/* The route form sits behind a per-row disclosure, closed by default, so the row stays light. */
+.entryDisclosure {
+  margin-top: 2px;
+}
+
+.entrySummary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 2px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease-out);
+}
+
+.entrySummary::-webkit-details-marker {
+  display: none;
+}
+
+.entrySummary::marker {
+  content: "";
+}
+
+.entrySummary:hover,
+.entryDisclosure[open] .entrySummary {
+  color: var(--fg);
+}
+
+.entryDisclosure .formRow {
+  margin-top: 4px;
+}
+
+@media (max-width: 639px) {
+  .entrySummary {
+    min-height: 44px;
+  }
 }
