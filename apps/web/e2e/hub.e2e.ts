@@ -1,8 +1,8 @@
-// H2: the hub capture box. H3: the route picker on each row. AR7: the Unresolved region lists every entry that
-// is not routed or needs the owner. The database is shared with other tests: every item carries a unique marker and
-// every assertion is scoped to rows with it. Previews (and the local run) have the synthetic seed,
-// which already holds some entries. Routing is off in these runs (no models secret), so a new entry shows
-// "Waiting for router" and has no "Route again" button.
+// H2: the hub capture box. H3: the route picker behind each row's closed "Change route" disclosure. AR7: the
+// Unresolved region lists every entry that is not routed or needs the owner. The database is shared with other
+// tests: every item carries a unique marker and every assertion is scoped to rows with it. Previews (and the
+// local run) have the synthetic seed, which already holds some entries. Routing is off in these runs (no models
+// secret), so a new entry shows "Waiting for router" and has no "Route again" button.
 import { expect, test, type Page } from "@playwright/test";
 
 test("hub redirects to sign-in when logged out", async ({ page }) => {
@@ -74,6 +74,7 @@ test.describe("as the preview owner", () => {
     await expect(page.getByRole("status")).toHaveText("Saved");
     const row = page.getByTestId("unresolved").locator("li").filter({ hasText: text });
     await expect(row).toHaveCount(1);
+    await row.getByText("Change route", { exact: true }).click();
     await expect(row.getByRole("combobox")).toBeVisible();
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -94,6 +95,7 @@ test.describe("as the preview owner", () => {
     const row = page.getByTestId("unresolved").locator("li").filter({ hasText: text });
     await expect(row).toHaveCount(1);
     await expect(row.locator('[data-field="status"]')).toHaveText("Waiting for router");
+    await row.getByText("Change route", { exact: true }).click();
     await expect(row.getByRole("button", { name: "Route again" })).toHaveCount(0);
 
     await row.getByRole("combobox").selectOption({ label: "Idea" });
@@ -101,6 +103,43 @@ test.describe("as the preview owner", () => {
     await expect(page.getByRole("status")).toHaveText("Routed to Idea.");
     // The route is set, so the row leaves the Unresolved region.
     await expect(page.getByTestId("unresolved").locator("li").filter({ hasText: text })).toHaveCount(0);
+  });
+
+  test("a row's closed Change route disclosure saves a different route", async ({ page }) => {
+    await signIn(page, "/hub");
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const text = `e2e change route ${stamp}`;
+    await page.getByLabel("Capture", { exact: true }).fill(text);
+    await captureSave(page).click();
+    await expect(page.getByRole("status")).toHaveText("Saved");
+
+    // The route form starts hidden behind the row's disclosure.
+    const row = page.getByTestId("unresolved").locator("li").filter({ hasText: text });
+    await expect(row).toHaveCount(1);
+    const disclosure = row.locator("details");
+    await expect(disclosure).toHaveJSProperty("open", false);
+    await expect(disclosure.locator("summary")).toHaveText("Change route");
+    await row.getByText("Change route", { exact: true }).click();
+    await expect(disclosure).toHaveJSProperty("open", true);
+
+    // Route it once, then change the route from the Recent row.
+    await row.getByRole("combobox").selectOption({ label: "Todo" });
+    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Routed to Todo.");
+    const recent = page.getByTestId("recent").locator("li").filter({ hasText: text });
+    await expect(recent).toHaveCount(1);
+    await expect(recent.locator('[data-field="status"]')).toHaveText("Todo");
+
+    await recent.getByText("Change route", { exact: true }).click();
+    await recent.getByRole("combobox").selectOption({ label: "Idea" });
+    await recent.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Routed to Idea.");
+
+    // The reloaded row shows the new route, and the disclosure has it selected.
+    const updated = page.getByTestId("recent").locator("li").filter({ hasText: text });
+    await expect(updated.locator('[data-field="status"]')).toHaveText("Idea");
+    await updated.getByText("Change route", { exact: true }).click();
+    await expect(updated.getByRole("combobox")).toHaveValue("idea");
   });
 
   test("Unresolved lists a row that needs the owner and links to the routing inbox (local seed)", async ({ page }) => {
