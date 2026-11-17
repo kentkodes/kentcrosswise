@@ -216,7 +216,7 @@ describe.each(WORKFLOW_AGENTS)("%s workflow limits and contract input match AGEN
   it("takes the contract input only in the Developer and QA workflows, as a required string for prepare only", () => {
     const input = /^ {6}contract:\n((?: {8}[^\n]+\n)*)/m.exec(yml)?.[1];
     if (agent === "developer" || agent === "qa") {
-      expect(input).toMatch(/type: string\n {8}required: true\n/);
+      expect(input).toMatch(agent === "qa" ? /type: string\n {8}required: false\n {8}default: ""\n/ : /type: string\n {8}required: true\n/);
       expect(job.prepare).toContain("KCW_CONTRACT: ${{ inputs.contract }}");
       expect(Object.keys(job).filter((n) => n !== "prepare").every((n) => !job[n]!.includes("KCW_CONTRACT"))).toBe(true);
       expect(yml.match(/inputs\.contract/g)).toHaveLength(1);

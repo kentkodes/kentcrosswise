@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalContract, contractHash, type TaskContract } from "@kcw/core/contract";
 import { assembleContext, gatherContext, InputError, linkedIssue, MAX_TASK_CONTEXT_BYTES, parseDispatchContract, parseInputs, requireContained } from "../lib/agent-context";
-import { refusedPaths } from "../lib/agents";
+import { AGENT_CONFIGS, refusedPaths } from "../lib/agents";
 
 const REPO = "kentkodes/kentcrosswise";
 const SHA = "a".repeat(40);
@@ -250,9 +250,25 @@ describe("task contract at prepare", () => {
     expect(parseDispatchContract("developer", canonicalContract(CONTRACT))).toEqual(CONTRACT);
     expect(parseDispatchContract("docs", undefined)).toBeNull();
     expect(parseDispatchContract("scraper", "")).toBeNull();
-    for (const bad of [undefined, "", "{}", JSON.stringify(CONTRACT, null, 1)]) {
+    for (const bad of ["{}", JSON.stringify(CONTRACT, null, 1)]) {
       expect(() => parseDispatchContract("qa", bad)).toThrow(/^contract_invalid$/);
     }
+    for (const bad of [undefined, "", "{}"]) expect(() => parseDispatchContract("developer", bad)).toThrow(/^contract_invalid$/);
+    // QA: absent or empty is decided later, against the PR author
+    expect(parseDispatchContract("qa", undefined)).toBeNull();
+    expect(parseDispatchContract("qa", "")).toBeNull();
+  });
+
+  it("takes no contract for a Docs-keeper PR (by author id) and requires one for any other PR", async () => {
+    const docs = fakeGitHub({ [`/repos/${REPO}/pulls/9`]: pull({ body: "No issue.", user: { login: "someone-else", id: AGENT_CONFIGS.docs.botId } }) });
+    const r = await gatherContext(qa, docs.gh, null);
+    expect(r.outputs.pr).toBe("9");
+    expect(r.markdown).not.toContain("Task contract");
+    expect(r.markdown).toContain("PR #9");
+    await expect(gatherContext(qa, docs.gh, CONTRACT)).rejects.toThrow(/^contract_invalid$/);
+    // the login alone does not make a Docs-keeper PR
+    const spoof = fakeGitHub({ [`/repos/${REPO}/pulls/9`]: pull({ user: { login: AGENT_CONFIGS.docs.botLogin, id: 1 } }) });
+    await expect(gatherContext(qa, spoof.gh, null)).rejects.toThrow(/^contract_invalid$/);
   });
 
   it("refuses a missing contract, a task mismatch and an issue mismatch", async () => {

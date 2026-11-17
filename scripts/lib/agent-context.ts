@@ -174,9 +174,13 @@ export function renderContract(c: TaskContract, hash: string, agent: "developer"
   ].join("\n");
 }
 
-/** Parses the `contract` dispatch input. Docs and scraper take none (null). */
+/**
+ * Parses the `contract` dispatch input. Docs and scraper take none (null). An absent or empty QA
+ * input is null here; `gatherContext` accepts that only for a Docs-keeper PR.
+ */
 export function parseDispatchContract(agent: WorkflowAgent, text: string | undefined): TaskContract | null {
   if (agent !== "developer" && agent !== "qa") return null;
+  if (agent === "qa" && (text === undefined || text === "")) return null;
   try {
     return parseContract(text ?? "");
   } catch {
@@ -241,10 +245,14 @@ export async function gatherContext(inputs: AgentInputs, gh: GhOptions, contract
       units.push(fix.join("\n"), ...(await latestChangesRequested(gh, pr.number)));
     }
   } else if (inputs.agent === "qa") {
-    if (!contract) throw new InputError("contract_invalid");
-    if (contract.task !== inputs.taskId) throw new InputError("contract_task_mismatch");
     const pr = await getTaskPull(gh, inputs.pr!, branch, "open");
-    if (linkedIssue(pr.body) !== contract.issue) throw new InputError("contract_issue_mismatch");
+    // A Docs-keeper PR (author id set by GitHub) has no contract; every other PR needs a valid one.
+    const docsPr = (pr.user as { id?: number } | null)?.id === AGENT_CONFIGS.docs.botId;
+    if (docsPr ? contract !== null : !contract) throw new InputError("contract_invalid");
+    if (contract) {
+      if (contract.task !== inputs.taskId) throw new InputError("contract_task_mismatch");
+      if (linkedIssue(pr.body) !== contract.issue) throw new InputError("contract_issue_mismatch");
+    }
     outputs.pr = String(pr.number);
     outputs.head_sha = pr.head.sha;
     head.push(
@@ -254,7 +262,7 @@ export async function gatherContext(inputs: AgentInputs, gh: GhOptions, contract
       "Independent source-only review runner: `git -C payload --no-pager diff --no-ext-diff --no-textconv origin/main...HEAD --`.",
       "Use the command for your current runner. Run no PR code, packages, hooks or tests in the source-only review runner.",
       "",
-      renderContract(contract, contractHash(contract), "qa"),
+      ...(contract ? [renderContract(contract, contractHash(contract), "qa")] : []),
     );
     unit(`PR #${pr.number}: ${pr.title}`, clip(pr.body));
   } else {

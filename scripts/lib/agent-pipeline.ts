@@ -21,7 +21,7 @@ export interface TrustedContext {
   baseSha: string;
   remoteSha: string | null;
   workflowSha: string;
-  /** SHA-256 of `context/contract.json` (developer and QA); null for docs and scraper. */
+  /** SHA-256 of `context/contract.json` (developer; QA unless the PR is a Docs-keeper PR); null for docs and scraper. */
   contractHash: string | null;
 }
 const sha = /^[a-f0-9]{40}$/;
@@ -32,7 +32,7 @@ export function parseTrustedContext(text: string): TrustedContext {
       c.version !== 2 || !isWorkflowAgent(c.agent) || !/^[\w-]+\/[\w.-]+$/.test(c.repo) ||
       !Number.isSafeInteger(c.taskId) || c.taskId < 1 || (c.agent === "scraper" ? c.op !== null : !Number.isSafeInteger(c.op) || c.op! < 0 || c.op! > 999_999_999) || c.branch !== branchOf(c.taskId) ||
       !sha.test(c.baseSha) || !sha.test(c.workflowSha) || (c.remoteSha !== null && !sha.test(c.remoteSha)) ||
-      (c.agent === "developer" || c.agent === "qa" ? typeof c.contractHash !== "string" || !/^[a-f0-9]{64}$/.test(c.contractHash) : c.contractHash !== null) ||
+      !(c.contractHash === null ? c.agent !== "developer" : (c.agent === "developer" || c.agent === "qa") && typeof c.contractHash === "string" && /^[a-f0-9]{64}$/.test(c.contractHash)) ||
       [c.issue, c.pr].some((n) => n !== null && (!Number.isSafeInteger(n) || n < 1))) throw new Error("invalid trusted context");
   return c;
 }
