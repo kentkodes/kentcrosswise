@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Privacy</h1>
-        <p className={s.updated}>Last updated: 16 November 2026</p>
+        <p className={s.updated}>Last updated: 17 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project with one account. This page says what the site does with
           data and which services it uses.
@@ -115,6 +115,19 @@ export default function PrivacyPage() {
             <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
             data under the{" "}
             <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
+          </p>
+          <p className={s.text}>
+            The site&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+            <a href="https://developers.google.com/terms/api-services-user-data-policy">
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements. Google data is used only for the two features
+            above. It is not sold, not used for advertising, not sent to language model services and
+            not used to train or improve any AI or machine learning model. It is not transferred to
+            anyone else, except to the site&apos;s hosting and secret store to provide those features,
+            or where the law requires it. No person reads it except the owner, or where needed for
+            security or required by law. Stored YouTube statistics are deleted with the account on the
+            social page; the refresh token is deleted when Google is disconnected.
           </p>
           <p className={s.text}>
             Instagram: for an account the owner has marked for the daily job, the site reads the
