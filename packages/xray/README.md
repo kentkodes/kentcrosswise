@@ -8,7 +8,7 @@ Every registry entry describes something that is built and shipped. An entry for
 
 ## Proposed scope: per-task evidence view (not built)
 
-Owner direction 2026-11-17 ([DESIGN section 4.6](../../docs/DESIGN.md#46-personal-helper-and-published-task-records-owner-direction-2026-11-17)): the X-ray grows from component labels to per-task evidence. For a published task a visitor can open:
+Owner direction 2026-11-17 ([DESIGN section 4.6](../../docs/DESIGN.md#46-personal-helper-and-the-public-log-owner-direction-2026-11-17)): the X-ray grows from component labels to per-task evidence. For a published task a visitor can open:
 
 - the sanitized input and intended outcome;
 - the actual tool calls and resulting changes;

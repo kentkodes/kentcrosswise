@@ -8,7 +8,7 @@ web
 
 ## Users
 
-The owner uses the private personal helper (the hub). Logged-out visitors see that helper working. Target (owner direction 2026-11-17, planned, not built): the public surface is a feed of sanitized real task records, each with its evidence in the X-ray, published automatically after sanitization with some records withheld for privacy or security. Today visitors get a simulated hub demo (`/demo`) and a separately identified real sanitized agent event feed (`/office` and the home page).
+The owner uses the private personal helper (the hub). Logged-out visitors see that helper working. Target (owner direction 2026-11-17, planned, not built): `/demo` becomes a public log of the owner's real entries, sanitized, with their routing, steps, results, checks, corrections and recovery, each with its evidence in the X-ray; records are published automatically after sanitization and some are withheld for privacy or security. Today visitors get a simulated hub demo (`/demo`) and a separately identified real sanitized agent event feed (`/office` and the home page).
 
 ## Product Purpose
 
@@ -20,7 +20,7 @@ A personal helper with a public, sanitized record of its real work and the evide
 
 ## Operating Context
 
-Visitors arrive on phones and desktop browsers. They come to understand the project and see what the helper actually did: today through the agent office and the simulated demo, later through published task records. Owner authentication, live private records and owner controls stay outside the public surface; the public reads only a sanitized projection.
+Visitors arrive on phones and desktop browsers. They come to understand the project and see what the helper actually did: today through the agent office and the simulated demo, later through the public log. Owner authentication, live private records and owner controls stay outside the public surface; the public reads only a sanitized projection.
 
 ## Capabilities and Constraints
 
@@ -31,11 +31,11 @@ Visitors arrive on phones and desktop browsers. They come to understand the proj
 - Diary and mood: `/diary` (write and list entries, mood summary per entry), `/diary/[id]` (read, edit, delete with confirmation, mood scores, Score again) and `/mood` (overall sentiment and eight metrics over the last 90 days or all, per-metric checkboxes, text summary and data table). Scoring runs only where the model router is configured.
 - Lists: `/todos`, `/ideas` and `/projects` (project tabs; the Essays tab summarises the library).
 - Social: `/social` shows followers and views for YouTube, Instagram and TikTok accounts: totals of each account's latest known numbers for a source filter, the change against the previous known value, a followers trend, and manual entry of daily numbers. A daily job adds YouTube and Instagram snapshots for the one account per platform that the owner marks for it when adding the account; no account is marked yet (owner step in OPEN-POINTS). TikTok stays manual.
-- Social: dropped for now (owner direction 2026-11-17). No further social work; whether the owner `/social` page and its daily job are parked too, or only the public and demo social surfaces, is an open point in OPEN-POINTS.
-- Published task records (planned, owner direction 2026-11-17; design target in DESIGN section 4.6, not built): every routed input gets a private execution record; publication is automatic after sanitization with no per-record approval, fails closed, and never includes credentials or access links, other people's sensitive information or unsanitized raw tool payloads. The feed is labelled "Tasks published automatically after sanitization; some records withheld for privacy/security" with a withheld count and no withheld contents. A record carries pass/fail checks for that run, not an accuracy percentage; accuracy claims belong to versioned aggregates over a labelled set. The feed is not a complete reliability record.
+- Social: being removed (owner direction 2026-11-17, OPEN-POINTS S1): `/social`, its daily job, the demo Following tab and the YouTube and Instagram connections.
+- Public log (planned, owner direction 2026-11-17; design target in DESIGN section 4.6, not built): every entry from launch on is published automatically once its route settles, with sanitized text (people as `[Person 1]` filler names), its steps, checks, corrections and recovery; no per-record approval; fail closed; never credentials, access links, raw tool payloads or raw model reasoning. The feed is labelled "Tasks published automatically after sanitization; some records withheld for privacy/security" with a withheld count and no withheld contents. A record carries pass/fail checks for that run, not an accuracy percentage; accuracy claims belong to versioned aggregates over a labelled set. The feed is not a complete reliability record.
 - Public pages use only `@kcw/demo-data`, `@kcw/xray` and the permitted public sources (public API routes reading sanitized views through the `web_public` role). Do not expose owner data or live private records, call paid models, enable workflows, or alter authentication or infrastructure from a page change.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behaviour are required.
-- Not built: the published task records feed and the per-task evidence X-ray (planned). Not set up yet: the live Google and Instagram connections and push on a device (owner steps in OPEN-POINTS). The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
+- Not built: the public log and the per-entry evidence X-ray (planned). Not set up yet: the live Google and Instagram connections and push on a device (owner steps in OPEN-POINTS). The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
 
 ## Brand Commitments
 
