@@ -71,7 +71,7 @@ describe("deploy state recording (AR8a)", () => {
     expect(record.body).toContain("apps/web/.open-next/kcw-build.json");
     expect(record.body).toContain(`::notice title=${constant("BUILD_ID_ANNOTATION_TITLE")}::`);
     expect(record.body).toContain("/^[A-Za-z0-9_-]{1,64}$/");
-    expect(record.body).not.toMatch(/secrets.|vars.|uses:|aws /);
+    expect(record.body).not.toMatch(/secrets\.|vars\.|uses:|aws /);
     expect(index("aws-actions/configure-aws-credentials")).toBeGreaterThan(lambdas + 1);
   });
 

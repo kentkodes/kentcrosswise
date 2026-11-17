@@ -16,6 +16,7 @@ import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { essayStatus, type EssayStatus } from "@/server/essay-status";
 import { orchestratorQueue } from "@/server/orchestrator-queue";
 import { requireOwner } from "@/server/owner";
+import { listReleases, type ReleaseRow } from "@/server/releases";
 import { formatUtc } from "../format";
 import { OwnerFrame } from "../owner-frame";
 import { Dot, Notice, Region } from "../owner-ui";
@@ -23,11 +24,12 @@ import s from "../owner.module.css";
 import { noticeText } from "../notices";
 import { taskTone } from "../tones";
 import { EssayStatusSection } from "./essay-status";
+import { ReleasesBlock } from "./releases";
 import { createTaskAction, setFlagAction } from "./actions";
 
 export const metadata: Metadata = { title: "Boss console | Kentcrosswise" };
 
-type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags; essays: EssayStatus; capacity: CapacitySummary };
+type Data = { tasks: TaskRow[]; events: EventRow[]; flags: Flags; essays: EssayStatus; capacity: CapacitySummary; releases: ReleaseRow[] };
 
 async function load(): Promise<{ data?: Data; problem?: string }> {
   try {
@@ -35,7 +37,7 @@ async function load(): Promise<{ data?: Data; problem?: string }> {
       "web_rw",
       async (db) => {
         const [tasks, flags, capacity] = [await listTasks(db), await getFlags(db), await capacitySummary(db)];
-        return { tasks, flags, capacity, events: await listEvents(db, tasks.map((t) => t.id)), essays: await essayStatus(db) };
+        return { tasks, flags, capacity, events: await listEvents(db, tasks.map((t) => t.id)), essays: await essayStatus(db), releases: await listReleases(db) };
       },
       { readOnly: true },
     );
@@ -168,6 +170,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
             <p data-testid="capacity" className={`${s.note} ${s.pad}`}>
               <CapacityText c={data.capacity} />
             </p>
+            <ReleasesBlock releases={data.releases} />
             {data.tasks.length === 0 ? <p className={`${s.note} ${s.pad}`}>No tasks yet.</p> : null}
             <ol data-testid="tasks" reversed className={s.list}>
               {data.tasks.map((t) => (
