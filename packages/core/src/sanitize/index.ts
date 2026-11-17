@@ -3,6 +3,8 @@
 // redacted piecemeal: the feed shows `Private task` instead, and GitHub issue text goes to an
 // `issue_text` approval. The contact list comes from `contacts.name`/`aliases` (readable by orch_rw).
 
+import { DIGIT_RUN, EMAIL, HANDLE, PHONE_CANDIDATE, PHONE_MIN_DIGITS, PRINTABLE_ASCII, URL_PATTERNS, words } from "./patterns";
+
 /** What the public feed shows instead of a title that is private, missing or fails the check (§3.2). */
 export const PRIVATE_TITLE = "Private task";
 
@@ -51,50 +53,6 @@ export interface Sanitizer {
    * without a non-blank line is `empty`.
    */
   checkText(text: string): CheckResult;
-}
-
-// ------------------------------------------------------------------ patterns
-const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
-const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
-const HANDLE = /@[a-z0-9_]/i;
-const URL_PATTERNS = [
-  /[a-z][a-z0-9+.-]*:\/\//i, // any scheme: https://, ftp://, ...
-  /\bwww\./i,
-  /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b/i, // bare domains (example.com, foo.co.uk); also "Node.js"
-  /\b\d{1,3}(?:\.\d{1,3}){3}\b/, // IPv4
-];
-// A run of digits with phone separators; it counts as a phone number when it holds 7+ digits.
-const PHONE_CANDIDATE = /\+?\(?\d[\d\s().\-/]*\d/g;
-const PHONE_MIN_DIGITS = 7;
-const DIGIT_RUN = /\d{5,}/; // "digit runs > 4"
-
-// Letters NFKD does not decompose into an ASCII base letter.
-const FOLD: Readonly<Record<string, string>> = {
-  ß: "ss",
-  æ: "ae",
-  œ: "oe",
-  ø: "o",
-  ł: "l",
-  đ: "d",
-  ð: "d",
-  þ: "th",
-  ı: "i",
-};
-
-/** Lowercase, strip accents and fold special letters, so "José" and "jose" compare equal. */
-function fold(s: string): string {
-  return s
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[ßæœøłđðþı]/g, (c) => FOLD[c] ?? c);
-}
-
-/** Words of a (folded) string: runs of letters or digits in any script. */
-function words(s: string): string[] {
-  return fold(s)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((w) => w.length > 0);
 }
 
 /**
@@ -172,3 +130,6 @@ export async function loadContactNames(db: ContactQuery): Promise<ContactNames[]
   const { rows } = await db.query<{ name: string; aliases: string[] | null }>(CONTACT_NAMES_SQL);
   return rows.map((r) => ({ name: r.name, aliases: r.aliases ?? [] }));
 }
+
+export { createRecordRedactor, PLACEHOLDERS, REDACT_FAILURES } from "./redact";
+export type { RecordRedactor, RedactFailure, RedactResult, RedactTerms } from "./redact";
