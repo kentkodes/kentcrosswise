@@ -12,8 +12,6 @@ locals {
     "kcw/prod/migrator"           = "db_url"
     "kcw/prod/origin-verify"      = "origin_verify (long random value; CloudFront sends it to the server, which checks it, D25)"
     "kcw/prod/google-owner-token" = "refresh_token (written by the web app at consent)"
-    "kcw/prod/social/instagram"   = "app_id, app_secret, long_lived_token (rewritten on refresh)"
-    "kcw/prod/social/tiktok"      = "client_key, client_secret, refresh_token (rewritten; may rotate)"
     "kcw/github/webhook-secret"   = "secret"
     "kcw/github/developer-app"    = "private_key"
     "kcw/github/qa-app"           = "private_key"

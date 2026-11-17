@@ -97,7 +97,7 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
-  # Scheduled jobs rewrite rotating tokens (Instagram refresh, Google): exactly the listed secrets.
+  # The web app rewrites the Google refresh token (at consent and on disconnect): exactly the listed secrets.
   dynamic "statement" {
     for_each = length(local.writable_secret_arns) > 0 ? [1] : []
     content {
