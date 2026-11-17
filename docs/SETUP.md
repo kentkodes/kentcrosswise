@@ -12,7 +12,7 @@ The project uses Node 24, pnpm 12, Terraform and AWS CLI v2; current commands ar
 
 - Public repository `kentkodes/kentcrosswise`, production domain `kentcrosswise.com`, Terraform bootstrap/prod and per-PR preview/teardown have been used successfully.
 - Neon production and separate synthetic CI projects exist. Production runtime logins, strict migrations and the public feed are wired. Relay login membership (`relay_rw=true`, `orch_rw=false`) and the accepted model-price row were independently verified during acceptance.
-- Google owner sign-in is working. The earlier setup checklist records the OAuth app published In production; future Calendar/YouTube scopes and long-lived refresh-token behavior still need the incremental-consent checks below.
+- Google owner sign-in is working. The earlier setup checklist records the OAuth app published In production; the Calendar scope and long-lived refresh-token behavior still need the incremental-consent checks below.
 - Five separate GitHub Apps, Anthropic federation and isolated publisher roles/environments are established. The owner-authorized /healthz vertical slice passed through root and Docs-child merges/deployments on 2026-10-26, and U13 required-review counting passed on disposable PR #45. Remaining adversarial/failure cases are tracked in [OPEN-POINTS.md](OPEN-POINTS.md).
 - Final main ruleset 25683184 is verified: one approval with stale dismissal, Actions and orchestrator-App required checks, squash only, no bypass. Final acceptance stop: `agents_paused=true`, `KCW_AGENT_WORKFLOWS_ENABLED=false`, `pipelines_paused=false`.
 - Named IAM-user owner administration and MFA are verified while Free Tier credits remain; migrate to IAM Identity Center after they are exhausted.
@@ -28,11 +28,9 @@ Domain verification-email completion, renewal/billing health, the optional budge
 
 ## Hub feature setup (Phase 3)
 
-1. **Google Calendar and YouTube:** enable Google Calendar API, YouTube Data API v3 and YouTube Analytics API. Add incremental scopes `calendar.events.owned`, `youtube.readonly`, `yt-analytics.readonly`; request offline consent and store the refresh token in `kcw/prod/google-owner-token`. Verify production consent warnings/re-consent and token behavior.
-2. **Instagram:** create/configure the Instagram Login app and tester account, verify development-mode access without App Review, and configure `https://kentcrosswise.com/api/instagram/callback`. The Instagram App ID/secret differ from the Meta app ID. Store credentials and long-lived token under `kcw/prod/social/instagram`; implement scheduled refresh before claiming connected metrics.
-3. **TikTok:** make /terms and /privacy live, configure Login Kit/Display API and scopes `user.info.basic`, `user.info.stats`, `video.list`, then test the sandbox with the owner's target account. Confirm whether it returns real stats; manual entry is the accepted fallback if usable API access is unavailable. Production review feasibility remains open. Store rotating refresh tokens under `kcw/prod/social/tiktok`.
-4. **LangSmith and model runtime:** verify required runtime key/account readiness without exposing values; secret presence alone does not prove model calls or trace flushing.
-5. **iPhone push:** build VAPID subscriptions, manifest/service worker and an in-app permission gesture; then test after Add to Home Screen on a supported iPhone. Store VAPID keys in `kcw/prod/web`.
+1. **Google Calendar:** enable the Google Calendar API. Add the incremental scope `calendar.events.owned`; request offline consent and store the refresh token in `kcw/prod/google-owner-token`. Verify production consent warnings/re-consent and token behavior.
+2. **LangSmith and model runtime:** verify required runtime key/account readiness without exposing values; secret presence alone does not prove model calls or trace flushing.
+3. **iPhone push:** build VAPID subscriptions, manifest/service worker and an in-app permission gesture; then test after Add to Home Screen on a supported iPhone. Store VAPID keys in `kcw/prod/web`.
 
 ## Operational references
 

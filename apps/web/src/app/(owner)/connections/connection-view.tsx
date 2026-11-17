@@ -6,10 +6,7 @@ import s from "../owner.module.css";
 import type { GoogleConnection } from "@/server/google";
 import { connectGoogleAction, disconnectGoogleAction } from "./actions";
 
-const SCOPE_LABELS = [
-  { key: "calendar", label: "Calendar events (own calendar)" },
-  { key: "youtube", label: "YouTube (read-only channel data)" },
-] as const;
+const SCOPE_LABELS = [{ key: "calendar", label: "Calendar events (own calendar)" }] as const;
 
 export function ConnectionView({ conn, confirming }: { conn: GoogleConnection; confirming: boolean }) {
   const since = conn.connectedAt && !Number.isNaN(Date.parse(conn.connectedAt)) ? formatUtc(conn.connectedAt) : null;
@@ -36,7 +33,7 @@ export function ConnectionView({ conn, confirming }: { conn: GoogleConnection; c
               })}
             </ul>
             {conn.scopes.length < SCOPE_LABELS.length ? (
-              <p className={s.muted}>One scope is missing. Reconnect and approve both.</p>
+              <p className={s.muted}>Calendar access is missing. Reconnect and approve it.</p>
             ) : null}
           </>
         ) : null}

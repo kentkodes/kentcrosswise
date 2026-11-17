@@ -8,7 +8,7 @@ Design target, nothing built: [DESIGN.md](DESIGN.md) section 4.6, hub SPEC featu
 
 | ID | Open work |
 |---|---|
-| S1 | Remove social: `/social`, the `social-daily` job and its schedule and alarm wording, the Instagram and TikTok secrets, the YouTube scope (Google connects for Calendar only), the demo Following tab and the home still's Following item, the `social_accounts` and `social_snapshots` tables (drop migration), `/privacy` and docs. Owner-approved as one bundle (merge on green, the drop, prod Terraform, and the bootstrap apply after the owner sees its plan). Owner: delete the Meta and TikTok developer apps; the Google verification request lists only the Calendar scope. |
+| S1 | Social removal: code, tests, demo tab, `/privacy`, migration 0024 (drops the two tables) and prod Terraform are done. Open: the bootstrap apply that deletes the `kcw/prod/social/instagram` and `kcw/prod/social/tiktok` secrets (Secrets Manager recovery window), after the owner sees its plan; owner step 2. |
 | PH4 | Settle the per-route-kind checks with the owner (draft table in DESIGN section 4.6). |
 | PH7 | People who are not contacts: the deterministic sanitizer cannot find their names. Options: (a) a bounded model call proposes spans to replace, the deterministic sanitizer applies and re-checks them, and a failed call withholds the record; (b) a deterministic rule that replaces every capitalized word not on an allowlist; (c) publish only kinds without free-form people text. Decide before PL1. |
 | PH8 | Dummy calendar: the owner creates the dummy Google account; its token needs its own secret (gated); proposed: events are added when a published CRM note has a calendar suggestion, and the log renders stored copies, so no Google call per visitor. |
@@ -70,9 +70,7 @@ Unsettled implementation choices: worker/WIP/time limits (when to raise the acti
 - Unknown-price policy: soft and visible. A model call without a price, or with usage unknown, adds $0 to the monthly cap total; it is counted apart on `/console/usage` and in the sweep's spend log lines. No cap value or enforcement changed. The essay pipeline does not check the spend cap.
 - Derived rows move on reassignment, and moving to an agent request discards edits to the derived body. A same-kind save is a no-op.
 - A link-only essay passes acceptance with a title and author; the missing source URL is counted, and zero approved seeds fails.
-- TikTok is manual entry for the MVP.
 - Alerts: failures publish to SNS topic `kcw-prod-alerts`. The owner subscribes an email address in the console; no subscription is in Terraform.
-- Social snapshots: one per UTC day, a rerun replaces that day, no backfill. Instagram stores exact followers with views null. YouTube followers are approximate (rounded by YouTube) and views are the channel's cumulative count.
 - Web push sends one generic notification (`N new items in your inbox`) that never carries item text.
 - Calendar: the suggestion step is bounded to 6 s and Google calls have an 8 s timeout. A suggestion is added with the suggestion's id as the event id, so a repeated tap is safe.
 - Google: `yt-analytics.readonly` is not requested. The refresh token lives only in `kcw/prod/google-owner-token`.
@@ -87,8 +85,8 @@ Unsettled implementation choices: worker/WIP/time limits (when to raise the acti
 
 ## Owner steps (open)
 
-1. Google: connect Google at `/connections` for Calendar (the YouTube scope and the Instagram and TikTok steps go away with S1).
-2. Consent screens (H1 console step): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen, the Meta for Developers app settings (Instagram) and the TikTok for Developers app.
+1. Google: connect Google at `/connections` for Calendar. If an earlier consent granted YouTube, revoke it at Google (Google Account, third-party access). Delete the Instagram (Meta) and TikTok developer apps; the Google verification request lists only the Calendar scope.
+2. Consent screens (H1 console step): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen.
 3. Web push: the VAPID keys are written (2026-11-17). On an iPhone (iOS 16.4+) add the site to the Home Screen, open it from there, sign in, enable notifications on `/notifications` and send a test.
 
 ## Runtime cases not yet exercised
@@ -107,11 +105,10 @@ Use these cases in AR9's acceptance matrix; each live case needs its own scoped,
 
 These are source or CI facts only until a scoped live check records a result.
 
-- A scheduled job run in prod (`social-daily`, `inbox-push`): the owner's AWS session had expired, so alarm states and job logs were not read.
+- A scheduled job run in prod (`inbox-push`): the owner's AWS session had expired, so alarm states and job logs were not read.
 - AR3 call records against live providers (migration 0019 is applied on prod): a record written by a real call, returned model ids and usage fields on error responses.
 - A live DeepSeek route of a real capture, a live mood score, and a live calendar extraction (Google event-id character set included).
 - A real Google Calendar insert and a real Google token refresh.
-- YouTube and Instagram API calls (no account connected yet). Instagram `/me`, API version `v23.0` and token lifetime are unverified until the first live run.
 - A real web push.
 - An outbox delivery and a live AR2 effect reconciliation (agents paused).
 - Live acceptance of the AR2 slice 3 identities after workflows are enabled.

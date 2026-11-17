@@ -177,13 +177,6 @@
   font-weight: 600;
 }
 
-.bigValue {
-  margin: 8px 0 0;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
 /* Visually hidden, still read by screen readers. Same rule as the team board's srOnly. */
 .srOnly {
   position: absolute;

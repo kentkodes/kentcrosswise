@@ -102,23 +102,23 @@ describe("SSM SecureString names (D21)", () => {
 
 describe("SecretStore writes", () => {
   it("put stores JSON and refreshes the cache", async () => {
-    const { store, aws } = createFakeSecrets({ "kcw/prod/social/instagram": { long_lived_token: "old" } });
-    expect(await store.get("kcw/prod/social/instagram", "long_lived_token")).toBe("old");
-    await store.put("kcw/prod/social/instagram", { long_lived_token: "new" });
-    expect(await store.get("kcw/prod/social/instagram", "long_lived_token")).toBe("new");
-    expect(JSON.parse(aws.values.get("kcw/prod/social/instagram") ?? "")).toEqual({ long_lived_token: "new" });
+    const { store, aws } = createFakeSecrets({ "kcw/test/rotating": { refresh_token: "old" } });
+    expect(await store.get("kcw/test/rotating", "refresh_token")).toBe("old");
+    await store.put("kcw/test/rotating", { refresh_token: "new" });
+    expect(await store.get("kcw/test/rotating", "refresh_token")).toBe("new");
+    expect(JSON.parse(aws.values.get("kcw/test/rotating") ?? "")).toEqual({ refresh_token: "new" });
   });
 
   it("patch re-reads from AWS and keeps other keys", async () => {
     const { store, aws } = createFakeSecrets({
-      "kcw/prod/social/tiktok": { client_key: "ck", refresh_token: "r1" },
+      "kcw/test/rotating": { other_key: "ck", refresh_token: "r1" },
     });
-    await store.get("kcw/prod/social/tiktok");
+    await store.get("kcw/test/rotating");
     // Someone else rotated the token meanwhile; patch must not write back the stale cached copy.
-    aws.values.set("kcw/prod/social/tiktok", JSON.stringify({ client_key: "ck2", refresh_token: "r2" }));
-    await store.patch("kcw/prod/social/tiktok", { refresh_token: "r3" });
-    expect(JSON.parse(aws.values.get("kcw/prod/social/tiktok") ?? "")).toEqual({
-      client_key: "ck2",
+    aws.values.set("kcw/test/rotating", JSON.stringify({ other_key: "ck2", refresh_token: "r2" }));
+    await store.patch("kcw/test/rotating", { refresh_token: "r3" });
+    expect(JSON.parse(aws.values.get("kcw/test/rotating") ?? "")).toEqual({
+      other_key: "ck2",
       refresh_token: "r3",
     });
   });

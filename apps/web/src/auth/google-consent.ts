@@ -3,12 +3,11 @@
 // package through scripts/build-web.ts), so it must stay free of next-auth and of the "@/" path alias.
 import { defaultSecretStore, SecretNotFoundError, type SecretStore } from "@kcw/secrets";
 
-/** Sign-in scopes only. Calendar and YouTube are added by incremental consent from /connections. */
+/** Sign-in scopes only. Calendar is added by incremental consent from /connections. */
 export const GOOGLE_SIGN_IN_SCOPES = "openid email profile";
 export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.owned";
-export const GOOGLE_YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
-/** What the Connect button asks for (yt-analytics.readonly is deliberately not requested). */
-export const GOOGLE_CONNECT_SCOPES = `${GOOGLE_SIGN_IN_SCOPES} ${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_YOUTUBE_SCOPE}`;
+/** What the Connect button asks for. */
+export const GOOGLE_CONNECT_SCOPES = `${GOOGLE_SIGN_IN_SCOPES} ${GOOGLE_CALENDAR_SCOPE}`;
 
 /** Env var holding the *name* of the secret that stores the Google refresh token (D15). Unset: no connection. */
 export const GOOGLE_TOKEN_SECRET_ENV = "KCW_GOOGLE_TOKEN_SECRET";

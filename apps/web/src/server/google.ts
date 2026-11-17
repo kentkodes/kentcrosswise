@@ -2,14 +2,13 @@
 // (written at sign-in by auth/config.ts events.signIn); this module turns it into short-lived access tokens
 // and can disconnect. Never log tokens, the client secret or response bodies: only fixed codes and error classes.
 import { defaultSecretStore, SecretKeyMissingError, SecretNotFoundError } from "@kcw/secrets";
-import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV, GOOGLE_YOUTUBE_SCOPE } from "../auth/google-consent";
+import { patchOrCreateSecret, GOOGLE_CALENDAR_SCOPE, GOOGLE_TOKEN_SECRET_ENV } from "../auth/google-consent";
 import { loadProdSettings } from "../auth/settings";
 
-export type GoogleScope = "calendar" | "youtube";
+export type GoogleScope = "calendar";
 
 const API_SCOPE: Record<GoogleScope, string> = {
   calendar: GOOGLE_CALENDAR_SCOPE,
-  youtube: GOOGLE_YOUTUBE_SCOPE,
 };
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -102,7 +101,7 @@ function parseScopes(scope: string): GoogleScope[] {
 }
 
 /**
- * A short-lived access token for the Calendar or YouTube API, or null when Google is not connected, the stored
+ * A short-lived access token for the Calendar API, or null when Google is not connected, the stored
  * consent lacks that scope, or the refresh failed. Tokens are cached in memory until a minute before expiry.
  */
 export async function googleAccessToken(scope: GoogleScope, deps: GoogleDeps = {}): Promise<string | null> {

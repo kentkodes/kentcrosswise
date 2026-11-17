@@ -2,12 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createFakeSecrets, setDefaultSecretStore } from "@kcw/secrets";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  buildAuthConfig,
-  GOOGLE_CALENDAR_SCOPE,
-  GOOGLE_CONNECT_SCOPES,
-  GOOGLE_YOUTUBE_SCOPE,
-} from "../src/auth/config";
+import { buildAuthConfig, GOOGLE_CALENDAR_SCOPE, GOOGLE_CONNECT_SCOPES } from "../src/auth/config";
 import {
   disconnectGoogle,
   googleAccessToken,
@@ -24,7 +19,7 @@ vi.mock("../src/app/(owner)/connections/actions", () => ({
 }));
 const { ConnectionView } = await import("../src/app/(owner)/connections/connection-view");
 
-const BOTH = `openid email profile ${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_YOUTUBE_SCOPE}`;
+const CONSENT = `openid email profile ${GOOGLE_CALENDAR_SCOPE}`;
 const SECRET_TOKEN = "synthetic-refresh-token";
 const SETTINGS = { authSecret: "s".repeat(40), ownerEmail: "o@example.com" };
 
@@ -41,20 +36,19 @@ describe("events.signIn stores the Google refresh token", () => {
   };
 
   it("writes refresh_token, scope and connected_at for a full consent", async () => {
-    const patch = await run({ provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH });
+    const patch = await run({ provider: "google", refresh_token: SECRET_TOKEN, scope: CONSENT });
     expect(patch).toHaveBeenCalledWith("kcw/test/google", {
       refresh_token: SECRET_TOKEN,
-      scope: BOTH,
+      scope: CONSENT,
       connected_at: "2026-11-15T10:00:00.000Z",
     });
   });
 
   it("writes nothing without a refresh token, with a missing scope, for another provider or without a secret name", async () => {
-    expect(await run({ provider: "google", scope: BOTH })).not.toHaveBeenCalled();
-    expect(await run({ provider: "google", refresh_token: "t", scope: `openid ${GOOGLE_CALENDAR_SCOPE}` })).not.toHaveBeenCalled();
+    expect(await run({ provider: "google", scope: CONSENT })).not.toHaveBeenCalled();
     expect(await run({ provider: "google", refresh_token: "t", scope: "openid email profile" })).not.toHaveBeenCalled();
-    expect(await run({ provider: "preview", refresh_token: "t", scope: BOTH })).not.toHaveBeenCalled();
-    expect(await run({ provider: "google", refresh_token: "t", scope: BOTH }, "")).not.toHaveBeenCalled();
+    expect(await run({ provider: "preview", refresh_token: "t", scope: CONSENT })).not.toHaveBeenCalled();
+    expect(await run({ provider: "google", refresh_token: "t", scope: CONSENT }, "")).not.toHaveBeenCalled();
   });
 
   it("logs only the error class when the write fails, and does not throw", async () => {
@@ -66,14 +60,14 @@ describe("events.signIn stores the Google refresh token", () => {
       },
     });
     await (cfg.events!.signIn as (m: unknown) => Promise<void>)({
-      account: { provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH },
+      account: { provider: "google", refresh_token: SECRET_TOKEN, scope: CONSENT },
     });
     expect(err.mock.calls).toEqual([["[google] store failed SecretAccessError"]]);
     err.mockRestore();
   });
 
-  it("asks for both API scopes and no analytics scope", () => {
-    expect(GOOGLE_CONNECT_SCOPES.split(" ")).toEqual(["openid", "email", "profile", GOOGLE_CALENDAR_SCOPE, GOOGLE_YOUTUBE_SCOPE]);
+  it("asks for the Calendar scope and nothing else beyond sign-in", () => {
+    expect(GOOGLE_CONNECT_SCOPES.split(" ")).toEqual(["openid", "email", "profile", GOOGLE_CALENDAR_SCOPE]);
   });
 });
 
@@ -96,7 +90,7 @@ function fakeStore(initial: StoredGoogleToken | null) {
   };
 }
 
-const stored: StoredGoogleToken = { refreshToken: SECRET_TOKEN, scope: BOTH, connectedAt: "2026-11-15T10:00:00.000Z" };
+const stored: StoredGoogleToken = { refreshToken: SECRET_TOKEN, scope: CONSENT, connectedAt: "2026-11-15T10:00:00.000Z" };
 const client = async () => ({ clientId: "id.example.invalid", clientSecret: "synthetic-client-secret" });
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
@@ -113,7 +107,7 @@ describe("googleAccessToken", () => {
     const fetch = vi.fn(async () => json(200, { access_token: "at-1", expires_in: 3600 }));
     const deps: GoogleDeps = { fetch: fetch as never, store: fakeStore(stored), client, now: () => t };
     expect(await googleAccessToken("calendar", deps)).toBe("at-1");
-    expect(await googleAccessToken("youtube", deps)).toBe("at-1");
+    expect(await googleAccessToken("calendar", deps)).toBe("at-1");
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0] as unknown as [string, { body: URLSearchParams }];
     expect(url).toBe("https://oauth2.googleapis.com/token");
@@ -132,8 +126,8 @@ describe("googleAccessToken", () => {
     const base = { fetch: fetch as never, client };
     expect(await googleAccessToken("calendar", { ...base, store: fakeStore(null) })).toBeNull();
     expect(await googleAccessToken("calendar", { ...base, store: fakeStore({ ...stored, refreshToken: "" }) })).toBeNull();
-    const onlyYoutube = fakeStore({ ...stored, scope: `openid ${GOOGLE_YOUTUBE_SCOPE}` });
-    expect(await googleAccessToken("calendar", { ...base, store: onlyYoutube })).toBeNull();
+    const noCalendar = fakeStore({ ...stored, scope: "openid email profile" });
+    expect(await googleAccessToken("calendar", { ...base, store: noCalendar })).toBeNull();
     expect(await googleAccessToken("calendar", { ...base, store: fakeStore(stored), client: async () => null })).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -150,7 +144,7 @@ describe("googleAccessToken", () => {
   it("returns null and keeps the token on other failures", async () => {
     const store = fakeStore(stored);
     const fetch = vi.fn(async () => json(500, { error: "backend_error" }));
-    expect(await googleAccessToken("youtube", { fetch: fetch as never, store, client })).toBeNull();
+    expect(await googleAccessToken("calendar", { fetch: fetch as never, store, client })).toBeNull();
     expect(store.patches).toEqual([]);
     expect(JSON.stringify(log.mock.calls)).not.toContain(SECRET_TOKEN);
   });
@@ -185,7 +179,7 @@ describe("disconnectGoogle and googleConnection", () => {
     expect(await googleConnection({ store: fakeStore(stored), client })).toEqual({
       configured: true,
       connected: true,
-      scopes: ["calendar", "youtube"],
+      scopes: ["calendar"],
       connectedAt: stored.connectedAt,
       expired: false,
     });
@@ -206,7 +200,7 @@ describe("ConnectionView states", () => {
     );
   const connected: Partial<GoogleConnection> = {
     connected: true,
-    scopes: ["calendar", "youtube"],
+    scopes: ["calendar"],
     connectedAt: stored.connectedAt,
   };
 
@@ -248,11 +242,11 @@ describe("a secret container with no value yet", () => {
     const { store, aws } = createFakeSecrets();
     setDefaultSecretStore(store);
     const cfg = buildAuthConfig(SETTINGS, [], undefined, { secretName: NAME, now: () => new Date("2026-11-15T10:00:00Z") });
-    const account = { provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH };
+    const account = { provider: "google", refresh_token: SECRET_TOKEN, scope: CONSENT };
     await (cfg.events!.signIn as (m: unknown) => Promise<void>)({ account });
     expect(JSON.parse(aws.values.get(NAME)!)).toEqual({
       refresh_token: SECRET_TOKEN,
-      scope: BOTH,
+      scope: CONSENT,
       connected_at: "2026-11-15T10:00:00.000Z",
     });
     await (cfg.events!.signIn as (m: unknown) => Promise<void>)({ account: { ...account, refresh_token: "second" } });
@@ -266,7 +260,7 @@ describe("a secret container with no value yet", () => {
     aws.failNextWith = "AccessDeniedException";
     const cfg = buildAuthConfig(SETTINGS, [], undefined, { secretName: NAME });
     await (cfg.events!.signIn as (m: unknown) => Promise<void>)({
-      account: { provider: "google", refresh_token: SECRET_TOKEN, scope: BOTH },
+      account: { provider: "google", refresh_token: SECRET_TOKEN, scope: CONSENT },
     });
     expect(log.mock.calls).toEqual([["[google] store failed SecretAccessError"]]);
     expect(aws.values.has(NAME)).toBe(false);

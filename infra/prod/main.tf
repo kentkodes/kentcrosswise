@@ -114,9 +114,8 @@ module "web_secrets" {
   names = [
     "kcw/prod/web",
     "kcw/prod/router",
-    # Scheduled web jobs (wave 2): the web server reads and rewrites these two (writable_secret_names).
+    # The web server reads and rewrites the Google refresh token (writable_secret_names).
     "kcw/prod/google-owner-token",
-    "kcw/prod/social/instagram",
   ]
 }
 
@@ -139,14 +138,13 @@ module "web" {
   route53_zone_id     = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
   secret_names        = module.web_secrets.names
 
-  # Rewritten by the web app: the Google refresh token at consent, the Instagram token on refresh.
-  writable_secret_names = ["kcw/prod/google-owner-token", "kcw/prod/social/instagram"]
+  # Rewritten by the web app: the Google refresh token at consent.
+  writable_secret_names = ["kcw/prod/google-owner-token"]
 
-  # Web-side jobs (apps/web/src/server/jobs): social-daily at 06:15 UTC, inbox-push on the sweeper's
-  # quarter hours so both share its database wake-up.
+  # Web-side jobs (apps/web/src/server/jobs): inbox-push on the sweeper's quarter hours so it shares
+  # the sweeper's database wake-up.
   scheduled_jobs = {
-    "social-daily" = "cron(15 6 * * ? *)"
-    "inbox-push"   = "cron(0/15 * * * ? *)"
+    "inbox-push" = "cron(0/15 * * * ? *)"
   }
 
   origin_verify_value       = jsondecode(data.aws_secretsmanager_secret_version.origin_verify.secret_string)["origin_verify"]
@@ -165,7 +163,6 @@ module "web" {
     KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
     ESSAY_TEXT_BUCKET          = local.essay_text_bucket
     KCW_GOOGLE_TOKEN_SECRET    = "kcw/prod/google-owner-token"
-    KCW_INSTAGRAM_SECRET       = "kcw/prod/social/instagram"
   }
 }
 
