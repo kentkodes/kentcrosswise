@@ -215,4 +215,3 @@ function moodRows(data: DemoData): DemoView["mood"] {
   if (!latest) return [];
   return MOOD_ORDER.map((m) => ({ name: capitalise(m), value: latest[m], text: latest[m].toFixed(2) }));
 }
-
