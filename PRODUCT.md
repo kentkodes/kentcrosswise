@@ -8,19 +8,19 @@ web
 
 ## Users
 
-The owner uses a private personal hub. Logged-out visitors explore a public hub demonstration with deterministic synthetic personal data alongside a separately identified real sanitized agent event feed.
+The owner uses the private personal helper (the hub). Logged-out visitors see that helper working. Target (owner direction 2026-11-17, planned, not built): the public surface is a feed of sanitized real task records, each with its evidence in the X-ray, published automatically after sanitization with some records withheld for privacy or security. Today visitors get a simulated hub demo (`/demo`) and a separately identified real sanitized agent event feed (`/office` and the home page).
 
 ## Product Purpose
 
-Kentcrosswise's primary goal is autonomous development: durable tasks carried through implementation, independent review and delivery by disposable workers with approved permissions. The personal hub and private essay library are its demonstration workload. Reliability precedes further feature expansion. The accepted target is in [docs/DESIGN.md](docs/DESIGN.md); the demonstration requirements are [docs/hub/SPEC.md](docs/hub/SPEC.md) and [docs/essays/SPEC.md](docs/essays/SPEC.md). Planned capabilities must not be presented as already delivered.
+Kentcrosswise is the owner's personal helper: it captures inputs, routes them and acts on them. The public site exists to show that helper working, with real inputs, real routing and real evidence: the helper is the product, and inspectable engineering evidence is its public proof. The autonomous development system (durable tasks carried through implementation, independent review and delivery by disposable workers with approved permissions) is how the site is built and maintained. Reliability precedes further feature expansion. The accepted targets are in [docs/DESIGN.md](docs/DESIGN.md) (sections 4.0 and 4.6); the requirements are [docs/hub/SPEC.md](docs/hub/SPEC.md) and [docs/essays/SPEC.md](docs/essays/SPEC.md). Planned capabilities must not be presented as already delivered.
 
 ## Positioning
 
-An autonomous development system demonstrated by a personal hub and a public view of sanitized execution activity. It is a personal project rather than a commercial SaaS offer.
+A personal helper with a public, sanitized record of its real work and the evidence behind each task. It is a personal project rather than a commercial SaaS offer, and the public surface is a demonstration of the real thing, nothing more: no social or playground features (owner direction 2026-11-17).
 
 ## Operating Context
 
-Visitors arrive on phones and desktop browsers. They come to understand the project, watch the agent office and explore the simulated demo. Owner authentication and private data stay outside the public demonstration.
+Visitors arrive on phones and desktop browsers. They come to understand the project and see what the helper actually did: today through the agent office and the simulated demo, later through published task records. Owner authentication, live private records and owner controls stay outside the public surface; the public reads only a sanitized projection.
 
 ## Capabilities and Constraints
 
@@ -31,9 +31,11 @@ Visitors arrive on phones and desktop browsers. They come to understand the proj
 - Diary and mood: `/diary` (write and list entries, mood summary per entry), `/diary/[id]` (read, edit, delete with confirmation, mood scores, Score again) and `/mood` (overall sentiment and eight metrics over the last 90 days or all, per-metric checkboxes, text summary and data table). Scoring runs only where the model router is configured.
 - Lists: `/todos`, `/ideas` and `/projects` (project tabs; the Essays tab summarises the library).
 - Social: `/social` shows followers and views for YouTube, Instagram and TikTok accounts: totals of each account's latest known numbers for a source filter, the change against the previous known value, a followers trend, and manual entry of daily numbers. A daily job adds YouTube and Instagram snapshots for the one account per platform that the owner marks for it when adding the account; no account is marked yet (owner step in OPEN-POINTS). TikTok stays manual.
-- Public pages use only `@kcw/demo-data` and the permitted public sources. Do not expose owner data, call paid models, enable workflows, or alter authentication or infrastructure from a page change.
+- Social: dropped for now (owner direction 2026-11-17). No further social work; whether the owner `/social` page and its daily job are parked too, or only the public and demo social surfaces, is an open point in OPEN-POINTS.
+- Published task records (planned, owner direction 2026-11-17; design target in DESIGN section 4.6, not built): every routed input gets a private execution record; publication is automatic after sanitization with no per-record approval, fails closed, and never includes credentials or access links, other people's sensitive information or unsanitized raw tool payloads. The feed is labelled "Tasks published automatically after sanitization; some records withheld for privacy/security" with a withheld count and no withheld contents. A record carries pass/fail checks for that run, not an accuracy percentage; accuracy claims belong to versioned aggregates over a labelled set. The feed is not a complete reliability record.
+- Public pages use only `@kcw/demo-data`, `@kcw/xray` and the permitted public sources (public API routes reading sanitized views through the `web_public` role). Do not expose owner data or live private records, call paid models, enable workflows, or alter authentication or infrastructure from a page change.
 - Keyboard access, mobile layouts, legible contrast and reduced-motion behaviour are required.
-- Not built: TikTok API ingestion (optional, later). Not set up yet: the live Google and Instagram connections and push on a device (owner steps in OPEN-POINTS). The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
+- Not built: the published task records feed and the per-task evidence X-ray (planned). Not set up yet: the live Google and Instagram connections and push on a device (owner steps in OPEN-POINTS). The accepted reliability and worker-contract changes also remain implementation work. See [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md).
 
 ## Brand Commitments
 
@@ -45,6 +47,10 @@ The repository, approved product specs, working public pages and deterministic `
 
 ## Product Principles
 
+- Show the real helper: public records come from real inputs and real routing, through a sanitized projection, never from live private records.
+- Publish automatically, fail closed: when sanitization cannot establish that a record is safe, it stays private, and the feed says how many were withheld.
+- Show actions, evidence and concise explanations, never raw model reasoning. "Completed, checks passed, no recovery needed" is a complete record; do not invent a failure story.
+- Evaluate honestly: per-record checks are pass/fail facts about that run; accuracy is a versioned aggregate over a labelled set; the feed is never presented as a complete reliability record.
 - Label simulated hub data clearly; keep real sanitized agent activity visibly separate, and mark Replay with original timestamps.
 - Describe only what is delivered; say "planned" for the rest.
 - Keep private data and owner controls separate from public exploration.
