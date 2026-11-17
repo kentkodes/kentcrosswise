@@ -21,7 +21,7 @@ import {
 import { checkpointerFromPool, setupCheckpointer, threadConfig } from "../src/index";
 import { servePglite, type PgSocketServer } from "./pg-socket";
 
-const PLAN = { title: "Add a healthz page", body: "Add a /healthz route that returns ok." };
+const PLAN = { title: "Add a healthz page", body: "Add a /healthz route that returns ok.", acceptance: ["It works."], scope: [], context: [] };
 const line = (model: string, input: number) => ({ kind: "model", provider: "anthropic", model, input_tokens: input, output_tokens: 1 });
 
 describe("agent reports (AR2 slice 3)", () => {
@@ -224,7 +224,7 @@ describe("agent reports (AR2 slice 3)", () => {
   });
 
   it("a step re-run after a crash writes its approval, inbox item and event once", async () => {
-    plan = { title: "Healthz", body: "Ask Jane Doe about the route." }; // fails the sanitizer: issue_text approval
+    plan = { title: "Healthz", body: "Ask Jane Doe about the route.", acceptance: ["It works."], scope: [], context: [] }; // fails the sanitizer: issue_text approval
     const id = await newTask();
     failOn = /UPDATE tasks SET status = \$/; // enter("owner"), after the approval and its event
     expect(await send(id, { type: "task.created", task_id: id }, "c-1")).toBe("failed");
@@ -276,7 +276,7 @@ describe("agent reports (AR2 slice 3)", () => {
   });
 
   it("the same logical message under two SQS ids writes one event and one approval", async () => {
-    plan = { title: "Healthz", body: "Ask Jane Doe about the route." }; // issue_text approval
+    plan = { title: "Healthz", body: "Ask Jane Doe about the route.", acceptance: ["It works."], scope: [], context: [] }; // issue_text approval
     const id = await newTask();
     const data = initialTaskData();
     // The same checkpoint applied twice: a resend of the outbox message after a crash.

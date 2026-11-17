@@ -360,6 +360,26 @@ export class OctokitGitHubClient implements GitHubClient {
     });
   }
 
+  async getBranchHead(branch: string): Promise<string> {
+    return this.#call("getBranchHead", async () => {
+      const { data } = await this.#octokit.rest.repos.getBranch({ ...this.#r, branch });
+      return data.commit.sha;
+    });
+  }
+
+  async readFile(path: string, ref: string): Promise<string | null> {
+    try {
+      return await this.#call("readFile", async () => {
+        const { data } = await this.#octokit.rest.repos.getContent({ ...this.#r, path, ref });
+        if (Array.isArray(data) || data.type !== "file" || !("content" in data)) return null;
+        return Buffer.from(data.content, "base64").toString("utf8");
+      });
+    } catch (err) {
+      if (err instanceof GitHubApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
   async getPrMergeState(pr: number): Promise<PrMergeState> {
     return this.#call("getPrMergeState", async () => {
       const { data } = await this.#octokit.rest.pulls.get({ ...this.#r, pull_number: pr });

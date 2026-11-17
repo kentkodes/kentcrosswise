@@ -295,6 +295,28 @@ describe("REST calls", () => {
     mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/pulls/7" ? json(200, { merged: false, merge_commit_sha: "def456" }) : undefined));
     await expect(client.getPrMergeState(7)).resolves.toEqual({ merged: false, mergeCommitSha: "def456" });
   });
+
+  it("getBranchHead reads the commit SHA of the branch", async () => {
+    mock.on("GET", "/repos/o/r/branches/main", () => json(200, { name: "main", commit: { sha: "c".repeat(40) } }));
+    await expect(client.getBranchHead("main")).resolves.toBe("c".repeat(40));
+    mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/branches/gone" ? json(404, { message: "Branch not found" }) : undefined));
+    await expect(client.getBranchHead("gone")).rejects.toMatchObject({ name: "GitHubApiError", operation: "getBranchHead", status: 404 });
+  });
+
+  it("readFile decodes the file at the ref; 404 and a directory are null; other errors throw", async () => {
+    const path = "/repos/o/r/contents/docs/agents/INSTRUCTIONS.md";
+    const text = "## Layout\n\ncaf\u00e9\n";
+    mock.routes.unshift((c) => (decodeURIComponent(c.url.pathname) === path ? json(200, { type: "file", encoding: "base64", content: Buffer.from(text, "utf8").toString("base64") }) : undefined));
+    const got = await client.readFile("docs/agents/INSTRUCTIONS.md", "d".repeat(40));
+    expect(got).toBe(text);
+    expect(mock.calls.at(-1)!.url.searchParams.get("ref")).toBe("d".repeat(40));
+    mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/contents/missing.md" ? json(404, { message: "Not Found" }) : undefined));
+    await expect(client.readFile("missing.md", "main")).resolves.toBeNull();
+    mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/contents/docs" ? json(200, [{ type: "file", name: "a" }]) : undefined));
+    await expect(client.readFile("docs", "main")).resolves.toBeNull();
+    mock.routes.unshift((c) => (c.url.pathname === "/repos/o/r/contents/boom.md" ? json(500, { message: "x" }) : undefined));
+    await expect(client.readFile("boom.md", "main")).rejects.toMatchObject({ name: "GitHubApiError", operation: "readFile", status: 500 });
+  });
 });
 
 describe("dispatchWorkflow run details (RUN-ID-MAPPING-SPEC §1)", () => {

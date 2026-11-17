@@ -9,12 +9,15 @@
 // checkpointed data, so the re-run reads the record or asks GitHub instead of repeating the effect.
 // Events and approvals carry an effect key (task, input, effect and its count in the step; AR2 slice 3),
 // so a re-run step writes neither twice. A report is applied in one transaction with its receipt.
+import { ContractError, canonicalContract, parseContract, type ContractPrerequisite, type TaskContract } from "@kcw/core/contract";
 import { reportKey, threadIdOf, usageKey, type AgentName, type AgentReport, type EventType } from "@kcw/core/events";
 import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
 import { evaluate } from "@kcw/merge-rules";
 import { ArtifactFormatError, CI_WORKFLOW, GitHubApiError, type GitHubClient, type MergeResult } from "../github";
+import { contractViolations } from "../nodes/planner";
 import { publicText } from "../nodes/public-title";
+import { REPO_BRIEF_PATH, repoBrief } from "../nodes/repo-brief";
 import { OperationConflictError, agentRunName, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
 import { DispatchLinkConflictError, type ChildTask, type OperationRecord, type TaskRecord, type TaskStatus, type TaskStore } from "./store";
 import {
@@ -27,6 +30,7 @@ import {
   IN_FLIGHT_LIMIT,
   MAX_ATTEMPTS,
   QA_WORKFLOW,
+  PlannerInputError,
   PlannerOutputError,
   WAIT_LIMIT_MINUTES,
   agentRoleOfWorkflow,
@@ -37,6 +41,7 @@ import {
   type GitHubInput,
   type IncompleteReason,
   type OwnerWait,
+  type PendingContract,
   type PendingDispatch,
   type Phase,
   type Plan,
@@ -451,26 +456,54 @@ class Machine {
    * Developer. Invalid model output (after the node's one retry) goes to the owner.
    */
   async plan(task: TaskRecord): Promise<StepOutcome> {
-    const req = { task_id: this.id, owner_text: task.owner_text, is_private: task.is_private };
     // The planner's answers are recorded before any external effect (private text, database only),
     // so a re-run of this step reuses them instead of calling the model again.
     const begun = await this.beginOp("plan", { owner_text: task.owner_text, is_private: task.is_private, subtask: task.parent_id !== null }, "plan");
     if (begun === null) return "applied";
     // after: each subtask's prerequisites (indices); records written before AR4 have none (sequential).
-    const stored = (begun.record.result ?? {}) as { subtasks?: string[]; after?: number[][]; plan?: Plan };
+    // AR5a: the contract base, its prerequisites and the repository brief are recorded with the answers, so a re-run makes no second read.
+    const stored = (begun.record.result ?? {}) as { subtasks?: string[]; after?: number[][]; plan?: Plan; base?: string; brief?: string; prerequisites?: ContractPrerequisite[] };
+    // A plan recorded before the contract existed has no base: it is asked again.
+    if (stored.base === undefined) delete stored.plan;
+    const save = () => this.store.updateOperation(begun.key, (stored.subtasks?.length ?? 0) > 1 || stored.plan !== undefined ? "done" : "intent", stored);
     let plan: Plan;
+    let pc: PendingContract;
     try {
+      const context = async (): Promise<"ok" | "applied"> => {
+        if (stored.base !== undefined && stored.brief !== undefined && stored.prerequisites !== undefined) return "ok";
+        const prerequisites: ContractPrerequisite[] = [];
+        for (const p of task.prerequisites) {
+          const merge = (await this.store.getTask(p))?.merge_sha;
+          if (!merge) {
+            await this.toOwnerFailure("a prerequisite task has no recorded merge commit, so the task cannot be planned; approve to plan it again", "plan");
+            return "applied";
+          }
+          prerequisites.push({ task: p, merge });
+        }
+        const base = await this.github.getBranchHead("main");
+        const file = await this.github.readFile(REPO_BRIEF_PATH, base);
+        const brief = file === null ? null : repoBrief(file);
+        if (brief === null) {
+          await this.toOwnerFailure("the repository brief is missing or too large; approve to plan it again", "plan");
+          return "applied";
+        }
+        Object.assign(stored, { base, brief, prerequisites });
+        await save();
+        return "ok";
+      };
       let subtasks = stored.subtasks;
       let after = stored.after;
       if (subtasks === undefined) {
         if (task.parent_id === null) {
-          const list = await this.deps.planner.split(req);
+          if ((await context()) === "applied") return "applied";
+          const list = await this.deps.planner.split({ task_id: this.id, owner_text: task.owner_text, is_private: task.is_private, brief: stored.brief! });
           // AR4: an invalid order (unknown or self reference, cycle) is invalid planner output.
           const order = orderSubtasks(list);
           if (!order.ok) throw new PlannerOutputError("planner", order.reason);
           subtasks = [...list];
           after = order.value;
-          await this.store.updateOperation(begun.key, subtasks.length > 1 ? "done" : "intent", { subtasks, after });
+          Object.assign(stored, { subtasks, after });
+          await save();
         } else {
           // A subtask was planned by its parent: it is never split again.
           subtasks = [task.owner_text];
@@ -481,13 +514,21 @@ class Machine {
         if (!order.ok) throw new PlannerOutputError("planner", order.reason);
         return await this.split(subtasks, order.value);
       }
+      if ((await context()) === "applied") return "applied";
       if (stored.plan !== undefined) {
         plan = stored.plan;
       } else {
-        plan = await this.deps.planner.plan({ ...req, owner_text: subtasks[0] ?? task.owner_text });
-        await this.store.updateOperation(begun.key, "done", { subtasks, plan });
+        plan = await this.deps.planner.plan({ task_id: this.id, owner_text: subtasks[0] ?? task.owner_text, is_private: task.is_private, brief: stored.brief! });
+        Object.assign(stored, { subtasks, plan });
+        await save();
       }
+      pc = { acceptance: plan.acceptance, scope: plan.scope, context: plan.context, base: stored.base!, prerequisites: stored.prerequisites! };
     } catch (err) {
+      if (err instanceof PlannerInputError) {
+        this.log("planning failed: input too large");
+        await this.toOwnerFailure("The planner input is larger than the size limit; nothing was sent to the model.", "plan");
+        return "applied";
+      }
       if (!(err instanceof PlannerOutputError)) throw err;
       this.log(`planning failed: ${err.message}`);
       await this.toOwnerFailure(`The ${err.node === "planner" ? "planner" : "public-title"} model returned unusable output (${err.reason}).`, "plan");
@@ -502,18 +543,52 @@ class Machine {
     const text = publicText(plan, sanitizer);
     await this.store.updateTask(this.id, { public_title: text.publicTitle, branch: branchOf(this.id) });
 
-    if (!text.body.ok) {
-      // §4.2 step 2: GitHub issue text that fails the sanitizer goes to the owner first.
+    // AR5a: the contract text is built only from this sanitized plan; one that cannot be a valid contract never reaches GitHub.
+    if (!this.contractFits(plan.body, pc)) {
+      await this.toOwnerFailure("the proposed task contract is not valid (characters or size); approve to plan it again", "plan");
+      return "applied";
+    }
+    const codes = [...new Set([...text.body.violations, ...contractViolations(plan, sanitizer)])];
+    if (codes.length > 0) {
+      // §4.2 step 2: GitHub issue text (and contract text) that fails the sanitizer goes to the owner first.
       this.d.pending_issue = text.issue;
+      this.d.pending_contract = pc;
       await this.toOwner("issue_text", "issue_text", [
-        `The issue body fails the sanitizer (${text.body.violations.join(", ")}). Approve to publish it as written; reject to cancel the task.`,
+        `The issue or contract text fails the sanitizer (${codes.join(", ")}). Approve to publish it as written; reject to cancel the task.`,
         `Proposed title: ${text.issue.title}`,
         `Proposed body: ${plan.body}`,
+        `Proposed acceptance: ${plan.acceptance.join(" | ")}`,
+        `Proposed scope: ${plan.scope.join(", ") || "(none)"}`,
+        `Proposed context: ${plan.context.join(", ") || "(none)"}`,
       ], `Task ${this.id}: issue text needs review`);
       return "applied";
     }
-    if (await this.publishIssue(text.issue)) await this.dispatchDev("implement");
+    await this.publishAndDispatch(text.issue, pc);
     return "applied";
+  }
+
+  /** The contract of this task for the issue (AR5a): revision 1, the goal is the issue body as published. */
+  contractOf(issue: number, goal: string, pc: PendingContract): TaskContract {
+    return { v: 1, task: this.id, revision: 1, issue, goal, acceptance: pc.acceptance, base: pc.base, prerequisites: pc.prerequisites, scope: pc.scope, context: pc.context };
+  }
+
+  /** Whether the contract for this text passes the strict parse the workers apply (issue number aside). */
+  contractFits(goal: string, pc: PendingContract): boolean {
+    try {
+      parseContract(canonicalContract(this.contractOf(1, goal, pc)));
+      return true;
+    } catch (err) {
+      if (err instanceof ContractError) return false;
+      throw err;
+    }
+  }
+
+  /** Opens the issue, builds the contract once the issue number is known, then dispatches the Developer. */
+  async publishAndDispatch(issue: { title: string; body: string }, pc: PendingContract): Promise<void> {
+    if (!(await this.publishIssue(issue))) return;
+    this.d.contract = this.contractOf(this.d.issue_number!, issue.body, pc);
+    this.d.pending_contract = null;
+    await this.dispatchDev("implement");
   }
 
   /**
@@ -692,12 +767,26 @@ class Machine {
     return this.d.pending_dispatch != null ? "unchanged" : "applied";
   }
 
+  /**
+   * The canonical contract input of a Developer or QA dispatch. A task planned before contracts
+   * existed has none: it fails (null). Its issue, and any PR, belong to that earlier plan, so it is
+   * not planned again here; the owner creates a new task.
+   */
+  async contractInput(): Promise<string | null> {
+    if (this.d.contract !== undefined) return canonicalContract(this.d.contract);
+    await this.finish("failed", "the task was planned before task contracts existed; create the task again");
+    return null;
+  }
+
   /** `redispatched`: this is the timeout's one redispatch (§4.3); the flag is set once the run exists. */
   async dispatchDev(mode: DevMode, reason?: string, redispatched = false): Promise<boolean> {
     const d = this.d;
+    const contract = await this.contractInput();
+    if (contract === null) return false;
     const sent = await this.dispatchAgent(
       DEV_WORKFLOW,
       {
+        contract,
         task_id: String(this.id),
         issue: d.issue_number === null ? "" : String(d.issue_number),
         mode,
@@ -729,9 +818,12 @@ class Machine {
   }
 
   async dispatchQa(reason?: string, redispatched = false): Promise<boolean> {
+    // A docs task's PR is reviewed without a contract (Docs dispatches are unchanged, AR5a).
+    const contract = this.isDocs ? undefined : await this.contractInput();
+    if (contract === null) return false;
     const sent = await this.dispatchAgent(
       QA_WORKFLOW,
-      { task_id: String(this.id), pr: String(this.d.pr_number) },
+      { ...(contract !== undefined && { contract }), task_id: String(this.id), pr: String(this.d.pr_number) },
       { role: "qa", ...(reason !== undefined && { reason }), redispatched },
     );
     if (!sent) return false;
@@ -1025,7 +1117,12 @@ class Machine {
 
     if (wait === "issue_text") {
       if (decision === "rejected") return this.finish("cancelled", "issue text rejected by the owner");
-      if (await this.publishIssue(d.pending_issue!)) await this.dispatchDev("implement");
+      if (!d.pending_contract) {
+        // Planned before the contract existed: nothing to publish as written.
+        await this.toOwnerFailure("the task has no contract; approve to plan it again", "plan");
+        return "applied";
+      }
+      await this.publishAndDispatch(d.pending_issue!, d.pending_contract);
       return "applied";
     }
     if (wait === "critical") {

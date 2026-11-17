@@ -13,7 +13,7 @@ import { threadConfig } from "../src/handler";
 describe('trusted office execution observations',()=>{
  let db:PGlite;let store:PgTaskStore;
  const observation=(taskId:number,action='requested',runId=100):TaskInput=>({kind:'github',event:'workflow_run',action,run_id:runId,run_attempt:1,agent_task_id:taskId,workflow_path:'.github/workflows/agent-developer.yml',head_branch:'main',trigger:'workflow_dispatch',head_sha:'a'.repeat(40),pr_numbers:[],run_started_at:'2099-01-01T00:00:00Z',updated_at:'2099-01-01T00:00:00Z',conclusion:action==='completed'?'success':null,message_id:`${runId}-${action}`});
- const deps=()=>({store,github:new FakeGitHubClient(),planner:{split:async()=>[],plan:async()=>({title:'Synthetic',body:'Synthetic'})}});
+ const deps=()=>({store,github:new FakeGitHubClient(),planner:{split:async()=>[],plan:async()=>({title:'Synthetic',body:'Synthetic',acceptance:['Synthetic'],scope:[],context:[]})}});
  beforeAll(async()=>{
   db=new PGlite();await migrate(fromPglite(db));
   store=new PgTaskStore({query:(sql:string,params:unknown[])=>db.query(sql,params)} as unknown as pg.Pool);

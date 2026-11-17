@@ -28,7 +28,7 @@ const msg = (id: string, body: unknown, taskId: number): SqsRecord => ({
 });
 const created = (id: string, taskId: number) => msg(id, { type: "task.created", task_id: taskId }, taskId);
 
-const plan = (title: string, body: string) => JSON.stringify({ title, body });
+const plan = (title: string, body: string) => JSON.stringify({ title, body, acceptance: ["It works."], scope: [], context: [] });
 const oneSubtask = (text: string) => JSON.stringify({ subtasks: [text] });
 
 describe("orchestrator Lambda on Postgres", () => {
@@ -153,7 +153,7 @@ describe("orchestrator Lambda on Postgres", () => {
         workflow: "agent-developer.yml",
         ref: "main",
         runId: expect.any(Number),
-        inputs: { task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "", op: "0" },
+        inputs: { contract: expect.any(String), task_id: String(id), issue: String(gh.issues[0]!.number), mode: "implement", pr: "", op: "0" },
       },
     ]);
     expect(await taskRow(id)).toMatchObject({
@@ -245,7 +245,7 @@ describe("orchestrator Lambda on Postgres", () => {
     const kids = (await sql<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1 ORDER BY id", [id])).map((r) => Number(r.id));
     expect(kids).toHaveLength(2);
     // The parent's invocation: one planner call, nothing on GitHub, the first child's start in the outbox.
-    expect(p.gh!.calls).toEqual([]);
+    expect(p.gh!.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
     expect((await usageRows([id, ...kids])).map((u) => Number(u.task_id))).toEqual([id]);
     const outbox = await sql<{ message_key: string; group_id: string; body: string }>(
       "SELECT message_key, group_id, body FROM orchestrator_outbox WHERE group_id = ANY($1::text[]) ORDER BY id",

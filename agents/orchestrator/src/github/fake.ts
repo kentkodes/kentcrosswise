@@ -1,6 +1,7 @@
 // In-memory GitHubClient for graph tests (P2-10). It records every call, keeps issues, dispatches,
 // checks and merges, and answers getDiff/getArtifact from data the test sets up. Behaviour mirrors
 // OctokitGitHubClient: squash merge refused when the head moved, 409-style cancel of a finished run.
+import { createHash } from "node:crypto";
 import type { MergeInput } from "@kcw/core/merge-input";
 import {
   ArtifactFormatError,
@@ -28,6 +29,9 @@ import {
 } from "./types";
 
 export type FakeMethod = keyof GitHubClient;
+
+/** The merge commit the fake gives a squash merge of that PR head: 40-hex, like a real commit (the contract requires it). */
+export const fakeMergeSha = (pr: number, headSha: string): string => createHash("sha1").update(`squash-${pr}-${headSha}`).digest("hex");
 
 export interface FakePr {
   headSha: string;
@@ -100,6 +104,15 @@ export class FakeGitHubClient implements GitHubClient {
   registerRuns = false;
   /** While true, findWorkflowRun does not see registered runs (GitHub's delayed run visibility). */
   hideRuns = false;
+  /** Branch heads getBranchHead answers (404 for another branch). `main` is set by default. */
+  readonly heads = new Map<string, string>([["main", "1".repeat(40)]]);
+  /** Files readFile answers by path, at any ref (the calls record the ref); another path is null. The Layout brief is set by default. */
+  readonly files = new Map<string, string>([
+    [
+      "docs/agents/INSTRUCTIONS.md",
+      ["# Instructions", "", "## Layout", "", "```", "agents/orchestrator/  the task graph", "packages/core/  shared code", "```", "", "## Rules", "", "Be careful.", ""].join("\n"),
+    ],
+  ]);
   #failures = new Map<FakeMethod, GitHubApiError>();
   #afterFailures = new Set<FakeMethod>();
   #nextId = 1;
@@ -176,7 +189,7 @@ export class FakeGitHubClient implements GitHubClient {
     if (pr.headSha !== input.headSha) return { merged: false, reason: "head_changed" };
     if (pr.merged || pr.mergeable === false) return { merged: false, reason: "not_mergeable" };
     pr.merged = true;
-    const sha = `squash-${input.pr}-${input.headSha}`;
+    const sha = fakeMergeSha(input.pr, input.headSha);
     pr.mergeSha = sha;
     this.merges.push({ pr: input.pr, sha });
     this.#lostResponse("merge");
@@ -242,6 +255,18 @@ export class FakeGitHubClient implements GitHubClient {
       .filter((i) => Date.parse(i.createdAt) >= Date.parse(input.createdAfter))
       .map((i) => ({ number: i.number, body: i.body, createdAt: i.createdAt }))
       .reverse();
+  }
+
+  async getBranchHead(branch: string): Promise<string> {
+    this.#record("getBranchHead", branch);
+    const sha = this.heads.get(branch);
+    if (sha === undefined) throw new GitHubApiError("getBranchHead", 404);
+    return sha;
+  }
+
+  async readFile(path: string, ref: string): Promise<string | null> {
+    this.#record("readFile", { path, ref });
+    return this.files.get(path) ?? null;
   }
 
   async getPrMergeState(pr: number): Promise<PrMergeState> {

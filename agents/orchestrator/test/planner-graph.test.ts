@@ -139,7 +139,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
   }
 
   const devDispatches = () => gh.dispatches.filter((x) => x.workflow === "agent-developer.yml");
-  const plan = (title: string, body: string) => JSON.stringify({ title, body });
+  const plan = (title: string, body: string) => JSON.stringify({ title, body, acceptance: ["It works."], scope: [], context: [] });
 
   // ------------------------------------------------------------------ DoD
 
@@ -171,7 +171,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     expect((await graph.getState(threadConfig(id))).values.task).toMatchObject({ phase: "children", children: [a, b] });
     // AR4: the parent's invocation made the planner call only; no child was planned in it.
     expect(provider.calls).toHaveLength(1);
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
 
     // The first child's start message, then its own invocation: public title, issue, Developer.
     expect(await deliverOutbox()).toEqual([`task-${a}/start: started`]);
@@ -222,7 +222,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     replies.planner.push("I would split this into two parts.", '{"subtasks": "one"}');
     expect(await start(id)).toBe("started");
     expect(provider.calls).toHaveLength(2);
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "owner" });
     const [a] = await pendingApprovals(id);
     expect(a!.kind).toBe("critical_pr");
@@ -248,7 +248,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     expect(a!.reasons[0]).toBe("Task failed: The public-title model returned unusable output (body is not a string).");
     expect(await decide(id, a!.id, "rejected")).toBe("applied");
     expect(await task(id)).toMatchObject({ status: "failed" });
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
   });
 
   it("a title containing a contact name becomes Private task (issue and feed)", async () => {
@@ -267,7 +267,7 @@ describe("planner and public-title nodes in the task graph (P2-11)", () => {
     replies.planner.push('{"subtasks": ["Add a contact form"]}');
     replies.public_title.push(plan("Add a contact form", "Add a form.\nSend submissions to owner@example.com"));
     expect(await start(id)).toBe("started");
-    expect(gh.calls).toEqual([]);
+    expect(gh.calls.filter((c) => c.method !== "getBranchHead" && c.method !== "readFile")).toEqual([]);
     expect(await task(id)).toMatchObject({ status: "waiting", waiting_on: "owner", public_title: "Add a contact form" });
     const approvals = await pendingApprovals(id);
     expect(approvals).toHaveLength(1);

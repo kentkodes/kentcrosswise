@@ -1,4 +1,5 @@
 // Task graph types and limits (P2-10, DESIGN §4.2-§4.3, D20, §11 Q11).
+import type { TaskContract } from "@kcw/core/contract";
 import type { AgentReport } from "@kcw/core/events";
 import type { OperationKind } from "./operations";
 
@@ -171,6 +172,16 @@ export interface TaskData {
   issue_title: string | null;
   /** Issue text waiting for an `issue_text` approval. */
   pending_issue: { title: string; body: string } | null;
+  /**
+   * AR5a: the contract fields proposed with `pending_issue` (acceptance, paths, base, prerequisites);
+   * approving the issue text builds the contract from them as written. Absent otherwise.
+   */
+  pending_contract?: PendingContract | null;
+  /**
+   * AR5a: the revision contract Developer and QA dispatches carry (built after the issue is
+   * published). Absent in checkpoints written before the contract existed: such a task cannot be dispatched.
+   */
+  contract?: TaskContract;
   pr_number: number | null;
   head_sha: string | null;
   /** The ci.yml result on `head_sha`, once known. */
@@ -217,6 +228,9 @@ export interface TaskData {
    */
   applied_reports?: string[];
 }
+
+/** The contract fields that are not the issue text (see TaskData.pending_contract). */
+export type PendingContract = Pick<TaskContract, "acceptance" | "scope" | "context" | "base" | "prerequisites">;
 
 /** A dispatch waiting for its run to become visible (see DISPATCH_UNKNOWN_MINUTES); a sweep resumes it. */
 export interface PendingDispatch {
@@ -276,6 +290,12 @@ export interface Plan {
   title: string;
   /** Proposed issue body (sanitized before use). */
   body: string;
+  /** 1 to 10 checkable acceptance items (AR5a). */
+  acceptance: string[];
+  /** Repository path prefixes the task owns (0 to 20). */
+  scope: string[];
+  /** Repository paths to read first (0 to 20). */
+  context: string[];
 }
 
 export interface PlanRequest {
@@ -283,6 +303,8 @@ export interface PlanRequest {
   /** Private: never sent to a public surface unsanitized. */
   owner_text: string;
   is_private: boolean;
+  /** AR5a: the bounded repository brief (public text) read at the contract base. */
+  brief: string;
 }
 
 /**
@@ -339,6 +361,14 @@ export interface Planner {
   split(req: PlanRequest): Promise<SubtaskList>;
   /** Public-title node: the public title and issue body of one (sub)task. */
   plan(req: PlanRequest): Promise<Plan>;
+}
+
+/** The planner prompt exceeds MAX_PLANNER_INPUT_BYTES: no model call was made. */
+export class PlannerInputError extends Error {
+  constructor() {
+    super("planner input too large");
+    this.name = "PlannerInputError";
+  }
 }
 
 /**

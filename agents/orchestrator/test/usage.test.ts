@@ -3,7 +3,7 @@ import { FakeProvider, type UsageRecord } from "@kcw/core/models";
 import { describe, expect, it } from "vitest";
 import { ModelPlanner, PLANNER_SYSTEM, trackPlannerUsage } from "../src/nodes";
 
-const req = (task_id: number, owner_text = `task ${task_id}`) => ({ task_id, owner_text, is_private: true });
+const req = (task_id: number, owner_text = `task ${task_id}`) => ({ task_id, owner_text, is_private: true, brief: "## Layout" });
 
 describe("trackPlannerUsage", () => {
   const setup = (delayMs = 0) => {
@@ -14,7 +14,7 @@ describe("trackPlannerUsage", () => {
       onUsage: usage.onUsage,
       complete: async (r) => {
         await new Promise((res) => setTimeout(res, delayMs));
-        return { text: r.system === PLANNER_SYSTEM ? '{"subtasks": ["x"]}' : '{"title": "T", "body": "B"}' };
+        return { text: r.system === PLANNER_SYSTEM ? '{"subtasks": ["x"]}' : '{"title": "T", "body": "B", "acceptance": ["A"], "scope": [], "context": []}' };
       },
     });
     return { rows, lines, provider, planner: usage.planner(new ModelPlanner({ provider })) };

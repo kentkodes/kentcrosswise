@@ -57,6 +57,21 @@ describe("FakeGitHubClient", () => {
     await expect(gh.merge({ pr: 99, headSha: "x" })).rejects.toMatchObject({ status: 404 });
   });
 
+  it("answers branch heads and files, with a 404 for an unknown branch and null for an unknown file", async () => {
+    await expect(gh.getBranchHead("main")).resolves.toMatch(/^[a-f0-9]{40}$/);
+    await expect(gh.getBranchHead("other")).rejects.toMatchObject({ operation: "getBranchHead", status: 404 });
+    gh.heads.set("other", "e".repeat(40));
+    await expect(gh.getBranchHead("other")).resolves.toBe("e".repeat(40));
+    await expect(gh.readFile("docs/agents/INSTRUCTIONS.md", "main")).resolves.toContain("## Layout");
+    await expect(gh.readFile("nope.md", "main")).resolves.toBeNull();
+    expect(gh.calls.map((c) => c.method)).toEqual(["getBranchHead", "getBranchHead", "getBranchHead", "readFile", "readFile"]);
+  });
+
+  it("a squash merge gets a 40-hex commit SHA", async () => {
+    const r = await gh.merge({ pr: 4, headSha: "h4" });
+    expect(r).toEqual({ merged: true, sha: expect.stringMatching(/^[a-f0-9]{40}$/) });
+  });
+
   it("keeps checks; latestCheck is what the ruleset sees", async () => {
     await gh.postCheck({ headSha: "h4", state: "pending", title: "Waiting", summary: "" });
     await gh.postCheck({ headSha: "h4", state: "success", title: "OK", summary: "" });

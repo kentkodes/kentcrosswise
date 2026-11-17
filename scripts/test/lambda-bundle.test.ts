@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { fromPglite, migrate } from "@kcw/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { effectKey, requestHash } from "../../agents/orchestrator/src/graph/operations";
 import { servePglite, type PgSocketServer } from "../../agents/orchestrator/test/pg-socket";
 import { BUNDLE_FILE, EXTERNALS, LAMBDA_TARGETS, bundleLambda, smokeImport, type BundleResult } from "../lib/lambda-bundle";
 
@@ -300,6 +301,9 @@ describe("built Lambda bundles", () => {
     it("runs the task graph on Postgres with the bundled pg, checkpointer and Anthropic SDK; no LangSmith key turns tracing off", async () => {
       // A local Messages API: the planner keeps one subtask; the issue body fails the sanitizer
       // (an email address), so the task goes to an issue_text approval without any GitHub call.
+      // Planning reads the repository brief from GitHub first (AR5a); here the `plan` operation
+      // record already holds that context, as after a crash between the read and the model call,
+      // so the step reuses it and reads nothing.
       const calls: string[] = [];
       const anthropic: Server = createServer((req, res) => {
         let raw = "";
@@ -309,7 +313,7 @@ describe("built Lambda bundles", () => {
           calls.push(`${req.method} ${req.url} ${req.headers.authorization}`);
           const text = body.system.startsWith("You plan work")
             ? JSON.stringify({ subtasks: ["Add a contact page"] })
-            : JSON.stringify({ title: "Add a contact page", body: "Show the address someone@example.com." });
+            : JSON.stringify({ title: "Add a contact page", body: "Show the address someone@example.com.", acceptance: ["The page shows the address"], scope: [], context: [] });
           res.writeHead(200, { "content-type": "application/json" });
           res.end(
             JSON.stringify({
@@ -332,6 +336,15 @@ describe("built Lambda bundles", () => {
         )).rows;
         const id = Number(row!.id);
         await db.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = $1", [id]);
+        await db.query(
+          "INSERT INTO github_operations (effect_key, task_id, kind, request_hash, state, result) VALUES ($1, $2, 'plan', $3, 'intent', $4)",
+          [
+            effectKey(id, "plan", 0),
+            id,
+            requestHash({ owner_text: "synthetic contact page", is_private: true, subtask: false }),
+            JSON.stringify({ base: "1".repeat(40), brief: "## Layout\n\napps/web/  the web app", prerequisites: [] }),
+          ],
+        );
         setSecrets({ "kcw/prod/orchestrator": appSecret(), "kcw/prod/models": { anthropic_api_key: "sk-synthetic" } });
         const r = await invoke(
           out,
