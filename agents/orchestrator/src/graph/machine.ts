@@ -456,8 +456,6 @@ class Machine {
    * Developer. Invalid model output (after the node's one retry) goes to the owner.
    */
   async plan(task: TaskRecord): Promise<StepOutcome> {
-    // A new planning run supersedes the previous contract (a replan publishes a new issue).
-    delete this.d.contract;
     // The planner's answers are recorded before any external effect (private text, database only),
     // so a re-run of this step reuses them instead of calling the model again.
     const begun = await this.beginOp("plan", { owner_text: task.owner_text, is_private: task.is_private, subtask: task.parent_id !== null }, "plan");
@@ -769,14 +767,18 @@ class Machine {
     return this.d.pending_dispatch != null ? "unchanged" : "applied";
   }
 
-  /** `redispatched`: this is the timeout's one redispatch (§4.3); the flag is set once the run exists. */
-  /** The canonical contract input of a Developer or QA dispatch, or null (the task went to the owner: planned before contracts existed). */
+  /**
+   * The canonical contract input of a Developer or QA dispatch. A task planned before contracts
+   * existed has none: it fails (null). Its issue, and any PR, belong to that earlier plan, so it is
+   * not planned again here; the owner creates a new task.
+   */
   async contractInput(): Promise<string | null> {
     if (this.d.contract !== undefined) return canonicalContract(this.d.contract);
-    await this.toOwnerFailure("the task has no contract; approve to plan it again", "plan");
+    await this.finish("failed", "the task was planned before task contracts existed; create the task again");
     return null;
   }
 
+  /** `redispatched`: this is the timeout's one redispatch (§4.3); the flag is set once the run exists. */
   async dispatchDev(mode: DevMode, reason?: string, redispatched = false): Promise<boolean> {
     const d = this.d;
     const contract = await this.contractInput();

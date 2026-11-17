@@ -254,13 +254,18 @@ describe("planner contract and repository brief (AR5a)", () => {
     expect((await pending(id))[0]!.reasons[0]).toBe("Task failed: the proposed task contract is not valid (characters or size); approve to plan it again");
   });
 
-  it("a work task without a contract at its dispatch goes to the owner; nothing is dispatched", async () => {
+  // Planned before contracts existed: the issue (and for QA the PR) belong to that plan, so the task is not planned again.
+  it.each([
+    ["dev", { phase: "dev" as const }],
+    ["qa", { phase: "qa" as const, pr_number: 9, head_sha: "a".repeat(40) }],
+  ])("a work task without a contract fails at its %s dispatch; nothing is dispatched and no approval is asked", async (waitingOn, extra) => {
     const id = await newTask("Planned before contracts existed");
-    await sql("UPDATE tasks SET status = 'waiting', waiting_on = 'dev' WHERE id = $1", [id]);
-    const data = { ...initialTaskData(), phase: "dev" as const, waiting_since: "2026-11-15T00:00:00.000Z", issue_number: 5 };
-    const next = await runStep(id, data, { kind: "sweep", message_id: "sweep-1" }, deps);
+    await sql("UPDATE tasks SET status = 'waiting', waiting_on = $2 WHERE id = $1", [id, waitingOn]);
+    const data = { ...initialTaskData(), ...extra, waiting_since: "2026-11-15T00:00:00.000Z", issue_number: 5 };
+    const next = await runStep(id, data, { kind: "sweep", message_id: `sweep-${waitingOn}` }, deps);
     expect(gh.dispatches).toEqual([]);
-    expect(next).toMatchObject({ phase: "owner", owner_wait: "failure", retry: "plan" });
-    expect((await pending(id))[0]!.reasons[0]).toBe("Task failed: the task has no contract; approve to plan it again");
+    expect(next).toMatchObject({ phase: "done" });
+    expect((await task(id)).status).toBe("failed");
+    expect(await pending(id)).toEqual([]);
   });
 });
