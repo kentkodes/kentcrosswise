@@ -8,6 +8,7 @@ import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
 import type pg from "pg";
 import { OperationConflictError, type OperationKind } from "./operations";
 import type { AgentRunRole, Decision, WaitingOn } from "./types";
+import type { EvidenceRow, ValidityRows } from "./validity";
 
 export type TaskStatus = "queued" | "planning" | "in_progress" | "waiting" | "merged" | "done" | "failed" | "cancelled";
 
@@ -155,6 +156,68 @@ export interface TaskStore {
   beginOperation(input: { effectKey: string; taskId: number; kind: OperationKind; requestHash: string; createdAt: string }): Promise<{ record: OperationRecord; created: boolean }>;
   /** Stores the operation's result (state `done`), or a partial result while it stays `intent`. */
   updateOperation(effectKey: string, state: "intent" | "done", result: unknown): Promise<void>;
+  /** AR5b (0021): the contract revision's row (the sanitized public contract); a second call writes nothing. */
+  recordRevision(input: RevisionWrite): Promise<void>;
+  /**
+   * AR5b: a replan in ONE transaction: revision `from` gets `superseded_at`, its open attempts end
+   * as `superseded`, its QA evidence gets `superseded_at`, and revision `next` is inserted. Every
+   * statement only touches rows still open, so a re-run changes nothing.
+   */
+  supersedeRevision(taskId: number, from: number, next: RevisionWrite): Promise<void>;
+  /** AR5b: the attempt of a dispatch, written with its intent; a second call for the key writes nothing. */
+  recordAttempt(input: AttemptWrite): Promise<void>;
+  /**
+   * AR5b: fills the attempt's run id, start, end and outcome. Each field is set once (a value already
+   * there is kept). `contractHash` guards `startedAt`: it applies only when the attempt carries that
+   * hash (a start report of another revision does not start it; undefined = no hash, as for docs).
+   * A key without a row (a dispatch before this slice deployed) changes nothing.
+   */
+  updateAttempt(effectKey: string, fields: AttemptUpdate): Promise<void>;
+  /** AR5b: CI or QA evidence for a head; a second call for the key writes nothing. */
+  recordEvidence(input: EvidenceWrite): Promise<void>;
+  /** AR5b: the rows the validity rule reads (graph/validity.ts): revisions, QA attempts of `revision`, evidence of `head`. */
+  loadValidity(taskId: number, revision: number | null, head: string): Promise<ValidityRows>;
+}
+
+/** One task_revisions row to write. */
+export interface RevisionWrite {
+  taskId: number;
+  revision: number;
+  contractHash: string;
+  contract: unknown;
+}
+
+export interface AttemptWrite {
+  /** The dispatch key `task-<id>/dispatch/<n>`. */
+  effectKey: string;
+  taskId: number;
+  /** Null for a docs task. */
+  revision: number | null;
+  role: "developer" | "qa" | "docs";
+  op: number;
+  contractHash: string | null;
+  baseSha: string | null;
+  createdAt: string;
+}
+
+export interface AttemptUpdate {
+  runId?: number;
+  /** Needs `startContract` to equal the attempt's hash (null: the attempt has none). */
+  startedAt?: string;
+  startContract?: string | null;
+  endedAt?: string;
+  outcome?: "succeeded" | "failed" | "superseded" | "lost";
+}
+
+export interface EvidenceWrite {
+  effectKey: string;
+  taskId: number;
+  revision: number | null;
+  kind: "ci" | "qa";
+  headSha: string;
+  outcome: "success" | "failure" | "approved" | "changes_requested";
+  attemptKey: string | null;
+  createdAt: string;
 }
 
 /** What `recordReport` writes: usage lines carry their `usage_events.dedupe_key`. */
@@ -575,6 +638,99 @@ export class PgTaskStore implements TaskStore {
       state,
       JSON.stringify(result),
     ]);
+  }
+
+  async recordRevision(r: RevisionWrite): Promise<void> {
+    await this.pool.query(
+      "INSERT INTO task_revisions (task_id, revision, contract_hash, contract) VALUES ($1, $2, $3, $4) ON CONFLICT (task_id, revision) DO NOTHING",
+      [r.taskId, r.revision, r.contractHash, JSON.stringify(r.contract)],
+    );
+  }
+
+  async supersedeRevision(taskId: number, from: number, next: RevisionWrite): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE task_revisions SET superseded_at = now() WHERE task_id = $1 AND revision = $2 AND superseded_at IS NULL", [taskId, from]);
+      await client.query(
+        "UPDATE task_attempts SET outcome = 'superseded', ended_at = now() WHERE task_id = $1 AND revision = $2 AND outcome IS NULL",
+        [taskId, from],
+      );
+      await client.query(
+        "UPDATE task_evidence SET superseded_at = now() WHERE task_id = $1 AND revision = $2 AND kind = 'qa' AND superseded_at IS NULL",
+        [taskId, from],
+      );
+      await client.query(
+        "INSERT INTO task_revisions (task_id, revision, contract_hash, contract) VALUES ($1, $2, $3, $4) ON CONFLICT (task_id, revision) DO NOTHING",
+        [next.taskId, next.revision, next.contractHash, JSON.stringify(next.contract)],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async recordAttempt(a: AttemptWrite): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO task_attempts (effect_key, task_id, revision, role, op, contract_hash, base_sha, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (effect_key) DO NOTHING`,
+      [a.effectKey, a.taskId, a.revision, a.role, a.op, a.contractHash, a.baseSha, a.createdAt],
+    );
+  }
+
+  async updateAttempt(effectKey: string, f: AttemptUpdate): Promise<void> {
+    await this.pool.query(
+      `UPDATE task_attempts SET
+         run_id = COALESCE(run_id, $2),
+         started_at = CASE WHEN $3::timestamptz IS NOT NULL AND contract_hash IS NOT DISTINCT FROM $4 THEN COALESCE(started_at, $3::timestamptz) ELSE started_at END,
+         ended_at = COALESCE(ended_at, $5::timestamptz),
+         outcome = COALESCE(outcome, $6)
+       WHERE effect_key = $1`,
+      [effectKey, f.runId ?? null, f.startedAt ?? null, f.startContract ?? null, f.endedAt ?? null, f.outcome ?? null],
+    );
+  }
+
+  async recordEvidence(e: EvidenceWrite): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO task_evidence (effect_key, task_id, revision, kind, head_sha, outcome, attempt_key, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (effect_key) DO NOTHING`,
+      [e.effectKey, e.taskId, e.revision, e.kind, e.headSha, e.outcome, e.attemptKey, e.createdAt],
+    );
+  }
+
+  async loadValidity(taskId: number, revision: number | null, head: string): Promise<ValidityRows> {
+    const iso = (v: Date | string | null): string | null => (v === null ? null : new Date(v).toISOString());
+    const revisions = await this.pool.query<{ revision: number; superseded_at: Date | string | null }>(
+      "SELECT revision, superseded_at FROM task_revisions WHERE task_id = $1 ORDER BY revision",
+      [taskId],
+    );
+    const attempts = await this.pool.query<{ effect_key: string; revision: number | null; op: number; started_at: Date | string | null }>(
+      "SELECT effect_key, revision, op, started_at FROM task_attempts WHERE task_id = $1 AND role = 'qa' AND revision IS NOT DISTINCT FROM $2 ORDER BY op",
+      [taskId, revision],
+    );
+    const evidence = await this.pool.query<{
+      kind: "ci" | "qa";
+      revision: number | null;
+      head_sha: string;
+      outcome: EvidenceRow["outcome"];
+      attempt_key: string | null;
+      superseded_at: Date | string | null;
+    }>("SELECT kind, revision, head_sha, outcome, attempt_key, superseded_at FROM task_evidence WHERE task_id = $1 AND head_sha = $2 ORDER BY created_at", [taskId, head]);
+    return {
+      revisions: revisions.rows.map((r) => ({ revision: Number(r.revision), superseded_at: iso(r.superseded_at) })),
+      attempts: attempts.rows.map((r) => ({ effect_key: r.effect_key, revision: r.revision === null ? null : Number(r.revision), op: Number(r.op), started_at: iso(r.started_at) })),
+      evidence: evidence.rows.map((r) => ({
+        kind: r.kind,
+        revision: r.revision === null ? null : Number(r.revision),
+        head_sha: r.head_sha,
+        outcome: r.outcome,
+        attempt_key: r.attempt_key,
+        superseded_at: iso(r.superseded_at),
+      })),
+    };
   }
 
   loadContacts(): Promise<ContactNames[]> {
