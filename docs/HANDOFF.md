@@ -49,7 +49,7 @@ Current state only; earlier chronology is in Git history. The open backlog is [O
 
 ## Remaining work and next action
 
-1. Decisions with the owner before PL1: PH7 (names of people who are not contacts), PH8 (dummy calendar account).
-2. Then the public log, PL1-PL7 in order (OPEN-POINTS).
+1. Decision with the owner before PL7: PH8 (dummy calendar account). PH4 and PH7 are decided (DESIGN sections 4.5 and 4.6).
+2. The public log, PL1-PL7 in order (OPEN-POINTS); PL1 can start.
 3. Reliability left: the AR9a follow-ups (task 8 to reconcile on resume), the canary token comparison, a schema-plus-consumer live run, raising the active limit, the restore rehearsal, X3.
 4. Owner steps: connect Google for Calendar, consent-screen links and Google verification, delete the Meta and TikTok developer apps, the iPhone push check.
