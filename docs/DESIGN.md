@@ -332,7 +332,7 @@ Status: accepted direction and design target. **None of this section is implemen
 
 **Records extend `agent_events`.** Routing stays an ordinary application workflow with bounded model calls (section 4.0), not a LangGraph graph. Each step of an entry writes one `agent_events` row with agent `router`: captured, routed (label, confidence, model), derived row created, contact link outcome, mood scored, calendar suggestion, corrected by the owner, failed (fixed error code), retried, recovered. The rows are keyed to the entry; the private `detail` stays private; a sanitized public payload is written beside it and read through a `web_public` view, on the pattern of `v_public_agent_events` and [office/LIVE-CONTRACT.md](office/LIVE-CONTRACT.md) (D10/D24 unchanged; new grants and views are owner-critical). Exact columns are decided in the first slice.
 
-**Publication.** Automatic once the entry's route settles, with no per-record approval; timestamps are rounded to the hour. Fail closed:
+**Publication.** Automatic once the owner has reviewed the entry's route (owner decision 2026-11-17, PH4): "Correct" on `/hub` confirms it, a reassignment corrects it, and either publishes the record with no further approval step. The review is a verdict on correctness, not a privacy approval: sanitization alone decides what is safe, and a review cannot publish a withheld record. Entries wait for review indefinitely; the log shows how many await review, apart from the withheld count. Later steps (a calendar suggestion added or dismissed, a contact chosen) update the published record. Timestamps are rounded to the hour. Fail closed:
 - Every route kind shows its sanitized text. Personal identifiers are replaced, not published: people by bracketed filler names, stable within one record (`[Person 1]`, `[Person 2]`), emails, phone numbers, links and handles by `[email]`, `[phone]`, `[link]`, `[handle]`.
 - Never published: credentials or access links, raw tool payloads, raw provider error messages, raw model reasoning.
 - If sanitization errors or cannot establish that a record is safe, the record stays private; only the count of withheld records is public. The log is labelled "Tasks published automatically after sanitization; some records withheld for privacy/security", with that count.
@@ -342,17 +342,21 @@ Status: accepted direction and design target. **None of this section is implemen
 
 **Evidence view (X-ray).** For a published entry a visitor opens its sanitized input and intended outcome, the actual steps and resulting changes, the checks that passed or failed, and the recovery, if any. `@kcw/xray` keeps describing only built components; the evidence view reads the public log, not the registry.
 
-**Checks and evaluation.** A record carries checks: deterministic pass/fail facts about that run. Draft per route kind (to settle with the owner, OPEN-POINTS PH4):
+**Checks and evaluation** (owner decision 2026-11-17, PH4). A record shows three things:
+
+1. **Checks:** deterministic pass/fail facts read back from stored state after each step. A check must be able to fail (on a bug, a provider misbehaviour or a timeout); properties the code already guarantees (a label in the allowed set, one transaction) are not shown as checks. No model call grades a record.
+2. **Verdicts:** the owner's action on each step, or "not reviewed": the route confirmed ("Correct") or corrected (reassignment), a contact link chosen ("Choose a contact"), a calendar suggestion added (accepted) or dismissed (rejected).
+3. **Check-list version:** the version of the check list below that the record was checked against, so changes over time are visible.
 
 | Kind | Checks |
 |---|---|
-| all | label in the allowed set; threshold applied (routed, or Needs you below 0.6); exactly one derived row; model call recorded with usage; no step left failed without a recovery or an unresolved mark |
-| `crm_note` | contact link outcome recorded (linked, ambiguous or none; none is not a failure); calendar suggestion absent or a valid future date in the entry's time zone |
-| `diary` | mood scores present and in range, or "not scored" with a fixed reason |
-| `todo`, `idea` | derived row created |
-| `agent_request` | stays a category: no derived row |
+| all | derived rows match the kind (one, none for `agent_request`); each model call has a usage row (tokens, or marked usage-unknown); each bounded step finished within its bound; every failed step is followed by a success or an "unresolved" mark |
+| `crm_note` | contact link outcome recorded, and a linked contact's name or alias appears in the note; calendar outcome recorded (`created`, `none`, `no-zone`, `invalid`, `failed`, `timeout`); a created suggestion's start is not before the capture time in the entry's time zone; a dummy-calendar event's id equals its suggestion's id |
+| `diary` | all nine mood values present and in range, or "not scored" with a fixed reason |
+| `todo`, `idea` | the derived body equals the entry text, or is marked "edited by owner" |
+| `agent_request` | no derived row and no task created (revisit when agent requests get a destination) |
 
-Correctness is not a per-record claim. The labelled set is the entries the owner corrected or confirmed (a new one-tap "Correct" on `/hub`); an uncorrected route is not assumed right. Accuracy is reported per router version (model and prompt) as a versioned aggregate with its sample size. Planned capabilities are described as planned, and the log is never presented as a complete reliability record.
+Correctness is not a per-record claim. Accuracy is a versioned aggregate per step over the owner's verdicts: route accuracy per router version (model and prompt), contact-link precision and calendar acceptance, each with its sample size. Planned capabilities are described as planned, and the log is never presented as a complete reliability record.
 
 **Calendar.** The public log includes a Google Calendar of a separate dummy Google account (never the owner's), kept fresh from published entries: a published CRM note's calendar suggestion is added to the dummy calendar through the API with its sanitized title, and the log shows those events. Details are open (OPEN-POINTS PH8).
 
