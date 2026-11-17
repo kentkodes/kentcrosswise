@@ -22,7 +22,7 @@ describe('console to graph to trusted observation to public read adapter',()=>{
   const id=await owner(client=>createTask(client,{ownerText:'Add a synthetic status endpoint',isPrivate:false}));
   await owner(drainOffice);
   const store=new PgTaskStore({ ...pool, query: (sql: string, params?: unknown[]) => db.query(sql, params) } as unknown as pg.Pool);
-  const deps={store,github:new FakeGitHubClient(),planner:{split:async(req:{owner_text:string})=>[req.owner_text],plan:async()=>({title:'Add a status endpoint',body:'Return synthetic status.'})}};
+  const deps={store,github:new FakeGitHubClient(),planner:{split:async(req:{owner_text:string})=>[req.owner_text],plan:async()=>({title:'Add a status endpoint',body:'Return synthetic status.',acceptance:['It works.'],scope:[],context:[]})}};
   await db.query('SET ROLE orch_rw');
   const state=await runStep(id,initialTaskData(),{kind:'start',message_id:'start'},deps);
   await db.query('RESET ROLE');expect(state.phase).toBe('dev');await owner(drainOffice);
