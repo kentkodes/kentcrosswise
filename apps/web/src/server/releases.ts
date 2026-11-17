@@ -75,3 +75,23 @@ export async function listReleases(db: Queryable, now: Date = new Date()): Promi
     };
   });
 }
+
+/**
+ * The releases for the console, isolated from the rest of the page: a failing read (inside the page's
+ * transaction, so under a savepoint) gives `unavailable` and no detail, never an error.
+ */
+export async function loadReleases(db: Queryable, now: Date = new Date()): Promise<{ releases: ReleaseRow[]; unavailable: boolean }> {
+  try {
+    await db.query("SAVEPOINT releases_read");
+    const releases = await listReleases(db, now);
+    await db.query("RELEASE SAVEPOINT releases_read");
+    return { releases, unavailable: false };
+  } catch {
+    try {
+      await db.query("ROLLBACK TO SAVEPOINT releases_read");
+    } catch {
+      // The transaction is unusable; the caller's own error handling applies on commit.
+    }
+    return { releases: [], unavailable: true };
+  }
+}

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { ReleasesBlock } from "../src/app/(owner)/console/releases";
 import { runAs, type Queryable } from "../src/server/db";
-import { listReleases, releaseLabel, RELEASE_LIST_LIMIT } from "../src/server/releases";
+import { listReleases, loadReleases, releaseLabel, RELEASE_LIST_LIMIT } from "../src/server/releases";
 import { freshDb, pglitePool } from "./pglite";
 
 // AR8a owner releases block: labels, order and limit on PGlite as web_rw. Synthetic data only.
@@ -77,6 +77,25 @@ describe("console releases as web_rw (PGlite)", () => {
     expect(html).toContain('href="https://github.com/kentkodes/kentcrosswise/actions/runs/11"');
     expect(html).toContain("build-1");
     expect(html).not.toContain("PRIVATE-OWNER-TEXT");
+  });
+
+  it("a failing releases read gives a fixed unavailable text and leaves the transaction usable", async () => {
+    await release(sha("a"), 30);
+    const out = await asRw(async (db) => {
+      const broken: Queryable = {
+        query: ((sql: string, params?: unknown[]) =>
+          /FROM task_releases/.test(sql) ? Promise.reject(new Error("secret detail")) : db.query(sql, params)) as Queryable["query"],
+      };
+      const r = await loadReleases(broken);
+      const after = await db.query("SELECT 1 AS one");
+      return { r, after: after.rows };
+    });
+    expect(out.r).toEqual({ releases: [], unavailable: true });
+    expect(out.after).toEqual([{ one: 1 }]);
+    const html = renderToStaticMarkup(createElement(ReleasesBlock, { releases: [], unavailable: true }));
+    expect(html).toContain("Release state is unavailable right now.");
+    expect(html).not.toContain("secret detail");
+    expect(await asRw((db) => loadReleases(db))).toMatchObject({ unavailable: false });
   });
 
   it("web_rw cannot write task_releases", async () => {

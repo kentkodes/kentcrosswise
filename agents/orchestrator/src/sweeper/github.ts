@@ -214,12 +214,19 @@ export class OctokitSweeperGitHub implements SweeperGitHub {
       const job = data.jobs.find((j) => j.name === DEPLOY_JOB);
       if (!job) return null;
       const step = job.steps?.find((s) => s.name === DEPLOY_CLEAR_CACHE_STEP);
-      const { data: annotations } = await this.#octokit.rest.checks.listAnnotations({ ...this.#r, check_run_id: job.id, per_page: 50 });
+      // The build id is optional evidence: a failing annotation read leaves it null and nothing else changes.
+      let buildId: string | null = null;
+      try {
+        const { data: annotations } = await this.#octokit.rest.checks.listAnnotations({ ...this.#r, check_run_id: job.id, per_page: 50 });
+        buildId = buildIdFromAnnotations(annotations);
+      } catch {
+        buildId = null;
+      }
       return {
         conclusion: job.conclusion ?? null,
         completedAt: job.completed_at ? new Date(job.completed_at) : null,
         clearCache: step ? { conclusion: step.conclusion ?? null, completedAt: step.completed_at ? new Date(step.completed_at) : null } : null,
-        buildId: buildIdFromAnnotations(annotations),
+        buildId,
       };
     });
   }

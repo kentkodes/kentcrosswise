@@ -9,7 +9,8 @@
 // wins (deployed_at from the cache-clear step if it succeeded, verified_at from the job, failed_at
 // cleared); otherwise the latest covering failure/timed_out run sets failed_at (and deployed_at when
 // the cache clear succeeded). Cancelled, queued and in-progress runs are ignored. verified_at is
-// never set unless the job concluded success. Repeating a sweep writes the same values.
+// never set unless the job concluded success. When the compare budget ran out before every candidate
+// run was checked, no failure is recorded for that row (a later descendant success may be unseen). Repeating a sweep writes the same values.
 import { MAX_RELEASE_POLLS, type ReleaseEvidence, type SweeperStore } from "./store";
 import type { DeployJob, DeployRun, SweeperGitHub } from "./github";
 
@@ -51,10 +52,14 @@ export async function runReleases(store: SweeperStore, github: () => Promise<Swe
     const notBefore = row.mergedAt.getTime() - RELEASE_RUN_LEEWAY_MS;
     let success: DeployRun | undefined;
     let failure: DeployRun | undefined;
+    let skipped = false; // a candidate was not compared because the budget ran out
     for (const run of runs) {
       if (run.createdAt.getTime() < notBefore) continue;
       if (run.headSha !== row.mergeSha) {
-        if (compares >= MAX_RELEASE_COMPARES) continue;
+        if (compares >= MAX_RELEASE_COMPARES) {
+          skipped = true;
+          continue;
+        }
         compares += 1;
         if (!(await client.isDescendant(row.mergeSha, run.headSha))) continue;
       }
@@ -74,7 +79,7 @@ export async function runReleases(store: SweeperStore, github: () => Promise<Swe
       if (success && job.conclusion === "success" && job.completedAt) {
         evidence = { ...base, verifiedAt: job.completedAt, failedAt: null };
         report.verified += 1;
-      } else if (!success && (job.conclusion === "failure" || job.conclusion === "timed_out")) {
+      } else if (!success && !skipped && (job.conclusion === "failure" || job.conclusion === "timed_out")) {
         evidence = { ...base, verifiedAt: null, failedAt: job.completedAt ?? run.createdAt };
         report.failed += 1;
       }

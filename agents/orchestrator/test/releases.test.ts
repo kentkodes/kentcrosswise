@@ -287,6 +287,61 @@ describe("releases part (orch_rw on PGlite)", () => {
     expect(await rowOf(sha("8"))).toMatchObject({ verified: true, build_id: null });
   });
 
+  it("a failure written after a verified write changes nothing (a verified row is final)", async () => {
+    await mergedAgo(sha("a"), 30);
+    await runReleases(store(), github()); // creates the row; nothing to compare
+    const verified = { runId: 1, attempt: 1, deploySha: sha("a"), buildId: "b-1", deployedAt: ago(8), verifiedAt: ago(5), failedAt: null };
+    await store().recordReleaseCheck(sha("a"), verified);
+    const first = await rowOf(sha("a"));
+    await store().recordReleaseCheck(sha("a"), { ...verified, runId: 2, buildId: null, deployedAt: null, verifiedAt: null, failedAt: ago(1) });
+    expect(await rowOf(sha("a"))).toEqual(first);
+    expect(first).toMatchObject({ run: 1, verified: true, failed: false, deployed: true });
+  });
+
+  it("a later failure that never cleared the cache keeps the earlier deployed_at", async () => {
+    await mergedAgo(sha("b"), 30);
+    await runReleases(store(), github());
+    await store().recordReleaseCheck(sha("b"), { runId: 1, attempt: 1, deploySha: sha("b"), buildId: null, deployedAt: ago(8), verifiedAt: null, failedAt: ago(6) });
+    await store().recordReleaseCheck(sha("b"), { runId: 2, attempt: 1, deploySha: sha("b"), buildId: null, deployedAt: null, verifiedAt: null, failedAt: ago(2) });
+    expect(await rowOf(sha("b"))).toMatchObject({ run: 2, deployed: true, failed: true, verified: false });
+  });
+
+  it("records no failure for a row whose candidate runs were not all compared (budget exhausted)", async () => {
+    // 19 other rows use up the budget on non-matching success runs; row c (polled last) has a failing
+    // exact-sha run, but its descendant checks were skipped, so no failure may be recorded for it.
+    for (let i = 0; i < 19; i++) await mergedAgo("1".repeat(38) + String(10 + i), 40 + i);
+    await mergedAgo(sha("c"), 35);
+    await runReleases(store(), github()); // creates the rows (nothing to compare yet)
+    await admin("UPDATE task_releases SET checked_at = now() - interval '1 hour'");
+    await admin("UPDATE task_releases SET checked_at = now() WHERE merge_sha = $1", [sha("c")]);
+    gh = new FakeDeployGitHub();
+    gh.runs = [run(400, "2".repeat(40), "success", 20), run(401, "3".repeat(40), "success", 18), run(402, sha("c"), "failure", 15)];
+    gh.jobs.set(402, { conclusion: "failure", completedAt: ago(10), clearCache: null, buildId: null });
+    await runReleases(store(), github());
+    expect(await rowOf(sha("c"))).toMatchObject({ run: null, failed: false, verified: false, checked: true });
+  });
+
+  it("a success run whose job lookup returns null writes only checked_at and does not fall back to a failure", async () => {
+    await mergedAgo(sha("d"), 30);
+    gh.runs = [run(402, sha("d"), "failure", 25), run(403, sha("d"), "success", 20)];
+    gh.jobs.set(402, { conclusion: "failure", completedAt: ago(22), clearCache: null, buildId: null });
+    await runReleases(store(), github()); // 403 has no job: null
+    expect(await rowOf(sha("d"))).toMatchObject({ run: null, failed: false, verified: false, checked: true });
+  });
+
+  it("two rows covered by one run are both verified with one job lookup", async () => {
+    await mergedAgo(sha("e"), 40);
+    await mergedAgo(sha("f"), 35);
+    gh.runs = [run(404, sha("9"), "success", 20)];
+    gh.descends.add(`${sha("e")}>${sha("9")}`);
+    gh.descends.add(`${sha("f")}>${sha("9")}`);
+    gh.jobs.set(404, okJob(5));
+    await runReleases(store(), github());
+    expect(await rowOf(sha("e"))).toMatchObject({ run: 404, verified: true });
+    expect(await rowOf(sha("f"))).toMatchObject({ run: 404, verified: true });
+    expect(gh.calls.filter((c) => c === "getDeployJob")).toHaveLength(1);
+  });
+
   it("does not verify a green run whose job did not conclude success", async () => {
     await mergedAgo(sha("9"), 30);
     gh.runs = [run(112, sha("9"), "success", 20)];
@@ -365,6 +420,16 @@ describe("OctokitSweeperGitHub release reads", () => {
       buildId: "build-7",
     });
     expect(calls.some((x) => x.includes("filter=latest"))).toBe(true);
+  });
+
+  it.each([403, 404, 500])("a failing annotation read (%i) leaves build_id null and the job result stands", async (status) => {
+    const job = { id: 77, name: "deploy", conclusion: "success", completed_at: "2026-11-16T09:10:00Z", steps: [{ name: DEPLOY_CLEAR_CACHE_STEP, conclusion: "success", completed_at: "2026-11-16T09:08:00Z" }] };
+    const { client: c } = client((p) => {
+      if (p === "/repos/o/r/actions/runs/9/jobs") return json({ total_count: 1, jobs: [job] });
+      if (p === "/repos/o/r/check-runs/77/annotations") return new Response(JSON.stringify({ message: "x" }), { status, headers: { "content-type": "application/json" } });
+      return undefined;
+    });
+    expect(await c.getDeployJob(9)).toMatchObject({ conclusion: "success", buildId: null, clearCache: { conclusion: "success" } });
   });
 
   it("returns null when the run has no deploy job, and maps compare status ahead/identical to descendant", async () => {

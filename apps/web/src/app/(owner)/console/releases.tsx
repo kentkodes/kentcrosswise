@@ -16,10 +16,12 @@ const TEXT: Record<ReleaseLabel, { text: string; tone: Tone }> = {
   missing: { text: "No deploy result", tone: "warn" },
 };
 
-export function ReleasesBlock({ releases }: { releases: ReleaseRow[] }) {
+export function ReleasesBlock({ releases, unavailable = false }: { releases: ReleaseRow[]; unavailable?: boolean }) {
   return (
     <Region id="releases" title="Releases" level={3} testId="releases">
-      {releases.length === 0 ? (
+      {unavailable ? (
+        <p className={`${s.note} ${s.pad}`}>Release state is unavailable right now.</p>
+      ) : releases.length === 0 ? (
         <p className={`${s.note} ${s.pad}`}>No merges recorded yet.</p>
       ) : (
         <ol className={s.list}>

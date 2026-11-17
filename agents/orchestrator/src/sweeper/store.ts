@@ -109,7 +109,10 @@ export interface SweeperStore {
   recordMergedReleases(): Promise<number>;
   /** Releases not yet verified, merged within 7 days, oldest check first (never checked first), at most `limit`. */
   listReleasesToPoll(limit: number): Promise<ReleaseRow[]>;
-  /** Stamps checked_at; with evidence, also writes the evidence columns (null evidence writes nothing else). */
+  /**
+   * Stamps checked_at; with evidence, also writes the evidence columns (null evidence writes nothing else).
+   * A verified row is final (a stale sweep cannot overwrite it); an earlier deployed_at is kept by a failure.
+   */
   recordReleaseCheck(mergeSha: string, evidence: ReleaseEvidence | null): Promise<void>;
 }
 
@@ -252,8 +255,9 @@ export function sqlSweeperStore(db: SqlQuery): SweeperStore {
       await db.query(
         `UPDATE task_releases
             SET deploy_run_id = $2, deploy_attempt = $3, deploy_sha = $4, build_id = $5,
-                deployed_at = $6::timestamptz, verified_at = $7::timestamptz, failed_at = $8::timestamptz, checked_at = now()
-          WHERE merge_sha = $1`,
+                deployed_at = CASE WHEN $7::timestamptz IS NOT NULL THEN COALESCE($6::timestamptz, deployed_at) ELSE COALESCE(deployed_at, $6::timestamptz) END,
+                verified_at = $7::timestamptz, failed_at = $8::timestamptz, checked_at = now()
+          WHERE merge_sha = $1 AND verified_at IS NULL`,
         [mergeSha, e.runId, e.attempt, e.deploySha, e.buildId, e.deployedAt?.toISOString() ?? null, e.verifiedAt?.toISOString() ?? null, e.failedAt?.toISOString() ?? null],
       );
     },
