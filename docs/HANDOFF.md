@@ -16,7 +16,7 @@ Current state only; earlier chronology is in Git history. The open backlog is [O
 - Through #136 (2026-11-16): public site, hub, essays, office, X-ray, legal pages, web jobs, Google Calendar, web push, alerts, AR1-AR3.
 - #137-#153: `/privacy` integrations and Limited Use, AR4 ordered children (0020), AR6 owner status (0022), AR5a contracts, AR8a release state (0023), AR5b revisions and attempts (0021), AR6 reservations and the limit of one, `kcw-gh-plan` trusted-path only, docs waves 3 and 4.
 - #154-#158: AR9's first live run (#155 owner nav and #156 docs merged by the orchestrator; #158 hub list merged by hand).
-- #159-#162: the personal-helper direction (DESIGN 4.6), the social removal (#161, migration 0024) and the AR9 results.
+- #159-#165: the personal-helper direction (DESIGN 4.6), the social removal (#161, migration 0024), the AR9 results, a docs cleanup (#163), the PH4 and PH7 decisions (#164) and PL1, the record redactor and span-proposal call (#165, not yet wired).
 
 ## Ownership and changes
 
@@ -40,7 +40,7 @@ Current state only; earlier chronology is in Git history. The open backlog is [O
 
 ## Decisions and security holds
 
-- Owner direction 2026-11-17: the personal helper is the product and inspectable engineering evidence is its public proof. `/demo` becomes the public log of the owner's real entries (sanitized, published automatically once the owner has reviewed the route, fail closed, with routing, trace, read-back checks, the owner's verdicts, corrections and recovery); records extend `agent_events`; Essays and `/office` stay; social removed; playground ideas held. Target design: DESIGN section 4.6; nothing of the log is built. Order: the public log (PL1-PL7), then the remaining reliability work.
+- Owner direction 2026-11-17: the personal helper is the product and inspectable engineering evidence is its public proof. `/demo` becomes the public log of the owner's real entries (sanitized, published automatically once the owner has reviewed the route, fail closed, with routing, trace, read-back checks, the owner's verdicts, corrections and recovery); records extend `agent_events`; Essays and `/office` stay; social removed; playground ideas held. Target design: DESIGN section 4.6; only PL1 (the redactor and the span-proposal call, not yet wired) is built. Order: the public log (PL1-PL7), then the remaining reliability work.
 - Owner direction 2026-11-14 (framing superseded above; its lifecycle defaults stand): disposable workers with durable task state; retries keep task identity with separate attempts; replanning supersedes affected work and revalidates QA.
 - Agents stay paused and agent workflows disabled until the owner enables them. Each live step (enable flag, prod migrations or grants, workflow files, IAM or secrets, paid runs) needs the owner's confirmation for that step.
 - Execution observations stay off until one controlled run confirms a signed `workflow_run` reaches `agent_runs`, including the sender-allowlist check (owner sign-off 2026-10-26).
@@ -50,6 +50,6 @@ Current state only; earlier chronology is in Git history. The open backlog is [O
 ## Remaining work and next action
 
 1. Decision with the owner before PL7: PH8 (dummy calendar account). PH4 and PH7 are decided (DESIGN sections 4.5 and 4.6).
-2. The public log, PL1-PL7 in order (OPEN-POINTS); PL1 can start.
+2. The public log, PL2-PL7 in order (OPEN-POINTS); PL1 is done (#165), PL2 is next.
 3. Reliability left: the AR9a follow-ups (task 8 to reconcile on resume), the canary token comparison, a schema-plus-consumer live run, raising the active limit, the restore rehearsal, X3.
 4. Owner steps: connect Google for Calendar, consent-screen links and Google verification, delete the Meta and TikTok developer apps, the iPhone push check.
