@@ -14,9 +14,9 @@ async function setup(registry: JobRegistry) {
 describe("job events in the origin wrapper", () => {
   it("routes a valid job event to the registry, never to the guard or the OpenNext handler", async () => {
     const job = vi.fn(async () => ({ code: "ok", counts: { sent: 2 } }));
-    const { handler, inner } = await setup({ "social-daily": job });
-    const out = await handler({ kcw_job: "social-daily", scheduled_time: "2026-11-15T06:15:00Z" });
-    expect(out).toEqual({ job: "social-daily", code: "ok", counts: { sent: 2 } });
+    const { handler, inner } = await setup({ "inbox-push": job });
+    const out = await handler({ kcw_job: "inbox-push", scheduled_time: "2026-11-15T06:15:00Z" });
+    expect(out).toEqual({ job: "inbox-push", code: "ok", counts: { sent: 2 } });
     expect(job).toHaveBeenCalledWith({ scheduledTime: "2026-11-15T06:15:00Z" });
     expect(inner).not.toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe("job events in the origin wrapper", () => {
 });
 
 describe("job registry", () => {
-  it("has exactly the two jobs (each job has its own tests)", () => {
-    expect(Object.keys(jobs).sort()).toEqual(["inbox-push", "social-daily"]);
+  it("has exactly the one job (each job has its own tests)", () => {
+    expect(Object.keys(jobs).sort()).toEqual(["inbox-push"]);
   });
 });

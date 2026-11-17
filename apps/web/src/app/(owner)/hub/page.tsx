@@ -20,13 +20,12 @@ const PAGES = [
   { href: "/mood", label: "Mood", note: "Mood scores over time" },
   { href: "/todos", label: "Todos", note: "Things to do" },
   { href: "/ideas", label: "Ideas", note: "Ideas and project thoughts" },
-  { href: "/social", label: "Social", note: "Follower and post counts by source" },
   { href: "/projects", label: "Projects", note: "One tab per project" },
   { href: "/console", label: "Boss console", note: "Create tasks, follow them, pause switches" },
   { href: "/inbox", label: "Inbox", note: "Approvals and routing waiting on you" },
   { href: "/console/usage", label: "Usage", note: "Model cost, spend cap, Actions minutes" },
   { href: "/essays", label: "Essays", note: "Library, recommendations and setup" },
-  { href: "/connections", label: "Connections", note: "Google Calendar and YouTube access" },
+  { href: "/connections", label: "Connections", note: "Google Calendar access" },
   { href: "/notifications", label: "Notifications", note: "Push notifications for new inbox items" },
 ] as const;
 
