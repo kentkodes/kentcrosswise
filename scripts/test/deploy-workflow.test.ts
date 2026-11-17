@@ -56,6 +56,34 @@ describe("deploy.yml order", () => {
   });
 });
 
+describe("deploy state recording (AR8a)", () => {
+  const sweeperSrc = readFileSync(path.join(root, "agents/orchestrator/src/sweeper/github.ts"), "utf8");
+  const constant = (name: string): string => {
+    const m = new RegExp(`export const ${name} = "([^"]+)";`).exec(sweeperSrc);
+    expect(m, name).not.toBeNull();
+    return m![1]!;
+  };
+
+  it("prints the build id as a notice right after the Lambda bundles, without credentials or secrets", () => {
+    const lambdas = index("pnpm build-lambdas");
+    const record = steps[lambdas + 1]!;
+    expect(record.name).toBe("Record build id");
+    expect(record.body).toContain("apps/web/.open-next/kcw-build.json");
+    expect(record.body).toContain(`::notice title=${constant("BUILD_ID_ANNOTATION_TITLE")}::`);
+    expect(record.body).toContain("/^[A-Za-z0-9_-]{1,64}$/");
+    expect(record.body).not.toMatch(/secrets\.|vars\.|uses:|aws /);
+    expect(index("aws-actions/configure-aws-credentials")).toBeGreaterThan(lambdas + 1);
+  });
+
+  it("keeps the names the releases sweeper part reads: the cache-clear step, the job and the workflow file", () => {
+    expect(steps.map((s) => s.name)).toContain(constant("DEPLOY_CLEAR_CACHE_STEP"));
+    expect(constant("DEPLOY_CLEAR_CACHE_STEP")).toBe("Clear the CloudFront cache");
+    expect(yml).toMatch(new RegExp(`^ {2}deploy:\n {4}name: ${constant("DEPLOY_JOB")}$`, "m"));
+    expect(constant("DEPLOY_WORKFLOW")).toBe("deploy.yml");
+    expect(sweeperSrc).toContain("BUILD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/");
+  });
+});
+
 describe("deploy failure alert (AR8b)", () => {
   const last = steps.slice(-2);
 

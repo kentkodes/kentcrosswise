@@ -11,11 +11,14 @@
 //   tasks:      a sweep message per waiting/queued task (the graph decides timeouts and retries);
 //   pause:      if agents_paused, cancel agent workflow runs that have not completed;
 //   gc:         in the nightly window, dispatch preview-gc.yml unless already dispatched;
-//   redeliver:  redeliver failed webhook deliveries of the orchestrator App.
+//   redeliver:  redeliver failed webhook deliveries of the orchestrator App;
+//   releases:   records merged, deployed and verified per merge commit from the deploy workflow's runs
+//               (releases.ts, migration 0023). Read-only GitHub calls, independent of the spend gate.
 // Every part is safe to repeat for the same scheduled time (retried invocation).
 import { threadIdOf } from "@kcw/core/events";
 import { describeError } from "./errors";
 import { REDELIVERY_DEFAULTS, selectRedeliveries, type RedeliveryPlan } from "./deliveries";
+import { runReleases, type ReleasesReport } from "./releases";
 import { PREVIEW_GC_WORKFLOW, type SweeperGitHub } from "./github";
 import { nightlyGcWindow, sweepDedupeId, windowLabel, windowStart } from "./schedule";
 import { MAX_OUTBOX_ROWS, MAX_SWEEP_TASKS, type SweeperStore } from "./store";
@@ -51,7 +54,7 @@ export interface SweepDeps {
   log?: (line: string) => void;
 }
 
-export type PartName = "outbox" | "spend" | "tasks" | "pause" | "gc" | "redeliver";
+export type PartName = "outbox" | "spend" | "tasks" | "pause" | "gc" | "redeliver" | "releases";
 
 export interface SweepReport {
   window: string;
@@ -69,6 +72,8 @@ export interface SweepReport {
   gc: "dispatched" | "already_dispatched" | "outside_window" | null;
   redelivered: number;
   redeliverySkipped: RedeliveryPlan["skipped"] | null;
+  /** The releases part (null when it failed). */
+  releases: ReleasesReport | null;
   /** Failed parts with the error class. */
   failed: Partial<Record<PartName, string>>;
 }
@@ -90,6 +95,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     gc: null,
     redelivered: 0,
     redeliverySkipped: null,
+    releases: null,
     failed: {},
   };
 
@@ -198,11 +204,16 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
     }
   });
 
+  await part("releases", async () => {
+    report.releases = await runReleases(deps.store, gh);
+  });
+
   log(
     `sweeper: window=${report.window} spend=${report.spend?.spentUsd.toFixed(2) ?? "unknown"} ` +
       `unpriced=${report.spend?.unpricedEvents ?? "unknown"} unknown=${report.spend?.unknownEvents ?? "unknown"} cap=${report.capReached ? "reached" : "ok"} ` +
       `outbox=${report.outboxSent}/${report.outboxFailed} swept=${report.swept} paused=${report.paused} cancelled=${report.cancelled} ` +
       `gc=${report.gc} redelivered=${report.redelivered}` +
+      (report.releases ? ` releases=${report.releases.created}/${report.releases.polled}/${report.releases.verified}/${report.releases.failed}` : "") +
       (Object.keys(report.failed).length > 0 ? ` failed=${Object.keys(report.failed).join(",")}` : ""),
   );
   return report;

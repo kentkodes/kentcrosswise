@@ -57,6 +57,13 @@ jobs:
       - name: Lambda bundles
         run: pnpm build-lambdas
 
+      # AR8a: the build id goes into a public workflow annotation, so the sweeper can bind a deploy
+      # run to its build (task_releases.build_id). No credentials; printed only when it is a short
+      # plain identifier. Read by agents/orchestrator/src/sweeper/github.ts (BUILD_ID_ANNOTATION_TITLE).
+      - name: Record build id
+        run: |
+          node -e 'const id = JSON.parse(require("fs").readFileSync("apps/web/.open-next/kcw-build.json", "utf8")).build_id; if (typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id)) console.log("::notice title=kcw-build-id::" + id)'
+
       - name: AWS credentials (kcw-gh-deploy)
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
