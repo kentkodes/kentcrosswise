@@ -84,7 +84,7 @@ Status, AR4: implemented and merged (#140, migration `0020_task_prerequisites`, 
 
 Status, AR5a: implemented and merged: the worker side (#143), the planner side (#145) and QA of a Docs-keeper PR without a contract (#146). Developer and QA dispatches carry the contract; no dispatch has run live with one. AR5b is merged too (#147, migration 0021: revisions, attempts, evidence, replan; the planner renders the previous contract and failure on a replan). Remaining: the usage measurement (AR9) and a live run.
 
-Status, AR6: the owner status is merged (#141, migration `0022_execution_wait`; the console shows active workers apart from parked and queued work) and so are the execution reservations (#149: `claimExecution`, `ACTIVE_EXECUTION_LIMIT`, reconcile before replacement; no migration). The limit is 4 and does not bind yet; the rollout value (recommended 1) is the owner's decision; GitHub cancellation timing is not verified live.
+Status, AR6: the owner status is merged (#141, migration `0022_execution_wait`; the console shows active workers apart from parked and queued work) and so are the execution reservations (#149: `claimExecution`, `ACTIVE_EXECUTION_LIMIT`, reconcile before replacement; no migration). The limit is 1 for rollout (owner decision; raised after AR9); GitHub cancellation timing is not verified live.
 
 Status, AR8a: the deploy-state follow-up is merged and deployed (#144, migration `0023_release_states`): merged, deployed and verified are recorded separately per merge commit (`task_releases`, sweeper part `releases`, console block). A failed, cancelled-without-successor or missing deploy is never shown as verified. The live check needs a real orchestrator merge: AR9.
 
