@@ -10,7 +10,10 @@ export const PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 export const SOURCES = ["all", ...PLATFORMS] as const;
 export type Source = (typeof SOURCES)[number];
-export type Ingest = "api" | "manual";
+export const INGESTS = ["manual", "api"] as const;
+export type Ingest = (typeof INGESTS)[number];
+/** The platforms the daily job reads (one API account each). TikTok is manual entry only. */
+export const API_PLATFORMS = ["youtube", "instagram"] as const;
 
 export const MAX_HANDLE_CHARS = 64;
 /** Snapshots per account that feed the followers trend (the newest days). */
@@ -26,7 +29,19 @@ const HANDLE = /^[A-Za-z0-9._-]+$/;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 /** Input problems, as fixed codes (the page shows text for each code; the message is never shown or logged). */
-export type SocialErrorCode = "platform" | "handle" | "duplicate" | "account" | "day" | "followers" | "views" | "empty";
+export type SocialErrorCode =
+  | "platform"
+  | "handle"
+  | "duplicate"
+  | "account"
+  | "day"
+  | "followers"
+  | "views"
+  | "empty"
+  | "ingest"
+  | "api-tiktok"
+  | "api-taken-youtube"
+  | "api-taken-instagram";
 
 export class SocialInputError extends Error {
   override name = "SocialInputError";
@@ -58,6 +73,12 @@ export function parseSource(raw: unknown): Source {
 export function parsePlatform(raw: unknown): Platform {
   if (typeof raw !== "string" || !(PLATFORMS as readonly string[]).includes(raw)) throw new SocialInputError("platform");
   return raw as Platform;
+}
+
+/** How an account's numbers arrive: typed in by hand, or read by the daily job. Anything else is invalid. */
+export function parseIngest(raw: unknown): Ingest {
+  if (typeof raw !== "string" || !(INGESTS as readonly string[]).includes(raw)) throw new SocialInputError("ingest");
+  return raw as Ingest;
 }
 
 /**
@@ -138,9 +159,20 @@ export function snapshotFromForm(form: FormData, today: string = todayUtc()): Sn
   );
 }
 
-/** The account from the add form. Ingest is always manual in this PR. */
-export function newAccountFromForm(form: FormData): { platform: Platform; handle: string } {
-  return { platform: parsePlatform(form.get("platform")), handle: normalizeHandle(form.get("handle")) };
+/** The account from the add form: platform, handle and how its numbers arrive (the ingest select). */
+export function newAccountFromForm(form: FormData): NewAccount {
+  return {
+    platform: parsePlatform(form.get("platform")),
+    handle: normalizeHandle(form.get("handle")),
+    ingest: parseIngest(form.get("ingest")),
+  };
+}
+
+export interface NewAccount {
+  platform: Platform;
+  handle: string;
+  /** Defaults to manual when omitted. */
+  ingest?: Ingest;
 }
 
 // ---------------------------------------------------------------- database
@@ -167,16 +199,29 @@ export function toCount(v: unknown): number | null {
 }
 
 /**
- * Inserts the account (ingest manual) and returns its id. A platform and handle that is already on the
- * dashboard throws "duplicate" (handles are stored lower-case, so case does not make a second account).
+ * Inserts the account with the given ingest (manual by default) and returns its id. A platform and handle
+ * that is already on the dashboard throws "duplicate" (handles are stored lower-case, so case does not make
+ * a second account). An ingest 'api' account is allowed only for YouTube and Instagram, and only one per
+ * platform, because the daily job reads a single one. The one-per-platform check runs under an advisory
+ * lock in the caller's transaction (withDb), so two saves at once cannot both pass it.
  */
-export async function addAccount(db: Queryable, input: { platform: Platform; handle: string }): Promise<string> {
+export async function addAccount(db: Queryable, input: NewAccount): Promise<string> {
   const platform = parsePlatform(input.platform);
   const handle = normalizeHandle(input.handle);
+  const ingest = parseIngest(input.ingest ?? "manual");
+  if (ingest === "api") {
+    if (!(API_PLATFORMS as readonly string[]).includes(platform)) throw new SocialInputError("api-tiktok");
+    await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`social-api:${platform}`]);
+    const { rows: taken } = await db.query(
+      "SELECT 1 FROM social_accounts WHERE platform = $1 AND ingest = 'api' LIMIT 1",
+      [platform],
+    );
+    if (taken.length > 0) throw new SocialInputError(platform === "youtube" ? "api-taken-youtube" : "api-taken-instagram");
+  }
   try {
     const { rows } = await db.query<{ id: string }>(
-      "INSERT INTO social_accounts (platform, handle, ingest) VALUES ($1, $2, 'manual') RETURNING id",
-      [platform, handle],
+      "INSERT INTO social_accounts (platform, handle, ingest) VALUES ($1, $2, $3) RETURNING id",
+      [platform, handle, ingest],
     );
     return rows[0]!.id;
   } catch (err) {

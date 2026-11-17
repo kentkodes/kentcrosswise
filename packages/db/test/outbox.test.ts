@@ -84,7 +84,8 @@ describe("0011 orchestrator_outbox and orchestrator_receipts", () => {
     expect(by("web_rw", "INSERT")).toEqual(["body", "group_id", "message_key"]);
     expect(by("web_rw", "SELECT")).toEqual(["message_key", "sent_at"]);
     expect(by("web_rw", "UPDATE")).toEqual(["sent_at"]);
-    expect(by("orch_rw", "INSERT")).toEqual([]);
+    // 0020 (AR4): the orchestrator enqueues child starts.
+    expect(by("orch_rw", "INSERT")).toEqual(["body", "group_id", "message_key"]);
     expect(by("orch_rw", "SELECT")).toEqual(
       ["attempts", "body", "created_at", "group_id", "id", "message_key", "next_attempt_at", "sent_at"],
     );
@@ -157,7 +158,7 @@ describe("0011 orchestrator_outbox and orchestrator_receipts", () => {
     for (const sql of denied) await expect(as("web_rw", sql), sql).rejects.toThrow(/permission denied/);
   });
 
-  it("orch_rw runs the sweeper's drain and the consumer's receipts, and cannot insert or delete outbox rows", async () => {
+  it("orch_rw runs the sweeper's drain and the consumer's receipts, and cannot delete outbox rows", async () => {
     await db.exec("DELETE FROM orchestrator_outbox");
     await db.exec(
       `INSERT INTO orchestrator_outbox (message_key, group_id, body, created_at) VALUES
@@ -196,7 +197,7 @@ describe("0011 orchestrator_outbox and orchestrator_receipts", () => {
     expect(await as("orch_rw", "SELECT 1 FROM orchestrator_receipts WHERE message_key = $1", ["d-1"])).toHaveLength(1);
 
     const denied = [
-      "INSERT INTO orchestrator_outbox (message_key, group_id, body) VALUES ('z', 'task-1', '{}')",
+      "INSERT INTO orchestrator_outbox (message_key, group_id, body, attempts) VALUES ('z', 'task-1', '{}', 3)",
       "UPDATE orchestrator_outbox SET body = 'x'",
       "UPDATE orchestrator_outbox SET message_key = 'x'",
       "DELETE FROM orchestrator_outbox",

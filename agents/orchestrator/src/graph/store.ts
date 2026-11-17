@@ -1,6 +1,7 @@
 // The task graph's database access, as orch_rw (DESIGN §3.2, §3.4): tasks, agent_events,
 // approvals (+ inbox items, migration 0003), usage_events, system_flags, contact names. Events and
 // approvals carry effect keys, and a report is written in one transaction (AR2 slice 3, 0013).
+// Child starts are outbox messages written with the state change that releases them (AR4, 0020).
 import type { AgentName, EventType, Usage } from "@kcw/core/events";
 import { callEventStatement, type CallEvent, type CallTag } from "@kcw/core/models";
 import { loadContactNames, type ContactNames } from "@kcw/core/sanitize";
@@ -19,11 +20,16 @@ export interface TaskRecord {
   github_issue: number | null;
   /** Set for a subtask (a child row the planner created). */
   parent_id: number | null;
+  /** AR4: sibling subtasks that must be merged before this one starts (empty for other tasks). */
+  prerequisites: number[];
+  /** AR4: the merge commit on main of this task's own pull request; null if not merged or GitHub returned none. */
+  merge_sha: string | null;
 }
 
 export interface ChildTask {
   id: number;
   status: TaskStatus;
+  prerequisites: number[];
 }
 
 export interface TaskUpdate {
@@ -117,11 +123,23 @@ export interface TaskStore {
   loadContacts(): Promise<ContactNames[]>;
   /**
    * §4.2 step 2: one child `tasks` row per subtask (queued, thread `task-<id>`, source and
-   * is_private copied from the parent), in one transaction. If the parent already has children
-   * (a retried step), returns those instead. Ids in subtask order.
+   * is_private copied from the parent, `prerequisites` = the child ids of `after[i]`), in one
+   * transaction with the outbox start message of every child without prerequisites (AR4). If the
+   * parent already has children (a retried step), returns those instead (their start messages are
+   * enqueued again, which writes nothing new). Ids in subtask order.
    */
-  createSubtasks(parentId: number, ownerTexts: readonly string[]): Promise<number[]>;
+  createSubtasks(parentId: number, ownerTexts: readonly string[], after: readonly (readonly number[])[]): Promise<number[]>;
   getChildren(parentId: number): Promise<ChildTask[]>;
+  /**
+   * AR4: the task is merged (status `merged`, no wait) and `merge_sha` is its own merge commit (a
+   * sha already recorded is kept; null when GitHub returned none). In the same transaction, every
+   * queued sibling whose prerequisites are now all merged gets its outbox start message. Serialized
+   * per parent (row lock), so two siblings merging at once cannot both miss a common dependent.
+   * Returns the released ids; a repeated call enqueues nothing new.
+   */
+  mergeTask(id: number, mergeSha: string | null): Promise<number[]>;
+  /** AR4: cancels these tasks if they are still queued (the blocked subtasks of a parked parent). */
+  cancelQueued(ids: readonly number[]): Promise<void>;
   /**
    * §4.2 step 8: the docs task of a merged task (a child row: queued, source `github`, is_private
    * copied, fixed owner text naming the PR, thread `task-<id>`; the docs start sets the branch). A merged
@@ -180,6 +198,22 @@ async function insertEvent(
   );
 }
 
+/**
+ * AR4: the `task.created` outbox message of each child (group = its thread), at most once per child
+ * (message key `task-<id>/start`); the sweeper's outbox part sends it.
+ */
+async function enqueueStarts(db: Pick<pg.PoolClient, "query">, ids: readonly number[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.query(
+    `INSERT INTO orchestrator_outbox (message_key, group_id, body)
+     SELECT 'task-' || c.id || '/start', 'task-' || c.id,
+            json_build_object('type', 'task.created', 'task_id', c.id, 'message_key', 'task-' || c.id || '/start')::text
+       FROM tasks c WHERE c.id = ANY($1::bigint[]) ORDER BY c.id
+     ON CONFLICT (message_key) DO NOTHING`,
+    [ids],
+  );
+}
+
 export class PgTaskStore implements TaskStore {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -221,7 +255,9 @@ export class PgTaskStore implements TaskStore {
       is_private: boolean;
       github_issue: number | null;
       parent_id: string | null;
-    }>("SELECT id, status, owner_text, is_private, github_issue, parent_id FROM tasks WHERE id = $1", [id]);
+      prerequisites: (string | number)[];
+      merge_sha: string | null;
+    }>("SELECT id, status, owner_text, is_private, github_issue, parent_id, prerequisites, merge_sha FROM tasks WHERE id = $1", [id]);
     const r = rows[0];
     return r
       ? {
@@ -231,6 +267,8 @@ export class PgTaskStore implements TaskStore {
           is_private: r.is_private,
           github_issue: r.github_issue,
           parent_id: num(r.parent_id),
+          prerequisites: r.prerequisites.map(Number),
+          merge_sha: r.merge_sha,
         }
       : null;
   }
@@ -400,7 +438,7 @@ export class PgTaskStore implements TaskStore {
     );
   }
 
-  async createSubtasks(parentId: number, ownerTexts: readonly string[]): Promise<number[]> {
+  async createSubtasks(parentId: number, ownerTexts: readonly string[], after: readonly (readonly number[])[]): Promise<number[]> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -419,7 +457,16 @@ export class PgTaskStore implements TaskStore {
           ids.push(Number(rows[0]!.id));
         }
         await client.query("UPDATE tasks SET thread_id = 'task-' || id WHERE id = ANY($1::bigint[])", [ids]);
+        for (const [i, id] of ids.entries()) {
+          const prerequisites = (after[i] ?? []).map((p) => ids[p]!);
+          if (prerequisites.length > 0) await client.query("UPDATE tasks SET prerequisites = $2::bigint[] WHERE id = $1", [id, prerequisites]);
+        }
       }
+      const { rows: ready } = await client.query<{ id: string }>(
+        "SELECT id FROM tasks WHERE parent_id = $1 AND cardinality(prerequisites) = 0 ORDER BY id",
+        [parentId],
+      );
+      await enqueueStarts(client, ready.map((r) => Number(r.id)));
       await client.query("COMMIT");
       return ids;
     } catch (err) {
@@ -459,11 +506,48 @@ export class PgTaskStore implements TaskStore {
   }
 
   async getChildren(parentId: number): Promise<ChildTask[]> {
-    const { rows } = await this.pool.query<{ id: string; status: TaskStatus }>(
-      "SELECT id, status FROM tasks WHERE parent_id = $1 ORDER BY id",
+    const { rows } = await this.pool.query<{ id: string; status: TaskStatus; prerequisites: (string | number)[] }>(
+      "SELECT id, status, prerequisites FROM tasks WHERE parent_id = $1 ORDER BY id",
       [parentId],
     );
-    return rows.map((r) => ({ id: Number(r.id), status: r.status }));
+    return rows.map((r) => ({ id: Number(r.id), status: r.status, prerequisites: r.prerequisites.map(Number) }));
+  }
+
+  async mergeTask(id: number, mergeSha: string | null): Promise<number[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows: own } = await client.query<{ parent_id: string | null }>("SELECT parent_id FROM tasks WHERE id = $1", [id]);
+      const parent = num(own[0]?.parent_id ?? null);
+      // Siblings that merge at once take turns, so the later one sees the earlier one merged.
+      if (parent !== null) await client.query("SELECT 1 FROM tasks WHERE id = $1 FOR UPDATE", [parent]);
+      await client.query(
+        "UPDATE tasks SET status = 'merged', waiting_on = NULL, agent = NULL, merge_sha = COALESCE(merge_sha, $2), updated_at = now() WHERE id = $1",
+        [id, mergeSha],
+      );
+      let released: number[] = [];
+      if (parent !== null) {
+        const { rows } = await client.query<{ id: string }>(
+          `SELECT c.id FROM tasks c
+            WHERE c.parent_id = $2 AND c.status = 'queued' AND $1 = ANY(c.prerequisites)
+              AND NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = ANY(c.prerequisites) AND p.status <> 'merged')`,
+          [id, parent],
+        );
+        released = rows.map((r) => Number(r.id)).sort((a, b) => a - b);
+        await enqueueStarts(client, released);
+      }
+      await client.query("COMMIT");
+      return released;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async cancelQueued(ids: readonly number[]): Promise<void> {
+    await this.pool.query("UPDATE tasks SET status = 'cancelled', waiting_on = NULL, updated_at = now() WHERE id = ANY($1::bigint[]) AND status = 'queued'", [ids]);
   }
 
   async beginOperation(input: { effectKey: string; taskId: number; kind: OperationKind; requestHash: string; createdAt: string }): Promise<{ record: OperationRecord; created: boolean }> {

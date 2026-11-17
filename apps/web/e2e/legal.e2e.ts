@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 const PAGES = [
-  { path: "/terms", title: "Terms | Kentcrosswise", h1: "Terms", link: "Terms" },
-  { path: "/privacy", title: "Privacy | Kentcrosswise", h1: "Privacy", link: "Privacy" },
+  { path: "/terms", title: "Terms | Kentcrosswise", h1: "Terms", link: "Terms", updated: "15 November 2026" },
+  { path: "/privacy", title: "Privacy | Kentcrosswise", h1: "Privacy", link: "Privacy", updated: "16 November 2026" },
 ];
 
 for (const p of PAGES) {
@@ -13,7 +13,7 @@ for (const p of PAGES) {
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { level: 1, name: p.h1, exact: true })).toBeVisible();
     expect(await main.getByRole("heading", { level: 2 }).count()).toBeGreaterThan(3);
-    await expect(main.getByText("Last updated: 15 November 2026", { exact: true })).toBeVisible();
+    await expect(main.getByText(`Last updated: ${p.updated}`, { exact: true })).toBeVisible();
     await expect(main.getByRole("link", { name: "open an issue" }))
       .toHaveAttribute("href", "https://github.com/kentkodes/kentcrosswise/issues/new");
   });

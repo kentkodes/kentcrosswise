@@ -235,7 +235,7 @@ describe("orchestrator Lambda on Postgres", () => {
     expect(b.gh!.calls).toEqual([]); // nothing re-planned or re-dispatched
   });
 
-  it("attributes usage to each task when the planner splits a task (children start in the same invocation)", async () => {
+  it("splitting a task makes no child model call in the parent's invocation; each child is planned from its own message (AR4)", async () => {
     const id = await newTask("Add a healthz page and a status badge");
     replies.planner.push(JSON.stringify({ subtasks: ["Add a /healthz route", "Add a status badge to the footer"] }));
     replies.public_title.push(plan("Add a healthz page", "Add a /healthz route."), plan("Add a status badge", "Show a badge."));
@@ -244,11 +244,21 @@ describe("orchestrator Lambda on Postgres", () => {
     expect(await p.handler({ Records: [created("s1", id)] })).toEqual({ batchItemFailures: [] });
     const kids = (await sql<{ id: string }>("SELECT id FROM tasks WHERE parent_id = $1 ORDER BY id", [id])).map((r) => Number(r.id));
     expect(kids).toHaveLength(2);
-    expect(p.gh!.issues.map((i) => i.title)).toEqual(["Add a healthz page", "Add a status badge"]);
-    expect(p.gh!.dispatches.map((d) => d.inputs.task_id)).toEqual(kids.map(String));
+    // The parent's invocation: one planner call, nothing on GitHub, the first child's start in the outbox.
+    expect(p.gh!.calls).toEqual([]);
+    expect((await usageRows([id, ...kids])).map((u) => Number(u.task_id))).toEqual([id]);
+    const outbox = await sql<{ message_key: string; group_id: string; body: string }>(
+      "SELECT message_key, group_id, body FROM orchestrator_outbox WHERE group_id = ANY($1::text[]) ORDER BY id",
+      [kids.map((k) => `task-${k}`)],
+    );
+    expect(outbox.map((o) => o.message_key)).toEqual([`task-${kids[0]}/start`]);
 
-    const usage = await usageRows([id, ...kids]);
-    expect(usage.map((u) => Number(u.task_id)).sort()).toEqual([id, ...kids].sort());
+    // The sweeper sends it; a later invocation plans that child alone.
+    const q = newProcess();
+    expect(await q.handler({ Records: [{ messageId: "s2", body: outbox[0]!.body, attributes: { MessageGroupId: outbox[0]!.group_id } }] })).toEqual({ batchItemFailures: [] });
+    expect(q.gh!.issues.map((i) => i.title)).toEqual(["Add a healthz page"]);
+    expect(q.gh!.dispatches.map((d) => d.inputs.task_id)).toEqual([String(kids[0])]);
+    expect((await usageRows([id, ...kids])).map((u) => Number(u.task_id)).sort()).toEqual([id, kids[0]!].sort());
   });
 
   it("runs the real AnthropicProvider (key from the models secret) and records its token counts (Opus 5.5, high effort; the returned model id is the usage row)", async () => {

@@ -260,6 +260,74 @@ describe("bigint columns from node-postgres (strings) read the same as PGlite (n
   });
 });
 
+describe("ingest choice on addAccount (PGlite)", () => {
+  let pg: PGlite;
+  const asRw = <T>(fn: (db: Queryable) => Promise<T>) => runAs(pglitePool(pg), "web_rw", fn);
+  // The selection the daily job makes (apps/web/src/server/jobs/social-daily.ts), copied verbatim.
+  const DAILY_JOB_SELECT = `SELECT DISTINCT ON (platform) platform, id FROM social_accounts
+        WHERE ingest = 'api' AND platform IN ('youtube', 'instagram') ORDER BY platform, handle`;
+
+  beforeAll(async () => {
+    pg = await freshDb();
+  }, 60_000);
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  const ingestOf = async (handle: string) =>
+    (await pg.query<{ ingest: string }>("SELECT ingest FROM social_accounts WHERE handle = $1", [handle])).rows;
+
+  it("stores manual by default, and api when asked", async () => {
+    await asRw((db) => addAccount(db, { platform: "tiktok", handle: "ingest_default" }));
+    await asRw((db) => addAccount(db, { platform: "youtube", handle: "ingest_yt_api", ingest: "api" }));
+    expect(await ingestOf("ingest_default")).toEqual([{ ingest: "manual" }]);
+    expect(await ingestOf("ingest_yt_api")).toEqual([{ ingest: "api" }]);
+  });
+
+  it("refuses api for TikTok with its notice, and stores nothing", async () => {
+    await expect(asRw((db) => addAccount(db, { platform: "tiktok", handle: "ingest_tt_api", ingest: "api" }))).rejects.toMatchObject({
+      code: "api-tiktok",
+    });
+    expect(await ingestOf("ingest_tt_api")).toEqual([]);
+  });
+
+  it("refuses a second api account for the same platform, and accepts a second manual one", async () => {
+    await expect(asRw((db) => addAccount(db, { platform: "youtube", handle: "ingest_yt_second", ingest: "api" }))).rejects.toMatchObject({
+      code: "api-taken-youtube",
+    });
+    expect(await ingestOf("ingest_yt_second")).toEqual([]);
+    await asRw((db) => addAccount(db, { platform: "youtube", handle: "ingest_yt_manual_two", ingest: "manual" }));
+    await asRw((db) => addAccount(db, { platform: "youtube", handle: "ingest_yt_manual_three" }));
+    expect(await ingestOf("ingest_yt_manual_two")).toEqual([{ ingest: "manual" }]);
+  });
+
+  it("allows one api YouTube and one api Instagram account together, and names the Instagram notice when refused", async () => {
+    await asRw((db) => addAccount(db, { platform: "instagram", handle: "ingest_ig_api", ingest: "api" }));
+    expect(await ingestOf("ingest_ig_api")).toEqual([{ ingest: "api" }]);
+    await expect(asRw((db) => addAccount(db, { platform: "instagram", handle: "ingest_ig_second", ingest: "api" }))).rejects.toMatchObject({
+      code: "api-taken-instagram",
+    });
+    const api = await pg.query<{ n: number }>("SELECT count(*)::int AS n FROM social_accounts WHERE ingest = 'api' AND platform IN ('youtube', 'instagram')");
+    expect(api.rows).toEqual([{ n: 2 }]);
+  });
+
+  it("refuses an ingest value that is neither manual nor api, as an ingest error", async () => {
+    await expect(asRw((db) => addAccount(db, { platform: "youtube", handle: "ingest_bad", ingest: "auto" as never }))).rejects.toMatchObject({
+      code: "ingest",
+    });
+    expect(await ingestOf("ingest_bad")).toEqual([]);
+  });
+
+  it("the row the daily job selects is the api account created through addAccount", async () => {
+    const { rows } = await pg.query<{ platform: string; id: string }>(DAILY_JOB_SELECT);
+    const created = await pg.query<{ platform: string; id: string }>(
+      "SELECT platform, id FROM social_accounts WHERE handle IN ('ingest_yt_api', 'ingest_ig_api') ORDER BY platform",
+    );
+    expect(rows).toEqual(created.rows);
+    expect(rows.map((r) => r.platform)).toEqual(["instagram", "youtube"]);
+  });
+});
+
 function idOf(rows: AccountRow[], handle: string): AccountRow {
   const row = rows.find((r) => r.handle === handle);
   if (!row) throw new Error("account missing from the test fixture");

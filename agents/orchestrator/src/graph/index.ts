@@ -4,7 +4,9 @@
 //   step: applies one input to the task's state machine (machine.ts): GitHub calls, DB writes;
 //   wait: interrupt() until the next input (relay event, agent report, owner decision, sweep).
 // The thread ends when the task is merged, failed or cancelled. A task the planner splits (P2-11)
-// gets one child task and thread per subtask; the parent thread waits in phase `children`.
+// gets one child task and thread per subtask; the parent thread waits in phase `children`. A child
+// thread starts from its own outbox message (AR4: written when the child becomes eligible, sent by
+// the sweeper), never from the parent's invocation.
 //
 // src/lambda.ts runs it: `handleTaskSqsEvent` with `ModelPlanner` from `@kcw/orchestrator/nodes`.
 import { Annotation, Command, END, START, StateGraph, interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
@@ -17,7 +19,7 @@ import { initialTaskData, waitingOnOf, type Phase, type StepOutcome, type TaskDa
 export * from "./types";
 export { DispatchLinkConflictError, PgTaskStore, IN_FLIGHT_STATUSES, type ApprovalKind, type ApprovalRecord, type ChildTask, type OperationRecord, type ReportWrite, type TaskRecord, type TaskStatus, type TaskStore, type TaskUpdate } from "./store";
 export { OperationConflictError, effectKey, issueMarker, requestHash, type OperationKind } from "./operations";
-export { runStep, type TaskGraphDeps } from "./machine";
+export { blockedChildren, runStep, type TaskGraphDeps } from "./machine";
 export { parseTaskMessage } from "./messages";
 export { PgReceiptStore, type ReceiptStore } from "./receipts";
 
@@ -70,16 +72,12 @@ export type TaskOutcome =
  * first completed with the input it already holds; the failed message comes back from SQS with the
  * same message id and is then recognised as applied.
  *
- * If the task is split into subtasks, every child thread that has not started (or whose start
- * failed half-way) is then started here, so a redelivery or a sweep of the parent completes it.
- * The same holds for the docs task of a merged task (§4.2 step 8).
+ * The docs task of a merged task (§4.2 step 8) is then started here (no model call), so a
+ * redelivery completes it. Subtasks are not: each starts from its own outbox message (AR4).
  */
 export async function processTaskInput(graph: TaskGraph, taskId: number, input: TaskInput): Promise<TaskOutcome> {
   const outcome = await applyTaskInput(graph, taskId, input);
-  if (outcome !== "no_thread") {
-    await startSubtasks(graph, taskId, input.message_id);
-    await startDocsTask(graph, taskId, input.message_id);
-  }
+  if (outcome !== "no_thread") await startDocsTask(graph, taskId, input.message_id);
   return outcome;
 }
 
@@ -92,15 +90,6 @@ async function startDocsTask(graph: TaskGraph, taskId: number, messageId: string
     docs: { pr: task.pr_number },
     message_id: `${messageId}/docs-${task.docs_task}`,
   });
-}
-
-async function startSubtasks(graph: TaskGraph, taskId: number, messageId: string): Promise<void> {
-  const task = (await graph.getState(threadConfig(taskId))).values.task;
-  if (task?.phase !== "children") return;
-  // A started child answers duplicate_start (no write); a child never splits, so this never recurses further.
-  for (const child of task.children) {
-    await processTaskInput(graph, child, { kind: "start", message_id: `${messageId}/task-${child}` });
-  }
 }
 
 async function applyTaskInput(graph: TaskGraph, taskId: number, input: TaskInput): Promise<TaskOutcome> {
