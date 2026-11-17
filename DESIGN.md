@@ -319,7 +319,7 @@ The static picture of the hub on the home page. Styles are in `apps/web/src/app/
 The `/demo` page (`apps/web/src/app/(public)/demo/`) is the product still's app frame filled with demo data. Styles are in `demo/demo.module.css`.
 
 - Frame: 1px `--line` border, 12px radius, hidden overflow. A 200px sidebar of tabs on `--bg-soft` beside the section. On phones the tabs become one horizontally scrollable row above it, so the page never scrolls sideways at 320px.
-- Tabs: Today, People, Mood, Following, Notes. Real `<button aria-pressed>` in a `Hub sections` nav. The selected tab has a `--bg` fill and a 1px `--line` ring. Tabs switch in place, with no URL change.
+- Tabs: Today, People, Mood, Notes, Essays. Real `<button aria-pressed>` in a `Hub sections` nav. The selected tab has a `--bg` fill and a 1px `--line` ring. Tabs switch in place, with no URL change.
 - Data: `buildDemoView()` in `demo/demo-view.ts` turns `@kcw/demo-data` into a serializable view model. The server page builds it; the client component (`demo/demo-app.tsx`) holds only the selected tab.
 - Sparkline: shared with the home product still through `_site/sparkline.ts`.
 - Footnote: the home page's live activity is real; everything inside the frame is generated.

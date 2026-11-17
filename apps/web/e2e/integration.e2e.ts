@@ -130,7 +130,6 @@ test.describe("as the preview owner", () => {
   ] as const;
   const MORE = [
     ["Mood", "/mood"],
-    ["Social", "/social"],
     ["Projects", "/projects"],
     ["Essays", "/essays"],
     ["Boss console", "/console"],

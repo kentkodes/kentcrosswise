@@ -39,11 +39,10 @@ for (const p of PAGES) {
   }
 }
 
-test("privacy links the YouTube Terms and the Google Privacy Policy", async ({ page }) => {
+test("privacy links the Google Privacy Policy and names no other service", async ({ page }) => {
   await page.goto("/privacy");
   const main = page.getByRole("main");
-  await expect(main.getByRole("link", { name: "YouTube Terms of Service" }))
-    .toHaveAttribute("href", "https://www.youtube.com/t/terms");
   await expect(main.getByRole("link", { name: "Google Privacy Policy" }).first())
     .toHaveAttribute("href", "https://policies.google.com/privacy");
+  expect(await main.innerText()).not.toMatch(/YouTube|Instagram|TikTok/);
 });

@@ -95,20 +95,6 @@ export async function seedDemo(db: SqlClient, input: DemoData | GenerateOptions 
       d.ideas.map((i) => [i.id, i.entryId, i.body, i.status, i.createdAt]),
       "(id)",
     );
-    inserted.social_accounts = await insertMany(
-      db,
-      "social_accounts",
-      ["id", "platform", "handle", "ingest"],
-      d.socialAccounts.map((a) => [a.id, a.platform, a.handle, a.ingest]),
-      "(id)",
-    );
-    inserted.social_snapshots = await insertMany(
-      db,
-      "social_snapshots",
-      ["account_id", "day", "followers", "views", "followers_exact"],
-      d.socialSnapshots.map((s) => [s.accountId, s.day, s.followers, s.views, s.followersExact]),
-      "(account_id, day)",
-    );
     inserted.projects = await insertMany(
       db,
       "projects",

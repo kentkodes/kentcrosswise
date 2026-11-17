@@ -105,7 +105,7 @@ resource "aws_cloudwatch_log_metric_filter" "hub_job_failures" {
 
 resource "aws_cloudwatch_metric_alarm" "hub_jobs_failing" {
   alarm_name          = "${var.name_prefix}-hub-jobs-failing"
-  alarm_description   = "A scheduled web job (social-daily, inbox-push) failed today. See docs/runbooks/alerts.md."
+  alarm_description   = "A scheduled web job (inbox-push) failed today. See docs/runbooks/alerts.md."
   namespace           = aws_cloudwatch_log_metric_filter.hub_job_failures.metric_transformation[0].namespace
   metric_name         = aws_cloudwatch_log_metric_filter.hub_job_failures.metric_transformation[0].name
   statistic           = "Sum"

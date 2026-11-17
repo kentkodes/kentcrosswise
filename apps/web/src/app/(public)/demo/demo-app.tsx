@@ -7,7 +7,7 @@ import type { DemoView } from "./demo-view";
 import { EssaysSection } from "./essays-section";
 import d from "./demo.module.css";
 
-const TABS = ["Today", "People", "Mood", "Following", "Notes", "Essays"] as const;
+const TABS = ["Today", "People", "Mood", "Notes", "Essays"] as const;
 type Tab = (typeof TABS)[number];
 
 export function DemoApp({ view }: { view: DemoView }) {
@@ -27,7 +27,6 @@ export function DemoApp({ view }: { view: DemoView }) {
         {tab === "Today" && <TodaySection view={view} titleId={titleId} />}
         {tab === "People" && <PeopleSection view={view} titleId={titleId} />}
         {tab === "Mood" && <MoodSection view={view} titleId={titleId} />}
-        {tab === "Following" && <FollowingSection view={view} titleId={titleId} />}
         {tab === "Notes" && <NotesSection view={view} titleId={titleId} />}
         {tab === "Essays" && <EssaysSection view={view} titleId={titleId} />}
       </section>
@@ -78,15 +77,6 @@ function TodaySection({ view, titleId }: SectionProps) {
             <span className={d.muted}>
               {today.followUp.howKnown}
               {today.followUp.sinceLastNote ? ` · ${today.followUp.sinceLastNote}` : ""}
-            </span>
-          </div>
-        ) : null}
-        {today.followers ? (
-          <div className={d.card}>
-            <span className={d.cardLabel}>Followers</span>
-            <p className={d.cardValue}>{today.followers.count}</p>
-            <span className={d.muted}>
-              {today.followers.platform} · {today.followers.change}
             </span>
           </div>
         ) : null}
@@ -155,27 +145,6 @@ function MoodSection({ view, titleId }: SectionProps) {
               <span className={d.fill} style={{ width: `${Math.round(m.value * 100)}%` }} />
             </span>
             <span className={d.barValue}>{m.text}</span>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function FollowingSection({ view, titleId }: SectionProps) {
-  return (
-    <>
-      <h2 id={titleId} className={d.h2}>
-        Following
-      </h2>
-      <div className={d.cards}>
-        {view.following.map((f) => (
-          <div key={f.handle} className={d.card}>
-            <span className={d.cardLabel}>{f.platform}</span>
-            <p className={d.bigValue}>{f.followers}</p>
-            <span className={d.muted}>
-              {f.change} · {f.handle}
-            </span>
           </div>
         ))}
       </div>

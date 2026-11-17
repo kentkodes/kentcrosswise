@@ -135,16 +135,11 @@ describe("secret split", () => {
   });
 
   it("the prod web server reads kcw/prod/router, the orchestrator keeps kcw/prod/models", () => {
-    // The web server's secrets, exactly: its own two, plus the two it reads and rewrites for the
-    // scheduled web jobs (wave 2). Never the orchestrator's secrets.
+    // The web server's secrets, exactly: its own two, plus the Google refresh token it reads and
+    // rewrites at consent. Never the orchestrator's secrets.
     const webSecrets = /module "web_secrets" \{[^}]*?names\s*=\s*\[([^\]]*)\]/.exec(prod)?.[1] ?? "";
-    expect(webSecrets.match(/"[^"]+"/g)).toEqual([
-      '"kcw/prod/web"',
-      '"kcw/prod/router"',
-      '"kcw/prod/google-owner-token"',
-      '"kcw/prod/social/instagram"',
-    ]);
-    expect(prod).toContain('writable_secret_names = ["kcw/prod/google-owner-token", "kcw/prod/social/instagram"]');
+    expect(webSecrets.match(/"[^"]+"/g)).toEqual(['"kcw/prod/web"', '"kcw/prod/router"', '"kcw/prod/google-owner-token"']);
+    expect(prod).toContain('writable_secret_names = ["kcw/prod/google-owner-token"]');
     expect(prod).toMatch(/KCW_WEB_SECRET\s*=\s*"kcw\/prod\/web"\s*KCW_MODELS_SECRET\s*=\s*"kcw\/prod\/router"/);
     expect(prod).toContain('names  = ["kcw/prod/orchestrator", "kcw/prod/models"]');
   });

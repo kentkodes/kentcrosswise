@@ -84,7 +84,7 @@ export default function PrivacyPage() {
           <ul className={s.list}>
             <li>
               Google sign-in for the owner, requesting only the basic profile information (identity and
-              email address). Connecting Calendar or YouTube, described below, asks for more. See
+              email address). Connecting Calendar, described below, asks for more. See
               the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
             </li>
             <li>
@@ -101,19 +101,13 @@ export default function PrivacyPage() {
             </li>
           </ul>
           <p className={s.text}>
-            The owner can connect Google Calendar and YouTube to the owner&apos;s own Google account.
-            The connection asks Google for access to the owner&apos;s own calendar events and for
-            read-only access to the owner&apos;s YouTube account, and stores a refresh token in the
-            site&apos;s secret store. It can be disconnected at any time: the site asks Google to
-            revoke the token and deletes its stored copy once Google confirms. It reads only the
-            owner&apos;s own data, never visitors&apos; data. When the owner accepts a suggested
-            event, the site adds that event to the owner&apos;s calendar; it reads no existing
-            events. From YouTube the site reads only channel statistics (subscriber and view counts):
-            once a day, for a channel the owner has marked for the daily job on the social page, and
-            it stores them. YouTube is accessed through YouTube API Services. By using it you are also
-            bound by the{" "}
-            <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google handles
-            data under the{" "}
+            The owner can connect Google Calendar to the owner&apos;s own Google account. The
+            connection asks Google for access to the owner&apos;s own calendar events, and stores a
+            refresh token in the site&apos;s secret store. It can be disconnected at any time: the site
+            asks Google to revoke the token and deletes its stored copy once Google confirms. It reads
+            only the owner&apos;s own data, never visitors&apos; data. When the owner accepts a suggested
+            event, the site adds that event to the owner&apos;s calendar; it reads no existing events.
+            Google handles data under the{" "}
             <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
           </p>
           <p className={s.text}>
@@ -121,23 +115,12 @@ export default function PrivacyPage() {
             <a href="https://developers.google.com/terms/api-services-user-data-policy">
               Google API Services User Data Policy
             </a>
-            , including the Limited Use requirements. Google data is used only for the two features
+            , including the Limited Use requirements. Google data is used only for the Calendar feature
             above. It is not sold, not used for advertising, not sent to language model services and
             not used to train or improve any AI or machine learning model. It is not transferred to
-            anyone else, except to the site&apos;s hosting and secret store to provide those features,
+            anyone else, except to the site&apos;s hosting and secret store to provide that feature,
             or where the law requires it. No person reads it except the owner, or where needed for
-            security or required by law. Stored YouTube statistics are deleted with the account on the
-            social page; the refresh token is deleted when Google is disconnected.
-          </p>
-          <p className={s.text}>
-            Instagram: for an account the owner has marked for the daily job, the site reads the
-            follower count of the owner&apos;s own Instagram account once a day. It uses an access
-            token the owner placed in the site&apos;s secret store and renews that token about every 25
-            days. It reads no other account and no visitors&apos; data.
-          </p>
-          <p className={s.text}>
-            TikTok is not connected. The owner types TikTok numbers in by hand, and the site does not
-            contact TikTok.
+            security or required by law. The refresh token is deleted when Google is disconnected.
           </p>
         </section>
 

@@ -11,8 +11,6 @@ export const MOOD_METRICS = [
   "energy", "stress", "happiness", "satisfaction", "sadness", "anger", "anxiety", "gratitude",
 ] as const;
 export type MoodMetric = (typeof MOOD_METRICS)[number];
-export const PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
-export type Platform = (typeof PLATFORMS)[number];
 
 // Row shapes mirror packages/db/migrations/0001 (camelCase here, snake_case in SQL).
 export interface DemoContact {
@@ -66,19 +64,6 @@ export interface DemoIdea {
   status: "open" | "done" | "dropped";
   createdAt: string;
 }
-export interface DemoSocialAccount {
-  id: string;
-  platform: Platform;
-  handle: string;
-  ingest: "api" | "manual";
-}
-export interface DemoSocialSnapshot {
-  accountId: string;
-  day: string;
-  followers: number;
-  views: number;
-  followersExact: boolean;
-}
 export interface DemoProject {
   slug: string;
   title: string;
@@ -96,8 +81,6 @@ export interface DemoData {
   moods: DemoMood[];
   todos: DemoTodo[];
   ideas: DemoIdea[];
-  socialAccounts: DemoSocialAccount[];
-  socialSnapshots: DemoSocialSnapshot[];
   projects: DemoProject[];
 }
 
@@ -115,9 +98,6 @@ const DAY_MS = 86_400_000;
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
-function dayIso(startMs: number, day: number): string {
-  return new Date(startMs + day * DAY_MS).toISOString().slice(0, 10);
-}
 function timeIso(startMs: number, day: number, minuteOfDay: number): string {
   return new Date(startMs + day * DAY_MS + minuteOfDay * 60_000).toISOString();
 }
@@ -150,8 +130,6 @@ export function generateDemoData(opts: GenerateOptions = {}): DemoData {
     moods: [],
     todos: [],
     ideas: [],
-    socialAccounts: [],
-    socialSnapshots: [],
     projects: [{ slug: "essays", title: "Essays", sort: 0 }],
   };
 
@@ -209,41 +187,7 @@ export function generateDemoData(opts: GenerateOptions = {}): DemoData {
     }
   }
 
-  // Social: daily growth with occasional spikes.
-  const socialRng = r("social");
-  for (const platform of PLATFORMS) {
-    const account: DemoSocialAccount = {
-      id: socialRng.uuid(),
-      platform,
-      handle: `demo-${platform}`,
-      ingest: platform === "tiktok" ? "manual" : "api",
-    };
-    out.socialAccounts.push(account);
-    let followers = socialRng.int(300, 5000);
-    let views = followers * socialRng.int(5, 20);
-    for (let day = 0; day < days; day++) {
-      const spike = socialRng.chance(0.05) ? socialRng.int(50, 400) : 0;
-      followers = Math.max(0, followers + socialRng.int(-3, 12) + spike);
-      views += socialRng.int(20, 400) + spike * 10;
-      out.socialSnapshots.push({
-        accountId: account.id,
-        day: dayIso(startMs, day),
-        // YouTube's subscriberCount is rounded (research/apis.md §1): mirror that.
-        followers: platform === "youtube" ? roundYoutube(followers) : followers,
-        views,
-        followersExact: platform !== "youtube",
-      });
-    }
-  }
-
   return out;
-}
-
-function roundYoutube(n: number): number {
-  if (n < 1000) return n;
-  const digits = Math.floor(Math.log10(n)) + 1;
-  const keep = 10 ** (digits - 3);
-  return Math.floor(n / keep) * keep;
 }
 
 function makeContacts(rng: Rng, n: number, startMs: number): DemoContact[] {

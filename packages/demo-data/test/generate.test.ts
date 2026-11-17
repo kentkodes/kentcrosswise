@@ -36,8 +36,6 @@ describe("generateDemoData", () => {
     expect(d.contacts).toHaveLength(5);
     expect(d.diaryEntries).toHaveLength(30);
     expect(d.moods).toHaveLength(30);
-    expect(d.socialAccounts).toHaveLength(3);
-    expect(d.socialSnapshots).toHaveLength(90);
     expect(new Set(d.contacts.map((c) => c.name)).size).toBe(5);
     const ids = [...d.entries, ...d.contacts, ...d.diaryEntries].map((x) => x.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -48,13 +46,6 @@ describe("generateDemoData", () => {
       for (const k of MOOD_METRICS) expect(m[k] >= 0 && m[k] <= 1).toBe(true);
       expect(m.sentiment >= -1 && m.sentiment <= 1).toBe(true);
     }
-  });
-
-  it("social snapshots are unique per account and day, with non-negative counts", () => {
-    const d = generateDemoData();
-    const keys = d.socialSnapshots.map((s) => `${s.accountId}/${s.day}`);
-    expect(new Set(keys).size).toBe(keys.length);
-    expect(d.socialSnapshots.every((s) => s.followers >= 0 && s.views >= 0)).toBe(true);
   });
 
   it("does not depend on the clock", () => {

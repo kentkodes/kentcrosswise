@@ -126,17 +126,6 @@ describe("0001 constraints", () => {
     await expect(db.query(moodSql, [await diary(), 0.5, 1.2])).rejects.toThrow(/check constraint/);
   });
 
-  it("social snapshots are unique per account and day", async () => {
-    const { rows } = await db.query<{ id: string }>(
-      "INSERT INTO social_accounts (platform, handle) VALUES ('youtube', 'demo-channel') RETURNING id",
-    );
-    const id = rows[0]!.id;
-    const ins = "INSERT INTO social_snapshots (account_id, day, followers, views) VALUES ($1, $2, 10, 100)";
-    await db.query(ins, [id, "2026-01-01"]);
-    await db.query(ins, [id, "2026-01-02"]);
-    await expect(db.query(ins, [id, "2026-01-01"])).rejects.toThrow(/duplicate key/);
-  });
-
   it("essays.text_hash is unique and length_band is generated", async () => {
     const ins = `INSERT INTO essays (kind, title, author, word_count, text_hash, text_s3_key)
       VALUES ('full', $1, 'Anon', $2, $3, 'k') RETURNING length_band`;

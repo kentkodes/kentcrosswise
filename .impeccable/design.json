@@ -520,7 +520,7 @@
       "name": "Demo Tabs",
       "kind": "nav",
       "refersTo": "demo-tabs",
-      "description": "Tab sidebar of the /demo app frame: Today, People, Mood, Following, Notes. Real buttons with aria-pressed; the selected tab has a --bg fill and a 1px --line ring. Switches in place, no URL change. Under 640px the tabs become one horizontally scrollable row above the section, with no visible scrollbar.",
+      "description": "Tab sidebar of the /demo app frame: Today, People, Mood, Notes, Essays. Real buttons with aria-pressed; the selected tab has a --bg fill and a 1px --line ring. Switches in place, no URL change. Under 640px the tabs become one horizontally scrollable row above the section, with no visible scrollbar.",
       "html": "<nav class=\"ds-tabs\" aria-label=\"Hub sections\"><button class=\"ds-tab\" aria-pressed=\"true\">Today</button><button class=\"ds-tab\" aria-pressed=\"false\">People</button><button class=\"ds-tab\" aria-pressed=\"false\">Mood</button></nav>",
       "css": ".ds-tabs{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0;padding:16px 12px;border-right:1px solid var(--line);background:var(--bg-soft)}.ds-tab{height:40px;padding:0 12px;border:0;border-radius:var(--radius-control);background:transparent;color:var(--fg-muted);font:inherit;font-size:14px;text-align:left;white-space:nowrap;cursor:pointer}.ds-tab[aria-pressed=\"true\"]{background:var(--bg);color:var(--fg);font-weight:500;box-shadow:0 0 0 1px var(--line)}@media (max-width:639px){.ds-tabs{flex-direction:row;overflow-x:auto;scrollbar-width:none;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line)}.ds-tabs::-webkit-scrollbar{display:none}.ds-tab{flex:0 0 auto;height:40px}}"
     },

@@ -97,7 +97,7 @@ Secrets Manager console → the secret → *Retrieve secret value* → *Edit* �
 | `kcw/ci`                 | `neon_api_key`                             | Neon → Settings → API keys, project-scoped to `kentcrosswise-ci` if offered                                                                                   |
 | `kcw/ci/e2e-login`       | `e2e_login`                                | a random string of at least 16 characters (below); the preview login token                                                                                    |
 
-This is the foundation provisioning procedure, not a current empty-secret checklist. Production DB, model and App configuration has since been supplied; preserve existing values. VAPID/social/pipeline readiness remains feature-specific.
+This is the foundation provisioning procedure, not a current empty-secret checklist. Production DB, model and App configuration has since been supplied; preserve existing values. VAPID and pipeline readiness remains feature-specific.
 
 A random value (48 characters), generated locally and copied straight to the clipboard (not printed). Use a fresh one each for `auth_secret`, `origin_verify` and `e2e_login`:
 

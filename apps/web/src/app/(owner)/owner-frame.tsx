@@ -14,7 +14,6 @@ export type OwnerPath =
   | "/mood"
   | "/todos"
   | "/ideas"
-  | "/social"
   | "/projects"
   | "/essays"
   | "/console"
@@ -33,7 +32,6 @@ const PRIMARY: { href: OwnerPath; label: string }[] = [
 
 const MORE: { href: OwnerPath; label: string }[] = [
   { href: "/mood", label: "Mood" },
-  { href: "/social", label: "Social" },
   { href: "/projects", label: "Projects" },
   { href: "/essays", label: "Essays" },
   { href: "/console", label: "Boss console" },
