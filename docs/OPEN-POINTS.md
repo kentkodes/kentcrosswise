@@ -37,7 +37,7 @@ Unsettled implementation choices: worker/WIP/time limits, alert recovery targets
 
 | ID | Open work |
 |---|---|
-| H8, H9 | The daily YouTube and Instagram job is built (#131), but `/social` cannot yet mark an account for it: `addAccount` in `apps/web/src/server/social.ts` always stores ingest `manual` and the job reads only ingest `api`, so it reads nothing. Open: the account choice on the `/social` add form (found in review on 2026-11-16, fix in progress), then owner step 2. |
+| H8, H9 | The daily YouTube and Instagram job is built (#131), and the `/social` add form marks an account for it (ingest `api`, one account per platform). Open: owner step 2, then the first live run (see "Not verified live"). |
 | H10 | TikTok sandbox stats spike and refresh-token rotation, optional later. The manual-entry fallback is done (`/social`, ingest `manual`); no code is planned. |
 | H12 | Unified owner inbox and web push. The inbox shows every region (routing, contact matches, calendar suggestions) and web push is built (W2-6, #135). Open: the owner steps below (VAPID keys, the iPhone Home Screen check). |
 
@@ -67,7 +67,7 @@ Unsettled implementation choices: worker/WIP/time limits, alert recovery targets
 ## Owner steps (open)
 
 1. Alerts: subscribe an email address to SNS topic `kcw-prod-alerts` in the console, confirm it, then run one controlled test ([alerts runbook](runbooks/alerts.md), section 2). Until then alarms publish to a topic with no subscriber.
-2. Google: connect Google at `/connections` (Calendar and YouTube). Paste the Instagram token into the Instagram secret. Then, once the H8/H9 fix above is merged, add one YouTube and one Instagram account for the daily job on `/social`.
+2. Google: connect Google at `/connections` (Calendar and YouTube). Paste the Instagram token into the Instagram secret. Then add one YouTube and one Instagram account on `/social` with "Numbers from" set to "Daily job (API)". An account that was already added as manual must be deleted and added again, because the choice cannot be changed afterwards.
 3. Consent screens (H1 console step): enter `https://kentcrosswise.com/terms` and `https://kentcrosswise.com/privacy` in the Google Cloud OAuth consent screen, the Meta for Developers app settings (Instagram) and the TikTok for Developers app.
 4. Web push: approve the Liaison running `pnpm exec tsx scripts/vapid-keys.ts --secret kcw/prod/web` (a gated secret write; it refuses to overwrite keys without `--rotate`). Then on an iPhone (iOS 16.4+) add the site to the Home Screen, open it from there, sign in, enable notifications on `/notifications` and send a test.
 

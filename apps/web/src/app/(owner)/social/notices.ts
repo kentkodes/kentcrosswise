@@ -16,6 +16,10 @@ export const NOTICES = {
   followers: "Followers must be a whole number, zero or more, or left empty.",
   views: "Views must be a whole number, zero or more, or left empty.",
   empty: "Enter followers or views, or both, for that day.",
+  ingest: "Choose manual entry or the daily job (API).",
+  "api-tiktok": "TikTok numbers are typed in by hand.",
+  "api-taken-youtube": "The daily job already reads another YouTube account.",
+  "api-taken-instagram": "The daily job already reads another Instagram account.",
   "db-not-configured": "The database is not connected yet.",
   "db-error": "The database is unavailable right now.",
 } as const;

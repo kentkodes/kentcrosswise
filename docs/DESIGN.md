@@ -486,7 +486,7 @@ Conventions for every task:
 - Social, YouTube: daily snapshot from `channels?part=statistics&mine=true`. `subscriberCount` is rounded (`followers_exact=false`); exact daily gains come from YouTube Analytics.
 - Social, Instagram (Instagram Login, `followers_count` field, `views` insights, 48 h delay) + **scheduled long-lived token refresh every ~30 days**, writing the new token back to Secrets Manager.
 - Social, TikTok **sandbox spike first** (does sandbox grant `user.info.stats` and return real numbers?). If not: manual-entry form (`ingest=manual`). Refresh-token rotation is written back to Secrets Manager.
-- Social dashboard (`/social`, built): per-source filter, totals of each account's latest known followers and views (each metric with its own day), the change against its previous known value, a followers trend of the newest 30 snapshots per account and manual entry with Manual/API provenance. Manual entry is the only writer so far.
+- Social dashboard (`/social`, built): per-source filter, totals of each account's latest known followers and views (each metric with its own day), the change against its previous known value, a followers trend of the newest 30 snapshots per account and manual entry with Manual/API provenance. The add-account form chooses how an account's numbers arrive (ingest `manual` or `api`); `api` is allowed for one YouTube and one Instagram account (the daily job reads one per platform), and TikTok stays manual. Ingest cannot be changed on an existing account. Manual entry still works for API accounts.
 - Web push (VAPID, manifest `display: standalone`, service worker, permission request on a tap; iOS 16.4+ Home Screen only).
 - Public demo versions of the dashboard, mood board and CRM from `@kcw/demo-data`.
 
