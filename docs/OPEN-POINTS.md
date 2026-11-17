@@ -4,19 +4,18 @@ Current backlog, 2026-11-17 UTC. Current state and holds are in [HANDOFF.md](HAN
 
 ## Personal helper and the public log
 
-Design target, nothing built: [DESIGN.md](DESIGN.md) section 4.6, hub SPEC features 9 and 10, the X-ray README (`packages/xray/README.md`). Decided 2026-11-17: `/demo` becomes the public log (Essays tab kept), `/office` and the essays library unchanged, records extend `agent_events`, sanitized text for every kind with bracketed filler names, publish once the route settles with timestamps rounded to the hour, no backfill, detailed corrections and recovery, labelled set = corrected or confirmed entries, a dummy Google account's calendar.
+Design target, nothing built: [DESIGN.md](DESIGN.md) section 4.6, hub SPEC features 9 and 10, the X-ray README (`packages/xray/README.md`). Decided 2026-11-17: `/demo` becomes the public log (Essays tab kept), `/office` and the essays library unchanged, records extend `agent_events`, sanitized text for every kind with bracketed filler names, timestamps rounded to the hour, no backfill, detailed corrections and recovery, a dummy Google account's calendar. PH4 decided 2026-11-17: read-back checks plus the owner's per-step verdicts, no model judge; a record publishes once the owner has reviewed its route (DESIGN section 4.6). PH7 decided 2026-11-17: a bounded model call proposes names, places and another person's private topics; the deterministic sanitizer applies and re-checks; a failed call withholds; the review screen shows the public text and allows added replacements; no keep-private button.
 
 | ID | Open work |
 |---|---|
-| PH4 | Settle the per-route-kind checks with the owner (draft table in DESIGN section 4.6). |
-| PH7 | People who are not contacts: the deterministic sanitizer cannot find their names. Options: (a) a bounded model call proposes spans to replace, the deterministic sanitizer applies and re-checks them, and a failed call withholds the record; (b) a deterministic rule that replaces every capitalized word not on an allowlist; (c) publish only kinds without free-form people text. Decide before PL1. |
 | PH8 | Dummy calendar: the owner creates the dummy Google account; its token needs its own secret (gated); proposed: events are added when a published CRM note has a calendar suggestion, and the log renders stored copies, so no Google call per visitor. |
-| PL1 | Sanitizer replace mode (DESIGN section 4.5 item 8) with tests. |
+| PL1 | Sanitizer replace mode (DESIGN section 4.5 item 8) with tests, plus the bounded span-proposal call (names, places, another person's private topics; recorded in the usage ledger; failure withholds). |
 | PL2 | Router step rows in `agent_events` (agent `router`, keyed to the entry, private `detail` plus a sanitized public payload); migration. |
-| PL3 | Public view, `web_public` grant and public API route (owner-critical). |
-| PL4 | `/demo` log page with the evidence view, the withheld count and the honest label; the home page leads with it and its copy moves to the 2026-11-17 framing (closes R1). |
-| PL5 | "Correct" on `/hub` and the versioned accuracy aggregate. |
-| PL6 | Dummy calendar (after PH8). |
+| PL3 | Review on `/hub`: the exact public text with tap-to-replace, one-tap "Correct", a list of entries awaiting review, and verdict rows for routes, contact choices and calendar decisions. Publication waits for it. |
+| PL4 | Public view, `web_public` grant and public API route (owner-critical). |
+| PL5 | `/demo` log page with the evidence view, the withheld and awaiting-review counts and the honest label; the home page leads with it and its copy moves to the 2026-11-17 framing (closes R1). |
+| PL6 | Read-back checks per DESIGN section 4.6 (versioned check list) and the per-step accuracy aggregates. |
+| PL7 | Dummy calendar (after PH8). |
 
 ## Autonomous development reliability
 
@@ -37,7 +36,7 @@ Open risk: the spend cap stays soft; unpriced and usage-unknown rows add $0 to t
 
 | ID | Open work |
 |---|---|
-| R1 | Public copy overstates what is delivered (agents "make every change", the office shows work "as it happens", "Three hundred ... essays" with 8 full texts; the "Simulated data" frame shows real agent rows). Closed by PL4. |
+| R1 | Public copy overstates what is delivered (agents "make every change", the office shows work "as it happens", "Three hundred ... essays" with 8 full texts; the "Simulated data" frame shows real agent rows). Closed by PL5. |
 | E5 | Further essay sources: Wikisource access path (its API path is robots-disallowed), source health recovery, schedules. |
 | E6 | Per-site extractors with public-domain fixtures; keep paywall and login boundaries and the link-only fallback; add the navigation/ad-text and language checks of SPEC item 4 with the first non-Gutenberg extractor. |
 | E10 | Nightly source health and weekly quality report; deferred until E5 or the Scraper-builder runs. |
