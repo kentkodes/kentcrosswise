@@ -2,7 +2,7 @@
 // the inbox, diary captures are listed as not scored, and the owner nav leads everywhere. Routing by the model is
 // off in these runs, so captures are routed with the route picker. The database is shared with other e2e files:
 // every item carries a unique marker and every assertion is scoped to it.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test.describe("as the preview owner", () => {
   const token = process.env.KCW_E2E_LOGIN;
@@ -118,14 +118,16 @@ test.describe("as the preview owner", () => {
     await expect(entry.locator('[data-field="mood"]')).toHaveText("Not scored");
   });
 
-  const NAV = [
+  const PRIMARY = [
     ["Hub", "/hub"],
     ["Inbox", "/inbox"],
-    ["Contacts", "/contacts"],
-    ["Diary", "/diary"],
-    ["Mood", "/mood"],
     ["Todos", "/todos"],
+    ["Diary", "/diary"],
     ["Ideas", "/ideas"],
+    ["Contacts", "/contacts"],
+  ] as const;
+  const MORE = [
+    ["Mood", "/mood"],
     ["Social", "/social"],
     ["Projects", "/projects"],
     ["Essays", "/essays"],
@@ -134,6 +136,12 @@ test.describe("as the preview owner", () => {
     ["Connections", "/connections"],
     ["Notifications", "/notifications"],
   ] as const;
+
+  /** The More links live in a closed <details>; open it only when it is shut. */
+  async function openMore(nav: Locator): Promise<void> {
+    const open = await nav.locator("details").evaluate((el) => (el as HTMLDetailsElement).open);
+    if (!open) await nav.locator("summary").click();
+  }
 
   for (const vp of [
     { label: "1280px", width: 1280, height: 900 },
@@ -144,15 +152,21 @@ test.describe("as the preview owner", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await signIn(page, "/hub");
       const nav = page.getByRole("navigation", { name: "Owner" });
-      await expect(nav.getByRole("link")).toHaveText(NAV.map(([label]) => label));
-      for (const [label, path] of NAV) {
+      await expect(nav.getByRole("link")).toHaveText(PRIMARY.map(([label]) => label));
+      expect(await nav.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await openMore(nav);
+      await expect(nav.getByRole("link")).toHaveText([...PRIMARY, ...MORE].map(([label]) => label));
+      for (const [label, path] of [...PRIMARY, ...MORE]) {
         await page.goto("/hub");
+        if (MORE.some(([moreLabel]) => moreLabel === label)) await openMore(nav);
         await nav.getByRole("link", { name: label, exact: true }).click();
         await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
         await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
-        await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
+        await expect(nav.locator('a[aria-current="page"]')).toHaveText(label);
+        await openMore(nav);
         await expect(nav.getByRole("link", { name: label, exact: true })).toBeInViewport();
         expect(await fits(page)).toBe(true);
+        expect(await nav.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
       }
     });
   }

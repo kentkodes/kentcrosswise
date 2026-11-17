@@ -99,6 +99,134 @@
   background: var(--bg-soft);
 }
 
+/* Owner nav row: six primary links plus the More disclosure, always on one line. The open panel is absolute,
+   so it overlays the content below instead of pushing the row onto a second line. */
+.nav {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* A closed panel would be clipped by the scroll container above; let it show while open (it overlays). */
+.nav:has(details[open]) {
+  overflow: visible;
+}
+
+.navRow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.navRow .navLink {
+  min-height: 44px;
+}
+
+.more {
+  flex: none;
+  margin: 0;
+}
+
+.moreSummary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    color var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover) var(--ease-out);
+}
+
+.moreSummary::-webkit-details-marker {
+  display: none;
+}
+
+.moreSummary::marker {
+  content: "";
+}
+
+.moreSummary:hover,
+.more[open] .moreSummary {
+  color: var(--fg);
+}
+
+.more[open] .moreSummary {
+  border-color: var(--line);
+  background: var(--bg-soft);
+}
+
+.morePanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  min-width: 200px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.14);
+  list-style: none;
+}
+
+.moreLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover) var(--ease-out);
+}
+
+.moreLink:hover {
+  color: var(--fg);
+  background: var(--bg-soft);
+}
+
+.moreLink[aria-current="page"] {
+  color: var(--fg);
+  border-color: var(--line);
+  background: var(--bg-soft);
+}
+
+/* Phone: shrink the text and padding so the six links and More fit a 375px line without scrolling. */
+@media (max-width: 639px) {
+  .navRow .navLink,
+  .moreSummary {
+    padding: 0 4px;
+    font-size: clamp(10.5px, 3.2vw, 12.5px);
+  }
+
+  .moreSummary {
+    padding: 0 8px;
+  }
+}
+
 /* Regions: 1px line border, 10px radius, optional title bar. */
 
 .region {
