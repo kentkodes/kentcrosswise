@@ -169,6 +169,39 @@ describe("contract fields", () => {
     });
   });
 
+  describe("replan input (AR5b)", () => {
+    const previous = {
+      v: 1 as const, task: 1, revision: 1, issue: 7, goal: "Add a /healthz route.", acceptance: ["GET /healthz answers ok"],
+      base: "1".repeat(40), prerequisites: [], scope: ["apps/web/src"], context: ["apps/web/src/app"],
+    };
+    const failure = "Revision 1 used 3 of 3 attempts without an approved QA review.";
+
+    it("puts the previous contract and the failure line between the repository and the task", async () => {
+      const { provider, planner } = scripted(JSON.stringify({ title: "Add a healthz page", body: "Add it.", ...REST }));
+      await planner.plan({ ...REQ, previous, failure });
+      const input = provider.calls[0]!.input as string;
+      expect(input.indexOf("<repository>")).toBeLessThan(input.indexOf("<previous_contract>"));
+      expect(input.indexOf("<previous_contract>")).toBeLessThan(input.indexOf("<failure>"));
+      expect(input.indexOf("<failure>")).toBeLessThan(input.indexOf("<task>"));
+      expect(input).toContain("goal: Add a /healthz route.");
+      expect(input).toContain("acceptance: GET /healthz answers ok");
+      expect(input).toContain(failure);
+    });
+
+    it("a first plan has neither block, and the split never gets them", async () => {
+      const { provider, planner } = scripted(JSON.stringify({ title: "Add a healthz page", body: "Add it.", ...REST }), '{"subtasks": ["x"]}');
+      await planner.plan(REQ);
+      await planner.split({ ...REQ, previous, failure });
+      for (const call of provider.calls) expect(call.input as string).not.toContain("<previous_contract>");
+    });
+
+    it("a previous contract that makes the prompt too large throws PlannerInputError and makes no model call", async () => {
+      const { provider, planner } = scripted("{}");
+      await expect(planner.plan({ ...REQ, previous: { ...previous, goal: "g".repeat(MAX_PLANNER_INPUT_BYTES) }, failure })).rejects.toBeInstanceOf(PlannerInputError);
+      expect(provider.calls).toHaveLength(0);
+    });
+  });
+
   describe("public text (§4.5)", () => {
     const sanitizer = createSanitizer({ contacts: [{ name: "Jane Doe", aliases: ["Janie"] }] });
 

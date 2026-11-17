@@ -9,7 +9,7 @@
 // checkpointed data, so the re-run reads the record or asks GitHub instead of repeating the effect.
 // Events and approvals carry an effect key (task, input, effect and its count in the step; AR2 slice 3),
 // so a re-run step writes neither twice. A report is applied in one transaction with its receipt.
-import { ContractError, canonicalContract, parseContract, type ContractPrerequisite, type TaskContract } from "@kcw/core/contract";
+import { ContractError, canonicalContract, contractHash, parseContract, type ContractPrerequisite, type TaskContract } from "@kcw/core/contract";
 import { reportKey, threadIdOf, usageKey, type AgentName, type AgentReport, type EventType } from "@kcw/core/events";
 import { MergeInputFormatError } from "@kcw/core/merge-input";
 import { PRIVATE_TITLE, createSanitizer } from "@kcw/core/sanitize";
@@ -51,6 +51,7 @@ import {
   type TaskData,
   type TaskInput,
 } from "./types";
+import { evidenceValid, latestQaAttempt, type EvidenceRow } from "./validity";
 
 export interface TaskGraphDeps {
   github: GitHubClient;
@@ -77,6 +78,10 @@ const INCOMPLETE_TEXT: Record<IncompleteReason, string> = {
   trusted_run_failed: "the trusted preview run for the PR head did not pass",
   no_artifact: "the trusted preview run has no merge-rules-input artifact",
 };
+
+/** What approving an exhausted task does (AR5b): the owner-facing text of the replan route. */
+const REPLAN_TEXT =
+  "Approve to replan the task (new contract revision; the PR is kept, CI is reused for an unchanged head, QA reviews again); reject to mark it failed.";
 
 /** How many applied report identities a thread remembers (a task has a few reports per run). */
 const APPLIED_REPORTS_KEPT = 200;
@@ -161,6 +166,44 @@ class Machine {
   /** What approving a failed Developer step restarts: a docs task has no Developer. */
   get devRetry(): RetryTarget {
     return this.isDocs ? "docs" : "dev";
+  }
+
+  /** AR5b: the current contract revision; null for a docs task (no contract, no revision). */
+  get revision(): number | null {
+    return this.isDocs ? null : (this.d.contract?.revision ?? this.d.revision ?? 1);
+  }
+  /** AR5b: whether "plan" means a replan (a new contract revision): a work task with its issue and contract. */
+  get canReplan(): boolean {
+    return !this.isDocs && this.d.issue_number !== null && this.d.contract !== undefined;
+  }
+  /** AR5b: the hash of the current contract (null for a docs task or one without a contract). */
+  get currentHash(): string | null {
+    return this.isDocs || this.d.contract === undefined ? null : contractHash(this.d.contract);
+  }
+
+  /**
+   * AR5b: CI evidence for the head `d.ci` names. Its key does not depend on the revision (CI judges
+   * code, so a replan reuses it); the revision column is the one current when it was recorded.
+   */
+  async writeCi(): Promise<void> {
+    const ci = this.d.ci;
+    if (ci === null) return;
+    await this.store.recordEvidence({
+      effectKey: `${threadIdOf(this.id)}/evidence/ci/${ci.sha}/0/ci:${ci.result}`,
+      taskId: this.id,
+      revision: this.revision,
+      kind: "ci",
+      headSha: ci.sha,
+      outcome: ci.result,
+      attemptKey: null,
+      createdAt: this.now().toISOString(),
+    });
+  }
+
+  /** AR5b: the previous dispatch of this role ended without a report (a timeout): its attempt is `lost`. */
+  async markLost(role: "developer" | "qa" | "docs"): Promise<void> {
+    const op = this.d.dispatch_ops?.[role];
+    if (op !== undefined) await this.store.updateAttempt(effectKey(this.id, "dispatch", op), { endedAt: this.now().toISOString(), outcome: "lost" });
   }
 
   // ------------------------------------------------------------------ entry
@@ -248,14 +291,14 @@ class Machine {
         else if (input.kind === "github" && input.event === "pull_request_review") out = await this.onReview(input);
         else if (input.kind === "github" && input.event === "pull_request") out = await this.onPush(input);
         // §4.2 step 6: CI results while QA works are recorded, not acted on.
-        else if (input.kind === "github" && input.event === "workflow_run") out = this.recordCi(input) ? "applied" : undefined;
+        else if (input.kind === "github" && input.event === "workflow_run") out = (await this.recordCiEvidence(input)) ? "applied" : undefined;
         break;
       case "merge":
         if (input.kind === "sweep") {
           await this.mergeStep();
           out = "applied";
         } else if (input.kind === "github" && input.event === "workflow_run") {
-          if (this.recordCi(input)) {
+          if (await this.recordCiEvidence(input)) {
             await this.mergeStep();
             out = "applied";
           }
@@ -383,9 +426,15 @@ class Machine {
       const current = r.agent === "developer" || r.agent === "qa" || r.agent === "docs" ? this.d.dispatch_ops?.[r.agent] : undefined;
       const expected: AgentName | null =
         this.d.phase === "dev" ? (this.isDocs ? "docs" : "developer") : this.d.phase === "qa" ? "qa" : null;
+      const hash = this.currentHash;
       if (r.op !== null && current !== undefined && r.op < current) {
         this.d.stale += 1;
         this.log(`report_fenced agent=${r.agent} op=${r.op} current=${current}`);
+        outcome = "stale";
+      } else if (r.contract !== undefined && hash !== null && r.contract !== hash) {
+        // AR5b: a run of an earlier revision (after a replan) has no lifecycle effect.
+        this.d.stale += 1;
+        this.log(`report_obsolete_contract agent=${r.agent} op=${r.op}`);
         outcome = "stale";
       } else if (r.agent !== expected) {
         this.d.stale += 1;
@@ -407,6 +456,14 @@ class Machine {
       event: event === null ? null : { type: event, detail: { source: "report" }, effectKey: `${key}/event` },
     });
     if (!written) this.log(`report_recorded_before job=${r.job}`);
+    // AR5b: the attempt of the report's dispatch key (a report with no row, from before this slice,
+    // changes nothing). The start counts only when its contract is the attempt's (the store guards it).
+    if (r.op !== null && (r.agent === "developer" || r.agent === "qa" || r.agent === "docs")) {
+      const at = this.now().toISOString();
+      const key = effectKey(this.id, "dispatch", r.op);
+      if (r.job === "start") await this.store.updateAttempt(key, { startedAt: at, startContract: r.contract ?? null });
+      else await this.store.updateAttempt(key, { endedAt: at, outcome: r.event_type === "failed" ? "failed" : "succeeded" });
+    }
     return outcome;
   }
 
@@ -568,14 +625,14 @@ class Machine {
   }
 
   /** The contract of this task for the issue (AR5a): revision 1, the goal is the issue body as published. */
-  contractOf(issue: number, goal: string, pc: PendingContract): TaskContract {
-    return { v: 1, task: this.id, revision: 1, issue, goal, acceptance: pc.acceptance, base: pc.base, prerequisites: pc.prerequisites, scope: pc.scope, context: pc.context };
+  contractOf(issue: number, goal: string, pc: PendingContract, revision = 1): TaskContract {
+    return { v: 1, task: this.id, revision, issue, goal, acceptance: pc.acceptance, base: pc.base, prerequisites: pc.prerequisites, scope: pc.scope, context: pc.context };
   }
 
   /** Whether the contract for this text passes the strict parse the workers apply (issue number aside). */
-  contractFits(goal: string, pc: PendingContract): boolean {
+  contractFits(goal: string, pc: PendingContract, revision = 1, issue = 1): boolean {
     try {
-      parseContract(canonicalContract(this.contractOf(1, goal, pc)));
+      parseContract(canonicalContract(this.contractOf(issue, goal, pc, revision)));
       return true;
     } catch (err) {
       if (err instanceof ContractError) return false;
@@ -587,6 +644,7 @@ class Machine {
   async publishAndDispatch(issue: { title: string; body: string }, pc: PendingContract): Promise<void> {
     if (!(await this.publishIssue(issue))) return;
     this.d.contract = this.contractOf(this.d.issue_number!, issue.body, pc);
+    this.d.revision = 1;
     this.d.pending_contract = null;
     await this.dispatchDev("implement");
   }
@@ -707,6 +765,17 @@ class Machine {
     if (begun === null) return false;
     // From the intent on, reports of this role with a lower op come from superseded runs (AR2 slice 3).
     d.dispatch_ops = { ...d.dispatch_ops, [role]: Number(inputs.op) };
+    // AR5b: one attempt per dispatch key, with the intent (a docs task has no contract and no revision).
+    await this.store.recordAttempt({
+      effectKey: begun.key,
+      taskId: this.id,
+      revision: this.revision,
+      role,
+      op: Number(inputs.op),
+      contractHash: this.currentHash,
+      baseSha: this.isDocs ? null : (d.contract?.base ?? null),
+      createdAt: this.now().toISOString(),
+    });
     let runId: number | null;
     if (begun.record.state === "done") {
       runId = (begun.record.result as { runId: number | null }).runId;
@@ -719,6 +788,7 @@ class Machine {
           const status = err instanceof GitHubApiError ? err.status : undefined;
           if (status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429) {
             await this.store.updateOperation(begun.key, "done", { dispatched: false, status });
+            await this.store.updateAttempt(begun.key, { endedAt: this.now().toISOString(), outcome: "failed" });
             this.bumpOp("dispatch");
           }
           throw err;
@@ -749,6 +819,7 @@ class Machine {
     d.pending_dispatch = null;
     this.bumpOp("dispatch");
     if (runId !== null) {
+      await this.store.updateAttempt(begun.key, { runId });
       try {
         await this.store.recordDispatch(runId, this.id, role);
       } catch (err) {
@@ -773,7 +844,13 @@ class Machine {
    * not planned again here; the owner creates a new task.
    */
   async contractInput(): Promise<string | null> {
-    if (this.d.contract !== undefined) return canonicalContract(this.d.contract);
+    const c = this.d.contract;
+    if (c !== undefined) {
+      // AR5b: the revision's row is written before its first dispatch (a second write changes nothing).
+      this.d.revision = c.revision;
+      await this.store.recordRevision({ taskId: this.id, revision: c.revision, contractHash: contractHash(c), contract: c });
+      return canonicalContract(c);
+    }
     await this.finish("failed", "the task was planned before task contracts existed; create the task again");
     return null;
   }
@@ -904,8 +981,15 @@ class Machine {
     return true;
   }
 
+  /** `recordCi`, and the CI evidence row of the head it set (AR5b). */
+  async recordCiEvidence(i: Extract<GitHubInput, { event: "workflow_run" }>): Promise<boolean> {
+    if (!this.recordCi(i)) return false;
+    await this.writeCi();
+    return true;
+  }
+
   async onCiResult(i: Extract<GitHubInput, { event: "workflow_run" }>): Promise<StepOutcome | undefined> {
-    if (!this.recordCi(i)) return undefined;
+    if (!(await this.recordCiEvidence(i))) return undefined;
     if (this.d.ci?.result === "success") {
       await this.event("ci_passed", "orchestrator", { pr: this.d.pr_number, head_sha: this.d.head_sha });
       await this.dispatchQa();
@@ -930,7 +1014,10 @@ class Machine {
       await this.dispatchDev("fix");
       return;
     }
-    await this.toOwnerFailure(`${what}; ${d.attempts} failed attempts.`, "dev");
+    // AR5b: attempts exhausted: approving replans (a new contract revision) instead of more attempts.
+    // A task planned before contracts existed cannot replan: it keeps the Developer retry, whose
+    // dispatch then fails it (it is never planned again onto its existing PR).
+    await this.toOwnerFailure(`${what}; ${d.attempts} failed attempts.`, this.canReplan ? "plan" : "dev");
   }
 
   // ------------------------------------------------------------------ QA (step 6)
@@ -941,16 +1028,63 @@ class Machine {
       return undefined;
     }
     if (i.review_state === "approved") {
+      // AR5b: applied only if it is valid evidence for the current revision and head.
+      if (!(await this.applyApproval())) return undefined;
       await this.event("approved", "qa", { pr: d.pr_number, head_sha: d.head_sha });
       await this.mergeStep();
       return "applied";
     }
     if (i.review_state === "changes_requested") {
+      // AR5b: like an approval, it counts only from the current revision's latest QA attempt once
+      // that attempt has started; a late review of an earlier run must not cost the new revision an attempt.
+      const rows = await this.store.loadValidity(this.id, this.revision, d.head_sha!);
+      const latest = latestQaAttempt(rows, this.revision);
+      if (latest === null || latest.started_at === null) {
+        this.log("review_not_valid");
+        return undefined;
+      }
+      await this.recordQaEvidence("changes_requested", latest.effect_key, latest.op);
       await this.event("changes_requested", "qa", { pr: d.pr_number, head_sha: d.head_sha });
       await this.failedAttempt("QA requested changes");
       return "applied";
     }
     return undefined; // a comment-only review
+  }
+
+  async recordQaEvidence(outcome: "approved" | "changes_requested", attemptKey: string | null, op: number | null): Promise<void> {
+    const head = this.d.head_sha!;
+    const revision = this.revision;
+    await this.store.recordEvidence({
+      effectKey: `${threadIdOf(this.id)}/evidence/qa/${head}/${revision ?? 0}/${op ?? "none"}/${outcome}`,
+      taskId: this.id,
+      revision,
+      kind: "qa",
+      headSha: head,
+      outcome,
+      attemptKey,
+      createdAt: this.now().toISOString(),
+    });
+  }
+
+  /**
+   * AR5b: records a QA approval of the current head and returns whether it is valid evidence (the
+   * revision's latest QA attempt has started and the revision is current). An approval that is not
+   * valid (an older revision's run, or a review from an attempt whose start report has not arrived)
+   * is neither recorded nor applied.
+   */
+  async applyApproval(): Promise<boolean> {
+    const head = this.d.head_sha!;
+    const revision = this.revision;
+    const rows = await this.store.loadValidity(this.id, revision, head);
+    const latest = latestQaAttempt(rows, revision);
+    const candidate: EvidenceRow | null =
+      latest === null ? null : { kind: "qa", revision, head_sha: head, outcome: "approved", attempt_key: latest.effect_key, superseded_at: null };
+    if (latest === null || candidate === null || !evidenceValid("qa", { revision, head }, { ...rows, evidence: [...rows.evidence, candidate] })) {
+      this.log("approval_not_valid");
+      return false;
+    }
+    await this.recordQaEvidence("approved", latest.effect_key, latest.op);
+    return true;
   }
 
   // ------------------------------------------------------------------ merge-rules and merge (step 7)
@@ -964,6 +1098,18 @@ class Machine {
     if (d.ci.result === "failure") {
       await this.event("tests_failed", "orchestrator", { pr, head_sha: sha });
       return this.failedAttempt("CI failed");
+    }
+    // AR5b: the stored evidence, not the checkpoint, decides. CI evidence is backfilled from `d.ci`
+    // (a checkpoint from before the tables existed); QA evidence has no other source: a missing or
+    // stale approval sends QA again for the current revision, with no owner step.
+    await this.writeCi();
+    const revision = this.revision;
+    const rows = await this.store.loadValidity(this.id, revision, sha);
+    if (!evidenceValid("ci", { revision, head: sha }, rows)) return this.incomplete("ci_not_finished");
+    if (!evidenceValid("qa", { revision, head: sha }, rows)) {
+      this.log("qa_evidence_not_valid");
+      await this.dispatchQa("QA approval is not valid for the current head and revision");
+      return;
     }
     const diff = await this.github.getDiff(pr);
     if (diff.headSha !== sha) return this.incomplete("head_moved");
@@ -1097,7 +1243,9 @@ class Machine {
           : retry === "docs"
             ? "dispatch Docs-keeper again"
             : `give the Developer ${MAX_ATTEMPTS} more attempts`;
-    await this.toOwner("failure", "critical_pr", [`Task failed: ${what}`, `Approve to ${again}; reject to mark the task failed.`], `Task ${this.id} failed: needs a decision`);
+    // AR5b: for a task that has its issue and contract, "plan" means a replan (a new contract revision).
+    const replan = retry === "plan" && this.canReplan;
+    await this.toOwner("failure", "critical_pr", [`Task failed: ${what}`, replan ? REPLAN_TEXT : `Approve to ${again}; reject to mark the task failed.`], `Task ${this.id} failed: needs a decision`);
     this.d.retry = retry;
   }
 
@@ -1117,6 +1265,11 @@ class Machine {
 
     if (wait === "issue_text") {
       if (decision === "rejected") return this.finish("cancelled", "issue text rejected by the owner");
+      if (d.pending_revision != null && d.pending_contract && d.pending_issue && d.contract) {
+        // AR5b: a replan's contract text, approved as written: nothing is published, the revision is released.
+        await this.adoptRevision(d.pending_issue.body, d.pending_contract, d.pending_revision);
+        return "applied";
+      }
       if (!d.pending_contract) {
         // Planned before the contract existed: nothing to publish as written.
         await this.toOwnerFailure("the task has no contract; approve to plan it again", "plan");
@@ -1144,6 +1297,10 @@ class Machine {
     if (d.retry === "plan") {
       const task = await this.store.getTask(this.id);
       if (!task) return this.finish("failed", "the task row is gone");
+      // AR5b: a task with its issue and contract replans: a new contract revision, the issue untouched.
+      if (this.canReplan) return this.replan(task);
+      // A task with a PR is never planned again (that would dispatch `implement` onto the PR).
+      if (d.pr_number !== null) return this.finish("failed", "the task was planned before task contracts existed; create the task again");
       // A deliberate replan: new planner and issue operations (new keys).
       this.bumpOp("plan");
       this.bumpOp("issue");
@@ -1161,6 +1318,124 @@ class Machine {
       await this.dispatchDev(pr === null ? "implement" : "fix", "owner retry");
     }
     return "applied";
+  }
+
+  /**
+   * AR5b: replan a task that has its issue and contract (attempts exhausted, owner approved). Only the
+   * public-title node runs (never `split`), with the previous contract and one fixed failure line
+   * built from counts; the answer is sanitized as for revision 1. The new contract keeps the issue,
+   * `base` and `prerequisites`; the issue is not edited and nothing is published.
+   */
+  async replan(task: TaskRecord): Promise<StepOutcome> {
+    const d = this.d;
+    const prev = d.contract!;
+    const revision = prev.revision + 1;
+    this.bumpOp("plan");
+    const begun = await this.beginOp("plan", { owner_text: task.owner_text, is_private: task.is_private, revision }, "plan");
+    if (begun === null) return "applied";
+    const stored = (begun.record.result ?? {}) as { brief?: string; plan?: Plan };
+    const save = () => this.store.updateOperation(begun.key, stored.plan !== undefined ? "done" : "intent", stored);
+    let plan: Plan;
+    try {
+      if (stored.brief === undefined) {
+        // The brief of the contract base: the same text revision 1 was planned from.
+        const file = await this.github.readFile(REPO_BRIEF_PATH, prev.base);
+        const brief = file === null ? null : repoBrief(file);
+        if (brief === null) {
+          await this.toOwnerFailure("the repository brief is missing or too large; approve to plan it again", "plan");
+          return "applied";
+        }
+        stored.brief = brief;
+        await save();
+      }
+      if (stored.plan === undefined) {
+        stored.plan = await this.deps.planner.plan({
+          task_id: this.id,
+          owner_text: task.owner_text,
+          is_private: task.is_private,
+          brief: stored.brief,
+          previous: prev,
+          failure: `Revision ${prev.revision} used ${d.attempts} of ${MAX_ATTEMPTS} attempts without an approved QA review.`,
+        });
+        await save();
+      }
+      plan = stored.plan;
+    } catch (err) {
+      if (err instanceof PlannerInputError) {
+        this.log("replanning failed: input too large");
+        await this.toOwnerFailure("The planner input is larger than the size limit; nothing was sent to the model.", "plan");
+        return "applied";
+      }
+      if (!(err instanceof PlannerOutputError)) throw err;
+      this.log(`replanning failed: ${err.message}`);
+      await this.toOwnerFailure(`The public-title model returned unusable output (${err.reason}).`, "plan");
+      return "applied";
+    }
+    const pc: PendingContract = { acceptance: plan.acceptance, scope: plan.scope, context: plan.context, base: prev.base, prerequisites: prev.prerequisites };
+    const sanitizer = createSanitizer({
+      contacts: await this.store.loadContacts(),
+      ...(this.deps.blocklist && { blocklist: this.deps.blocklist }),
+    });
+    const text = publicText(plan, sanitizer);
+    if (!this.contractFits(plan.body, pc, revision, prev.issue)) {
+      await this.toOwnerFailure("the proposed task contract is not valid (characters or size); approve to plan it again", "plan");
+      return "applied";
+    }
+    const codes = [...new Set([...text.body.violations, ...contractViolations(plan, sanitizer)])];
+    if (codes.length > 0) {
+      d.pending_issue = text.issue;
+      d.pending_contract = pc;
+      d.pending_revision = revision;
+      await this.toOwner("issue_text", "issue_text", [
+        `The contract text of revision ${revision} fails the sanitizer (${codes.join(", ")}). Approve to release it as written (nothing is published again); reject to cancel the task.`,
+        `Proposed body: ${plan.body}`,
+        `Proposed acceptance: ${plan.acceptance.join(" | ")}`,
+        `Proposed scope: ${plan.scope.join(", ") || "(none)"}`,
+        `Proposed context: ${plan.context.join(", ") || "(none)"}`,
+      ], `Task ${this.id}: contract text needs review`);
+      return "applied";
+    }
+    await this.adoptRevision(text.issue.body, pc, revision);
+    return "applied";
+  }
+
+  /**
+   * AR5b: the new revision replaces the current one (one transaction: the old revision, its open
+   * attempts and its QA evidence are superseded, the new row is inserted), attempts restart at 0, and
+   * the task continues by what its PR has: no PR, the Developer implements; CI success at the head
+   * (reused for an unchanged head), QA reviews the new contract; CI failure at the head, the Developer
+   * fixes; CI unknown, wait for CI. A task with a PR is never dispatched `implement`.
+   */
+  async adoptRevision(goal: string, pc: PendingContract, revision: number): Promise<void> {
+    const d = this.d;
+    const prev = d.contract!;
+    const next = this.contractOf(prev.issue, goal, pc, revision);
+    await this.store.supersedeRevision(this.id, prev.revision, { taskId: this.id, revision, contractHash: contractHash(next), contract: next });
+    d.contract = next;
+    d.revision = revision;
+    d.pending_issue = null;
+    d.pending_contract = null;
+    d.pending_revision = null;
+    d.attempts = 0;
+    await this.store.updateTask(this.id, { attempts: 0 });
+    const head = d.head_sha;
+    if (d.pr_number === null || head === null) {
+      await this.dispatchDev("implement", "replan");
+      return;
+    }
+    if (d.ci?.sha === head && d.ci.result === "failure") {
+      await this.dispatchDev("fix", "replan");
+      return;
+    }
+    if (d.ci?.sha === head) {
+      await this.writeCi(); // a checkpoint from before the tables existed
+      if (evidenceValid("ci", { revision, head }, await this.store.loadValidity(this.id, revision, head))) {
+        await this.dispatchQa("replan");
+        return;
+      }
+    }
+    await this.event("ci_running", "orchestrator", { pr: d.pr_number, head_sha: head });
+    await this.enter("ci");
   }
 
   async finish(status: "failed" | "cancelled", reason: string): Promise<StepOutcome> {
@@ -1182,7 +1457,8 @@ class Machine {
       // CI is not an agent workflow: there is nothing to redispatch.
       await this.toOwnerFailure(`CI did not finish within ${limit} minutes.`, this.devRetry);
     } else if (!d.redispatched) {
-      // Redispatch once (§4.3).
+      // Redispatch once (§4.3); the run that timed out ends as `lost` (AR5b).
+      await this.markLost(phase === "dev" ? "developer" : "qa");
       if (phase === "dev") await this.dispatchDev(d.dev_mode, reason, true);
       else await this.dispatchQa(reason, true);
     } else {
@@ -1239,6 +1515,7 @@ class Machine {
       await this.toOwnerFailure(`${reason}, after one redispatch.`, "docs");
       return "applied";
     }
+    await this.markLost("docs");
     await this.dispatchDocs(reason, true);
     return "applied";
   }

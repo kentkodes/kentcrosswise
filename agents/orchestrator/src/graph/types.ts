@@ -182,6 +182,13 @@ export interface TaskData {
    * published). Absent in checkpoints written before the contract existed: such a task cannot be dispatched.
    */
   contract?: TaskContract;
+  /**
+   * AR5b: the current contract revision (absent means 1; a docs task has none). The working copy of
+   * `contract.revision`; the task_revisions row is the durable record.
+   */
+  revision?: number;
+  /** AR5b: set while a replan's contract (revision n) waits for an `issue_text` approval. */
+  pending_revision?: number | null;
   pr_number: number | null;
   head_sha: string | null;
   /** The ci.yml result on `head_sha`, once known. */
@@ -305,6 +312,12 @@ export interface PlanRequest {
   is_private: boolean;
   /** AR5a: the bounded repository brief (public text) read at the contract base. */
   brief: string;
+  /**
+   * AR5b, replan only: the contract of the revision being replaced, and one fixed failure line built
+   * from counts (no free text). Absent for a first plan.
+   */
+  previous?: TaskContract;
+  failure?: string;
 }
 
 /**

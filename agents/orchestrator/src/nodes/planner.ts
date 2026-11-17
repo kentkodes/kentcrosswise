@@ -38,6 +38,8 @@ export const PUBLIC_TITLE_SYSTEM = [
   `acceptance: 1 to ${MAX_ACCEPTANCE_ITEMS} checkable statements of at most ${MAX_ACCEPTANCE_CHARS} characters each.`,
   `scope: 0 to ${MAX_PATHS} repository path prefixes the change owns; context: 0 to ${MAX_PATHS} repository paths to read first.`,
   "Take paths from the <repository> block (the repository's layout); a path has letters, digits, _ . / - only, no .. and no leading /.",
+  "A <previous_contract> block, when present, is the earlier version of this issue; it did not lead to an approved change (see <failure>).",
+  "Then write a revised version: keep what was right and make the body and the acceptance statements more precise.",
   "Rules for both: plain ASCII only; no names of people; no personal facts; no email addresses, @handles,",
   "URLs or domain names, phone numbers, or numbers longer than 4 digits. Leave out anything private;",
   "describe the change at product level instead.",
@@ -48,6 +50,25 @@ export interface ModelPlannerOptions {
   provider: ModelProvider;
   /** Opus 5.5 thinking counts toward the limit; 8000 keeps two planner calls well inside the 5-minute orchestrator Lambda timeout. */
   maxTokens?: number;
+}
+
+/**
+ * AR5b, replan only: the text of the contract being replaced (public, sanitized) and the fixed
+ * failure line, as blocks between <repository> and <task>. Empty for a first plan.
+ */
+function replanBlocks(req: PlanRequest): string {
+  const p = req.previous;
+  if (p === undefined) return "";
+  const lines = [
+    "<previous_contract>",
+    `goal: ${p.goal}`,
+    `acceptance: ${p.acceptance.join(" | ")}`,
+    `scope: ${p.scope.join(", ")}`,
+    `context: ${p.context.join(", ")}`,
+    "</previous_contract>",
+    ...(req.failure === undefined ? [] : ["<failure>", req.failure, "</failure>"]),
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -61,11 +82,11 @@ export class ModelPlanner implements Planner {
   }
 
   plan(req: PlanRequest): Promise<Plan> {
-    return this.#ask("public_title", PUBLIC_TITLE_SYSTEM, req.brief, req.owner_text, parsePlan);
+    return this.#ask("public_title", PUBLIC_TITLE_SYSTEM, req.brief, req.owner_text, parsePlan, replanBlocks(req));
   }
 
-  async #ask<T>(node: PlannerOutputError["node"], system: string, brief: string, text: string, parse: (raw: string) => Parsed<T>): Promise<T> {
-    const prompt = `<repository>\n${brief}\n</repository>\n<task>\n${text}\n</task>`;
+  async #ask<T>(node: PlannerOutputError["node"], system: string, brief: string, text: string, parse: (raw: string) => Parsed<T>, extra = ""): Promise<T> {
+    const prompt = `<repository>\n${brief}\n</repository>\n${extra}<task>\n${text}\n</task>`;
     if (Buffer.byteLength(system, "utf8") + Buffer.byteLength(prompt, "utf8") > MAX_PLANNER_INPUT_BYTES) throw new PlannerInputError();
     const maxTokens = this.opts.maxTokens ?? 8000;
     const first = await this.#reply(node, system, prompt, maxTokens);

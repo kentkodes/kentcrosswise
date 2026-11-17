@@ -132,6 +132,14 @@ describe("ordered child work in the task graph (AR4)", () => {
   });
 
   async function send(taskId: number, body: unknown, messageId = `m${++seq}`, group = `task-${taskId}`): Promise<string> {
+    // AR5b: an approval counts only after its QA attempt's start report; this harness starts the latest QA attempt.
+    const sent = (typeof body === "string" ? JSON.parse(body) : body) as { resume?: { event?: string; payload?: { review_state?: string } } } | null;
+    if (sent?.resume?.event === "pull_request_review.submitted" && sent.resume.payload?.review_state === "approved") {
+      await sql(
+        "UPDATE task_attempts SET started_at = now() WHERE started_at IS NULL AND effect_key = (SELECT effect_key FROM task_attempts WHERE task_id = $1 AND role = 'qa' ORDER BY op DESC LIMIT 1)",
+        [taskId],
+      );
+    }
     const lines: string[] = [];
     const res = await handleTaskSqsEvent(
       { Records: [{ messageId, body: typeof body === "string" ? body : JSON.stringify(body), attributes: { MessageGroupId: group } }] },
