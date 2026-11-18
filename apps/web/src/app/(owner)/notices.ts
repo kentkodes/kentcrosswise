@@ -29,6 +29,15 @@ export const NOTICES = {
   "route-failed": "Routing failed. Try again.",
   "route-off": "Routing is not set up here (preview), so nothing was sent.",
   "entry-not-found": "That entry is no longer here.",
+  "review-confirmed": "Marked correct.",
+  "review-already": "That entry was already reviewed.",
+  "term-added": "Replacement added.",
+  "term-exists": "That replacement is already there.",
+  "term-full": "This entry already has the most replacements allowed.",
+  "term-not-ready": "Find names first, then add replacements.",
+  "names-ready": "Names checked.",
+  "names-capped": "Name check paused: monthly spend cap reached.",
+  "names-failed": "Name check failed. Try again.",
   "capture-empty": "Nothing to save. Write something first.",
   "capture-too-long": "That is longer than 10,000 characters. Shorten it and save again.",
   "prefs-saved": "Essay preferences saved.",
@@ -71,6 +80,9 @@ const SUCCESS: ReadonlySet<string> = new Set<string>([
   "captured",
   ...Object.values(CAPTURED_ROUTED),
   ...Object.values(ROUTED),
+  "review-confirmed",
+  "term-added",
+  "names-ready",
 ]);
 export const isSuccessNotice = (code: string | string[] | undefined): boolean => typeof code === "string" && SUCCESS.has(code);
 

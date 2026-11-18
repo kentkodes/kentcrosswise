@@ -1,6 +1,7 @@
 // Contacts (H4): people the owner knows, and the link from CRM notes to them by name match. Owner pages only;
 // runs as web_rw. Contact data is private: nothing here logs names, aliases or note text.
 // `orch_rw` reads contacts.name and contacts.aliases for the public-title sanitizer, so those columns keep their meaning.
+import { recordStep } from "./steps";
 import type { Queryable } from "./db";
 
 export const MAX_NAME_CHARS = 200;
@@ -263,12 +264,15 @@ export async function resolveCrmNote(db: Queryable, noteId: string, contactId: s
     const c = await db.query("SELECT 1 FROM contacts WHERE id = $1", [contactId]);
     if (c.rows.length === 0) return "contact-not-found";
   }
-  const { rows } = await db.query(
-    "UPDATE crm_notes SET contact_id = $2, link_status = $3 WHERE id = $1 RETURNING id",
+  const { rows } = await db.query<{ entry_id: string | null }>(
+    "UPDATE crm_notes SET contact_id = $2, link_status = $3 WHERE id = $1 RETURNING entry_id",
     [noteId, contactId, contactId === null ? "none" : "linked"],
   );
   if (rows.length === 0) return "note-not-found";
   await db.query(CLOSE_MATCH_ITEM, [noteId]);
+  // The owner's verdict on the contact link (public log, PL3); a note without an entry has no record.
+  const entryId = rows[0]!.entry_id;
+  if (entryId) await recordStep(db, entryId, "contact_chosen", { note_id: noteId, linked: contactId !== null });
   return "ok";
 }
 

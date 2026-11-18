@@ -471,11 +471,12 @@ export async function addSuggestionToCalendar(run: DbRun, id: string, deps: AddD
   }
 
   await run(async (db) => {
-    await db.query("UPDATE calendar_suggestions SET status = 'added', google_event_id = $2 WHERE id = $1 AND status = 'pending'", [
-      id,
-      eventIdFor(id),
-    ]);
+    const { rows } = await db.query<{ id: string }>(
+      "UPDATE calendar_suggestions SET status = 'added', google_event_id = $2 WHERE id = $1 AND status = 'pending' RETURNING id",
+      [id, eventIdFor(id)],
+    );
     await closeItem(db, id);
+    if (rows.length > 0) await verdictStep(db, id, "calendar_added");
   });
   return "added";
 }
@@ -485,5 +486,16 @@ export async function dismissSuggestion(db: Queryable, id: string): Promise<bool
   if (!isSuggestionId(id)) return false;
   const { rows } = await db.query<{ id: string }>("UPDATE calendar_suggestions SET status = 'dismissed' WHERE id = $1 AND status = 'pending' RETURNING id", [id]);
   await closeItem(db, id);
+  if (rows.length > 0) await verdictStep(db, id, "calendar_dismissed");
   return rows.length > 0;
+}
+
+/** The owner's verdict on a suggestion (public log, PL3), on the entry its contact note came from, if any. */
+async function verdictStep(db: Queryable, suggestionId: string, step: "calendar_added" | "calendar_dismissed"): Promise<void> {
+  const { rows } = await db.query<{ entry_id: string | null }>(
+    "SELECT n.entry_id FROM calendar_suggestions s JOIN crm_notes n ON n.id = s.crm_note_id WHERE s.id = $1",
+    [suggestionId],
+  );
+  const entryId = rows[0]?.entry_id;
+  if (entryId) await recordStep(db, entryId, step, { suggestion_id: suggestionId });
 }

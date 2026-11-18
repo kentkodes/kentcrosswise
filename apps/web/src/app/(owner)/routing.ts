@@ -4,6 +4,7 @@ import { dbErrorLabel, withDb } from "@/server/db";
 import { isEntryId, isRouteKind, reassignEntryDerived, routeEntry, routerDb, routerFromEnv, type RouteOutcome } from "@/server/router";
 // Relative on purpose: the action tests mock the "@/server/*" modules one by one and do not resolve the alias.
 import { suggestFromNote } from "../../server/calendar";
+import { prepareSpans, type PrepareResult } from "../../server/review";
 import { scoreNow } from "./diary/score";
 import { CAPTURED_ROUTED, failureNotice, ROUTED, type NoticeCode } from "./notices";
 
@@ -45,13 +46,30 @@ export async function suggestCreated(derived: { kind: string; id: string } | nul
   }
 }
 
+/**
+ * Finds the names and places in an entry for its public text (PL3), unless a valid proposal is stored. Bounded by
+ * proposeSpans; never throws and never changes a notice. "off" when no model is configured here.
+ */
+export async function prepareNow(entryId: string): Promise<PrepareResult | "off"> {
+  try {
+    const provider = await routerFromEnv(process.env);
+    if (!provider) return "off";
+    return await prepareSpans(routerDb, entryId, provider);
+  } catch (err) {
+    console.error(`[review] ${dbErrorLabel(err)}`);
+    return "failed";
+  }
+}
+
 /** Routes an entry now with the configured model ("off" when routing is not configured here). */
 export async function routeNow(entryId: string): Promise<RouteOutcome> {
   try {
     const provider = await routerFromEnv(process.env);
     if (!provider) return { code: "off" };
     const outcome = await routeEntry(routerDb, entryId, provider);
-    if (outcome.code === "routed") await scoreCreated(outcome.derived);
+    // Mood scoring and the name check run side by side after the route committed; neither changes the notice.
+    if (outcome.code === "routed") await Promise.all([scoreCreated(outcome.derived), prepareNow(entryId)]);
+    else if (outcome.code === "needs_owner") await prepareNow(entryId);
     return outcome;
   } catch (err) {
     console.error(`[router] ${dbErrorLabel(err)}`);
@@ -101,8 +119,7 @@ export async function reassignNotice(formData: FormData): Promise<NoticeCode> {
   try {
     const res = await withDb("web_rw", (db) => reassignEntryDerived(db, id, to));
     if (res.result !== "ok") return "entry-not-found";
-    await scoreCreated(res.derived);
-    await suggestCreated(res.derived);
+    await Promise.all([scoreCreated(res.derived), suggestCreated(res.derived), prepareNow(id)]);
     return ROUTED[to];
   } catch (err) {
     return failureNotice(err, "routing");
