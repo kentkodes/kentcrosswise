@@ -7,6 +7,7 @@
 import type { ModelProvider } from "@kcw/core/models";
 import { MOOD_KEYS, type MoodValues } from "./diary";
 import type { DbRun } from "./router";
+import { recordStep, type StepDetail } from "./steps";
 import { capReachedUsd, monthToDateRange, spendDecisionLine, usageSummary } from "./usage";
 
 export const MOOD_INSTRUCTIONS = [
@@ -65,16 +66,19 @@ export function parseMoodReply(text: string): MoodParse {
  */
 export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider: ModelProvider): Promise<ScoreOutcome> {
   const before = await run(async (db) => {
-    const { rows } = await db.query<{ body: string }>("SELECT body FROM diary_entries WHERE id = $1", [diaryEntryId]);
+    const { rows } = await db.query<{ body: string; entry_id: string | null }>("SELECT body, entry_id FROM diary_entries WHERE id = $1", [diaryEntryId]);
     if (!rows[0]) return { state: "not-found" as const };
+    const entryId = rows[0].entry_id;
     const spent = await usageSummary(db, monthToDateRange());
     if (capReachedUsd(spent.total.costUsd)) {
       console.error(`[mood] ${spendDecisionLine(spent)}`);
+      if (entryId) await recordStep(db, entryId, "mood_scored", { outcome: "cap", diary_entry_id: diaryEntryId });
       return { state: "cap" as const };
     }
-    return { state: "ready" as const, body: rows[0].body };
+    return { state: "ready" as const, body: rows[0].body, entryId };
   });
   if (before.state !== "ready") return before.state;
+  const failed = () => moodStep(run, before.entryId, { outcome: "failed", diary_entry_id: diaryEntryId });
 
   let reply: Awaited<ReturnType<ModelProvider["complete"]>>;
   try {
@@ -86,15 +90,18 @@ export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider
     });
   } catch (err) {
     console.error(`[mood] ${err instanceof Error ? err.name : "error"}`);
+    await failed();
     return "failed";
   }
   if (reply.stop !== "end") {
     console.error(`[mood] stop-${reply.stop}`);
+    await failed();
     return "failed";
   }
   const parsed = parseMoodReply(reply.text);
   if (!parsed.ok) {
     console.error(`[mood] reply-${parsed.reason}`);
+    await failed();
     return "failed";
   }
   const v = parsed.values;
@@ -103,7 +110,10 @@ export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider
   return await run(async (db): Promise<ScoreOutcome> => {
     const { rows } = await db.query<{ body: string }>("SELECT body FROM diary_entries WHERE id = $1 FOR UPDATE", [diaryEntryId]);
     if (!rows[0]) return "gone";
-    if (rows[0].body !== before.body) return "changed";
+    if (rows[0].body !== before.body) {
+      if (before.entryId) await recordStep(db, before.entryId, "mood_scored", { outcome: "changed", diary_entry_id: diaryEntryId });
+      return "changed";
+    }
     await db.query(
       `INSERT INTO mood_scores (diary_entry_id, energy, stress, happiness, satisfaction, sadness, anger, anxiety, gratitude, sentiment, model)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -114,6 +124,17 @@ export async function scoreDiaryEntry(run: DbRun, diaryEntryId: string, provider
          model = EXCLUDED.model, scored_at = now()`,
       [diaryEntryId, v.energy, v.stress, v.happiness, v.satisfaction, v.sadness, v.anger, v.anxiety, v.gratitude, v.sentiment, reply.model],
     );
+    if (before.entryId) await recordStep(db, before.entryId, "mood_scored", { outcome: "scored", diary_entry_id: diaryEntryId, model: reply.model });
     return "scored";
   });
+}
+
+/** Records a mood step in its own transaction when the diary row came from a capture. Never throws. */
+async function moodStep(run: DbRun, entryId: string | null, detail: StepDetail["mood_scored"]): Promise<void> {
+  if (!entryId) return;
+  try {
+    await run((db) => recordStep(db, entryId, "mood_scored", detail));
+  } catch (err) {
+    console.error(`[mood] step-${err instanceof Error ? err.name : "error"}`);
+  }
 }

@@ -18,6 +18,7 @@ import { withDb, type Queryable } from "./db";
 import { suggestFromNote } from "./calendar";
 import { linkCrmNote } from "./contacts";
 import { applyRoute } from "./derived";
+import { recordStep } from "./steps";
 import { capReachedUsd, monthToDateRange, spendDecisionLine, usageSummary } from "./usage";
 
 /** Entries the model is less sure of than this go to the owner's inbox (0.59 goes, 0.6 is routed). */
@@ -128,16 +129,20 @@ export async function applyRouteLinked(
   to: RouteKind,
 ): Promise<DerivedRow | null> {
   const created = await applyRoute(db, entryId, from, to);
+  if (created) await recordStep(db, entryId, "derived", { kind: created.kind, row_id: created.id, moved_from: from });
   if (created?.kind === "crm_note") {
     await db.query("SAVEPOINT link_note");
+    let outcome: "linked" | "ambiguous" | "none" | "failed" | "not-found";
     try {
-      await linkCrmNote(db, created.id);
+      outcome = await linkCrmNote(db, created.id);
       await db.query("RELEASE SAVEPOINT link_note");
     } catch (err) {
       console.error(`[router] link-${errorClass(err)}`);
       await db.query("ROLLBACK TO SAVEPOINT link_note");
       await db.query("RELEASE SAVEPOINT link_note");
+      outcome = "failed";
     }
+    if (outcome !== "not-found") await recordStep(db, entryId, "contact_linked", { outcome, note_id: created.id });
   }
   return created;
 }
@@ -200,6 +205,8 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
       [entryId, kind, answer.confidence, answer.model, needsOwner ? "needs_owner" : "routed"],
     );
     if (upd.rows.length === 0) return { written: false as const };
+    if (needsOwner) await recordStep(db, entryId, "needs_owner", { kind, confidence: answer.confidence, model: answer.model });
+    else await recordStep(db, entryId, "routed", { kind, by: "model", confidence: answer.confidence, model: answer.model });
     let derived: DerivedRow | null = null;
     if (!needsOwner) derived = await applyRouteLinked(db, entryId, null, kind);
     if (needsOwner) {
@@ -218,12 +225,13 @@ export async function routeEntry(run: DbRun, entryId: string, provider: ModelPro
 /** Stores a failed attempt: the fixed code, one more attempt, now. Only while the entry is still unrouted. */
 async function recordFailure(run: DbRun, entryId: string, code: RouteError): Promise<void> {
   try {
-    await run((db) =>
-      db.query(
-        "UPDATE entries SET route_error = $2, route_attempts = route_attempts + 1, route_attempted_at = now() WHERE id = $1 AND route_kind IS NULL",
+    await run(async (db) => {
+      const { rows } = await db.query<{ route_attempts: number }>(
+        "UPDATE entries SET route_error = $2, route_attempts = route_attempts + 1, route_attempted_at = now() WHERE id = $1 AND route_kind IS NULL RETURNING route_attempts",
         [entryId, code],
-      ),
-    );
+      );
+      if (rows[0]) await recordStep(db, entryId, "route_failed", { code, attempt: Number(rows[0].route_attempts) });
+    });
   } catch (err) {
     console.error(`[router] record-${errorClass(err)}`);
   }
@@ -255,6 +263,9 @@ export async function reassignEntryDerived(
     "UPDATE entries SET route_kind = $2, routed_by = 'owner', status = 'routed', route_error = NULL WHERE id = $1",
     [entryId, to],
   );
+  // A routed entry the owner moves is a correction; a "needs you", pending or failed entry gets its first route from the owner.
+  if (row.status === "routed" && row.route_kind !== null) await recordStep(db, entryId, "corrected", { from: row.route_kind, to });
+  else await recordStep(db, entryId, "routed", { kind: to, by: "owner", guess: row.route_kind });
   // A "needs you" entry has a guess but no derived row yet; a routed one has a row of its current kind.
   const derived = await applyRouteLinked(db, entryId, row.status === "needs_owner" ? null : row.route_kind, to);
   if (row.route_kind !== null && row.route_kind !== to) {
