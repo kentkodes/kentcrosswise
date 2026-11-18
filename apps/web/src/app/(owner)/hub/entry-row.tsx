@@ -31,33 +31,41 @@ export function EntryItem({ e, routing }: { e: EntryRow; routing: boolean }) {
           )}
         </span>
       </p>
-      <details className={s.entryDisclosure}>
-        <summary className={s.entrySummary}>Change route</summary>
-        <form action={reassignAction} className={s.formRow}>
-          <input type="hidden" name="entry_id" value={e.id} />
-          <label className={s.fieldLabel}>
-            Route
-            <select className={s.field} name="to" defaultValue={e.routeKind ?? ""} required>
-              <option value="" disabled>
-                Choose a kind
-              </option>
-              {KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {ROUTE_LABELS[k]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className={s.button} type="submit">
-            Save
-          </button>
-          {routing && e.routeKind === null ? (
-            <button className={s.button} type="submit" formAction={routeAgainAction} formNoValidate>
-              Route again
-            </button>
-          ) : null}
-        </form>
-      </details>
+      <ChangeRoute e={e} routing={routing} />
     </li>
+  );
+}
+
+/** The closed "Change route" disclosure: the route picker and, for a pending entry where routing is configured,
+ *  "Route again". Shared by the entry lists and the review list. */
+export function ChangeRoute({ e, routing }: { e: Pick<EntryRow, "id" | "routeKind">; routing: boolean }) {
+  return (
+    <details className={s.entryDisclosure}>
+      <summary className={s.entrySummary}>Change route</summary>
+      <form action={reassignAction} className={s.formRow}>
+        <input type="hidden" name="entry_id" value={e.id} />
+        <label className={s.fieldLabel}>
+          Route
+          <select className={s.field} name="to" defaultValue={e.routeKind ?? ""} required>
+            <option value="" disabled>
+              Choose a kind
+            </option>
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {ROUTE_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className={s.button} type="submit">
+          Save
+        </button>
+        {routing && e.routeKind === null ? (
+          <button className={s.button} type="submit" formAction={routeAgainAction} formNoValidate>
+            Route again
+          </button>
+        ) : null}
+      </form>
+    </details>
   );
 }

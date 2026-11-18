@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { listRecentEntries, listUnresolvedEntries, MAX_CAPTURE_CHARS, type EntryRow } from "@/server/capture";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
+import { listAwaitingReview, type ReviewItem } from "@/server/review";
 import { routingEnabled } from "@/server/router";
 import { isSuccessNotice, noticeText } from "../notices";
 import { OwnerFrame } from "../owner-frame";
@@ -10,14 +11,19 @@ import s from "../owner.module.css";
 import { captureAction } from "./actions";
 import { CaptureField } from "./capture-field";
 import { EntryItem } from "./entry-row";
+import { ReviewEntry } from "./review-item";
 
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
 
-async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; problem?: string }> {
+async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; review?: ReviewItem[]; problem?: string }> {
   try {
     return await withDb(
       "web_rw",
-      async (db) => ({ rows: await listRecentEntries(db), unresolved: await listUnresolvedEntries(db) }),
+      async (db) => ({
+        rows: await listRecentEntries(db),
+        unresolved: await listUnresolvedEntries(db),
+        review: await listAwaitingReview(db),
+      }),
       { readOnly: true },
     );
   } catch (err) {
@@ -33,7 +39,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
   const notice = noticeText(code);
   const ok = isSuccessNotice(code);
   const routing = routingEnabled(process.env);
-  const { rows, unresolved, problem } = await loadRecent();
+  const { rows, unresolved, review, problem } = await loadRecent();
 
   return (
     <OwnerFrame title="Hub" current="/hub">
@@ -66,6 +72,18 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
           </ol>
         ) : (
           <p className={`${s.note} ${s.pad}`}>Nothing is waiting.</p>
+        )}
+      </Region>
+
+      <Region id="review" title={review && review.length > 0 ? `Awaiting review (${review.length})` : "Awaiting review"} testId="review">
+        {problem ? null : review && review.length > 0 ? (
+          <ol className={s.list} data-testid="review-entries">
+            {review.map((e) => (
+              <ReviewEntry key={e.id} e={e} routing={routing} />
+            ))}
+          </ol>
+        ) : (
+          <p className={`${s.note} ${s.pad}`}>Nothing to review. A routed entry waits here until you mark it correct or change its route.</p>
         )}
       </Region>
 

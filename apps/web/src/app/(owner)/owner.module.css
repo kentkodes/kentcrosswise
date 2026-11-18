@@ -833,3 +833,53 @@ textarea.field.capture {
     min-height: 44px;
   }
 }
+
+/* Hub review (PL3): the exact public text in a soft box; each word is a tappable button that reads as text. */
+
+.publicBox {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--bg-soft);
+}
+
+.publicText {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.wordButton {
+  padding: 0 1px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.wordButton:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.wordPicked,
+.wordPicked:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 1px solid var(--accent);
+}
+
+.placeholder {
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wordButton {
+    transition: background var(--dur-hover) var(--ease-out);
+  }
+}
