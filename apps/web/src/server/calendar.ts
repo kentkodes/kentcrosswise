@@ -8,6 +8,7 @@ import type { ModelProvider } from "@kcw/core/models";
 import { googleAccessToken, resetGoogleCache } from "./google";
 import type { Queryable } from "./db";
 import type { DbRun } from "./router";
+import { recordStep, type StepDetail } from "./steps";
 import { capReachedUsd, monthToDateRange, usageSummary } from "./usage";
 
 const MAX_TOKENS = 200;
@@ -203,8 +204,10 @@ function inboxTitle(title: string): string {
  */
 export async function suggestFromNote(run: DbRun, crmNoteId: string, provider: ModelProvider, now: Date = new Date()): Promise<SuggestOutcome> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let outcome: SuggestOutcome;
+  let thrown = false;
   try {
-    return await Promise.race([
+    outcome = await Promise.race([
       suggest(run, crmNoteId, provider, now),
       new Promise<SuggestOutcome>((resolve) => {
         timer = setTimeout(() => resolve("timeout"), SUGGEST_BOUND_MS);
@@ -212,10 +215,14 @@ export async function suggestFromNote(run: DbRun, crmNoteId: string, provider: M
     ]);
   } catch (err) {
     console.error(`[calendar] ${err instanceof Error ? err.name : "error"}`);
-    return "failed";
+    outcome = "failed";
+    thrown = true;
   } finally {
     clearTimeout(timer);
   }
+  // suggest() records its own outcomes; the bound and a thrown error are recorded here.
+  if (outcome === "timeout" || thrown) await noteStep(run, crmNoteId, null, { outcome: thrown ? "failed" : "timeout", note_id: crmNoteId });
+  return outcome;
 }
 
 async function suggest(run: DbRun, crmNoteId: string, provider: ModelProvider, now: Date): Promise<SuggestOutcome> {
@@ -230,12 +237,19 @@ async function suggest(run: DbRun, crmNoteId: string, provider: ModelProvider, n
     if (!row) return { state: "gone" as const };
     if (row.has) return { state: "exists" as const };
     const zone = validTimeZone(row.time_zone);
-    if (!zone) return { state: "no-zone" as const };
+    if (!zone) {
+      if (row.entry_id) await recordStep(db, row.entry_id, "calendar_suggested", { outcome: "no-zone", note_id: crmNoteId });
+      return { state: "no-zone" as const };
+    }
     const spent = await usageSummary(db, monthToDateRange(now));
-    if (capReachedUsd(spent.total.costUsd)) return { state: "cap" as const };
+    if (capReachedUsd(spent.total.costUsd)) {
+      if (row.entry_id) await recordStep(db, row.entry_id, "calendar_suggested", { outcome: "cap", note_id: crmNoteId });
+      return { state: "cap" as const };
+    }
     return { state: "ready" as const, body: row.body, entryId: row.entry_id, zone };
   });
   if (before.state !== "ready") return before.state;
+  const step = (outcome: "none" | "invalid" | "failed") => noteStep(run, crmNoteId, before.entryId, { outcome, note_id: crmNoteId });
 
   let reply: Awaited<ReturnType<ModelProvider["complete"]>>;
   try {
@@ -247,16 +261,22 @@ async function suggest(run: DbRun, crmNoteId: string, provider: ModelProvider, n
     });
   } catch (err) {
     console.error(`[calendar] ${err instanceof Error ? err.name : "error"}`);
+    await step("failed");
     return "failed";
   }
   if (reply.stop !== "end") {
     console.error(`[calendar] calendar_invalid stop-${reply.stop}`);
+    await step("invalid");
     return "invalid";
   }
   const parsed = parseCalendarReply(reply.text, now, before.zone);
   if (!parsed.ok) {
-    if (parsed.reason === "none") return "none";
+    if (parsed.reason === "none") {
+      await step("none");
+      return "none";
+    }
     console.error(`[calendar] calendar_invalid ${parsed.reason}`);
+    await step("invalid");
     return "invalid";
   }
   const plan = parsed.plan;
@@ -271,12 +291,32 @@ async function suggest(run: DbRun, crmNoteId: string, provider: ModelProvider, n
     );
     const id = ins.rows[0]?.id;
     if (!id) return "exists";
+    if (before.entryId) await recordStep(db, before.entryId, "calendar_suggested", { outcome: "created", note_id: crmNoteId, suggestion_id: id });
     await db.query("INSERT INTO inbox_items (kind, ref_table, ref_id, title) VALUES ('calendar', 'calendar_suggestions', $1, $2)", [
       id,
       inboxTitle(plan.title),
     ]);
     return "created";
   });
+}
+
+/**
+ * Records a calendar step in its own transaction for a note that came from a capture (the entry is looked up when
+ * not known). Never throws.
+ */
+async function noteStep(run: DbRun, crmNoteId: string, entryId: string | null, detail: StepDetail["calendar_suggested"]): Promise<void> {
+  try {
+    await run(async (db) => {
+      let entry = entryId;
+      if (entry === null) {
+        const { rows } = await db.query<{ entry_id: string | null }>("SELECT entry_id FROM crm_notes WHERE id = $1", [crmNoteId]);
+        entry = rows[0]?.entry_id ?? null;
+      }
+      if (entry) await recordStep(db, entry, "calendar_suggested", detail);
+    });
+  } catch (err) {
+    console.error(`[calendar] step-${err instanceof Error ? err.name : "error"}`);
+  }
 }
 
 // ---------------------------------------------------------------- inbox list

@@ -2,6 +2,7 @@
 // entries hold private text and must never reach a public route. Routing itself is in router.ts.
 import type { Tone } from "../app/(owner)/tones";
 import type { Queryable } from "./db";
+import { recordStep } from "./steps";
 
 export const MAX_CAPTURE_CHARS = 10000;
 
@@ -61,7 +62,9 @@ export function entryStatus(row: Pick<EntryRow, "routeKind" | "status"> & { rout
 /** Inserts a web entry with its raw text (route stays NULL, so it is pending) and returns its id. */
 export async function saveEntry(db: Queryable, text: string): Promise<string> {
   const { rows } = await db.query<{ id: string }>("INSERT INTO entries (source, raw_text) VALUES ('web', $1) RETURNING id", [text]);
-  return rows[0]!.id;
+  const id = rows[0]!.id;
+  await recordStep(db, id, "captured", { source: "web" });
+  return id;
 }
 
 interface DbEntry {

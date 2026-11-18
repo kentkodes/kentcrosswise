@@ -23,6 +23,28 @@ export const EVENT_TYPES = [
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
+/**
+ * Router steps of one capture (public log, DESIGN §4.6; migration 0025). Written with agent `router` and the
+ * entry's id, never a task. The first nine are written automatically; the last four are the owner's verdicts.
+ * They are not development activity: the public agent feed and the office leave them out.
+ */
+export const ROUTER_STEPS = [
+  "captured",
+  "routed",
+  "needs_owner",
+  "route_failed",
+  "derived",
+  "contact_linked",
+  "mood_scored",
+  "calendar_suggested",
+  "corrected",
+  "confirmed",
+  "contact_chosen",
+  "calendar_added",
+  "calendar_dismissed",
+] as const;
+export type RouterStep = (typeof ROUTER_STEPS)[number];
+
 export function isAgentName(x: unknown): x is AgentName {
   return typeof x === "string" && (AGENTS as readonly string[]).includes(x);
 }
