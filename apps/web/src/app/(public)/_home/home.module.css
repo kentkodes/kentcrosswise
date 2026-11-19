@@ -89,13 +89,18 @@
   border-color: color-mix(in srgb, var(--fg) 40%, transparent);
 }
 
-/* Product still */
+.privacy {
+  margin: 0;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
 
-.still {
+/* Lead panel (PL5): the latest log entries, then agent activity, in one framed card. */
+
+.panel {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
-  min-height: 300px;
-  margin-top: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-frame);
   background: var(--bg);
@@ -104,37 +109,20 @@
   animation: rise var(--dur-enter) var(--ease-out) both;
 }
 
-.side {
+.panelPart {
   display: grid;
   align-content: start;
-  gap: 2px;
-  padding: 14px 10px;
-  border-right: 1px solid var(--line);
-  background: var(--bg-soft);
-  font-size: 13px;
-}
-
-.sideItem {
-  padding: 6px 8px;
-  border-radius: 6px;
-  color: var(--fg-muted);
-}
-
-.sideOn {
-  background: var(--bg);
-  color: var(--fg);
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-.content {
-  display: grid;
-  align-content: start;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
   padding: 20px;
 }
 
-.greet {
+.panelPart + .panelPart {
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+
+.panelHead {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -142,10 +130,11 @@
   gap: 8px 12px;
 }
 
-.greetTitle {
-  font-size: 20px;
+.panelTitle {
+  margin: 0;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .label {
@@ -154,50 +143,45 @@
   color: var(--fg-muted);
 }
 
-.cards {
+.entries {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.card {
+.entry {
   display: grid;
-  align-content: start;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
 }
 
-.cardLabel {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.entryMeta {
+  font-size: 13px;
   color: var(--fg-muted);
 }
 
-.cardValue {
-  margin: 0;
+.entryText {
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.more {
+  justify-self: start;
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.4;
-}
-
-.cardNote {
-  font-size: 12px;
-  color: var(--fg-muted);
-}
-
-/* Fixed 160x36 user units at 1:1, so the endpoint dot stays round (no preserveAspectRatio stretch). */
-.spark {
-  display: block;
-  width: 160px;
-  max-width: 100%;
-  height: 36px;
-  overflow: visible;
   color: var(--fg);
+  text-underline-offset: 3px;
 }
 
 /* Live activity, styled as log rows. */
@@ -291,27 +275,14 @@
   color: var(--fg-muted);
 }
 
-/* Phones (under 640px): gutters 16px, sidebar hidden, cards stacked, log titles on their own line. */
+/* Phones (under 640px): gutters 16px, tighter panel, log titles on their own line. */
 @media (max-width: 639px) {
   .hero {
     padding: 56px 0 40px;
   }
 
-  .still {
-    grid-template-columns: minmax(0, 1fr);
-    margin-top: 0;
-  }
-
-  .side {
-    display: none;
-  }
-
-  .content {
+  .panelPart {
     padding: 16px;
-  }
-
-  .cards {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .logRow {
@@ -335,7 +306,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hero,
-  .still {
+  .panel {
     animation: none;
   }
 

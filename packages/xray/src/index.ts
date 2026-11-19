@@ -28,11 +28,11 @@ export const XRAY = {
     what: "Text is set in Geist, with Geist Mono for small technical text. Colours are shared variables that follow your light or dark setting.",
     why: "Fonts are self-hosted at build time, so visiting sends no request to Google. Every page uses the same colour tokens.",
   },
-  "product-still": {
-    label: "Hub preview",
-    tech: "React server component, @kcw/demo-data",
-    what: "A still picture of the private hub, drawn from simulated people, notes and mood.",
-    why: "Public pages may import only the demo data, so private data cannot reach them by accident.",
+  "log-preview": {
+    label: "Latest from the log",
+    tech: "A cached public JSON endpoint",
+    what: "The three newest published entries of the owner's helper, each with how it was filed and its outcome.",
+    why: "It reads the same public API as the log page, which serves only sanitized text and fixed codes.",
   },
   "activity-feed": {
     label: "Agent activity",
@@ -40,17 +40,11 @@ export const XRAY = {
     what: "The latest public events from the agents, such as a pull request opened or merged. The page asks for new ones every few seconds.",
     why: "A cached JSON endpoint needs no extra service. Titles are checked first, so a private task shows only as Private task.",
   },
-  "demo-data": {
-    label: "Simulated data",
-    tech: "@kcw/demo-data",
-    what: "People, notes and mood are generated from a fixed seed, so every visit shows the same made-up hub.",
-    why: "The real hub is private. This package is one of only two workspace packages the public pages may import.",
-  },
-  "demo-app": {
-    label: "Demo hub",
-    tech: "React, server-built view model",
-    what: "Tabs for Today, People, Mood and Notes. The server prepares the numbers and the browser only tracks the selected tab.",
-    why: "The server builds the view from the demo data, and the browser only holds the selected tab.",
+  "public-log": {
+    label: "Public log",
+    tech: "Postgres views, cached JSON",
+    what: "Each published entry with its sanitized text, how it was filed and the evidence for every step. Withheld records are only counted.",
+    why: "The public API reads two views that hold only sanitized text and fixed codes, so private fields cannot reach this page.",
   },
   "office-board": {
     label: "Office board",

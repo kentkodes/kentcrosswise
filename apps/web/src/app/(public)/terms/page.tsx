@@ -13,7 +13,7 @@ export default function TermsPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Terms</h1>
-        <p className={s.updated}>Last updated: 15 November 2026</p>
+        <p className={s.updated}>Last updated: 19 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project. By using this website you agree to these short terms.
         </p>
@@ -28,11 +28,13 @@ export default function TermsPage() {
         </section>
 
         <section aria-labelledby="demo" className={s.section}>
-          <h2 id="demo" className={s.heading}>The demo is simulated</h2>
+          <h2 id="demo" className={s.heading}>What the public pages show</h2>
           <p className={s.text}>
-            The public demo shows generated data: the people, moods and numbers are examples, not real
-            records. Do not rely on them. The agent office shows real but sanitized activity of the
-            project&apos;s software agents, as task titles and event types.
+            The public log shows sanitized copies of the owner&apos;s own entries and what the software did
+            with them. Names and other personal details are replaced with placeholders, so the text is not a
+            complete or exact record; do not rely on it. The essay ratings are simulated. The agent office
+            shows real but sanitized activity of the project&apos;s software agents, as task titles and event
+            types.
           </p>
         </section>
 

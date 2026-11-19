@@ -1,31 +1,9 @@
-// View model for /demo: a small, serializable picture of the simulated hub, built from @kcw/demo-data.
-// Pure: no clock and no React. "Today" is the latest day present in the data, so the output is deterministic.
-import {
-  DEMO_ESSAYS,
-  DEMO_ESSAY_RATINGS,
-  lengthBand,
-  readingMinutes,
-  recommend,
-  type DemoContact,
-  type DemoData,
-  type MoodMetric,
-  type RouteKind,
-} from "@kcw/demo-data";
+// View model for the /demo Essays tab: the static, link-only public-domain essays from @kcw/demo-data with their
+// simulated ratings. Pure: no clock and no React. (The simulated hub tabs were removed in PL5; /demo leads with the
+// public log, which the browser loads from the public API.)
+import { DEMO_ESSAYS, DEMO_ESSAY_RATINGS, lengthBand, readingMinutes, recommend } from "@kcw/demo-data";
 
 export interface DemoView {
-  /** "Wednesday, 11 November" (UTC), for the latest day in the data. */
-  todayLabel: string;
-  today: {
-    /** Sentiment of the last 7 mood scores, oldest first. Drawn as the sparkline. */
-    moodSeries: number[];
-    followUp: { name: string; howKnown: string; sinceLastNote: string | null } | null;
-    /** Newest first. `day` is "Mar 31" (UTC) from the entry's createdAt. */
-    captures: { text: string; day: string; route: string; detail: string }[];
-  };
-  people: { name: string; howKnown: string; lastNote: string; birthday: string }[];
-  /** Latest mood, in display order. `value` is 0 to 1. */
-  mood: { name: string; value: number; text: string }[];
-  notes: { todos: string[]; ideas: string[] };
   essays: EssaysView;
 }
 
@@ -50,64 +28,7 @@ export interface EssaysView {
   recommended: { id: string; reason: string } | null;
 }
 
-const DAY_MS = 86_400_000;
-const LIST_CAP = 5;
-
-const ROUTE_LABEL: Record<RouteKind, string> = {
-  crm_note: "CRM note",
-  diary: "Diary",
-  todo: "To do",
-  idea: "Idea",
-  agent_request: "Agent request",
-};
-// Display order: positive feelings first, then the negative ones.
-const MOOD_ORDER: MoodMetric[] = ["energy", "happiness", "satisfaction", "gratitude", "stress", "anxiety", "sadness", "anger"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const dayOf = (iso: string) => iso.slice(0, 10);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-/** Keeps the first (newest, once sorted) row for each body, at most LIST_CAP rows. */
-function uniqueBodies<T extends { body: string; createdAt: string }>(rows: T[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const row of [...rows].sort(newestFirst)) {
-    if (seen.has(row.body)) continue;
-    seen.add(row.body);
-    out.push(row.body);
-    if (out.length === LIST_CAP) break;
-  }
-  return out;
-}
-
-/** Newest first; ISO timestamps sort correctly as strings. */
-const newestFirst = <T extends { createdAt: string }>(a: T, b: T) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0);
-
-/** "Wednesday, 11 November" for a YYYY-MM-DD day, in UTC, with no year. */
-export function dayLabel(day: string): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "UTC" }).format(d);
-  const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "UTC" }).format(d);
-  return `${weekday}, ${d.getUTCDate()} ${month}`;
-}
-
-/** "Mar 14" from a YYYY-MM-DD birthday. */
-function birthdayLabel(date: string): string {
-  const [, month = "1", day = "1"] = date.split("-");
-  return `${MONTHS[Number(month) - 1] ?? ""} ${Number(day)}`;
-}
-
-/** "Mar 31" from an ISO timestamp, in UTC. */
-function shortDayLabel(iso: string): string {
-  const d = new Date(iso);
-  return `${MONTHS[d.getUTCMonth()] ?? ""} ${d.getUTCDate()}`;
-}
-
-/** The latest day present in the data (mood scores and entries), never the wall clock. */
-export function latestDay(data: DemoData): string {
-  const stamps = [...data.moods.map((m) => m.scoredAt), ...data.entries.map((e) => e.createdAt)];
-  return dayOf(stamps.reduce((a, b) => (b > a ? b : a), data.start));
-}
 
 /** Static, link-only essays from @kcw/demo-data with the simulated ratings. */
 export function buildEssaysView(): EssaysView {
@@ -129,89 +50,6 @@ export function buildEssaysView(): EssaysView {
   return { feed, recommended: rec && liked ? { id: rec.essayId, reason: `Because you liked ${liked.title}` } : null };
 }
 
-export function buildDemoView(data: DemoData): DemoView {
-  const today = latestDay(data);
-  const entryById = new Map(data.entries.map((e) => [e.id, e]));
-  const contactById = new Map<string, DemoContact>(data.contacts.map((c) => [c.id, c]));
-
-  // A CRM note's date is its entry's createdAt.
-  const datedNotes = data.crmNotes.flatMap((n) => {
-    const entry = entryById.get(n.entryId);
-    return entry ? [{ ...n, createdAt: entry.createdAt }] : [];
-  });
-  const latestNoteByContact = new Map<string, { createdAt: string; body: string }>();
-  for (const n of datedNotes) {
-    if (!n.contactId) continue;
-    const seen = latestNoteByContact.get(n.contactId);
-    if (!seen || n.createdAt > seen.createdAt) latestNoteByContact.set(n.contactId, { createdAt: n.createdAt, body: n.body });
-  }
-
-  return {
-    todayLabel: dayLabel(today),
-    today: {
-      moodSeries: data.moods.slice(-7).map((m) => m.sentiment),
-      followUp: followUp(data, latestNoteByContact, today),
-      captures: captures(data, contactById),
-    },
-    essays: buildEssaysView(),
-    people: data.contacts.slice(0, 8).map((c) => ({
-      name: c.name,
-      howKnown: c.howKnown,
-      lastNote: latestNoteByContact.get(c.id)?.body ?? "—",
-      birthday: birthdayLabel(c.birthday),
-    })),
-    mood: moodRows(data),
-    notes: {
-      todos: uniqueBodies(data.todos.filter((t) => !t.done)),
-      ideas: uniqueBodies(data.ideas.filter((i) => i.status === "open")),
-    },
-  };
-}
-
-/** Oldest latest CRM note wins. With no notes at all, the first contact is chosen, with no note age. */
-function followUp(
-  data: DemoData,
-  latestNoteByContact: Map<string, { createdAt: string; body: string }>,
-  today: string,
-): DemoView["today"]["followUp"] {
-  let pick: { contact: DemoData["contacts"][number]; createdAt: string } | undefined;
-  for (const contact of data.contacts) {
-    const latest = latestNoteByContact.get(contact.id);
-    if (latest && (!pick || latest.createdAt < pick.createdAt)) pick = { contact, createdAt: latest.createdAt };
-  }
-  if (pick) {
-    const weeks = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dayOf(pick.createdAt)}T00:00:00Z`)) / (7 * DAY_MS));
-    return { name: pick.contact.name, howKnown: pick.contact.howKnown, sinceLastNote: `${plural(weeks, "week")} since last note` };
-  }
-  const first = data.contacts[0];
-  return first ? { name: first.name, howKnown: first.howKnown, sinceLastNote: null } : null;
-}
-
-/** The latest entries of any kind, newest first, with where each one went. */
-function captures(data: DemoData, contactById: Map<string, DemoContact>): DemoView["today"]["captures"] {
-  const linkedContact = new Map<string, string>();
-  for (const n of data.crmNotes) {
-    if (n.linkStatus !== "linked" || !n.contactId) continue;
-    const name = contactById.get(n.contactId)?.name;
-    if (name) linkedContact.set(n.entryId, name);
-  }
-  return [...data.entries]
-    .sort(newestFirst)
-    .slice(0, 5)
-    .map((entry) => {
-      const contact = linkedContact.get(entry.id);
-      const confidence = entry.routeConfidence.toFixed(2);
-      return {
-        text: entry.rawText,
-        day: shortDayLabel(entry.createdAt),
-        route: entry.status === "needs_owner" ? "Needs you" : ROUTE_LABEL[entry.routeKind],
-        detail: contact ? `${contact} · ${confidence}` : confidence,
-      };
-    });
-}
-
-function moodRows(data: DemoData): DemoView["mood"] {
-  const latest = data.moods.at(-1);
-  if (!latest) return [];
-  return MOOD_ORDER.map((m) => ({ name: capitalise(m), value: latest[m], text: latest[m].toFixed(2) }));
+export function buildDemoView(): DemoView {
+  return { essays: buildEssaysView() };
 }

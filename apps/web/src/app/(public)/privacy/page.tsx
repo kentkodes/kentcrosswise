@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <PaperFrame>
       <div className={s.column}>
         <h1 className={s.title}>Privacy</h1>
-        <p className={s.updated}>Last updated: 17 November 2026</p>
+        <p className={s.updated}>Last updated: 19 November 2026</p>
         <p className={s.intro}>
           Kentcrosswise is a personal project with one account. This page says what the site does with
           data and which services it uses.
@@ -60,7 +60,15 @@ export default function PrivacyPage() {
         <section aria-labelledby="public-data" className={s.section}>
           <h2 id="public-data" className={s.heading}>What the public pages show</h2>
           <ul className={s.list}>
-            <li>The demo shows generated data, not real people.</li>
+            <li>
+              The public log shows a sanitized copy of the owner&apos;s own entries once the owner has
+              reviewed them: names of people and specific places become placeholders such as [Person 1]
+              and [place], and email addresses, phone numbers, links and handles are removed. An entry about
+              another person&apos;s health, money, legal or relationship matters, or one that cannot be
+              sanitized safely, is withheld and only counted. Each entry shows how it was filed and fixed
+              codes for what happened next, never contact details, mood values or calendar event details.
+            </li>
+            <li>The essay ratings on the Essays tab are simulated.</li>
             <li>
               The agent office shows real but sanitized activity of the project&apos;s software agents:
               the agent, the time, the event type and a sanitized task title. Private tasks appear as
@@ -72,8 +80,9 @@ export default function PrivacyPage() {
         <section aria-labelledby="private-data" className={s.section}>
           <h2 id="private-data" className={s.heading}>The owner&apos;s private data</h2>
           <p className={s.text}>
-            The owner&apos;s own notes and other private data are not shown on the public pages. Notes
-            are also sent to the language model service named under Third-party services. The essay
+            Apart from the sanitized copies in the public log, the owner&apos;s notes and other private data
+            are not shown on the public pages. Notes are also sent to the language model service named under
+            Third-party services, including to find the names and places to replace before publication. The essay
             library is private: its texts are for the owner&apos;s reading and are not distributed.
           </p>
         </section>

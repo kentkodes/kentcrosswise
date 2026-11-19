@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 const PAGES = [
-  { path: "/terms", title: "Terms | Kentcrosswise", h1: "Terms", link: "Terms", updated: "15 November 2026" },
-  { path: "/privacy", title: "Privacy | Kentcrosswise", h1: "Privacy", link: "Privacy", updated: "17 November 2026" },
+  { path: "/terms", title: "Terms | Kentcrosswise", h1: "Terms", link: "Terms", updated: "19 November 2026" },
+  { path: "/privacy", title: "Privacy | Kentcrosswise", h1: "Privacy", link: "Privacy", updated: "19 November 2026" },
 ];
 
 for (const p of PAGES) {

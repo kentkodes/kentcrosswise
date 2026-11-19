@@ -14,7 +14,7 @@ test("turning X-ray on labels the components", async ({ page }) => {
   await page.goto("/");
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
-  for (const label of ["Type and theme", "Hub preview", "Agent activity", "Sign-in link"]) {
+  for (const label of ["Type and theme", "Latest from the log", "Agent activity", "Sign-in link"]) {
     await expect(page.getByRole("button", { name: new RegExp(label) })).toBeVisible();
   }
   await toggle(page).click();
@@ -24,7 +24,7 @@ test("turning X-ray on labels the components", async ({ page }) => {
 test("a chip opens its card with the keyboard and Escape closes it", async ({ page }) => {
   await page.goto("/");
   await toggle(page).click();
-  const chip = page.getByRole("button", { name: /Hub preview/ });
+  const chip = page.getByRole("button", { name: /Latest from the log/ });
   await chip.focus();
   const card = page.getByRole("tooltip");
   await expect(card).toBeVisible();
@@ -41,11 +41,10 @@ test("a chip opens its card with the keyboard and Escape closes it", async ({ pa
 test("X-ray stays on across pages in the session", async ({ page }) => {
   await page.goto("/");
   await toggle(page).click();
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Demo" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Log" }).click();
   await expect(page).toHaveURL(/\/demo$/);
   await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: /Demo hub/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Simulated data @kcw/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Public log/ })).toBeVisible();
 });
 
 for (const path of ["/", "/demo", "/office", "/bot"]) {
