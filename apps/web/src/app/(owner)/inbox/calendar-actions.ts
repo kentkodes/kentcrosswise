@@ -7,6 +7,8 @@ import { dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
 import { routerDb } from "@/server/router";
 import type { CalendarNoticeCode } from "./calendar-notices";
+// Relative on purpose: the action tests mock the "@/server/*" modules one by one and do not resolve the alias.
+import { entryOf, publishNow } from "../../../server/publish";
 
 export async function addSuggestionAction(formData: FormData): Promise<void> {
   await requireOwner();
@@ -15,6 +17,7 @@ export async function addSuggestionAction(formData: FormData): Promise<void> {
   if (isSuggestionId(id)) {
     try {
       code = await addSuggestionToCalendar(routerDb, id);
+      if (code === "added") await publishNow(await entryOf("suggestion", id));
     } catch (err) {
       console.error(`[calendar] ${dbErrorLabel(err)}`);
       code = "db-error";
@@ -30,6 +33,7 @@ export async function dismissSuggestionAction(formData: FormData): Promise<void>
   if (isSuggestionId(id)) {
     try {
       code = (await withDb("web_rw", (db) => dismissSuggestion(db, id))) ? "dismissed" : "already";
+      if (code === "dismissed") await publishNow(await entryOf("suggestion", id));
     } catch (err) {
       console.error(`[calendar] ${dbErrorLabel(err)}`);
       code = "db-error";

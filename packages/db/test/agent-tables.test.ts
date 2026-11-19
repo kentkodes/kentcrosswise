@@ -123,9 +123,18 @@ describe("0002 agent system", () => {
         if (r[0]!.ok) readable.push(`${p} ${rel}`);
       }
     }
-    // 0006 adds the sanitized connected-office views (office-projection.test.ts checks them).
+    // 0006 adds the sanitized connected-office views (office-projection.test.ts checks them); 0027 the public log views.
     expect(readable.sort()).toEqual(
-      ["v_office_events", "v_office_executions", "v_office_invalidations", "v_office_state", "v_office_tasks", "v_public_agent_events"].map(
+      [
+        "v_office_events",
+        "v_office_executions",
+        "v_office_invalidations",
+        "v_office_state",
+        "v_office_tasks",
+        "v_public_agent_events",
+        "v_public_log_counts",
+        "v_public_records",
+      ].map(
         (v) => `SELECT public.${v}`,
       ),
     );
@@ -133,7 +142,8 @@ describe("0002 agent system", () => {
     const { rows: cols } = await db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM information_schema.column_privileges
        WHERE grantee = 'web_public' AND table_name NOT IN (
-         'v_public_agent_events', 'v_office_events', 'v_office_executions', 'v_office_invalidations', 'v_office_state', 'v_office_tasks')`,
+         'v_public_agent_events', 'v_office_events', 'v_office_executions', 'v_office_invalidations', 'v_office_state', 'v_office_tasks',
+         'v_public_records', 'v_public_log_counts')`,
     );
     expect(cols[0]!.n).toBe(0);
   });

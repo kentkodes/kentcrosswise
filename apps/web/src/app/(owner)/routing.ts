@@ -5,6 +5,7 @@ import { isEntryId, isRouteKind, reassignEntryDerived, routeEntry, routerDb, rou
 // Relative on purpose: the action tests mock the "@/server/*" modules one by one and do not resolve the alias.
 import { suggestFromNote } from "../../server/calendar";
 import { prepareSpans, type PrepareResult } from "../../server/review";
+import { publishNow } from "../../server/publish";
 import { scoreNow } from "./diary/score";
 import { CAPTURED_ROUTED, failureNotice, ROUTED, type NoticeCode } from "./notices";
 
@@ -120,6 +121,8 @@ export async function reassignNotice(formData: FormData): Promise<NoticeCode> {
     const res = await withDb("web_rw", (db) => reassignEntryDerived(db, id, to));
     if (res.result !== "ok") return "entry-not-found";
     await Promise.all([scoreCreated(res.derived), suggestCreated(res.derived), prepareNow(id)]);
+    // The owner's route is a review: publish (or withhold) the record once its name check has run (PL4).
+    await publishNow(id);
     return ROUTED[to];
   } catch (err) {
     return failureNotice(err, "routing");

@@ -11,6 +11,9 @@ import {
   updateContact,
 } from "@/server/contacts";
 import { withDb } from "@/server/db";
+// Relative on purpose: the action tests mock the "@/server/*" modules one by one and do not resolve the alias.
+import { entryOf, publishNow } from "../../../server/publish";
+
 import { requireOwner } from "@/server/owner";
 import { contactFailure, type ContactNoticeCode } from "./notices";
 
@@ -73,6 +76,7 @@ export async function resolveNoteAction(formData: FormData): Promise<void> {
   try {
     const res = await withDb("web_rw", (db) => resolveCrmNote(db, noteId, contactId));
     notice = res === "ok" ? (contactId === null ? "note-unlinked" : "note-linked") : res === "note-not-found" ? "note-not-found" : "not-found";
+    if (res === "ok") await publishNow(await entryOf("crm_note", noteId)); // the contact choice updates a published record
   } catch (err) {
     notice = contactFailure(err);
   }

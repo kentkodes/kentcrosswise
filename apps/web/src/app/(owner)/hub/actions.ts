@@ -6,6 +6,7 @@ import { validTimeZone } from "../../../server/calendar";
 // Relative on purpose, like calendar above: the action tests mock the "@/server/*" modules one by one.
 import { addOwnerTerm, confirmEntry, isTermKind } from "../../../server/review";
 import { isEntryId } from "../../../server/router";
+import { publishNow } from "../../../server/publish";
 import { parseCapture, saveEntry } from "@/server/capture";
 import { withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
@@ -54,6 +55,8 @@ export async function confirmAction(formData: FormData): Promise<void> {
     try {
       const res = await withDb("web_rw", (db) => confirmEntry(db, id));
       notice = res === "ok" ? "review-confirmed" : res === "already" ? "review-already" : "entry-not-found";
+      // Publication follows the review (PL4); a failure here is logged and never changes the notice.
+      if (res === "ok") await publishNow(id);
     } catch (err) {
       notice = failureNotice(err, "hub");
     }
@@ -70,6 +73,7 @@ export async function addTermAction(formData: FormData): Promise<void> {
   if (isEntryId(id) && isTermKind(kind)) {
     try {
       const res = await withDb("web_rw", (db) => addOwnerTerm(db, id, formData.get("term"), kind));
+      if (res === "ok") await publishNow(id); // a published record gets the new replacement
       notice =
         res === "ok"
           ? "term-added"
@@ -96,6 +100,7 @@ export async function findNamesAction(formData: FormData): Promise<void> {
   let notice: NoticeCode = "invalid";
   if (isEntryId(id)) {
     const res = await prepareNow(id);
+    await publishNow(id); // a reviewed entry withheld for its name check is published once the check succeeds
     notice =
       res === "ok" || res === "kept"
         ? "names-ready"
