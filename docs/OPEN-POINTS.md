@@ -9,7 +9,7 @@ Design target: [DESIGN.md](DESIGN.md) section 4.6, hub SPEC features 9 and 10, t
 | ID | Open work |
 |---|---|
 | PL-ex | A featured example under the home hero, once the owner finds a convincing real entry (owner 2026-11-19). |
-| PL7 | Dummy calendar per DESIGN section 4.6 "Calendar" (PH8 decided 2026-11-19: added suggestions only, times rounded to the hour, a Connect demo calendar button, a stored list plus a link to the public calendar). Owner steps first: create the dummy Google account, make its calendar public, add it as a test user on the OAuth consent screen while the app is unverified. Gated live steps: the `kcw/prod/google-demo-token` secret (bootstrap apply) and the web Lambda's write permission (prod apply). |
+| PL7 | Dummy calendar, built (DESIGN section 4.6 "Calendar", migration 0029). Before it shows events: the gated bootstrap apply that creates `kcw/prod/google-demo-token` (the prod apply on merge only adds the env var and the write permission, and does not need the secret); then the owner creates the dummy Google account, makes its calendar public, adds it as a test user on the OAuth consent screen while the app is unverified, registers the redirect URI `https://kentcrosswise.com/connections/demo/callback` on the OAuth client, and taps Connect demo calendar on `/connections`. Planned: a read-back check of the event id. |
 
 ## Autonomous development reliability
 

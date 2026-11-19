@@ -120,16 +120,25 @@ export default function PrivacyPage() {
             <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
           </p>
           <p className={s.text}>
+            The owner can also connect a separate demo Google account, never the owner&apos;s own, for
+            the public log. That connection asks Google for the account&apos;s address and access to its
+            own calendar events, and stores its refresh token the same way. The site adds the calendar
+            suggestions the owner accepted from published log entries to that calendar, with sanitized
+            titles and times rounded to the hour, and removes them when an entry is no longer
+            published. The account&apos;s address is the public calendar&apos;s id, linked from the log.
+            The site reads no existing events, and the demo account can be disconnected the same way.
+          </p>
+          <p className={s.text}>
             The site&apos;s use and transfer of information received from Google APIs adheres to the{" "}
             <a href="https://developers.google.com/terms/api-services-user-data-policy">
               Google API Services User Data Policy
             </a>
-            , including the Limited Use requirements. Google data is used only for the Calendar feature
+            , including the Limited Use requirements. Google data is used only for the Calendar features
             above. It is not sold, not used for advertising, not sent to language model services and
             not used to train or improve any AI or machine learning model. It is not transferred to
             anyone else, except to the site&apos;s hosting and secret store to provide that feature,
             or where the law requires it. No person reads it except the owner, or where needed for
-            security or required by law. The refresh token is deleted when Google is disconnected.
+            security or required by law. Each refresh token is deleted when its account is disconnected.
           </p>
         </section>
 

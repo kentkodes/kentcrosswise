@@ -123,7 +123,7 @@ describe("0002 agent system", () => {
         if (r[0]!.ok) readable.push(`${p} ${rel}`);
       }
     }
-    // 0006 adds the sanitized connected-office views (office-projection.test.ts checks them); 0027 the public log views.
+    // 0006 adds the sanitized connected-office views (office-projection.test.ts checks them); 0027 the public log views; 0029 the dummy-calendar views.
     expect(readable.sort()).toEqual(
       [
         "v_office_events",
@@ -132,6 +132,8 @@ describe("0002 agent system", () => {
         "v_office_state",
         "v_office_tasks",
         "v_public_agent_events",
+        "v_public_demo_calendar",
+        "v_public_demo_events",
         "v_public_log_counts",
         "v_public_records",
       ].map(
@@ -143,7 +145,7 @@ describe("0002 agent system", () => {
       `SELECT count(*)::int AS n FROM information_schema.column_privileges
        WHERE grantee = 'web_public' AND table_name NOT IN (
          'v_public_agent_events', 'v_office_events', 'v_office_executions', 'v_office_invalidations', 'v_office_state', 'v_office_tasks',
-         'v_public_records', 'v_public_log_counts')`,
+         'v_public_records', 'v_public_log_counts', 'v_public_demo_events', 'v_public_demo_calendar')`,
     );
     expect(cols[0]!.n).toBe(0);
   });

@@ -29,8 +29,9 @@ Domain verification-email completion, renewal/billing health, the optional budge
 ## Hub feature setup (Phase 3)
 
 1. **Google Calendar:** enable the Google Calendar API. Add the incremental scope `calendar.events.owned`; request offline consent and store the refresh token in `kcw/prod/google-owner-token`. Verify production consent warnings/re-consent and token behavior.
-2. **LangSmith and model runtime:** verify required runtime key/account readiness without exposing values; secret presence alone does not prove model calls or trace flushing.
-3. **iPhone push:** build VAPID subscriptions, manifest/service worker and an in-app permission gesture; then test after Add to Home Screen on a supported iPhone. Store VAPID keys in `kcw/prod/web`.
+2. **Demo calendar (public log, PL7):** create a separate dummy Google account (never the owner's) and make its primary calendar public (Settings, Access permissions, "Make available to public", see all event details). While the OAuth app is unverified, add the account as a test user on the consent screen. On the OAuth client, add the authorized redirect URI `https://kentcrosswise.com/connections/demo/callback`. The secret `kcw/prod/google-demo-token` must exist (bootstrap apply). Then, signed in as the owner, tap "Connect demo calendar" on `/connections` and pick the dummy account; the owner's own account is refused.
+3. **LangSmith and model runtime:** verify required runtime key/account readiness without exposing values; secret presence alone does not prove model calls or trace flushing.
+4. **iPhone push:** build VAPID subscriptions, manifest/service worker and an in-app permission gesture; then test after Add to Home Screen on a supported iPhone. Store VAPID keys in `kcw/prod/web`.
 
 ## Operational references
 

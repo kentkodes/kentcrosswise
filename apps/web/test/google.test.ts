@@ -16,6 +16,9 @@ import {
 vi.mock("../src/app/(owner)/connections/actions", () => ({
   connectGoogleAction: async () => {},
   disconnectGoogleAction: async () => {},
+  connectDemoCalendarAction: async () => {},
+  disconnectDemoCalendarAction: async () => {},
+  syncDemoCalendarAction: async () => {},
 }));
 const { ConnectionView } = await import("../src/app/(owner)/connections/connection-view");
 

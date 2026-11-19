@@ -347,13 +347,13 @@ describe("0006 office projection grants", () => {
     }
   }
 
-  it("web_public holds exactly SELECT on the five sanitized views and the two public log views, beyond its 0001/0002 grants", async () => {
+  it("web_public holds exactly SELECT on the five sanitized views and the four public log views, beyond its 0001/0002 grants", async () => {
     const { rows } = await db.query<{ obj: string; priv: string }>(
       `SELECT c.relname AS obj, a.privilege_type AS priv FROM pg_class c, aclexplode(c.relacl) a
         WHERE a.grantee = 'web_public'::regrole ORDER BY 1, 2`,
     );
-    // 0027 adds the public log views (PL4); nothing else.
-    expect(rows).toEqual([...VIEWS, "v_public_agent_events", "v_public_log_counts", "v_public_records"].sort().map((obj) => ({ obj, priv: "SELECT" })));
+    // 0027 adds the public log views (PL4) and 0029 the dummy-calendar views (PL7); nothing else.
+    expect(rows).toEqual([...VIEWS, "v_public_agent_events", "v_public_demo_calendar", "v_public_demo_events", "v_public_log_counts", "v_public_records"].sort().map((obj) => ({ obj, priv: "SELECT" })));
     const { rows: cols } = await db.query(
       `SELECT 1 FROM pg_attribute at, aclexplode(at.attacl) a WHERE a.grantee = 'web_public'::regrole`,
     );

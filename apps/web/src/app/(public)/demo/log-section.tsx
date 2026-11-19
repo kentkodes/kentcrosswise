@@ -1,9 +1,23 @@
 "use client";
 // The /demo Log tab (PL5): the owner's published entries, newest first, each with its sanitized text, a one-line
 // outcome and an Evidence disclosure listing every step in plain words and the read-back checks (PL6). Withheld
-// records are only counted. The accuracy lines are counted from the published records only.
+// records are only counted. The accuracy lines are counted from the published records only. The calendar (PL7)
+// lists the events mirrored into a separate dummy Google account, each linked to its record, and links to that
+// public calendar (no embed).
 // Loaded in the browser from GET /api/public/log (public pages may not import server code, D10).
-import { accuracyLines, checkText, hourLabel, isMine, isProblem, KIND_LABEL, stepText, summary, type LogRecord } from "../_site/public-log";
+import {
+  accuracyLines,
+  checkText,
+  eventWhen,
+  hourLabel,
+  isMine,
+  isProblem,
+  KIND_LABEL,
+  stepText,
+  summary,
+  type LogCalendar,
+  type LogRecord,
+} from "../_site/public-log";
 import { usePublicLog } from "../_site/use-public-log";
 import d from "./demo.module.css";
 
@@ -38,6 +52,7 @@ export function LogSection({ titleId }: { titleId: string }) {
           <p className={d.muted}>Counted from the published records only, by my verdicts.</p>
         </section>
       ) : null}
+      {log?.calendar ? <CalendarSection calendar={log.calendar} shown={new Set(log.records.map((r) => r.id))} /> : null}
       {log && log.records.length === 0 ? <p className={d.note}>Nothing published yet.</p> : null}
       {log && log.records.length > 0 ? (
         <ol className={d.records} aria-label="Published entries">
@@ -50,10 +65,43 @@ export function LogSection({ titleId }: { titleId: string }) {
   );
 }
 
+function CalendarSection({ calendar, shown }: { calendar: LogCalendar; shown: ReadonlySet<string> }) {
+  return (
+    <section className={d.accuracy} aria-label="Demo calendar">
+      <p className={d.cardLabel}>Demo calendar</p>
+      <p className={d.muted}>
+        Calendar suggestions I added from published contact notes, mirrored to a separate demo Google account: titles
+        sanitized like the records, times rounded to the hour.
+      </p>
+      {calendar.events.length > 0 ? (
+        <ul className={d.accuracyList} aria-label="Calendar events">
+          {calendar.events.map((e) => (
+            <li key={`${e.recordId}-${e.start}-${e.title}`}>
+              <time className={d.mono} dateTime={e.start}>
+                {eventWhen(e)}
+              </time>{" "}
+              · {shown.has(e.recordId) ? <a href={`#r-${e.recordId}`}>{e.title}</a> : e.title}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={d.muted}>{calendar.link ? "No events yet." : "The demo calendar is not connected yet."}</p>
+      )}
+      {calendar.link ? (
+        <p>
+          <a href={calendar.link} rel="noopener noreferrer" target="_blank">
+            Open the public calendar
+          </a>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function RecordItem({ r }: { r: LogRecord }) {
   const outcome = summary(r);
   return (
-    <li className={d.record}>
+    <li className={d.record} id={`r-${r.id}`}>
       <div className={d.recordMeta}>
         <span className={d.route}>{KIND_LABEL[r.kind]}</span>
         <time className={d.mono} dateTime={r.capturedHour}>

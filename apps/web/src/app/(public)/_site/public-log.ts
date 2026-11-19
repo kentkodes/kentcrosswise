@@ -2,6 +2,7 @@
 // file has its own copy of the record shape served by GET /api/public/log, a strict parser that keeps only those
 // fields (anything else is dropped), and the plain-words text for each step line. Pure: no React, no clock.
 // PL6: each record's read-back checks and the check-list version, and the accuracy aggregates over published records.
+// PL7: the dummy calendar: the link to its public Google Calendar and the stored copies of its mirrored events.
 
 export const LOG_URL = "/api/public/log";
 
@@ -59,8 +60,26 @@ export interface LogCounts {
   awaitingReview: number;
 }
 
+/** One event of the dummy calendar (PL7): its record's public id, the sanitized title, and hours in UTC. */
+export interface LogCalendarEvent {
+  recordId: string;
+  title: string;
+  allDay: boolean;
+  start: string;
+  end: string;
+}
+
+export interface LogCalendar {
+  /** The dummy account's public Google Calendar; null before it is connected. */
+  link: string | null;
+  events: LogCalendarEvent[];
+}
+
+/** The only link the calendar may carry: Google Calendar's public page of one calendar. */
+export const CALENDAR_LINK_PREFIX = "https://calendar.google.com/calendar/embed?src=";
+
 export type PublicLog =
-  | { available: true; label: string; counts: LogCounts; accuracy: LogAccuracy | null; records: LogRecord[] }
+  | { available: true; label: string; counts: LogCounts; accuracy: LogAccuracy | null; records: LogRecord[]; calendar: LogCalendar | null }
   | { available: false; label: string; note: string };
 
 const isKind = (v: unknown): v is Kind => typeof v === "string" && (KINDS as readonly string[]).includes(v);
@@ -107,6 +126,33 @@ function parseAccuracy(v: unknown): LogAccuracy | null {
   return { routes, links: { confirmed: lk.confirmed, changed: lk.changed }, calendar: { added: cal.added, dismissed: cal.dismissed } };
 }
 
+const RECORD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// An encoded address only: letters, digits and the escapes encodeURIComponent writes for "@", "%" and "+".
+const CALENDAR_SRC = /^[A-Za-z0-9._~%-]{3,600}$/;
+
+function parseCalendarEvent(v: unknown): LogCalendarEvent | null {
+  if (v === null || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.recordId !== "string" || !RECORD_ID.test(o.recordId)) return null;
+  if (typeof o.title !== "string" || o.title.length === 0 || o.title.length > 500) return null;
+  if (typeof o.allDay !== "boolean" || !isHour(o.start) || !isHour(o.end) || Date.parse(o.end) <= Date.parse(o.start)) return null;
+  return { recordId: o.recordId, title: o.title, allDay: o.allDay, start: o.start, end: o.end };
+}
+
+/** The calendar, or null when absent or malformed (the page then leaves it out). Malformed events are skipped. */
+function parseCalendar(v: unknown): LogCalendar | null {
+  if (v === null || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.events)) return null;
+  let link: string | null = null;
+  if (typeof o.link === "string") {
+    if (!o.link.startsWith(CALENDAR_LINK_PREFIX) || !CALENDAR_SRC.test(o.link.slice(CALENDAR_LINK_PREFIX.length))) return null;
+    link = o.link;
+  } else if (o.link !== null) return null;
+  const events = o.events.map(parseCalendarEvent).filter((e): e is LogCalendarEvent => e !== null);
+  return { link, events };
+}
+
 function parseRecord(v: unknown): LogRecord | null {
   if (v === null || typeof v !== "object") return null;
   const o = v as Record<string, unknown>;
@@ -147,10 +193,19 @@ export function parsePublicLog(v: unknown): PublicLog | null {
     counts: { published: c.published, withheld: c.withheld, awaitingReview: c.awaitingReview },
     accuracy: parseAccuracy(o.accuracy),
     records,
+    calendar: parseCalendar(o.calendar),
   };
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** When a calendar event is: "1 Dec 2026, all day", "1 Dec 2026, 10:00-11:00 UTC", or both ends in full. */
+export function eventWhen(e: Pick<LogCalendarEvent, "allDay" | "start" | "end">): string {
+  const day = (iso: string) => hourLabel(iso).split(",")[0] ?? "";
+  if (e.allDay) return `${day(e.start)}, all day`;
+  if (day(e.start) === day(e.end)) return `${day(e.start)}, ${e.start.slice(11, 16)}-${e.end.slice(11, 16)} UTC`;
+  return `${hourLabel(e.start)} to ${hourLabel(e.end)}`;
+}
 
 /** "18 Nov 2026, 14:00 UTC" (the hour is already rounded by the server). */
 export function hourLabel(iso: string): string {

@@ -22,5 +22,18 @@ test.describe("as the preview owner", () => {
     await expect(google.getByText("Not connected")).toBeVisible();
     await expect(google.getByText(/Google is not configured here/)).toBeVisible();
     await expect(google.getByRole("button")).toHaveCount(0);
+
+    // The demo calendar (PL7): its own region, also not configured in previews, with its stored state.
+    const demo = page.getByTestId("demo-calendar");
+    await expect(demo.getByRole("heading", { name: "Demo calendar" })).toBeVisible();
+    await expect(demo.getByText("Not connected")).toBeVisible();
+    await expect(demo.getByText(/The demo calendar is not configured here/)).toBeVisible();
+    await expect(demo.getByTestId("demo-calendar-id")).toHaveText("Calendar: none yet");
+    await expect(demo.getByRole("button")).toHaveCount(0);
+    for (const width of [320, 375]) {
+      await page.setViewportSize({ width, height: 800 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await demo.screenshot({ path: test.info().outputPath("demo-calendar-320.png") });
   });
 });
