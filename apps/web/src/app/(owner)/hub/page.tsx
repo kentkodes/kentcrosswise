@@ -3,7 +3,7 @@ import { listRecentEntries, listUnresolvedEntries, MAX_CAPTURE_CHARS, type Entry
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
 import { listWithheldRetry, type WithheldItem } from "@/server/publish";
-import { listAwaitingReview, type ReviewItem } from "@/server/review";
+import { contactOptions, listAwaitingReview, type ReviewItem } from "@/server/review";
 import { routingEnabled } from "@/server/router";
 import { isSuccessNotice, noticeText } from "../notices";
 import { OwnerFrame } from "../owner-frame";
@@ -16,7 +16,14 @@ import { ReviewEntry, WithheldEntry } from "./review-item";
 
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
 
-async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; review?: ReviewItem[]; withheld?: WithheldItem[]; problem?: string }> {
+async function loadRecent(): Promise<{
+  rows?: EntryRow[];
+  unresolved?: EntryRow[];
+  review?: ReviewItem[];
+  withheld?: WithheldItem[];
+  contacts?: { id: string; name: string }[];
+  problem?: string;
+}> {
   try {
     return await withDb(
       "web_rw",
@@ -25,6 +32,7 @@ async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[
         unresolved: await listUnresolvedEntries(db),
         review: await listAwaitingReview(db),
         withheld: await listWithheldRetry(db),
+        contacts: await contactOptions(db),
       }),
       { readOnly: true },
     );
@@ -41,7 +49,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
   const notice = noticeText(code);
   const ok = isSuccessNotice(code);
   const routing = routingEnabled(process.env);
-  const { rows, unresolved, review, withheld, problem } = await loadRecent();
+  const { rows, unresolved, review, withheld, contacts, problem } = await loadRecent();
 
   return (
     <OwnerFrame title="Hub" current="/hub">
@@ -81,7 +89,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
         {problem ? null : review && review.length > 0 ? (
           <ol className={s.list} data-testid="review-entries">
             {review.map((e) => (
-              <ReviewEntry key={e.id} e={e} routing={routing} />
+              <ReviewEntry key={e.id} e={e} routing={routing} contacts={contacts} />
             ))}
           </ol>
         ) : (

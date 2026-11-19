@@ -35,9 +35,13 @@ export interface PublicRecord {
   checksVersion: number | null;
 }
 
-/** Route accuracy per model (records the model filed that the owner confirmed or corrected) and calendar acceptance. */
+/**
+ * Route accuracy per model (records the model filed that the owner confirmed or corrected), contact-link precision
+ * (automatic links the owner kept or changed, PL6b) and calendar acceptance.
+ */
 export interface PublicAccuracy {
   routes: { model: string; confirmed: number; corrected: number }[];
+  links: { confirmed: number; changed: number };
   calendar: { added: number; dismissed: number };
 }
 
@@ -130,6 +134,7 @@ export function publicStep(step: unknown, ts: unknown, detail: unknown): PublicS
     case "contact_chosen":
       if (typeof d.linked !== "boolean") return null;
       out.linked = d.linked;
+      if (d.kept === true || d.kept === false) out.kept = d.kept;
       return out;
   }
 }
@@ -156,11 +161,13 @@ function rebuildSteps(v: unknown): PublicStep[] | null {
 /**
  * The aggregates over published records' step lines. Route accuracy: a record counts once, under the model of its
  * first model route, by the owner's last verdict after it (confirmed or corrected); records without one are not
- * counted. Calendar: a record's last added or dismissed verdict.
+ * counted. Contact links: after a record's last automatic link (contact_linked "linked"), the owner's last contact
+ * choice: kept is confirmed, anything else changed. Calendar: a record's last added or dismissed verdict.
  */
 export function accuracyOf(records: readonly PublicStep[][]): PublicAccuracy {
   const routes = new Map<string, { confirmed: number; corrected: number }>();
   const calendar = { added: 0, dismissed: 0 };
+  const links = { confirmed: 0, changed: 0 };
   for (const steps of records) {
     const first = steps.findIndex((s) => s.step === "routed" && s.by === "model");
     if (first >= 0) {
@@ -175,11 +182,20 @@ export function accuracyOf(records: readonly PublicStep[][]): PublicAccuracy {
         routes.set(m, row);
       }
     }
+    const linked = steps.map((s) => (s.step === "contact_linked" ? s.outcome : null)).lastIndexOf("linked");
+    if (linked >= 0) {
+      const choice = steps
+        .slice(linked + 1)
+        .filter((s) => s.step === "contact_chosen")
+        .pop();
+      if (choice) links[choice.kept === true ? "confirmed" : "changed"]++;
+    }
     const cal = steps.filter((s) => s.step === "calendar_added" || s.step === "calendar_dismissed").pop();
     if (cal) calendar[cal.step === "calendar_added" ? "added" : "dismissed"]++;
   }
   return {
     routes: [...routes].map(([model, n]) => ({ model, ...n })).sort((a, b) => a.model.localeCompare(b.model)),
+    links,
     calendar,
   };
 }

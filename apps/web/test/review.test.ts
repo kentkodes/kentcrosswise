@@ -136,11 +136,72 @@ describe("owner review (web_rw on PGlite)", () => {
     const steps = await run((db) => listSteps(db, id));
     const verdicts = steps.filter((s) => ["contact_chosen", "calendar_dismissed", "calendar_added"].includes(s.step));
     expect(verdicts.map((s) => [s.step, s.detail])).toEqual([
-      ["contact_chosen", { note_id: note, linked: false }],
+      ["contact_chosen", { note_id: note, linked: false, kept: false }],
       ["calendar_dismissed", { suggestion_id: dismissed }],
       ["calendar_added", { suggestion_id: added }],
     ]);
     expect(await types(id)).toContain("routed");
+  });
+});
+
+describe("contact-link verdicts (PL6b)", () => {
+  let pg: PGlite;
+  const run: DbRun = (fn) => runAs(pglitePool(pg), "web_rw", fn);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const contactId = async (name: string) => (await pg.query<{ id: string }>("SELECT id FROM contacts WHERE name = $1", [name])).rows[0]!.id;
+  const noteOf = async (entry: string) => (await pg.query<{ id: string }>("SELECT id FROM crm_notes WHERE entry_id = $1", [entry])).rows[0]!.id;
+  const chosen = async (entry: string) =>
+    (await run((db) => listSteps(db, entry))).filter((s) => s.step === "contact_chosen").map((s) => s.detail);
+  const note = async (text: string) => {
+    const id = await run((db) => saveEntry(db, text));
+    await routeEntry(run, id, routeAs("crm_note"));
+    await prepareSpans(run, id, spans([]));
+    return id;
+  };
+  const item = async (id: string) => (await run((db) => listAwaitingReview(db))).find((r) => r.id === id);
+
+  beforeAll(async () => {
+    pg = await freshDb();
+    for (const name of ["Bram Tull", "Cleo Varn"]) {
+      await run((db) => createContact(db, { name, aliases: [], howKnown: null, birthday: null, notes: null, tags: [] }));
+    }
+  });
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  it("the review row shows an automatic link, and Correct confirms it as a kept contact", async () => {
+    const id = await note("Coffee with Bram Tull");
+    expect((await item(id))!.link).toEqual({ noteId: await noteOf(id), contactId: await contactId("Bram Tull"), contactName: "Bram Tull", status: "linked", confirmsLink: true });
+    await run((db) => confirmEntry(db, id));
+    expect(await chosen(id)).toEqual([{ note_id: await noteOf(id), linked: true, kept: true }]);
+  });
+
+  it("changing the contact first is a changed verdict, and Correct then adds no second one", async () => {
+    const id = await note("Walk with Bram Tull");
+    const [n1, cleo] = [await noteOf(id), await contactId("Cleo Varn")];
+    await run((db) => resolveCrmNote(db, n1, cleo));
+    expect((await item(id))!.link).toMatchObject({ contactName: "Cleo Varn", confirmsLink: false });
+    await run((db) => confirmEntry(db, id));
+    expect(await chosen(id)).toEqual([{ note_id: await noteOf(id), linked: true, kept: false }]);
+  });
+
+  it("keeping the same contact in the picker counts as kept; a note with no link gets no verdict from Correct", async () => {
+    const kept = await note("Lunch with Bram Tull");
+    const [n2, bram] = [await noteOf(kept), await contactId("Bram Tull")];
+    await run((db) => resolveCrmNote(db, n2, bram));
+    expect(await chosen(kept)).toEqual([{ note_id: await noteOf(kept), linked: true, kept: true }]);
+
+    const none = await note("Lunch with nobody known");
+    expect((await item(none))!.link).toMatchObject({ status: "none", contactId: null, confirmsLink: false });
+    await run((db) => confirmEntry(db, none));
+    expect(await chosen(none)).toEqual([]);
+  });
+
+  it("only contact notes carry link info", async () => {
+    const id = await run((db) => saveEntry(db, "Synthetic idea"));
+    await routeEntry(run, id, routeAs("idea"));
+    expect(await item(id)).not.toHaveProperty("link");
   });
 });
 

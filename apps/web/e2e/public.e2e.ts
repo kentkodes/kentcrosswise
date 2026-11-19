@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // PL5: the home page leads with the public log; /demo is the log (default tab) and the Essays tab. Record data is
 // served by the real API on previews (no published records there), so these tests route a fixed synthetic reply.
-const LOG = { available: true, label: "Tasks published automatically after sanitization; some records withheld for privacy/security", counts: { published: 1, withheld: 2, awaitingReview: 3 }, records: [{ id: "00000000-0000-4000-8000-000000000001", capturedHour: "2026-11-18T14:00:00.000Z", kind: "todo", text: "Book the [place] table for [Person 1]", steps: [{ step: "captured", hour: "2026-11-18T14:00:00.000Z" }, { step: "route_failed", hour: "2026-11-18T14:00:00.000Z", code: "provider_error", attempt: 1 }, { step: "routed", hour: "2026-11-18T14:00:00.000Z", kind: "idea", by: "model", confidence: 0.91, model: "deepseek-flash" }, { step: "derived", hour: "2026-11-18T14:00:00.000Z", kind: "idea" }, { step: "corrected", hour: "2026-11-18T15:00:00.000Z", from: "idea", to: "todo" }, { step: "derived", hour: "2026-11-18T15:00:00.000Z", kind: "todo", moved_from: "idea" }], checks: [{ check: "derived_rows", result: "pass" }, { check: "usage_recorded", result: "fail" }, { check: "failures_resolved", result: "pass" }], checksVersion: 1 }], accuracy: { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], calendar: { added: 1, dismissed: 1 } } };
+const LOG = { available: true, label: "Tasks published automatically after sanitization; some records withheld for privacy/security", counts: { published: 1, withheld: 2, awaitingReview: 3 }, records: [{ id: "00000000-0000-4000-8000-000000000001", capturedHour: "2026-11-18T14:00:00.000Z", kind: "todo", text: "Book the [place] table for [Person 1]", steps: [{ step: "captured", hour: "2026-11-18T14:00:00.000Z" }, { step: "route_failed", hour: "2026-11-18T14:00:00.000Z", code: "provider_error", attempt: 1 }, { step: "routed", hour: "2026-11-18T14:00:00.000Z", kind: "idea", by: "model", confidence: 0.91, model: "deepseek-flash" }, { step: "derived", hour: "2026-11-18T14:00:00.000Z", kind: "idea" }, { step: "corrected", hour: "2026-11-18T15:00:00.000Z", from: "idea", to: "todo" }, { step: "derived", hour: "2026-11-18T15:00:00.000Z", kind: "todo", moved_from: "idea" }], checks: [{ check: "derived_rows", result: "pass" }, { check: "usage_recorded", result: "fail" }, { check: "failures_resolved", result: "pass" }], checksVersion: 1 }], accuracy: { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], links: { confirmed: 1, changed: 1 }, calendar: { added: 1, dismissed: 1 } } };
 const routeLog = (page: Page) => page.route("**/api/public/log", (route) => route.fulfill({ json: LOG }));
 
 test("public home leads with the log and links to it", async ({ page }) => {
@@ -41,7 +41,7 @@ test("the log tab shows counts, the label, the record and its evidence", async (
   const accuracy = page.getByRole("region", { name: "Accuracy" });
   await expect(accuracy.getByText("Model filings confirmed: 3 of 4 (75%), deepseek-flash")).toBeVisible();
   await expect(accuracy.getByText("Calendar suggestions added: 1 of 2")).toBeVisible();
-  await expect(accuracy.getByText("Contact-link precision: planned")).toBeVisible();
+  await expect(accuracy.getByText("Contact links confirmed: 1 of 2 (50%)")).toBeVisible();
 });
 
 test("the log tab says so when nothing is published, and when the log is unavailable", async ({ page }) => {

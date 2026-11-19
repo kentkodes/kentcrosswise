@@ -21,7 +21,8 @@ export interface StepDetail {
   calendar_suggested: { outcome: "created" | "none" | "no-zone" | "cap" | "invalid" | "failed" | "timeout"; note_id: string; suggestion_id?: string };
   corrected: { from: RouteKind; to: RouteKind };
   confirmed: { kind: RouteKind };
-  contact_chosen: { note_id: string; linked: boolean };
+  /** kept: the owner kept the contact the note was already linked to (PL6b: a confirmed automatic link). */
+  contact_chosen: { note_id: string; linked: boolean; kept?: boolean };
   calendar_added: { suggestion_id: string };
   calendar_dismissed: { suggestion_id: string };
 }

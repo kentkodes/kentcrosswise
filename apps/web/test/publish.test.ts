@@ -154,7 +154,7 @@ describe("publication (web_rw writes, web_public reads)", () => {
     const second = (await stored(id))!;
     expect(second.public_id).toBe(first.public_id);
     expect(second.body).toBe("Met [Person 1] near [place]");
-    expect(second.steps.at(-1)).toEqual({ step: "contact_chosen", hour: expect.stringMatching(HOUR), linked: false });
+    expect(second.steps.at(-1)).toEqual({ step: "contact_chosen", hour: expect.stringMatching(HOUR), linked: false, kept: false });
   });
 
   it("withholds a record with a step that does not map to an allowed line", async () => {

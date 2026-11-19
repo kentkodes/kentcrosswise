@@ -49,6 +49,7 @@ export interface LogRecord {
 
 export interface LogAccuracy {
   routes: { model: string; confirmed: number; corrected: number }[];
+  links: { confirmed: number; changed: number };
   calendar: { added: number; dismissed: number };
 }
 
@@ -95,13 +96,15 @@ function parseAccuracy(v: unknown): LogAccuracy | null {
   if (!Array.isArray(o.routes) || o.calendar === null || typeof o.calendar !== "object") return null;
   const cal = o.calendar as Record<string, unknown>;
   if (!isCount(cal.added) || !isCount(cal.dismissed)) return null;
+  const lk = o.links !== null && typeof o.links === "object" ? (o.links as Record<string, unknown>) : {};
+  if (!isCount(lk.confirmed) || !isCount(lk.changed)) return null;
   const routes: LogAccuracy["routes"] = [];
   for (const r of o.routes as unknown[]) {
     const x = r !== null && typeof r === "object" ? (r as Record<string, unknown>) : {};
     if (typeof x.model !== "string" || !(x.model === "unknown" || MODEL.test(x.model)) || !isCount(x.confirmed) || !isCount(x.corrected)) return null;
     routes.push({ model: x.model, confirmed: x.confirmed, corrected: x.corrected });
   }
-  return { routes, calendar: { added: cal.added, dismissed: cal.dismissed } };
+  return { routes, links: { confirmed: lk.confirmed, changed: lk.changed }, calendar: { added: cal.added, dismissed: cal.dismissed } };
 }
 
 function parseRecord(v: unknown): LogRecord | null {
@@ -216,6 +219,7 @@ export function stepText(s: LogStep): string {
     case "confirmed":
       return "I confirmed how it was filed";
     case "contact_chosen":
+      if (s.kept === true) return "I confirmed the linked contact";
       return s.linked === true ? "I chose the contact it is about" : "I marked it as about no contact";
     case "calendar_added":
       return "I added the suggested event to my calendar";
@@ -282,7 +286,8 @@ export function accuracyLines(a: LogAccuracy): string[] {
   }
   const decided = a.calendar.added + a.calendar.dismissed;
   lines.push(decided === 0 ? "Calendar suggestions added: none decided yet" : `Calendar suggestions added: ${a.calendar.added} of ${decided}`);
-  lines.push("Contact-link precision: planned");
+  const judged = a.links.confirmed + a.links.changed;
+  lines.push(judged === 0 ? "Contact links confirmed: none reviewed yet" : `Contact links confirmed: ${a.links.confirmed} of ${judged} (${pct(a.links.confirmed, judged)}%)`);
   return lines;
 }
 
