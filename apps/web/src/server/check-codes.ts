@@ -3,7 +3,8 @@
 // stays free of the owner-side modules.
 
 /** The version of the check list below. Raise it whenever a check in checks.ts is added, removed or changes meaning. */
-export const CHECKS_VERSION = 1;
+// v2 (PL6b): link_name also applies after the owner kept the automatic link (a kept contact choice).
+export const CHECKS_VERSION = 2;
 
 export const CHECK_CODES = [
   "derived_rows", // the entry has exactly the derived row its kind makes (none for agent_request)

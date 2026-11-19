@@ -90,7 +90,8 @@ export function evaluateChecks(f: CheckFacts): PublicCheck[] {
 
   if (f.kind === "crm_note") {
     add("link_recorded", f.steps.some((s) => s.step === "contact_linked"));
-    const chosen = f.steps.some((s) => s.step === "contact_chosen");
+    // The name check is about the automatic link: left out once the owner chose another contact or none.
+    const chosen = f.steps.some((s) => s.step === "contact_chosen" && s.detail.kept !== true);
     if (f.note && f.note.linkStatus === "linked" && !chosen) add("link_name", f.note.names.some((n) => n.trim() !== "" && containsWord(f.note!.body, n)));
     add("calendar_recorded", f.steps.some((s) => s.step === "calendar_suggested"));
     if (f.suggestion) {

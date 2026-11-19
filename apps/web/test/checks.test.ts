@@ -109,6 +109,10 @@ describe("evaluateChecks", () => {
       expect(allDay("2026-11-17T05:00:00.000Z")).toBe("fail");
     });
 
+    it("keeps the name check after the owner kept the automatic link (list v2)", () => {
+      expect(result(note({ steps: [step("contact_linked", { outcome: "linked" }), step("contact_chosen", { linked: true, kept: true })] })).link_name).toBe("pass");
+    });
+
     it("leaves out the name check when the owner chose the contact or nothing was linked", () => {
       expect(result(note({ steps: [step("contact_linked", { outcome: "ambiguous" }), step("contact_chosen", { linked: true })] }))).not.toHaveProperty("link_name");
       expect(result(note({ note: { body: "x", linkStatus: "none", names: [] } }))).not.toHaveProperty("link_name");
@@ -151,12 +155,18 @@ describe("accuracyOf", () => {
       [s("calendar_suggested", { outcome: "created" }), s("calendar_added")],
       [s("calendar_suggested", { outcome: "created" }), s("calendar_dismissed")],
       [s("calendar_suggested", { outcome: "created" })],
+      [s("contact_linked", { outcome: "linked" }), s("contact_chosen", { linked: true, kept: true })],
+      [s("contact_linked", { outcome: "linked" }), s("contact_chosen", { linked: true, kept: false })],
+      [s("contact_linked", { outcome: "linked" }), s("contact_chosen", { linked: false, kept: false })],
+      [s("contact_linked", { outcome: "ambiguous" }), s("contact_chosen", { linked: true, kept: false })], // not an automatic link
+      [s("contact_linked", { outcome: "linked" })], // no verdict
     ]);
     expect(a).toEqual({
       routes: [
         { model: "deepseek-flash", confirmed: 1, corrected: 1 },
         { model: "unknown", confirmed: 1, corrected: 0 },
       ],
+      links: { confirmed: 1, changed: 2 },
       calendar: { added: 1, dismissed: 1 },
     });
   });

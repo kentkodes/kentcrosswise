@@ -89,12 +89,34 @@ export function publicPreview(rawText: string, p: PublicInputs | null, contacts:
   return r.ok ? { state: "ready", text: r.text } : { state: "withheld", reason: r.reason };
 }
 
+/** A contact note's link as the review row shows it (PL6b): Correct also confirms an automatic link. */
+export interface ReviewLink {
+  noteId: string;
+  contactId: string | null;
+  contactName: string | null;
+  status: "linked" | "ambiguous" | "none";
+  /** True when Correct will also confirm the link: linked automatically and not yet chosen by the owner. */
+  confirmsLink: boolean;
+}
+
 export interface ReviewItem {
   id: string;
   createdAt: string;
   rawText: string;
   routeKind: RouteKind;
   preview: PublicPreview;
+  /** Only for contact notes. */
+  link?: ReviewLink | null;
+}
+
+/** An automatic link the owner has not judged: the note is linked, its last link step linked it, no owner choice. */
+const AUTO_LINK = `n.link_status = 'linked' AND n.contact_id IS NOT NULL
+  AND (SELECT l.detail->>'outcome' FROM agent_events l WHERE l.entry_id = n.entry_id AND l.event_type = 'contact_linked' ORDER BY l.id DESC LIMIT 1) = 'linked'
+  AND NOT EXISTS (SELECT 1 FROM agent_events c WHERE c.entry_id = n.entry_id AND c.event_type = 'contact_chosen')`;
+
+/** Contacts for the review row's picker, by name. */
+export async function contactOptions(db: Queryable): Promise<{ id: string; name: string }[]> {
+  return (await db.query<{ id: string; name: string }>("SELECT id, name FROM contacts ORDER BY lower(name), id")).rows;
 }
 
 export async function contactNames(db: Queryable): Promise<ContactNames[]> {
@@ -113,13 +135,27 @@ export async function listAwaitingReview(db: Queryable): Promise<ReviewItem[]> {
   );
   if (rows.length === 0) return [];
   const contacts = await contactNames(db);
-  return rows.map((r) => ({
-    id: r.id,
-    createdAt: new Date(r.created_at).toISOString(),
-    rawText: r.raw_text,
-    routeKind: r.route_kind,
-    preview: publicPreview(r.raw_text, r.spans_state ? (r as PublicInputs) : null, contacts),
-  }));
+  const notes = rows.some((r) => r.route_kind === "crm_note")
+    ? (await db.query<{ entry_id: string; id: string; contact_id: string | null; name: string | null; link_status: ReviewLink["status"]; auto: boolean }>(
+        `SELECT DISTINCT ON (n.entry_id) n.entry_id, n.id, n.contact_id, c.name, n.link_status, (${AUTO_LINK}) AS auto
+           FROM crm_notes n LEFT JOIN contacts c ON c.id = n.contact_id
+          WHERE n.entry_id = ANY($1::uuid[]) ORDER BY n.entry_id, n.created_at`,
+        [rows.filter((r) => r.route_kind === "crm_note").map((r) => r.id)],
+      )).rows
+    : [];
+  return rows.map((r) => {
+    const n = notes.find((x) => x.entry_id === r.id);
+    return {
+      id: r.id,
+      createdAt: new Date(r.created_at).toISOString(),
+      rawText: r.raw_text,
+      routeKind: r.route_kind,
+      preview: publicPreview(r.raw_text, r.spans_state ? (r as PublicInputs) : null, contacts),
+      ...(r.route_kind === "crm_note"
+        ? { link: n ? { noteId: n.id, contactId: n.contact_id, contactName: n.name, status: n.link_status, confirmsLink: n.auto } : null }
+        : {}),
+    };
+  });
 }
 
 /**
@@ -140,6 +176,20 @@ export async function confirmEntry(db: Queryable, entryId: string): Promise<"ok"
     entryId,
     JSON.stringify({ kind: row.route_kind }),
   ]);
+  // PL6b (owner decision 2026-11-19): Correct on a contact note also confirms an automatic link the owner has not
+  // judged, as a kept contact choice. Like the confirmed step, a failed write fails the action.
+  if (row.route_kind === "crm_note") {
+    const note = (await db.query<{ id: string }>(
+      `SELECT n.id FROM crm_notes n WHERE n.entry_id = $1 AND ${AUTO_LINK} ORDER BY n.created_at LIMIT 1`,
+      [entryId],
+    )).rows[0];
+    if (note) {
+      await db.query("INSERT INTO agent_events (agent, event_type, entry_id, detail) VALUES ('router', 'contact_chosen', $1, $2)", [
+        entryId,
+        JSON.stringify({ note_id: note.id, linked: true, kept: true }),
+      ]);
+    }
+  }
   return "ok";
 }
 

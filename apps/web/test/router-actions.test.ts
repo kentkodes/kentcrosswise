@@ -28,7 +28,7 @@ vi.mock("@/server/outbox", async () => await import("../src/server/outbox"));
 vi.mock("@/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
 vi.mock("../src/server/router", async () => ({ ...(await import("../src/server/router")), routerFromEnv: f.routerFromEnv }));
 
-import { captureAction, reassignAction, routeAgainAction } from "../src/app/(owner)/hub/actions";
+import { captureAction, changeContactAction, reassignAction, routeAgainAction } from "../src/app/(owner)/hub/actions";
 import { reassignRoutingAction } from "../src/app/(owner)/inbox/actions";
 
 const ENTRY_ID = "8f14e45f-ceea-4671-9d3f-0b1f5c1e2a3b";
@@ -49,7 +49,8 @@ describe("owner gate", () => {
     await expect(reassignAction(form({ entry_id: ENTRY_ID, to: "todo" }))).rejects.toThrow("NEXT_REDIRECT");
     await expect(routeAgainAction(form({ entry_id: ENTRY_ID }))).rejects.toThrow("NEXT_REDIRECT");
     await expect(reassignRoutingAction(form({ entry_id: ENTRY_ID, to: "todo" }))).rejects.toThrow("NEXT_REDIRECT");
-    expect(f.requireOwner).toHaveBeenCalledTimes(3);
+    await expect(changeContactAction(form({ entry_id: ENTRY_ID, note_id: ENTRY_ID, contact_id: "" }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(f.requireOwner).toHaveBeenCalledTimes(4);
     expect(f.withDb).not.toHaveBeenCalled();
     expect(f.routerFromEnv).not.toHaveBeenCalled();
     expect(f.redirect).not.toHaveBeenCalled();
@@ -85,6 +86,21 @@ describe("reassign and route again: bad input never reaches the DB", () => {
     f.withDb.mockResolvedValueOnce({ result: "not-found", derived: null });
     await reassignRoutingAction(form({ entry_id: ENTRY_ID, to: "idea" }));
     expect(f.redirect).toHaveBeenLastCalledWith("/inbox?n=entry-not-found");
+  });
+
+  it("change contact rejects malformed ids before the DB, and reports a missing note or contact", async () => {
+    await changeContactAction(form({ entry_id: "not-a-uuid", note_id: ENTRY_ID, contact_id: "" }));
+    expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=invalid#review");
+    await changeContactAction(form({ entry_id: ENTRY_ID, note_id: ENTRY_ID, contact_id: "nope" }));
+    expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=invalid#review");
+    expect(f.withDb).not.toHaveBeenCalled();
+    f.withDb.mockResolvedValueOnce("note-not-found");
+    await changeContactAction(form({ entry_id: ENTRY_ID, note_id: ENTRY_ID, contact_id: ENTRY_ID }));
+    expect(f.withDb).toHaveBeenNthCalledWith(1, "web_rw", expect.any(Function));
+    expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=contact-not-found#review");
+    f.withDb.mockResolvedValueOnce("ok");
+    await changeContactAction(form({ entry_id: ENTRY_ID, note_id: ENTRY_ID, contact_id: "" }));
+    expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=contact-cleared#review");
   });
 
   it("route again with routing off says so and does no DB work", async () => {

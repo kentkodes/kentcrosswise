@@ -6,6 +6,7 @@ import { validTimeZone } from "../../../server/calendar";
 // Relative on purpose, like calendar above: the action tests mock the "@/server/*" modules one by one.
 import { addOwnerTerm, confirmEntry, isTermKind } from "../../../server/review";
 import { isEntryId } from "../../../server/router";
+import { isContactId, resolveCrmNote } from "../../../server/contacts";
 import { publishNow } from "../../../server/publish";
 import { parseCapture, saveEntry } from "@/server/capture";
 import { withDb } from "@/server/db";
@@ -86,6 +87,30 @@ export async function addTermAction(formData: FormData): Promise<void> {
                 : res === "not-found"
                   ? "entry-not-found"
                   : "invalid";
+    } catch (err) {
+      notice = failureNotice(err, "hub");
+    }
+  }
+  redirect(`/hub?n=${notice}#review`);
+}
+
+/**
+ * Review: changes the contact of a contact note awaiting review (entry_id, note_id, contact_id or empty for none).
+ * After an automatic link this is the owner's "wrong contact" verdict (PL6b); keeping the same contact counts as
+ * confirmed. The route still waits for Correct or a reassignment.
+ */
+export async function changeContactAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  const entryId = formData.get("entry_id");
+  const noteId = formData.get("note_id");
+  const raw = formData.get("contact_id");
+  const contactId = raw === "" || raw === null ? null : raw;
+  let notice: NoticeCode = "invalid";
+  if (isEntryId(entryId) && isContactId(noteId) && (contactId === null || isContactId(contactId))) {
+    try {
+      const res = await withDb("web_rw", (db) => resolveCrmNote(db, noteId, contactId));
+      notice = res === "ok" ? (contactId === null ? "contact-cleared" : "contact-changed") : "contact-not-found";
+      if (res === "ok") await publishNow(entryId); // a no-op until the entry is reviewed
     } catch (err) {
       notice = failureNotice(err, "hub");
     }

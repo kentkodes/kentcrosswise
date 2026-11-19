@@ -53,7 +53,7 @@ describe("parsePublicLog", () => {
 
   it("keeps known checks and the version, skips a record with an unknown check, and reads the aggregates", () => {
     const rec = (checks: unknown, checksVersion: unknown = 1) => ({ id: "a", capturedHour: H, kind: "todo", text: "x", steps: [], checks, checksVersion });
-    const accuracy = { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], calendar: { added: 1, dismissed: 2 } };
+    const accuracy = { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], links: { confirmed: 2, changed: 1 }, calendar: { added: 1, dismissed: 2 } };
     const log = parsePublicLog({
       ...good,
       accuracy,
@@ -61,8 +61,10 @@ describe("parsePublicLog", () => {
     });
     expect(log?.available && log.records).toEqual([{ id: "a", capturedHour: H, kind: "todo", text: "x", steps: [], checks: [{ check: "derived_rows", result: "pass" }], checksVersion: 1 }]);
     expect(log?.available && log.accuracy).toEqual(accuracy);
-    const bad = parsePublicLog({ ...good, accuracy: { routes: [{ model: "<b>", confirmed: 1, corrected: 0 }], calendar: { added: 0, dismissed: 0 } } });
+    const bad = parsePublicLog({ ...good, accuracy: { routes: [{ model: "<b>", confirmed: 1, corrected: 0 }], links: { confirmed: 0, changed: 0 }, calendar: { added: 0, dismissed: 0 } } });
     expect(bad?.available && bad.accuracy).toBeNull();
+    const noLinks = parsePublicLog({ ...good, accuracy: { routes: [], calendar: { added: 0, dismissed: 0 } } });
+    expect(noLinks?.available && noLinks.accuracy).toBeNull();
   });
 
   it("reads an unavailable reply, and rejects anything else", () => {
@@ -88,6 +90,8 @@ describe("step text", () => {
     [step("corrected", { from: "idea", to: "todo" }), "I corrected it from idea to todo"],
     [step("confirmed", { kind: "idea" }), "I confirmed how it was filed"],
     [step("contact_chosen", { linked: false }), "I marked it as about no contact"],
+    [step("contact_chosen", { linked: true, kept: true }), "I confirmed the linked contact"],
+    [step("contact_chosen", { linked: true, kept: false }), "I chose the contact it is about"],
     [step("calendar_added"), "I added the suggested event to my calendar"],
     [step("calendar_dismissed"), "I dismissed the suggested event"],
     [step("route_failed", { code: "<script>", attempt: 1 }), "Filing failed: an unknown error (attempt 1)"],
@@ -133,17 +137,17 @@ describe("checks and accuracy", () => {
     );
   });
 
-  it("writes the aggregate lines, including empty ones and the planned metric", () => {
-    expect(accuracyLines({ routes: [], calendar: { added: 0, dismissed: 0 } })).toEqual([
+  it("writes the aggregate lines, including empty ones", () => {
+    expect(accuracyLines({ routes: [], links: { confirmed: 0, changed: 0 }, calendar: { added: 0, dismissed: 0 } })).toEqual([
       "Model filings confirmed: none reviewed yet",
       "Calendar suggestions added: none decided yet",
-      "Contact-link precision: planned",
+      "Contact links confirmed: none reviewed yet",
     ]);
-    expect(accuracyLines({ routes: [{ model: "deepseek-flash", confirmed: 2, corrected: 1 }, { model: "unknown", confirmed: 1, corrected: 0 }], calendar: { added: 1, dismissed: 3 } })).toEqual([
+    expect(accuracyLines({ routes: [{ model: "deepseek-flash", confirmed: 2, corrected: 1 }, { model: "unknown", confirmed: 1, corrected: 0 }], links: { confirmed: 3, changed: 1 }, calendar: { added: 1, dismissed: 3 } })).toEqual([
       "Model filings confirmed: 2 of 3 (67%), deepseek-flash",
       "Model filings confirmed: 1 of 1 (100%), model not recorded",
       "Calendar suggestions added: 1 of 4",
-      "Contact-link precision: planned",
+      "Contact links confirmed: 3 of 4 (75%)",
     ]);
   });
 });

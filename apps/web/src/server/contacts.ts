@@ -258,12 +258,22 @@ async function relinkUnlinkedNotes(db: Queryable): Promise<void> {
 
 export type ResolveOutcome = "ok" | "note-not-found" | "contact-not-found";
 
-/** The owner's choice: a contact (link) or null (no contact). Closes the note's open contact_match item. */
+/**
+ * The owner's choice: a contact (link) or null (no contact). Closes the note's open contact_match item. The step
+ * records whether the owner kept the contact the note was already linked to (PL6b), so a kept automatic link counts
+ * as confirmed and any other choice after one as changed.
+ */
 export async function resolveCrmNote(db: Queryable, noteId: string, contactId: string | null): Promise<ResolveOutcome> {
   if (contactId !== null) {
     const c = await db.query("SELECT 1 FROM contacts WHERE id = $1", [contactId]);
     if (c.rows.length === 0) return "contact-not-found";
   }
+  const prev = (await db.query<{ contact_id: string | null; link_status: string }>(
+    "SELECT contact_id, link_status FROM crm_notes WHERE id = $1 FOR UPDATE",
+    [noteId],
+  )).rows[0];
+  if (!prev) return "note-not-found";
+  const kept = contactId !== null && prev.link_status === "linked" && prev.contact_id === contactId;
   const { rows } = await db.query<{ entry_id: string | null }>(
     "UPDATE crm_notes SET contact_id = $2, link_status = $3 WHERE id = $1 RETURNING entry_id",
     [noteId, contactId, contactId === null ? "none" : "linked"],
@@ -272,7 +282,7 @@ export async function resolveCrmNote(db: Queryable, noteId: string, contactId: s
   await db.query(CLOSE_MATCH_ITEM, [noteId]);
   // The owner's verdict on the contact link (public log, PL3); a note without an entry has no record.
   const entryId = rows[0]!.entry_id;
-  if (entryId) await recordStep(db, entryId, "contact_chosen", { note_id: noteId, linked: contactId !== null });
+  if (entryId) await recordStep(db, entryId, "contact_chosen", { note_id: noteId, linked: contactId !== null, kept });
   return "ok";
 }
 

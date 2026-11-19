@@ -1,11 +1,13 @@
 // One entry awaiting review (PL3): the private text, the route, the exact public text (or why it is withheld),
 // "Correct", and the shared "Change route" picker. Correct and a reassignment are the owner's verdict on the route.
+// A contact note also shows its contact and a "Change contact" picker (PL6b): Correct confirms an automatic link
+// too, and changing the contact first is the verdict that the link was wrong.
 import { ROUTE_LABELS } from "@/server/capture";
 import type { WithheldItem } from "@/server/publish";
-import type { ReviewItem as Item, WithheldReason } from "@/server/review";
+import type { ReviewItem as Item, ReviewLink, WithheldReason } from "@/server/review";
 import { formatUtc } from "../format";
 import s from "../owner.module.css";
-import { confirmAction, findNamesAction } from "./actions";
+import { changeContactAction, confirmAction, findNamesAction } from "./actions";
 import { ChangeRoute } from "./entry-row";
 import { PublicText } from "./public-text";
 
@@ -26,7 +28,9 @@ const WITHHELD: Readonly<Record<WithheldReason, string>> = {
 /** Withheld reasons that a new name check can change. */
 const RETRY: ReadonlySet<WithheldReason> = new Set(["cap", "failed", "invalid", "timeout"]);
 
-export function ReviewEntry({ e, routing }: { e: Item; routing: boolean }) {
+export type ContactOption = { id: string; name: string };
+
+export function ReviewEntry({ e, routing, contacts = [] }: { e: Item; routing: boolean; contacts?: ContactOption[] }) {
   const p = e.preview;
   return (
     <li data-entry-id={e.id}>
@@ -56,6 +60,7 @@ export function ReviewEntry({ e, routing }: { e: Item; routing: boolean }) {
           ) : null}
         </div>
       )}
+      {e.link ? <ContactRow entryId={e.id} link={e.link} contacts={contacts} /> : null}
       <div className={s.formRow}>
         <form action={confirmAction}>
           <input type="hidden" name="entry_id" value={e.id} />
@@ -66,6 +71,41 @@ export function ReviewEntry({ e, routing }: { e: Item; routing: boolean }) {
       </div>
       <ChangeRoute e={e} routing={routing} />
     </li>
+  );
+}
+
+function ContactRow({ entryId, link, contacts }: { entryId: string; link: ReviewLink; contacts: ContactOption[] }) {
+  const label =
+    link.status === "linked" && link.contactName !== null
+      ? `Contact: ${link.contactName}`
+      : link.status === "ambiguous"
+        ? "More than one contact matches."
+        : "No contact linked.";
+  return (
+    <div className={s.formRow} data-field="contact">
+      <p className={s.note}>
+        {label}
+        {link.confirmsLink ? " Correct also confirms this contact." : null}
+      </p>
+      <form action={changeContactAction} className={s.formRow}>
+        <input type="hidden" name="entry_id" value={entryId} />
+        <input type="hidden" name="note_id" value={link.noteId} />
+        <label className={s.fieldLabel}>
+          Contact
+          <select className={s.field} name="contact_id" defaultValue={link.contactId ?? ""}>
+            <option value="">No contact</option>
+            {contacts.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className={s.button} type="submit">
+          Change contact
+        </button>
+      </form>
+    </div>
   );
 }
 
