@@ -1,11 +1,24 @@
 // PL5: the browser-side copy of the public log (D10: public pages cannot import server code). The parser keeps only
 // the public shape, and every step line reads in plain words. Synthetic data only.
 import { describe, expect, it } from "vitest";
-import { hourLabel, isMine, isProblem, parsePublicLog, stepText, summary, type LogRecord, type LogStep } from "../src/app/(public)/_site/public-log";
+import {
+  accuracyLines,
+  checksSummary,
+  checkText,
+  hourLabel,
+  isMine,
+  isProblem,
+  parsePublicLog,
+  stepText,
+  summary,
+  type LogCheck,
+  type LogRecord,
+  type LogStep,
+} from "../src/app/(public)/_site/public-log";
 
 const H = "2026-11-18T14:00:00.000Z";
 const step = (s: string, extra: Record<string, string | number | boolean> = {}): LogStep => ({ step: s, hour: H, ...extra });
-const record = (steps: LogStep[]): LogRecord => ({ id: "r1", capturedHour: H, kind: "todo", text: "t", steps });
+const record = (steps: LogStep[], checks: LogCheck[] = []): LogRecord => ({ id: "r1", capturedHour: H, kind: "todo", text: "t", steps, checks, checksVersion: checks.length ? 1 : null });
 
 describe("parsePublicLog", () => {
   const good = {
@@ -17,7 +30,13 @@ describe("parsePublicLog", () => {
 
   it("keeps the public shape and drops unknown fields", () => {
     const log = parsePublicLog(good);
-    expect(log).toEqual({ available: true, label: "L", counts: { published: 1, withheld: 0, awaitingReview: 2 }, records: [{ id: "a", capturedHour: H, kind: "idea", text: "x", steps: [{ step: "captured", hour: H }] }] });
+    expect(log).toEqual({
+      available: true,
+      label: "L",
+      counts: { published: 1, withheld: 0, awaitingReview: 2 },
+      accuracy: null,
+      records: [{ id: "a", capturedHour: H, kind: "idea", text: "x", steps: [{ step: "captured", hour: H }], checks: [], checksVersion: null }],
+    });
   });
 
   it("skips malformed records and drops non-scalar step fields", () => {
@@ -29,7 +48,21 @@ describe("parsePublicLog", () => {
         { id: "c", capturedHour: H, kind: "todo", text: "x", steps: [{ step: "captured", hour: H, nested: { a: 1 } }] },
       ],
     });
-    expect(log?.available && log.records).toEqual([{ id: "c", capturedHour: H, kind: "todo", text: "x", steps: [{ step: "captured", hour: H }] }]);
+    expect(log?.available && log.records).toEqual([{ id: "c", capturedHour: H, kind: "todo", text: "x", steps: [{ step: "captured", hour: H }], checks: [], checksVersion: null }]);
+  });
+
+  it("keeps known checks and the version, skips a record with an unknown check, and reads the aggregates", () => {
+    const rec = (checks: unknown, checksVersion: unknown = 1) => ({ id: "a", capturedHour: H, kind: "todo", text: "x", steps: [], checks, checksVersion });
+    const accuracy = { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], calendar: { added: 1, dismissed: 2 } };
+    const log = parsePublicLog({
+      ...good,
+      accuracy,
+      records: [rec([{ check: "derived_rows", result: "pass", extra: 1 }]), rec([{ check: "secret", result: "pass" }]), rec([], 0)],
+    });
+    expect(log?.available && log.records).toEqual([{ id: "a", capturedHour: H, kind: "todo", text: "x", steps: [], checks: [{ check: "derived_rows", result: "pass" }], checksVersion: 1 }]);
+    expect(log?.available && log.accuracy).toEqual(accuracy);
+    const bad = parsePublicLog({ ...good, accuracy: { routes: [{ model: "<b>", confirmed: 1, corrected: 0 }], calendar: { added: 0, dismissed: 0 } } });
+    expect(bad?.available && bad.accuracy).toBeNull();
   });
 
   it("reads an unavailable reply, and rejects anything else", () => {
@@ -84,6 +117,34 @@ describe("summary", () => {
       "Filed by the model, confirmed · Recovered after 1 failed attempt",
     );
     expect(summary(record([step("routed", { kind: "idea", by: "model" }), failed]))).toBe("");
+  });
+});
+
+describe("checks and accuracy", () => {
+  it("reads checks in plain words and sums them up", () => {
+    expect(checkText({ check: "usage_recorded", result: "pass" })).toBe("Passed: Every model call has a usage record");
+    expect(checkText({ check: "failures_resolved", result: "unresolved" })).toBe("Unresolved: Every failed step was followed by a success");
+    expect(checksSummary([])).toBe("");
+    expect(checksSummary([{ check: "derived_rows", result: "pass" }])).toBe("The check passed");
+    expect(checksSummary([{ check: "derived_rows", result: "pass" }, { check: "body_matches", result: "pass" }])).toBe("All 2 checks passed");
+    expect(checksSummary([{ check: "derived_rows", result: "fail" }, { check: "failures_resolved", result: "unresolved" }])).toBe("1 check failed · A failure is unresolved");
+    expect(summary(record([step("routed", { kind: "todo", by: "model" }), step("confirmed", { kind: "todo" })], [{ check: "derived_rows", result: "pass" }]))).toBe(
+      "Filed by the model, confirmed · The check passed",
+    );
+  });
+
+  it("writes the aggregate lines, including empty ones and the planned metric", () => {
+    expect(accuracyLines({ routes: [], calendar: { added: 0, dismissed: 0 } })).toEqual([
+      "Model filings confirmed: none reviewed yet",
+      "Calendar suggestions added: none decided yet",
+      "Contact-link precision: planned",
+    ]);
+    expect(accuracyLines({ routes: [{ model: "deepseek-flash", confirmed: 2, corrected: 1 }, { model: "unknown", confirmed: 1, corrected: 0 }], calendar: { added: 1, dismissed: 3 } })).toEqual([
+      "Model filings confirmed: 2 of 3 (67%), deepseek-flash",
+      "Model filings confirmed: 1 of 1 (100%), model not recorded",
+      "Calendar suggestions added: 1 of 4",
+      "Contact-link precision: planned",
+    ]);
   });
 });
 

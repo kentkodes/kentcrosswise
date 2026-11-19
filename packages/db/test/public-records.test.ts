@@ -42,6 +42,10 @@ describe("0027 public_records", () => {
     ["a time that is not on the hour", "INSERT INTO public_records (entry_id, state, kind, captured_hour, body) VALUES ($1, 'published', 'idea', date_trunc('hour', now()) + interval '1 minute', 't')"],
     ["a reason that is not a code", "INSERT INTO public_records (entry_id, state, withheld_reason, kind, captured_hour) VALUES ($1, 'withheld', 'Some Text!', 'idea', date_trunc('hour', now()))"],
     ["steps that are not an array", "INSERT INTO public_records (entry_id, state, kind, captured_hour, body, steps) VALUES ($1, 'published', 'idea', date_trunc('hour', now()), 't', '{}')"],
+    ["checks that are not an array", "INSERT INTO public_records (entry_id, state, kind, captured_hour, body, checks) VALUES ($1, 'published', 'idea', date_trunc('hour', now()), 't', '{}')"],
+    ["withheld with checks", "INSERT INTO public_records (entry_id, state, withheld_reason, kind, captured_hour, checks) VALUES ($1, 'withheld', 'x', 'idea', date_trunc('hour', now()), '[{}]')"],
+    ["withheld with a check-list version", "INSERT INTO public_records (entry_id, state, withheld_reason, kind, captured_hour, checks_version) VALUES ($1, 'withheld', 'x', 'idea', date_trunc('hour', now()), 1)"],
+    ["a check-list version below 1", "INSERT INTO public_records (entry_id, state, kind, captured_hour, body, checks_version) VALUES ($1, 'published', 'idea', date_trunc('hour', now()), 't', 0)"],
   ])("rejects %s", async (_name, sql) => {
     const id = await entry();
     await expect(db.query(sql, [id])).rejects.toThrow();
@@ -54,7 +58,7 @@ describe("0027 public_records", () => {
     await withhold(held);
     const { rows } = await as("web_public", () => db.query<{ body: string; public_id: string }>("SELECT * FROM v_public_records"));
     const cols = await db.query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'v_public_records' ORDER BY ordinal_position");
-    expect(cols.rows.map((c) => c.column_name)).toEqual(["public_id", "captured_hour", "kind", "body", "steps"]);
+    expect(cols.rows.map((c) => c.column_name)).toEqual(["public_id", "captured_hour", "kind", "body", "steps", "checks", "checks_version"]);
     expect(rows.map((r) => r.body)).toEqual(["shown"]);
     expect(rows[0]!.public_id).not.toBe(pub);
   });

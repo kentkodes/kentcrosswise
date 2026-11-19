@@ -212,6 +212,33 @@
   color: var(--warn);
 }
 
+/* Accuracy (PL6): the aggregate lines above the records. */
+
+.accuracy {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg-soft);
+}
+
+.accuracyList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.evidence .cardLabel {
+  display: block;
+  margin: 12px 0 0;
+}
+
 .cardLabel {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 11px;
