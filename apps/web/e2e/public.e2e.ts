@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // PL5: the home page leads with the public log; /demo is the log (default tab) and the Essays tab. Record data is
 // served by the real API on previews (no published records there), so these tests route a fixed synthetic reply.
-const LOG = { available: true, label: "Tasks published automatically after sanitization; some records withheld for privacy/security", counts: { published: 1, withheld: 2, awaitingReview: 3 }, records: [{ id: "00000000-0000-4000-8000-000000000001", capturedHour: "2026-11-18T14:00:00.000Z", kind: "todo", text: "Book the [place] table for [Person 1]", steps: [{ step: "captured", hour: "2026-11-18T14:00:00.000Z" }, { step: "route_failed", hour: "2026-11-18T14:00:00.000Z", code: "provider_error", attempt: 1 }, { step: "routed", hour: "2026-11-18T14:00:00.000Z", kind: "idea", by: "model", confidence: 0.91, model: "deepseek-flash" }, { step: "derived", hour: "2026-11-18T14:00:00.000Z", kind: "idea" }, { step: "corrected", hour: "2026-11-18T15:00:00.000Z", from: "idea", to: "todo" }, { step: "derived", hour: "2026-11-18T15:00:00.000Z", kind: "todo", moved_from: "idea" }] }] };
+const LOG = { available: true, label: "Tasks published automatically after sanitization; some records withheld for privacy/security", counts: { published: 1, withheld: 2, awaitingReview: 3 }, records: [{ id: "00000000-0000-4000-8000-000000000001", capturedHour: "2026-11-18T14:00:00.000Z", kind: "todo", text: "Book the [place] table for [Person 1]", steps: [{ step: "captured", hour: "2026-11-18T14:00:00.000Z" }, { step: "route_failed", hour: "2026-11-18T14:00:00.000Z", code: "provider_error", attempt: 1 }, { step: "routed", hour: "2026-11-18T14:00:00.000Z", kind: "idea", by: "model", confidence: 0.91, model: "deepseek-flash" }, { step: "derived", hour: "2026-11-18T14:00:00.000Z", kind: "idea" }, { step: "corrected", hour: "2026-11-18T15:00:00.000Z", from: "idea", to: "todo" }, { step: "derived", hour: "2026-11-18T15:00:00.000Z", kind: "todo", moved_from: "idea" }], checks: [{ check: "derived_rows", result: "pass" }, { check: "usage_recorded", result: "fail" }, { check: "failures_resolved", result: "pass" }], checksVersion: 1 }], accuracy: { routes: [{ model: "deepseek-flash", confirmed: 3, corrected: 1 }], calendar: { added: 1, dismissed: 1 } } };
 const routeLog = (page: Page) => page.route("**/api/public/log", (route) => route.fulfill({ json: LOG }));
 
 test("public home leads with the log and links to it", async ({ page }) => {
@@ -11,7 +11,7 @@ test("public home leads with the log and links to it", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "A personal helper you can inspect." })).toBeVisible();
   const latest = page.getByRole("region", { name: "Latest from the log" });
   await expect(latest.getByText("Book the [place] table for [Person 1]")).toBeVisible();
-  await expect(latest.getByText("Corrected: Idea → Todo · Recovered after 1 failed attempt")).toBeVisible();
+  await expect(latest.getByText("Corrected: Idea → Todo · Recovered after 1 failed attempt · 1 check failed")).toBeVisible();
   await expect(page.getByText(/Simulated data/)).toHaveCount(0);
   await page.getByRole("main").getByRole("link", { name: "Read the log", exact: true }).first().click();
   await expect(page).toHaveURL(/\/demo$/);
@@ -32,6 +32,16 @@ test("the log tab shows counts, the label, the record and its evidence", async (
   await expect(record.getByText("The model filed it as idea (confidence 0.91, deepseek-flash)")).toBeVisible();
   await expect(record.getByText("I corrected it from idea to todo")).toBeVisible();
   await expect(record.getByText("Moved the record from idea to todo")).toBeVisible();
+  await expect(record.getByText("Checks · list v1")).toBeVisible();
+  await expect(record.getByRole("list", { name: "Checks" }).getByRole("listitem")).toHaveText([
+    "Passed: The saved records match the kind",
+    "Failed: Every model call has a usage record",
+    "Passed: Every failed step was followed by a success",
+  ]);
+  const accuracy = page.getByRole("region", { name: "Accuracy" });
+  await expect(accuracy.getByText("Model filings confirmed: 3 of 4 (75%), deepseek-flash")).toBeVisible();
+  await expect(accuracy.getByText("Calendar suggestions added: 1 of 2")).toBeVisible();
+  await expect(accuracy.getByText("Contact-link precision: planned")).toBeVisible();
 });
 
 test("the log tab says so when nothing is published, and when the log is unavailable", async ({ page }) => {

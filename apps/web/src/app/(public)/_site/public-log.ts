@@ -1,6 +1,7 @@
 // The public log as the browser sees it (PL5, DESIGN §4.6). Public pages may not import server code (D10), so this
 // file has its own copy of the record shape served by GET /api/public/log, a strict parser that keeps only those
 // fields (anything else is dropped), and the plain-words text for each step line. Pure: no React, no clock.
+// PL6: each record's read-back checks and the check-list version, and the accuracy aggregates over published records.
 
 export const LOG_URL = "/api/public/log";
 
@@ -18,12 +19,37 @@ export const KIND_LABEL: Readonly<Record<Kind, string>> = {
 /** One step line: the step, its hour and the step's own codes (already allowlisted by the server). */
 export type LogStep = { step: string; hour: string } & Record<string, string | number | boolean>;
 
+export const CHECKS = [
+  "derived_rows",
+  "usage_recorded",
+  "failures_resolved",
+  "link_recorded",
+  "link_name",
+  "calendar_recorded",
+  "calendar_start",
+  "mood_consistent",
+  "body_matches",
+] as const;
+export type CheckCode = (typeof CHECKS)[number];
+export type CheckResult = "pass" | "fail" | "unresolved";
+export interface LogCheck {
+  check: CheckCode;
+  result: CheckResult;
+}
+
 export interface LogRecord {
   id: string;
   capturedHour: string;
   kind: Kind;
   text: string;
   steps: LogStep[];
+  checks: LogCheck[];
+  checksVersion: number | null;
+}
+
+export interface LogAccuracy {
+  routes: { model: string; confirmed: number; corrected: number }[];
+  calendar: { added: number; dismissed: number };
 }
 
 export interface LogCounts {
@@ -33,7 +59,7 @@ export interface LogCounts {
 }
 
 export type PublicLog =
-  | { available: true; label: string; counts: LogCounts; records: LogRecord[] }
+  | { available: true; label: string; counts: LogCounts; accuracy: LogAccuracy | null; records: LogRecord[] }
   | { available: false; label: string; note: string };
 
 const isKind = (v: unknown): v is Kind => typeof v === "string" && (KINDS as readonly string[]).includes(v);
@@ -52,6 +78,32 @@ function parseStep(v: unknown): LogStep | null {
   return out;
 }
 
+const RESULTS: readonly string[] = ["pass", "fail", "unresolved"];
+const MODEL = /^[a-z0-9][a-z0-9.-]{0,39}$/;
+
+function parseCheck(v: unknown): LogCheck | null {
+  if (v === null || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.check !== "string" || !(CHECKS as readonly string[]).includes(o.check) || typeof o.result !== "string" || !RESULTS.includes(o.result)) return null;
+  return { check: o.check as CheckCode, result: o.result as CheckResult };
+}
+
+/** The aggregates, or null when absent or malformed (the page then leaves them out). */
+function parseAccuracy(v: unknown): LogAccuracy | null {
+  if (v === null || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.routes) || o.calendar === null || typeof o.calendar !== "object") return null;
+  const cal = o.calendar as Record<string, unknown>;
+  if (!isCount(cal.added) || !isCount(cal.dismissed)) return null;
+  const routes: LogAccuracy["routes"] = [];
+  for (const r of o.routes as unknown[]) {
+    const x = r !== null && typeof r === "object" ? (r as Record<string, unknown>) : {};
+    if (typeof x.model !== "string" || !(x.model === "unknown" || MODEL.test(x.model)) || !isCount(x.confirmed) || !isCount(x.corrected)) return null;
+    routes.push({ model: x.model, confirmed: x.confirmed, corrected: x.corrected });
+  }
+  return { routes, calendar: { added: cal.added, dismissed: cal.dismissed } };
+}
+
 function parseRecord(v: unknown): LogRecord | null {
   if (v === null || typeof v !== "object") return null;
   const o = v as Record<string, unknown>;
@@ -62,7 +114,18 @@ function parseRecord(v: unknown): LogRecord | null {
     if (!p) return null;
     steps.push(p);
   }
-  return { id: o.id, capturedHour: o.capturedHour, kind: o.kind, text: o.text, steps };
+  const checks: LogCheck[] = [];
+  if (o.checks !== undefined) {
+    if (!Array.isArray(o.checks)) return null;
+    for (const c of o.checks) {
+      const p = parseCheck(c);
+      if (!p) return null;
+      checks.push(p);
+    }
+  }
+  const version = o.checksVersion === undefined || o.checksVersion === null ? null : o.checksVersion;
+  if (version !== null && !(isCount(version) && version >= 1)) return null;
+  return { id: o.id, capturedHour: o.capturedHour, kind: o.kind, text: o.text, steps, checks, checksVersion: version as number | null };
 }
 
 /** The API reply, or null when it does not have the public log's shape. Malformed records are skipped. */
@@ -75,7 +138,13 @@ export function parsePublicLog(v: unknown): PublicLog | null {
   const c = o.counts as Record<string, unknown>;
   if (!isCount(c.published) || !isCount(c.withheld) || !isCount(c.awaitingReview)) return null;
   const records = o.records.map(parseRecord).filter((r): r is LogRecord => r !== null);
-  return { available: true, label: o.label, counts: { published: c.published, withheld: c.withheld, awaitingReview: c.awaitingReview }, records };
+  return {
+    available: true,
+    label: o.label,
+    counts: { published: c.published, withheld: c.withheld, awaitingReview: c.awaitingReview },
+    accuracy: parseAccuracy(o.accuracy),
+    records,
+  };
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -172,6 +241,51 @@ export function isMine(s: LogStep): boolean {
   return ["corrected", "confirmed", "contact_chosen", "calendar_added", "calendar_dismissed"].includes(s.step) || (s.step === "routed" && s.by === "owner");
 }
 
+const CHECK_TEXT: Readonly<Record<CheckCode, string>> = {
+  derived_rows: "The saved records match the kind",
+  usage_recorded: "Every model call has a usage record",
+  failures_resolved: "Every failed step was followed by a success",
+  link_recorded: "The contact-link outcome was recorded",
+  link_name: "The linked contact's name appears in the note",
+  calendar_recorded: "The calendar outcome was recorded",
+  calendar_start: "The suggested event does not start before the note was written",
+  mood_consistent: "The stored mood score matches its recorded outcome",
+  body_matches: "The saved text equals the entry",
+};
+const RESULT_TEXT: Readonly<Record<CheckResult, string>> = { pass: "Passed", fail: "Failed", unresolved: "Unresolved" };
+
+/** A check line in plain words, e.g. "Passed: Every model call has a usage record". */
+export function checkText(c: LogCheck): string {
+  return `${RESULT_TEXT[c.result]}: ${CHECK_TEXT[c.check]}`;
+}
+
+/** "All 3 checks passed", "1 check failed", "A failure is unresolved", or "" when there are no checks. */
+export function checksSummary(checks: readonly LogCheck[]): string {
+  if (checks.length === 0) return "";
+  const failed = checks.filter((c) => c.result === "fail").length;
+  const unresolved = checks.filter((c) => c.result === "unresolved").length;
+  const parts: string[] = [];
+  if (failed > 0) parts.push(`${failed} ${failed === 1 ? "check" : "checks"} failed`);
+  if (unresolved > 0) parts.push("A failure is unresolved");
+  return parts.length > 0 ? parts.join(" · ") : checks.length === 1 ? "The check passed" : `All ${checks.length} checks passed`;
+}
+
+const pct = (n: number, d: number) => Math.round((n / d) * 100);
+
+/** The aggregate lines, in plain words. */
+export function accuracyLines(a: LogAccuracy): string[] {
+  const lines: string[] = [];
+  if (a.routes.length === 0) lines.push("Model filings confirmed: none reviewed yet");
+  for (const r of a.routes) {
+    const n = r.confirmed + r.corrected;
+    lines.push(`Model filings confirmed: ${r.confirmed} of ${n} (${pct(r.confirmed, n)}%), ${r.model === "unknown" ? "model not recorded" : r.model}`);
+  }
+  const decided = a.calendar.added + a.calendar.dismissed;
+  lines.push(decided === 0 ? "Calendar suggestions added: none decided yet" : `Calendar suggestions added: ${a.calendar.added} of ${decided}`);
+  lines.push("Contact-link precision: planned");
+  return lines;
+}
+
 /** The one-line outcome of a record: how its filing was judged, and a recovery when there was one. */
 export function summary(r: LogRecord): string {
   const parts: string[] = [];
@@ -186,5 +300,7 @@ export function summary(r: LogRecord): string {
     const n = r.steps.filter((s) => s.step === "route_failed").length;
     parts.push(`Recovered after ${n} failed ${n === 1 ? "attempt" : "attempts"}`);
   }
+  const checks = checksSummary(r.checks);
+  if (checks) parts.push(checks);
   return parts.join(" · ");
 }

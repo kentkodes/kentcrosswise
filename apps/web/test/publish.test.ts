@@ -8,6 +8,7 @@ import { saveEntry } from "../src/server/capture";
 import { createContact, resolveCrmNote } from "../src/server/contacts";
 import { runAs } from "../src/server/db";
 import { LOG_LABEL, loadPublicLog, publicStep, queryPublicLog } from "../src/server/public-log";
+import { CHECKS_VERSION } from "../src/server/check-codes";
 import { listWithheldRetry, publishEntry } from "../src/server/publish";
 import { addOwnerTerm, confirmEntry, prepareSpans } from "../src/server/review";
 import { reassignEntryDerived, routeEntry, type DbRun } from "../src/server/router";
@@ -24,8 +25,8 @@ describe("publication (web_rw writes, web_public reads)", () => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   const publish = (id: string) => run((db) => publishEntry(db, id));
   const stored = async (id: string) =>
-    (await pg.query<{ state: string; withheld_reason: string | null; body: string | null; steps: unknown[]; public_id: string }>(
-      "SELECT state, withheld_reason, body, steps, public_id FROM public_records WHERE entry_id = $1",
+    (await pg.query<{ state: string; withheld_reason: string | null; body: string | null; steps: unknown[]; public_id: string; checks: unknown[]; checks_version: number | null }>(
+      "SELECT state, withheld_reason, body, steps, public_id, checks, checks_version FROM public_records WHERE entry_id = $1",
       [id],
     )).rows[0];
   const routed = async (text: string, label = "idea", proposal = spans([])) => {
@@ -68,7 +69,60 @@ describe("publication (web_rw writes, web_public reads)", () => {
     const rec = log.records.find((x) => x.id === pid);
     expect(rec).toMatchObject({ kind: "todo", text: "Synthetic correction text", capturedHour: expect.stringMatching(HOUR) });
     expect(rec!.steps.find((s) => s.step === "corrected")).toMatchObject({ from: "idea", to: "todo" });
-    expect(Object.keys(rec!)).toEqual(["id", "capturedHour", "kind", "text", "steps"]);
+    expect(Object.keys(rec!)).toEqual(["id", "capturedHour", "kind", "text", "steps", "checks", "checksVersion"]);
+    expect(rec!.checksVersion).toBe(CHECKS_VERSION);
+  });
+
+  it("stores the read-back checks: a missing usage record fails until one exists", async () => {
+    const id = await routed("Synthetic checked idea");
+    await run((db) => confirmEntry(db, id));
+    await publish(id);
+    const first = (await stored(id))!;
+    expect(first.checks_version).toBe(CHECKS_VERSION);
+    // FakeProvider writes no call records, so the route's usage record is missing.
+    expect(first.checks).toEqual([
+      { check: "derived_rows", result: "pass" },
+      { check: "usage_recorded", result: "fail" },
+      { check: "body_matches", result: "pass" },
+    ]);
+    await pg.query(
+      "INSERT INTO usage_events (kind, agent, provider, model, input_tokens, output_tokens, purpose, subject_kind, subject_id, outcome) VALUES ('model', 'router', 'fake', 'deepseek-flash', 1, 1, 'route', 'entry', $1, 'reported')",
+      [id],
+    );
+    await publish(id);
+    expect((await stored(id))!.checks).toContainEqual({ check: "usage_recorded", result: "pass" });
+    // A later change to the derived row is caught.
+    await pg.query("UPDATE ideas SET body = 'Changed' WHERE entry_id = $1", [id]);
+    await publish(id);
+    expect((await stored(id))!.checks).toContainEqual({ check: "body_matches", result: "fail" });
+  });
+
+  it("checks a CRM note's contact link and calendar outcome, and a withheld record has no checks", async () => {
+    const id = await routed("Lunch with Pell Rook", "crm_note");
+    await run((db) => confirmEntry(db, id));
+    await publish(id);
+    const checks = Object.fromEntries(((await stored(id))!.checks as { check: string; result: string }[]).map((c) => [c.check, c.result]));
+    expect(checks).toMatchObject({ derived_rows: "pass", link_recorded: "pass", link_name: "pass", calendar_recorded: "pass" });
+
+    const priv = await routed("Synthetic private checks", "idea", spans([], [], true));
+    await run((db) => confirmEntry(db, priv));
+    await publish(priv);
+    expect(await stored(priv)).toMatchObject({ state: "withheld", checks: [], checks_version: null });
+  });
+
+  it("the reader rebuilds check lines from the allowlist and reports the aggregates from published records", async () => {
+    const log = await pub((db) => queryPublicLog(db));
+    expect(log.accuracy.routes.find((r) => r.model === "deepseek-flash")!.confirmed).toBeGreaterThanOrEqual(2);
+    expect(log.accuracy.calendar).toEqual({ added: 0, dismissed: 0 });
+    const id = await routed("Synthetic tampered checks");
+    await run((db) => confirmEntry(db, id));
+    await publish(id);
+    const pid = (await stored(id))!.public_id;
+    await pg.query(`UPDATE public_records SET checks = '[{"check":"derived_rows","result":"pass","note":"secret"}]' WHERE entry_id = $1`, [id]);
+    const kept = (await pub((db) => queryPublicLog(db))).records.find((r) => r.id === pid);
+    expect(kept!.checks).toEqual([{ check: "derived_rows", result: "pass" }]);
+    await pg.query(`UPDATE public_records SET checks = '[{"check":"leak","result":"pass"}]' WHERE entry_id = $1`, [id]);
+    expect((await pub((db) => queryPublicLog(db))).records.some((r) => r.id === pid)).toBe(false);
   });
 
   it("withholds another person's private matters and a failed name check; a new check then publishes", async () => {

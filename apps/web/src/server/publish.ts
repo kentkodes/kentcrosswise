@@ -5,7 +5,10 @@
 // a missing or failed name check, another person's private matters, a redaction failure, or a step that does not
 // map to an allowed line. A later verdict, an added replacement or a new name check calls publishEntry again and
 // replaces the snapshot. Nothing here runs before review, and nothing publishes a record review.ts would withhold.
+// A published snapshot also carries the read-back checks (checks.ts, PL6) and the version of the check list.
 // Logs carry codes and error classes, never text.
+import { CHECKS_VERSION, type PublicCheck } from "./check-codes";
+import { runChecks } from "./checks";
 import type { Queryable } from "./db";
 import { withDb } from "./db";
 import { publicStep, type PublicStep } from "./public-log";
@@ -31,8 +34,10 @@ export async function publishEntry(db: Queryable, entryId: string): Promise<Publ
   const preview = publicPreview(row.raw_text, row.has_public ? (row as PublicInputs) : null, await contactNames(db));
   let reason: string | null = preview.state === "ready" ? null : preview.state === "pending" ? "pending" : preview.reason;
   const steps: PublicStep[] = [];
+  let checks: PublicCheck[] = [];
   if (reason === null) {
-    for (const s of await listSteps(db, entryId)) {
+    const rows = await listSteps(db, entryId);
+    for (const s of rows) {
       const line = publicStep(s.step, s.ts, s.detail);
       if (!line) {
         reason = "step";
@@ -40,14 +45,16 @@ export async function publishEntry(db: Queryable, entryId: string): Promise<Publ
       }
       steps.push(line);
     }
+    if (reason === null) checks = await runChecks(db, entryId, rows);
   }
   const published = reason === null && preview.state === "ready";
   await db.query(
-    `INSERT INTO public_records (entry_id, state, withheld_reason, kind, captured_hour, body, steps, first_published)
-     SELECT e.id, $2, $3, e.route_kind, date_trunc('hour', e.created_at), $4, $5::jsonb, CASE WHEN $2 = 'published' THEN now() END
+    `INSERT INTO public_records (entry_id, state, withheld_reason, kind, captured_hour, body, steps, checks, checks_version, first_published)
+     SELECT e.id, $2, $3, e.route_kind, date_trunc('hour', e.created_at), $4, $5::jsonb, $6::jsonb, $7, CASE WHEN $2 = 'published' THEN now() END
        FROM entries e WHERE e.id = $1
      ON CONFLICT (entry_id) DO UPDATE SET state = EXCLUDED.state, withheld_reason = EXCLUDED.withheld_reason,
-       kind = EXCLUDED.kind, body = EXCLUDED.body, steps = EXCLUDED.steps, updated_at = now(),
+       kind = EXCLUDED.kind, body = EXCLUDED.body, steps = EXCLUDED.steps, checks = EXCLUDED.checks,
+       checks_version = EXCLUDED.checks_version, updated_at = now(),
        first_published = COALESCE(public_records.first_published, EXCLUDED.first_published)`,
     [
       entryId,
@@ -55,6 +62,8 @@ export async function publishEntry(db: Queryable, entryId: string): Promise<Publ
       published ? null : reason,
       published && preview.state === "ready" ? preview.text : null,
       JSON.stringify(published ? steps : []),
+      JSON.stringify(published ? checks : []),
+      published ? CHECKS_VERSION : null,
     ],
   );
   return published ? "published" : "withheld";
