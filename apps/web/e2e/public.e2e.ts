@@ -1,56 +1,68 @@
 import { expect, test, type Page } from "@playwright/test";
 
-test("public home renders and links to the demo", async ({ page }) => {
+// PL5: the home page leads with the public log; /demo is the log (default tab) and the Essays tab. Record data is
+// served by the real API on previews (no published records there), so these tests route a fixed synthetic reply.
+const LOG = { available: true, label: "Tasks published automatically after sanitization; some records withheld for privacy/security", counts: { published: 1, withheld: 2, awaitingReview: 3 }, records: [{ id: "00000000-0000-4000-8000-000000000001", capturedHour: "2026-11-18T14:00:00.000Z", kind: "todo", text: "Book the [place] table for [Person 1]", steps: [{ step: "captured", hour: "2026-11-18T14:00:00.000Z" }, { step: "route_failed", hour: "2026-11-18T14:00:00.000Z", code: "provider_error", attempt: 1 }, { step: "routed", hour: "2026-11-18T14:00:00.000Z", kind: "idea", by: "model", confidence: 0.91, model: "deepseek-flash" }, { step: "derived", hour: "2026-11-18T14:00:00.000Z", kind: "idea" }, { step: "corrected", hour: "2026-11-18T15:00:00.000Z", from: "idea", to: "todo" }, { step: "derived", hour: "2026-11-18T15:00:00.000Z", kind: "todo", moved_from: "idea" }] }] };
+const routeLog = (page: Page) => page.route("**/api/public/log", (route) => route.fulfill({ json: LOG }));
+
+test("public home leads with the log and links to it", async ({ page }) => {
+  await routeLog(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Watch AI agents build my personal hub." })).toBeVisible();
-  await expect(page.getByText(/^Simulated data/)).toBeVisible();
-  await page.getByRole("main").getByRole("link", { name: "Explore the demo", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "A personal helper you can inspect." })).toBeVisible();
+  const latest = page.getByRole("region", { name: "Latest from the log" });
+  await expect(latest.getByText("Book the [place] table for [Person 1]")).toBeVisible();
+  await expect(latest.getByText("Corrected: Idea → Todo · Recovered after 1 failed attempt")).toBeVisible();
+  await expect(page.getByText(/Simulated data/)).toHaveCount(0);
+  await page.getByRole("main").getByRole("link", { name: "Read the log", exact: true }).first().click();
   await expect(page).toHaveURL(/\/demo$/);
 });
 
-test("demo page is the app frame with simulated data", async ({ page }) => {
+test("the log tab shows counts, the label, the record and its evidence", async ({ page }) => {
+  await routeLog(page);
   await page.goto("/demo");
-  await expect(page.getByRole("heading", { level: 1, name: "The hub, with made-up data" })).toBeVisible();
-  await expect(page.getByText("Simulated data", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Today" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
-  const tabs = page.getByRole("navigation", { name: "Hub sections" });
-  await expect(tabs.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("heading", { level: 1, name: "The log" })).toBeVisible();
+  const tabs = page.getByRole("navigation", { name: "Sections" });
+  await expect(tabs.getByRole("button", { name: "Log" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("log-counts")).toHaveText("1 published · 2 withheld · 3 awaiting review");
+  await expect(page.getByText("Tasks published automatically after sanitization; some records withheld for privacy/security")).toBeVisible();
+  const record = page.getByRole("list", { name: "Published entries" }).getByRole("listitem").first();
+  await expect(record.getByText("Book the [place] table for [Person 1]")).toBeVisible();
+  await record.getByText(/^Evidence/).click();
+  await expect(record.getByText("Filing failed: the model provider returned an error (attempt 1)")).toBeVisible();
+  await expect(record.getByText("The model filed it as idea (confidence 0.91, deepseek-flash)")).toBeVisible();
+  await expect(record.getByText("I corrected it from idea to todo")).toBeVisible();
+  await expect(record.getByText("Moved the record from idea to todo")).toBeVisible();
+});
 
-  await tabs.getByRole("button", { name: "People" }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "People" })).toBeVisible();
-  // Header row plus the first 8 contacts.
-  await expect(page.getByRole("row")).toHaveCount(9);
-  await expect(tabs.getByRole("button", { name: "People" })).toHaveAttribute("aria-pressed", "true");
-
-  await tabs.getByRole("button", { name: "Mood" }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "Mood" })).toBeVisible();
-  await expect(page.getByText("Happiness", { exact: true })).toBeVisible();
-
-  await tabs.getByRole("button", { name: "Notes" }).click();
-  await expect(page.getByRole("heading", { level: 3, name: "To do" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 3, name: "Ideas" })).toBeVisible();
+test("the log tab says so when nothing is published, and when the log is unavailable", async ({ page }) => {
+  await page.route("**/api/public/log", (route) =>
+    route.fulfill({ json: { ...LOG, counts: { published: 0, withheld: 0, awaitingReview: 0 }, records: [] } }),
+  );
+  await page.goto("/demo");
+  await expect(page.getByText("Nothing published yet.")).toBeVisible();
+  await page.unroute("**/api/public/log");
+  await page.route("**/api/public/log", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.reload();
+  await expect(page.getByText("The log is unavailable right now.")).toBeVisible();
 });
 
 for (const width of [320, 375]) {
-  test(`demo page (${width}px): no sideways page scroll, the tab row scrolls inside itself`, async ({ page }) => {
+  test(`log page (${width}px): no sideways page scroll with the evidence open`, async ({ page }) => {
+    await routeLog(page);
     await page.setViewportSize({ width, height: 740 });
     await page.goto("/demo");
     await page.evaluate(() => document.fonts.ready);
+    await page.getByRole("list", { name: "Published entries" }).getByText(/^Evidence/).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const tabs = page.getByRole("navigation", { name: "Hub sections" });
-    const overflow = await tabs.evaluate((e) => e.scrollWidth > e.clientWidth);
-    expect(overflow, "tabs overflow their own row").toBe(true);
-    await tabs.getByRole("button", { name: "Notes" }).scrollIntoViewIfNeeded();
-    await tabs.getByRole("button", { name: "Notes" }).click();
-    await expect(page.getByRole("heading", { level: 2, name: "Notes" })).toBeVisible();
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }
 
 const PAGES = [
   { path: "/", current: "Home" },
-  { path: "/demo", current: "Demo" },
+  { path: "/demo", current: "Log" },
   { path: "/office", current: "Agent office" },
 ];
 
@@ -59,7 +71,7 @@ async function expectSharedNav(page: Page, current: string, account: "Sign in" |
   const links = nav.getByRole("link");
   await expect(links).toHaveCount(4);
   await expect(links.nth(0)).toHaveText("Home");
-  await expect(links.nth(1)).toHaveText("Demo");
+  await expect(links.nth(1)).toHaveText("Log");
   await expect(links.nth(2)).toHaveText("Agent office");
   // Resolved in the browser after mount (AccountLink); both labels are in the DOM, one hidden.
   await expect(links.nth(3)).toHaveAccessibleName(account);
@@ -87,7 +99,7 @@ test.describe("shared navigation", () => {
     await expect(page).toHaveURL(/\/office$/);
     await nav.getByRole("link", { name: "Home" }).click();
     await expect(page).toHaveURL(/\/$/);
-    await nav.getByRole("link", { name: "Demo" }).click();
+    await nav.getByRole("link", { name: "Log" }).click();
     await expect(page).toHaveURL(/\/demo$/);
   });
 
@@ -164,7 +176,7 @@ test.describe("shared navigation, signed in", () => {
 
 test("demo Essays tab: feed, recommended line, reader panel and local rating", async ({ page }) => {
   await page.goto("/demo");
-  const tabs = page.getByRole("navigation", { name: "Hub sections" });
+  const tabs = page.getByRole("navigation", { name: "Sections" });
   await tabs.getByRole("button", { name: "Essays" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Essays" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Essay feed" }).getByRole("listitem")).toHaveCount(6);
@@ -192,7 +204,7 @@ for (const width of [320, 375]) {
   test(`demo Essays tab (${width}px): reader and rating fit without sideways page scroll`, async ({ page }) => {
     await page.setViewportSize({ width, height: 740 });
     await page.goto("/demo");
-    const tabs = page.getByRole("navigation", { name: "Hub sections" });
+    const tabs = page.getByRole("navigation", { name: "Sections" });
     await tabs.getByRole("button", { name: "Essays" }).scrollIntoViewIfNeeded();
     await tabs.getByRole("button", { name: "Essays" }).click();
     await page.getByRole("list", { name: "Essay feed" }).getByRole("button", { name: "Walking" }).click();

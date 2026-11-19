@@ -12,7 +12,7 @@ export type PublicPath = "/" | "/demo" | "/office" | "/bot";
 
 const LINKS: { href: PublicPath; label: string }[] = [
   { href: "/", label: "Home" },
-  { href: "/demo", label: "Demo" },
+  { href: "/demo", label: "Log" },
   { href: "/office", label: "Agent office" },
 ];
 

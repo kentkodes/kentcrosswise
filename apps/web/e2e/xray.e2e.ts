@@ -41,11 +41,10 @@ test("a chip opens its card with the keyboard and Escape closes it", async ({ pa
 test("X-ray stays on across pages in the session", async ({ page }) => {
   await page.goto("/");
   await toggle(page).click();
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Demo" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Log" }).click();
   await expect(page).toHaveURL(/\/demo$/);
   await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: /Demo hub/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Simulated data @kcw/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Public log/ })).toBeVisible();
 });
 
 for (const path of ["/", "/demo", "/office", "/bot"]) {

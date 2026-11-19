@@ -1,4 +1,4 @@
-// Shared public footer: wordmark, what the demo is, and the public links. Static; no session read.
+// Shared public footer: wordmark, what the public pages show, and the public links. Static; no session read.
 import Link from "next/link";
 import f from "./site-footer.module.css";
 
@@ -8,14 +8,14 @@ export function SiteFooter() {
       <div className={f.inner}>
         <p className={f.wordmark}>Kentcrosswise</p>
         <p className={f.note}>
-          A personal hub built with a small team of AI agents. Everything in the demo is simulated: the
-          people, moods and numbers are generated examples.
+          A personal helper built with a small team of AI agents. The log shows the owner&apos;s own entries,
+          sanitized; the essay ratings are simulated.
         </p>
         <nav className={f.nav} aria-label="Footer">
           <ul className={f.navList}>
             <li>
               <Link className={f.navLink} href="/demo">
-                Demo
+                Log
               </Link>
             </li>
             <li>
