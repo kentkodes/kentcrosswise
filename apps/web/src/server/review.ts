@@ -20,11 +20,11 @@ export const MAX_OWNER_TERMS = 50;
 /** Longest word or phrase the owner can add. */
 export const MAX_TERM_LENGTH = 120;
 
-/** Entries that count as reviewed: confirmed, corrected, or routed by the owner's own choice. */
-const REVIEWED = `EXISTS (SELECT 1 FROM agent_events r WHERE r.entry_id = e.id
+/** SQL on `entries e`: the entry counts as reviewed (confirmed, corrected, or routed by the owner's own choice). Migration 0027 repeats this filter in v_public_log_counts. */
+export const REVIEWED = `EXISTS (SELECT 1 FROM agent_events r WHERE r.entry_id = e.id
   AND (r.event_type IN ('confirmed', 'corrected') OR (r.event_type = 'routed' AND r.detail->>'by' = 'owner')))`;
 /** Entries the public log can cover: captured since router steps exist (PL2; no backfill). */
-const LOGGED = "EXISTS (SELECT 1 FROM agent_events c WHERE c.entry_id = e.id AND c.event_type = 'captured')";
+export const LOGGED = "EXISTS (SELECT 1 FROM agent_events c WHERE c.entry_id = e.id AND c.event_type = 'captured')";
 const AWAITING = `e.status = 'routed' AND e.route_kind IS NOT NULL AND ${LOGGED} AND NOT ${REVIEWED}`;
 
 export type PrepareResult = SpansState | "kept" | "not-found";
@@ -68,7 +68,7 @@ export type WithheldReason = Exclude<SpansState, "ok"> | "private-other" | Redac
 
 export type PublicPreview = { state: "ready"; text: string } | { state: "pending" } | { state: "withheld"; reason: WithheldReason };
 
-interface PublicInputs {
+export interface PublicInputs {
   spans_state: SpansState;
   people: string[];
   places: string[];
@@ -97,7 +97,7 @@ export interface ReviewItem {
   preview: PublicPreview;
 }
 
-async function contactNames(db: Queryable): Promise<ContactNames[]> {
+export async function contactNames(db: Queryable): Promise<ContactNames[]> {
   const { rows } = await db.query<{ name: string; aliases: string[] | null }>("SELECT name, aliases FROM contacts ORDER BY id");
   return rows.map((r) => ({ name: r.name, aliases: r.aliases ?? [] }));
 }

@@ -1,6 +1,6 @@
 // Server-only Postgres access for the web app (DESIGN §3.4). Two roles:
 //   web_rw      owner pages (boss console, inbox, pause switches)
-//   web_public  public API routes; it can read v_public_agent_events and nothing else
+//   web_public  public API routes; it can read only the public views (agent events, office, public log)
 // Every call runs in its own transaction that starts with `SET LOCAL ROLE <role>`, so a query runs
 // with that role's grants even when the login user could do more (previews use one Neon URL).
 //

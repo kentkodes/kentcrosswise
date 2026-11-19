@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { listRecentEntries, listUnresolvedEntries, MAX_CAPTURE_CHARS, type EntryRow } from "@/server/capture";
 import { DbNotConfiguredError, dbErrorLabel, withDb } from "@/server/db";
 import { requireOwner } from "@/server/owner";
+import { listWithheldRetry, type WithheldItem } from "@/server/publish";
 import { listAwaitingReview, type ReviewItem } from "@/server/review";
 import { routingEnabled } from "@/server/router";
 import { isSuccessNotice, noticeText } from "../notices";
@@ -11,11 +12,11 @@ import s from "../owner.module.css";
 import { captureAction } from "./actions";
 import { CaptureField } from "./capture-field";
 import { EntryItem } from "./entry-row";
-import { ReviewEntry } from "./review-item";
+import { ReviewEntry, WithheldEntry } from "./review-item";
 
 export const metadata: Metadata = { title: "Hub | Kentcrosswise" };
 
-async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; review?: ReviewItem[]; problem?: string }> {
+async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[]; review?: ReviewItem[]; withheld?: WithheldItem[]; problem?: string }> {
   try {
     return await withDb(
       "web_rw",
@@ -23,6 +24,7 @@ async function loadRecent(): Promise<{ rows?: EntryRow[]; unresolved?: EntryRow[
         rows: await listRecentEntries(db),
         unresolved: await listUnresolvedEntries(db),
         review: await listAwaitingReview(db),
+        withheld: await listWithheldRetry(db),
       }),
       { readOnly: true },
     );
@@ -39,7 +41,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
   const notice = noticeText(code);
   const ok = isSuccessNotice(code);
   const routing = routingEnabled(process.env);
-  const { rows, unresolved, review, problem } = await loadRecent();
+  const { rows, unresolved, review, withheld, problem } = await loadRecent();
 
   return (
     <OwnerFrame title="Hub" current="/hub">
@@ -86,6 +88,16 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
           <p className={`${s.note} ${s.pad}`}>Nothing to review. A routed entry waits here until you mark it correct or change its route.</p>
         )}
       </Region>
+
+      {!problem && withheld && withheld.length > 0 ? (
+        <Region id="withheld" title={`Withheld after review (${withheld.length})`} testId="withheld">
+          <ol className={s.list} data-testid="withheld-entries">
+            {withheld.map((e) => (
+              <WithheldEntry key={e.id} e={e} routing={routing} />
+            ))}
+          </ol>
+        </Region>
+      ) : null}
 
       <Region id="recent" title="Recent" testId="recent">
         {problem ? (

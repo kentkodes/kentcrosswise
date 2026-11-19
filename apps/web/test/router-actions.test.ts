@@ -77,7 +77,9 @@ describe("reassign and route again: bad input never reaches the DB", () => {
   it("reassigns through web_rw and redirects with the routed notice, or not-found for an unknown entry", async () => {
     f.withDb.mockResolvedValueOnce({ result: "ok", derived: null });
     await reassignAction(form({ entry_id: ENTRY_ID, to: "todo" }));
-    expect(f.withDb).toHaveBeenCalledExactlyOnceWith("web_rw", expect.any(Function));
+    // The reassignment first; publication (PL4) then reads the entry, also as web_rw, and never changes the notice.
+    expect(f.withDb).toHaveBeenNthCalledWith(1, "web_rw", expect.any(Function));
+    expect(f.withDb.mock.calls.every(([role]) => role === "web_rw")).toBe(true);
     expect(f.redirect).toHaveBeenLastCalledWith("/hub?n=routed-todo");
 
     f.withDb.mockResolvedValueOnce({ result: "not-found", derived: null });
