@@ -36,7 +36,7 @@ export const PUBLIC_TITLE_SYSTEM = [
   `title: a product-level summary of the change, at most ${MAX_TITLE_LENGTH} characters.`,
   "body: what to build and how to check it is done, for a developer agent. Markdown is fine.",
   `acceptance: 1 to ${MAX_ACCEPTANCE_ITEMS} checkable statements of at most ${MAX_ACCEPTANCE_CHARS} characters each.`,
-  `scope: 0 to ${MAX_PATHS} repository path prefixes the change owns; context: 0 to ${MAX_PATHS} repository paths to read first.`,
+  `scope: 0 to ${MAX_PATHS} repository path prefixes the change owns, including the tests that exercise them (unit tests next to the code, end-to-end specs of the pages it changes); context: 0 to ${MAX_PATHS} repository paths to read first.`,
   "Take paths from the <repository> block (the repository's layout); a path has letters, digits, _ . / - only, no .. and no leading /.",
   "A <previous_contract> block, when present, is the earlier version of this issue; it did not lead to an approved change (see <failure>).",
   "Then write a revised version: keep what was right and make the body and the acceptance statements more precise.",

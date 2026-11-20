@@ -27,7 +27,10 @@ export interface TaskContract {
   /** The main head at planning (contains every prerequisite merge). 40-hex. */
   base: string;
   prerequisites: ContractPrerequisite[];
-  /** Repo path prefixes the task owns (guidance, not enforced). */
+  /**
+   * Repo path prefixes the task owns (guidance, not enforced). The tests that exercise them are in scope
+   * too, listed or not (AR9a: QA and the Developer may update their selectors, fixtures and expectations).
+   */
   scope: string[];
   /** Repo paths to read first (loaded on demand). */
   context: string[];

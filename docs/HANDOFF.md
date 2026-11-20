@@ -49,7 +49,7 @@ Current state only; earlier chronology is in Git history. The open backlog is [O
 
 ## Remaining work and next action
 
-1. The public log's dummy calendar (PL7) is built; before it shows events: the gated bootstrap apply for `kcw/prod/google-demo-token`, then the owner's steps in SETUP "Demo calendar" (dummy account, public calendar, test user, redirect URI, Connect demo calendar). PL1-PL7 are done; a featured example (PL-ex) waits on the owner.
+1. PL1-PL7 are done and the demo calendar is connected (owner, 2026-11-20); the first mirrored event is not yet seen. A featured example (PL-ex) waits on the owner.
 2. PH4, PH7 and PH8 are decided (DESIGN sections 4.5 and 4.6).
-3. Reliability left: the AR9a follow-ups (task 8 to reconcile on resume), the canary token comparison, a schema-plus-consumer live run, raising the active limit, the restore rehearsal, X3.
+3. Reliability left: the AR9a follow-ups (AR9a-1, scope covers tests and a run without commits goes to the owner, is in source; left: per-role cost and task 8 to reconcile on resume), the canary token comparison, a schema-plus-consumer live run, raising the active limit, the restore rehearsal, X3.
 4. Owner steps: connect Google for Calendar, consent-screen links and Google verification, delete the Meta and TikTok developer apps, the iPhone push check.
