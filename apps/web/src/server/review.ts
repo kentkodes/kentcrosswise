@@ -89,6 +89,20 @@ export function publicPreview(rawText: string, p: PublicInputs | null, contacts:
   return r.ok ? { state: "ready", text: r.text } : { state: "withheld", reason: r.reason };
 }
 
+/**
+ * Another field of the record (a calendar suggestion's title, PL7) through the record's own redactor: the same names,
+ * places and owner replacements as the record's public text, with the same person numbers (the text is redacted
+ * first). Null when the record's text or the field cannot be made safe.
+ */
+export function publicField(rawText: string, p: PublicInputs | null, contacts: readonly ContactNames[], field: string): string | null {
+  if (!p || p.spans_state !== "ok" || p.private_other) return null;
+  const redactor = createRecordRedactor({ contacts });
+  const terms = { people: [...p.people, ...p.owner_people], places: [...p.places, ...p.owner_places] };
+  if (!redactor.redact(rawText, terms).ok) return null;
+  const r = redactor.redact(field, terms);
+  return r.ok ? r.text : null;
+}
+
 /** A contact note's link as the review row shows it (PL6b): Correct also confirms an automatic link. */
 export interface ReviewLink {
   noteId: string;

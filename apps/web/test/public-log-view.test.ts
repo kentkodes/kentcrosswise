@@ -5,6 +5,7 @@ import {
   accuracyLines,
   checksSummary,
   checkText,
+  eventWhen,
   hourLabel,
   isMine,
   isProblem,
@@ -36,7 +37,34 @@ describe("parsePublicLog", () => {
       counts: { published: 1, withheld: 0, awaitingReview: 2 },
       accuracy: null,
       records: [{ id: "a", capturedHour: H, kind: "idea", text: "x", steps: [{ step: "captured", hour: H }], checks: [], checksVersion: null }],
+      calendar: null,
     });
+  });
+
+  it("keeps the demo calendar's link and well-formed events only (PL7)", () => {
+    const RID = "11111111-2222-4333-8444-555555555555";
+    const ev = (o: Record<string, unknown> = {}) => ({ recordId: RID, title: "Call [Person 1]", allDay: false, start: H, end: "2026-11-18T15:00:00.000Z", ...o });
+    const link = "https://calendar.google.com/calendar/embed?src=demo.calendar%40example.com";
+    const log = parsePublicLog({
+      ...good,
+      calendar: { link, events: [ev({ extra: "dropped" }), ev({ recordId: "r1" }), ev({ end: H }), ev({ title: "" }), ev({ allDay: "yes" })] },
+    });
+    expect(log?.available && log.calendar).toEqual({ link, events: [ev()] });
+    const bad = (calendar: unknown) => {
+      const l = parsePublicLog({ ...good, calendar });
+      return l?.available && l.calendar;
+    };
+    expect(bad({ link: "https://evil.example/?src=x", events: [] })).toBeNull();
+    expect(bad({ link: "https://calendar.google.com/calendar/embed?src=a&b=<x>", events: [] })).toBeNull();
+    expect(bad({ link: "javascript:alert(1)", events: [] })).toBeNull();
+    expect(bad({ link: null })).toBeNull();
+    expect(bad({ link: null, events: [] })).toEqual({ link: null, events: [] });
+  });
+
+  it("writes when an event is", () => {
+    expect(eventWhen({ allDay: false, start: "2026-12-01T10:00:00.000Z", end: "2026-12-01T11:00:00.000Z" })).toBe("1 Dec 2026, 10:00-11:00 UTC");
+    expect(eventWhen({ allDay: true, start: "2026-12-01T00:00:00.000Z", end: "2026-12-02T00:00:00.000Z" })).toBe("1 Dec 2026, all day");
+    expect(eventWhen({ allDay: false, start: "2026-12-01T23:00:00.000Z", end: "2026-12-02T01:00:00.000Z" })).toBe("1 Dec 2026, 23:00 UTC to 2 Dec 2026, 01:00 UTC");
   });
 
   it("skips malformed records and drops non-scalar step fields", () => {

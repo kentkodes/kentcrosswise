@@ -11,6 +11,13 @@ export const GOOGLE_CONNECT_SCOPES = `${GOOGLE_SIGN_IN_SCOPES} ${GOOGLE_CALENDAR
 
 /** Env var holding the *name* of the secret that stores the Google refresh token (D15). Unset: no connection. */
 export const GOOGLE_TOKEN_SECRET_ENV = "KCW_GOOGLE_TOKEN_SECRET";
+/** Env var holding the *name* of the secret that stores the dummy calendar account's refresh token (PL7). Unset: no demo calendar. */
+export const GOOGLE_DEMO_TOKEN_SECRET_ENV = "KCW_GOOGLE_DEMO_TOKEN_SECRET";
+/**
+ * What the demo calendar consent asks for: the account's address (to refuse the owner's own account and to link the
+ * public calendar) and its own calendar's events. Not the owner sign-in: a separate consent with its own callback.
+ */
+export const GOOGLE_DEMO_SCOPES = `openid email ${GOOGLE_CALENDAR_SCOPE}`;
 
 /**
  * Patches the keys of a JSON secret. A secret container with no value yet (bootstrap creates none) is created

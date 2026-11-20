@@ -139,7 +139,8 @@ describe("secret split", () => {
     // rewrites at consent. Never the orchestrator's secrets.
     const webSecrets = /module "web_secrets" \{[^}]*?names\s*=\s*\[([^\]]*)\]/.exec(prod)?.[1] ?? "";
     expect(webSecrets.match(/"[^"]+"/g)).toEqual(['"kcw/prod/web"', '"kcw/prod/router"', '"kcw/prod/google-owner-token"']);
-    expect(prod).toContain('writable_secret_names = ["kcw/prod/google-owner-token"]');
+    expect(prod).toContain('writable_secret_names = ["kcw/prod/google-owner-token", "kcw/prod/google-demo-token"]');
+    expect(prod).toMatch(/KCW_GOOGLE_DEMO_TOKEN_SECRET\s*=\s*"kcw\/prod\/google-demo-token"/);
     expect(prod).toMatch(/KCW_WEB_SECRET\s*=\s*"kcw\/prod\/web"\s*KCW_MODELS_SECRET\s*=\s*"kcw\/prod\/router"/);
     expect(prod).toContain('names  = ["kcw/prod/orchestrator", "kcw/prod/models"]');
   });

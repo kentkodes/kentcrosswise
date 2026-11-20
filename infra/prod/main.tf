@@ -138,8 +138,10 @@ module "web" {
   route53_zone_id     = local.has_domain ? data.aws_route53_zone.this[0].zone_id : null
   secret_names        = module.web_secrets.names
 
-  # Rewritten by the web app: the Google refresh token at consent.
-  writable_secret_names = ["kcw/prod/google-owner-token"]
+  # Rewritten by the web app: the Google refresh tokens at consent (the owner's, and the dummy calendar account's for
+  # the public log, PL7). Each is also readable. The demo token is not in web_secrets.names, so a plan does not need
+  # the secret to exist: until the bootstrap apply creates it, connecting the demo calendar fails and nothing else.
+  writable_secret_names = ["kcw/prod/google-owner-token", "kcw/prod/google-demo-token"]
 
   # Web-side jobs (apps/web/src/server/jobs): inbox-push on the sweeper's quarter hours so it shares
   # the sweeper's database wake-up.
@@ -158,11 +160,12 @@ module "web" {
   essay_text_bucket_arn = "arn:aws:s3:::${local.essay_text_bucket}"
 
   server_environment = {
-    KCW_WEB_SECRET             = "kcw/prod/web"
-    KCW_MODELS_SECRET          = "kcw/prod/router"
-    KCW_ORCHESTRATOR_QUEUE_URL = module.orchestrator.queue_url
-    ESSAY_TEXT_BUCKET          = local.essay_text_bucket
-    KCW_GOOGLE_TOKEN_SECRET    = "kcw/prod/google-owner-token"
+    KCW_WEB_SECRET               = "kcw/prod/web"
+    KCW_MODELS_SECRET            = "kcw/prod/router"
+    KCW_ORCHESTRATOR_QUEUE_URL   = module.orchestrator.queue_url
+    ESSAY_TEXT_BUCKET            = local.essay_text_bucket
+    KCW_GOOGLE_TOKEN_SECRET      = "kcw/prod/google-owner-token"
+    KCW_GOOGLE_DEMO_TOKEN_SECRET = "kcw/prod/google-demo-token"
   }
 }
 

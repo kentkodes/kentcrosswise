@@ -9,6 +9,7 @@
 // Logs carry codes and error classes, never text.
 import { CHECKS_VERSION, type PublicCheck } from "./check-codes";
 import { runChecks } from "./checks";
+import { syncDemoCalendar } from "./demo-calendar";
 import type { Queryable } from "./db";
 import { withDb } from "./db";
 import { publicStep, type PublicStep } from "./public-log";
@@ -69,15 +70,23 @@ export async function publishEntry(db: Queryable, entryId: string): Promise<Publ
   return published ? "published" : "withheld";
 }
 
-/** Publishes after an owner action, in its own transaction. Never throws ("failed" logs the error class). */
+/**
+ * Publishes after an owner action, in its own transaction, then brings the entry's events in the dummy calendar in
+ * line (PL7: added, changed or removed; Google is called after the commit and only when something differs). Never
+ * throws ("failed" logs the error class).
+ */
 export async function publishNow(entryId: string | null | undefined): Promise<PublishResult | "failed"> {
   if (!entryId) return "not-found";
+  let result: PublishResult | "failed";
   try {
-    return await withDb("web_rw", (db) => publishEntry(db, entryId));
+    result = await withDb("web_rw", (db) => publishEntry(db, entryId));
   } catch (err) {
     console.error(`[publish] ${err instanceof Error ? err.name : "error"}`);
     return "failed";
   }
+  // Also after "not-found": the stored copies of a deleted entry are removed from the dummy calendar.
+  await syncDemoCalendar(entryId);
+  return result;
 }
 
 /** The entry a CRM note, a calendar suggestion or a diary row came from (null when none). Never throws. */

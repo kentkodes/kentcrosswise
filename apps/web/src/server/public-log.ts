@@ -8,6 +8,9 @@
 // PL6: each record also carries its read-back checks ({check, result} codes, rebuilt from CHECK_CODES) and the
 // check-list version, and the log carries accuracy aggregates computed from the published records' own step lines
 // only (owner decision 2026-11-19), so a visitor can recount them from the records.
+// PL7: the log also carries the dummy calendar (migration 0029 views): the stored copies of the events mirrored into a
+// separate dummy Google account (titles through the record's redactor, times on the hour, each with its record's
+// public id) and the link to that public calendar. Step lines still never carry calendar titles.
 import { ROUTER_STEPS, type RouterStep } from "@kcw/core/events";
 import { CHECK_CODES, CHECK_RESULTS, type PublicCheck } from "./check-codes";
 import { DbNotConfiguredError, dbErrorLabel, withDb, type Queryable } from "./db";
@@ -51,9 +54,31 @@ export interface PublicLogCounts {
   awaitingReview: number;
 }
 
+/** One mirrored event of the dummy calendar (PL7). Times are ISO hours in UTC; an all-day event covers one date. */
+export interface PublicCalendarEvent {
+  recordId: string;
+  title: string;
+  allDay: boolean;
+  start: string;
+  end: string;
+}
+
+/** The dummy calendar: the link to the public Google Calendar (null before it is connected) and its stored events. */
+export interface PublicCalendar {
+  link: string | null;
+  events: PublicCalendarEvent[];
+}
+
 export type PublicLog =
-  | { available: true; label: string; counts: PublicLogCounts; accuracy: PublicAccuracy; records: PublicRecord[] }
+  | { available: true; label: string; counts: PublicLogCounts; accuracy: PublicAccuracy; records: PublicRecord[]; calendar: PublicCalendar }
   | { available: false; label: string; note: string; diag?: string };
+
+/** The public page of a Google Calendar (no embed: the log links to it). Null for an id that is not an address. */
+export function publicCalendarUrl(calendarId: unknown): string | null {
+  if (typeof calendarId !== "string" || !/^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}$/.test(calendarId)) return null;
+  return `${CALENDAR_LINK_PREFIX}${encodeURIComponent(calendarId)}`;
+}
+export const CALENDAR_LINK_PREFIX = "https://calendar.google.com/calendar/embed?src=";
 
 /** The only fields a record may have, in order. */
 export const PUBLIC_RECORD_FIELDS = ["id", "capturedHour", "kind", "text", "steps", "checks", "checksVersion"] as const;
@@ -211,7 +236,9 @@ interface RecordRow {
 }
 
 /** The newest published records (at most LOG_LIMIT), each rebuilt field by field; a malformed row is skipped. */
-export async function queryPublicLog(db: Queryable): Promise<{ counts: PublicLogCounts; accuracy: PublicAccuracy; records: PublicRecord[] }> {
+export async function queryPublicLog(
+  db: Queryable,
+): Promise<{ counts: PublicLogCounts; accuracy: PublicAccuracy; records: PublicRecord[]; calendar: PublicCalendar }> {
   const { rows } = await db.query<RecordRow>(
     "SELECT public_id, captured_hour, kind, body, steps, checks, checks_version FROM v_public_records ORDER BY captured_hour DESC, public_id LIMIT $1",
     [LOG_LIMIT],
@@ -243,7 +270,28 @@ export async function queryPublicLog(db: Queryable): Promise<{ counts: PublicLog
     },
     accuracy: accuracyOf(all),
     records,
+    calendar: await queryCalendar(db),
   };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The dummy calendar through its two views (0029), newest first, each event rebuilt field by field. */
+async function queryCalendar(db: Queryable): Promise<PublicCalendar> {
+  const { rows } = await db.query<{ public_id: string; title: unknown; all_day: unknown; start_at: Date | string; end_at: Date | string }>(
+    "SELECT public_id, title, all_day, start_at, end_at FROM v_public_demo_events ORDER BY start_at DESC, public_id, title LIMIT $1",
+    [LOG_LIMIT],
+  );
+  const events: PublicCalendarEvent[] = [];
+  for (const r of rows) {
+    const start = toHour(r.start_at);
+    const end = toHour(r.end_at);
+    const id = String(r.public_id);
+    if (!start || !end || !UUID.test(id) || typeof r.title !== "string" || r.title.length === 0 || r.title.length > 500 || typeof r.all_day !== "boolean") continue;
+    events.push({ recordId: id, title: r.title, allDay: r.all_day, start, end });
+  }
+  const cal = (await db.query<{ calendar_id: unknown }>("SELECT calendar_id FROM v_public_demo_calendar")).rows[0];
+  return { link: publicCalendarUrl(cal?.calendar_id), events };
 }
 
 export const LOG_NOT_CONFIGURED = "The public log is not connected yet.";

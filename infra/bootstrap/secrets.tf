@@ -12,6 +12,7 @@ locals {
     "kcw/prod/migrator"           = "db_url"
     "kcw/prod/origin-verify"      = "origin_verify (long random value; CloudFront sends it to the server, which checks it, D25)"
     "kcw/prod/google-owner-token" = "refresh_token (written by the web app at consent)"
+    "kcw/prod/google-demo-token"  = "refresh_token of the dummy calendar account (written by the web app at the demo consent, PL7)"
     "kcw/github/webhook-secret"   = "secret"
     "kcw/github/developer-app"    = "private_key"
     "kcw/github/qa-app"           = "private_key"
