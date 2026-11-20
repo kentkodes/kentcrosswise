@@ -465,6 +465,10 @@ class Machine {
     if (!written) this.log(`report_recorded_before job=${r.job}`);
     // AR5b: the attempt of the report's dispatch key (a report with no row, from before this slice,
     // changes nothing). The start counts only when its contract is the attempt's (the store guards it).
+    // AR9a: the end report of the current Developer dispatch (any outcome) lets the dev sweep look at its run.
+    if (r.agent === "developer" && r.job === "end" && r.op !== null && r.op === this.d.dispatch_ops?.developer && outcome !== "stale") {
+      this.d.dev_end_report = r.op;
+    }
     if (r.op !== null && (r.agent === "developer" || r.agent === "qa" || r.agent === "docs")) {
       const at = this.now().toISOString();
       const key = effectKey(this.id, "dispatch", r.op);
@@ -1253,7 +1257,7 @@ class Machine {
    * Attempts exhausted, a timeout after one redispatch, or a refused merge. The schema has no
    * "failed" approval kind, so this is a `critical_pr` approval whose reasons say what approving does.
    */
-  async toOwnerFailure(what: string, retry: RetryTarget): Promise<void> {
+  async toOwnerFailure(what: string, retry: RetryTarget, note: "no_commits" | null = null): Promise<void> {
     const again =
       retry === "qa"
         ? "dispatch QA again"
@@ -1266,6 +1270,7 @@ class Machine {
     const replan = retry === "plan" && this.canReplan;
     await this.toOwner("failure", "critical_pr", [`Task failed: ${what}`, replan ? REPLAN_TEXT : `Approve to ${again}; reject to mark the task failed.`], `Task ${this.id} failed: needs a decision`);
     this.d.retry = retry;
+    this.d.failure_note = note;
   }
 
   async onDecision(approvalId: string, decision: "approved" | "rejected"): Promise<StepOutcome | undefined> {
@@ -1374,7 +1379,7 @@ class Machine {
           is_private: task.is_private,
           brief: stored.brief,
           previous: prev,
-          failure: `Revision ${prev.revision} used ${d.attempts} of ${MAX_ATTEMPTS} attempts without an approved QA review.`,
+          failure: replanFailure(prev.revision, d.attempts, d.failure_note ?? null),
         });
         await save();
       }
@@ -1469,6 +1474,10 @@ class Machine {
     const d = this.d;
     const phase = d.phase as "dev" | "ci" | "qa";
     if (phase === "dev" && this.isDocs) return this.docsSweep();
+    if (phase === "dev") {
+      const ended = await this.devRunEnded();
+      if (ended !== null) return ended;
+    }
     const limit = WAIT_LIMIT_MINUTES[phase];
     if (this.minutesSince(d.waiting_since) < limit) return "unchanged";
     const reason = `timeout after ${limit} min`;
@@ -1502,6 +1511,41 @@ class Machine {
         phase === "dev" ? "dev" : "qa",
       );
     }
+    return "applied";
+  }
+
+  /**
+   * AR9a: a Developer run that completed while the task still waits on the Developer ended without new
+   * commits (a push moves the task to CI): it hit its turn limit, failed, or stopped because the fix needs
+   * paths outside the contract (developer playbook). Another run of the same contract rarely helps, so the
+   * owner decides at once (a replan for a task with a contract) instead of a timeout and a redispatch.
+   * Only a run whose end report arrived is looked up (no GitHub call before); a run that completed without
+   * one is a lost run and keeps the timeout's redispatch (AR6). The first sweep that sees the run only marks
+   * it; the next one acts, so a late push webhook still wins. A cancelled run (pause-all, the timeout's own
+   * cancel) and a run not visible yet keep the timeout path.
+   */
+  async devRunEnded(): Promise<StepOutcome | null> {
+    const d = this.d;
+    const prev = d.dispatch_ops?.developer;
+    if (prev === undefined || d.dev_end_report !== prev) return null;
+    const run = await this.github.findWorkflowRun({
+      workflow: DEV_WORKFLOW,
+      displayTitle: agentRunName("developer", this.id, prev),
+      createdAfter: new Date(Date.parse(d.waiting_since ?? this.now().toISOString()) - DISPATCH_UNKNOWN_MINUTES * 60_000 - CLOCK_SLACK_MS).toISOString(),
+    });
+    if (run === null || run.status !== "completed" || run.conclusion === "cancelled") return null;
+    if (d.dev_run_ended !== prev) {
+      d.dev_run_ended = prev;
+      this.log(`dev_run_ended op=${prev} conclusion=${run.conclusion ?? "none"}`);
+      return "applied";
+    }
+    d.dev_run_ended = null;
+    const retry: RetryTarget = this.canReplan ? "plan" : "dev";
+    await this.toOwnerFailure(
+      `The Developer run ended (${run.conclusion ?? "no conclusion"}) without new commits${d.pr_number === null ? "" : ` on PR #${d.pr_number}`}. It may need paths outside the task contract, or it ran out of turns.`,
+      retry,
+      "no_commits",
+    );
     return "applied";
   }
 
@@ -1554,6 +1598,18 @@ class Machine {
     await this.dispatchDocs(reason, true);
     return "applied";
   }
+}
+
+/**
+ * AR5b/AR9a: the fixed failure line a replan gives the planner, built from counts and a fixed note only
+ * (never model or review text).
+ */
+export function replanFailure(revision: number, attempts: number, note: "no_commits" | null): string {
+  if (note === "no_commits") {
+    return `Revision ${revision}: after ${attempts} of ${MAX_ATTEMPTS} attempts, a Developer run ended without new commits. ` +
+      "The change may need paths outside the scope: widen the scope to every path it must touch, including the tests that exercise them.";
+  }
+  return `Revision ${revision} used ${attempts} of ${MAX_ATTEMPTS} attempts without an approved QA review.`;
 }
 
 /**

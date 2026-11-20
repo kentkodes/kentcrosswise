@@ -10,7 +10,7 @@ Read [INSTRUCTIONS.md](INSTRUCTIONS.md) and [CONTINUITY.md](CONTINUITY.md) first
 
 ## Review checklist
 
-1. The change does what the issue asks and matches docs/DESIGN.md. Anything that changes product behavior beyond the issue: request changes.
+1. The change does what the issue asks and matches docs/DESIGN.md. Anything that changes product behavior beyond the issue: request changes. Updating the tests that exercise the changed files (selectors, fixtures, expectations) is in scope, whether or not the contract's scope lists them: do not request changes for it. If the fix you ask for needs product code outside the scope, start the request with "Contract conflict:" and name the paths; the Developer then makes no commit and the owner decides.
 2. Tests cover the change (unit tests next to the code; Playwright in `apps/web/e2e/` for new pages or routes). Missing tests: add them in a commit to the PR branch, `test:` prefix, tests only.
 3. Rules from INSTRUCTIONS.md:
    - no private data, real-looking emails or secrets in code, fixtures or logs;
