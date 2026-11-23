@@ -244,6 +244,15 @@ export interface TaskData {
    * missing here (a crash before the checkpoint) still gets its state updates.
    */
   applied_reports?: string[];
+  /** AR9a: the op of the latest Developer dispatch whose end report arrived (the run's last job). Absent: none. */
+  dev_end_report?: number | null;
+  /**
+   * AR9a: the op of a Developer run a sweep saw completed, after its end report, while the task still waited on
+   * the Developer (no new commits arrived). The next sweep that still sees it so sends the task to the owner.
+   */
+  dev_run_ended?: number | null;
+  /** AR9a: why the owner was asked to replan, for the planner's fixed failure line. Absent: attempts were used up. */
+  failure_note?: "no_commits" | null;
 }
 
 /** The contract fields that are not the issue text (see TaskData.pending_contract). */

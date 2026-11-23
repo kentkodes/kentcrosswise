@@ -145,6 +145,10 @@ const EVIDENCE: Record<"developer" | "qa", string> = {
 };
 
 /** The contract, profile, limits and expected evidence as guidance text for the model. */
+/** AR9a: what the scope covers (the role playbooks say the same). */
+export const SCOPE_RULE =
+  "The tests that exercise these paths are in scope too. If the change needs other paths, the Developer makes no commit and says which paths and why (the owner can replan).";
+
 export function renderContract(c: TaskContract, hash: string, agent: "developer" | "qa"): string {
   const limits = AGENT_CONFIGS[agent].limits;
   const lim = (name: string, l: { minutes: number; turns: number }) => `${name} ${l.minutes} minutes and ${l.turns} turns`;
@@ -164,7 +168,9 @@ export function renderContract(c: TaskContract, hash: string, agent: "developer"
     ...(c.prerequisites.length > 0
       ? ["### Prerequisites (already merged into the base)", "", ...c.prerequisites.map((p) => `- task ${p.task} at ${p.merge}`), ""]
       : []),
-    ...(c.scope.length > 0 ? ["### Scope (guidance, not enforced)", "", ...c.scope.map((p) => `- \`${p}\``), ""] : []),
+    ...(c.scope.length > 0
+      ? ["### Scope (guidance, not enforced)", "", ...c.scope.map((p) => `- \`${p}\``), "", SCOPE_RULE, ""]
+      : []),
     ...(c.context.length > 0 ? ["### Read first (load on demand)", "", ...c.context.map((p) => `- \`${p}\``), ""] : []),
     "### Profile",
     "",

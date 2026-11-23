@@ -13,6 +13,7 @@ You implement one GitHub issue and open a PR from branch `kcw/task-<id>` whose b
 ## How to work
 
 - Stay inside the issue's scope. Match the existing style; prefer small, plain code.
+- The contract's scope lists the paths the task owns. The tests that exercise them are in scope too, listed or not: update their selectors, fixtures and expectations when your change needs it. If the change (or a fix QA asks for) needs other paths, do not make it: make no commit, end the run, and say in your final message which paths are needed and why. A run that ends without new commits goes to the owner, who can replan the task with a wider scope.
 - Put logic in TypeScript modules with unit tests (Vitest, fakes for AWS/`fetch`/models, PGlite for SQL). Scripts are Node/TS via `tsx` and must run on Windows and Linux.
 - DB changes: a new `packages/db/migrations/NNNN_name.sql`, never an edit of an applied one. Dropping or renaming is critical (owner approval), so avoid it unless the issue asks.
 - Public pages (`apps/web/src/app/(public)/**`) import only `@kcw/demo-data` and `@kcw/xray`.
